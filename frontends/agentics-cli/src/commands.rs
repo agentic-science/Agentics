@@ -801,20 +801,8 @@ async fn execute_local_validation_targets(
                 ),
             )
             .await?;
-        let bundle_archive_path = context
-            .storage_root
-            .join("_tmp")
-            .join(format!("{job_id}-bundle.tar"));
-        pack_directory_to_tar(&context.bundle_dir, &bundle_archive_path).await?;
-        let bundle_key = StorageKey::try_new(format!("local-validation/{job_id}/bundle.tar"))?;
-        let stored_bundle_key = storage
-            .put_file(
-                &bundle_key,
-                &bundle_archive_path,
-                StorageWriteIntent::new("challenge bundle archive", 1024 * 1024 * 1024),
-            )
-            .await?;
-        drop(tokio::fs::remove_file(&bundle_archive_path).await);
+        let stored_bundle_key =
+            pack_local_validation_public_bundle(context, &storage, &job_id).await?;
         let payload = EvaluationJobPayload {
             artifact_key: stored_artifact_key,
             bundle_key: stored_bundle_key.clone(),
@@ -823,7 +811,8 @@ async fn execute_local_validation_targets(
             challenge_name: context.spec.challenge_name.clone(),
             target: target.clone(),
         };
-        let log_path = context.storage_root.join(runner_log_key(&job_id));
+        let log_key = agentics_runner::evaluation_runner_log_key(&job_id, 1)?;
+        let log_path = context.storage_root.join(log_key.as_str());
         match agentics_runner::execute_evaluation_job(agentics_runner::EvaluationJobExecution {
             docker: &docker,
             config: &context.config,
@@ -867,6 +856,67 @@ async fn execute_local_validation_targets(
         }
     }
     Ok(target_reports)
+}
+
+/// Store a public-only challenge bundle archive for local validation.
+async fn pack_local_validation_public_bundle(
+    context: &LocalValidationContext,
+    storage: &LocalStorage,
+    job_id: &str,
+) -> Result<StorageKey> {
+    let tmp_root = context.storage_root.join("_tmp");
+    let public_bundle_dir = tmp_root.join(format!("{job_id}-public-bundle"));
+    let bundle_archive_path = tmp_root.join(format!("{job_id}-public-bundle.tar"));
+    drop(tokio::fs::remove_dir_all(&public_bundle_dir).await);
+    drop(tokio::fs::remove_file(&bundle_archive_path).await);
+
+    let bundle_copy = async {
+        if context.spec.datasets.private_benchmark_enabled
+            && let Some(private_benchmark_dir) = &context.spec.datasets.private_benchmark_dir
+        {
+            agentics_contracts::challenge_bundle::copy_challenge_bundle_dir_excluding(
+                &context.bundle_dir,
+                &public_bundle_dir,
+                private_benchmark_dir.as_path(),
+                true,
+            )
+            .await?;
+        } else {
+            agentics_contracts::challenge_bundle::copy_challenge_bundle_dir(
+                &context.bundle_dir,
+                &public_bundle_dir,
+                true,
+            )
+            .await?;
+        }
+
+        pack_directory_to_tar(
+            &public_bundle_dir,
+            &bundle_archive_path,
+            StorageWriteIntent::new(
+                "challenge public bundle archive",
+                context.config.storage_max_bundle_archive_bytes,
+            ),
+        )
+        .await?;
+        let bundle_key =
+            StorageKey::try_new(format!("local-validation/{job_id}/public-bundle.tar"))?;
+        Ok(storage
+            .put_file(
+                &bundle_key,
+                &bundle_archive_path,
+                StorageWriteIntent::new(
+                    "challenge public bundle archive",
+                    context.config.storage_max_bundle_archive_bytes,
+                ),
+            )
+            .await?)
+    }
+    .await;
+
+    drop(tokio::fs::remove_file(&bundle_archive_path).await);
+    drop(tokio::fs::remove_dir_all(&public_bundle_dir).await);
+    bundle_copy
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -969,13 +1019,6 @@ fn sanitize_identifier_component(value: &str) -> String {
     } else {
         sanitized
     }
-}
-
-/// Handles runner log key for this module.
-fn runner_log_key(job_id: &str) -> PathBuf {
-    PathBuf::from("eval-artifacts")
-        .join(job_id)
-        .join("runner.log")
 }
 
 /// Validates parent submission scope invariants for this contract.

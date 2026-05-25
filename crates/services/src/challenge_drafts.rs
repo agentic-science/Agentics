@@ -4,6 +4,7 @@ use std::{
     collections::HashSet,
     path::{Path, PathBuf},
     process::Command,
+    time::{Duration, SystemTime},
 };
 
 use tracing::warn;
@@ -505,6 +506,13 @@ pub async fn cleanup_challenge_drafts(
 
     let mut purged = 0_i64;
     for asset in purge_candidates {
+        let Some(asset) = repos
+            .challenge_drafts()
+            .mark_private_asset_purging(&asset.id)
+            .await?
+        else {
+            continue;
+        };
         storage.delete(&asset.storage_key).await?;
         if let Some(temporary_storage_key) = &asset.temporary_storage_key {
             storage.delete(temporary_storage_key).await?;
@@ -517,11 +525,36 @@ pub async fn cleanup_challenge_drafts(
             ServiceError::Internal("private asset purge count overflow".to_string())
         })?;
     }
+    let tmp_cutoff = temporary_storage_cleanup_cutoff(config)?;
+    let purged_temporary_storage_objects = storage
+        .delete_prefix_older_than(&StorageKey::try_new("_tmp")?, tmp_cutoff)
+        .await?;
+    let purged_temporary_storage_objects = i64::try_from(purged_temporary_storage_objects)
+        .map_err(|_| {
+            ServiceError::Internal(
+                "temporary storage cleanup count exceeds supported range".to_string(),
+            )
+        })?;
 
     Ok(ChallengeDraftCleanupResponse {
         abandoned_drafts: abandoned,
         purged_private_assets: purged,
+        purged_temporary_storage_objects,
     })
+}
+
+fn temporary_storage_cleanup_cutoff(config: &Config) -> Result<SystemTime> {
+    let seconds = config
+        .storage_tmp_object_grace_hours
+        .checked_mul(60 * 60)
+        .ok_or_else(|| {
+            ServiceError::Internal("temporary storage grace window overflow".to_string())
+        })?;
+    SystemTime::now()
+        .checked_sub(Duration::from_secs(seconds))
+        .ok_or_else(|| {
+            ServiceError::Internal("temporary storage cleanup cutoff underflow".to_string())
+        })
 }
 
 /// Approve a validated draft for publishing.
@@ -700,9 +733,9 @@ async fn publish_claimed_challenge_draft(
         }
         ChallengeCreationRequestKind::NewChallenge => {
             let temporary_bundle_path =
-                temporary_runtime_bundle_path(config, draft, publish_claim_id);
+                temporary_runtime_bundle_path(config, draft, publish_claim_id)?;
             let temporary_public_bundle_path =
-                temporary_public_runtime_bundle_path(config, draft, publish_claim_id);
+                temporary_public_runtime_bundle_path(config, draft, publish_claim_id)?;
 
             let publish_new_result = prepare_and_publish_new_challenge_draft(
                 pool,
@@ -721,11 +754,9 @@ async fn publish_claimed_challenge_draft(
                 },
             )
             .await;
-            if let Err(error) = publish_new_result {
-                cleanup_runtime_bundle(&temporary_bundle_path).await;
-                cleanup_runtime_bundle(&temporary_public_bundle_path).await;
-                return Err(error);
-            }
+            cleanup_runtime_bundle(&temporary_bundle_path).await;
+            cleanup_runtime_bundle(&temporary_public_bundle_path).await;
+            publish_new_result?;
         }
     };
     Ok(())
@@ -794,8 +825,22 @@ async fn prepare_and_publish_new_challenge_draft(
         .join("_tmp")
         .join(format!("public-bundle-{}.tar", Uuid::new_v4()));
     let storage_result = async {
-        pack_directory_to_tar(ctx.temporary_bundle_path, &private_archive_path).await?;
-        pack_directory_to_tar(ctx.temporary_public_bundle_path, &public_archive_path).await?;
+        let bundle_archive_intent = StorageWriteIntent::new(
+            "challenge bundle archive",
+            config.storage_max_bundle_archive_bytes,
+        );
+        pack_directory_to_tar(
+            ctx.temporary_bundle_path,
+            &private_archive_path,
+            bundle_archive_intent,
+        )
+        .await?;
+        pack_directory_to_tar(
+            ctx.temporary_public_bundle_path,
+            &public_archive_path,
+            bundle_archive_intent,
+        )
+        .await?;
         storage
             .put_file(
                 &bundle_key,
@@ -930,7 +975,7 @@ async fn validate_and_hash_runtime_bundle(
     manifest: &ChallengeCreationManifest,
 ) -> Result<Sha256Digest> {
     let validation_claim_id = ChallengeDraftPublishClaimId::generate();
-    let runtime_bundle_path = temporary_runtime_bundle_path(config, draft, &validation_claim_id);
+    let runtime_bundle_path = temporary_runtime_bundle_path(config, draft, &validation_claim_id)?;
     let validation: Result<Sha256Digest> = async {
         assemble_runtime_bundle(
             storage,
@@ -1071,9 +1116,8 @@ fn temporary_runtime_bundle_path(
     config: &Config,
     draft: &ChallengeDraftResponse,
     publish_claim_id: &ChallengeDraftPublishClaimId,
-) -> PathBuf {
-    storage_work_root(config)
-        .unwrap_or_else(|_| std::env::temp_dir().join("agentics-storage-work"))
+) -> Result<PathBuf> {
+    Ok(storage_work_root(config)?
         .join("_tmp")
         .join("challenge-bundles")
         .join(format!(
@@ -1081,7 +1125,7 @@ fn temporary_runtime_bundle_path(
             draft.id,
             publish_claim_id,
             Uuid::new_v4()
-        ))
+        )))
 }
 
 /// Attempt-scoped temporary public-only bundle path under local storage work root.
@@ -1089,9 +1133,8 @@ fn temporary_public_runtime_bundle_path(
     config: &Config,
     draft: &ChallengeDraftResponse,
     publish_claim_id: &ChallengeDraftPublishClaimId,
-) -> PathBuf {
-    storage_work_root(config)
-        .unwrap_or_else(|_| std::env::temp_dir().join("agentics-storage-work"))
+) -> Result<PathBuf> {
+    Ok(storage_work_root(config)?
         .join("_tmp")
         .join("challenge-public-bundles")
         .join(format!(
@@ -1099,7 +1142,7 @@ fn temporary_public_runtime_bundle_path(
             draft.id,
             publish_claim_id,
             Uuid::new_v4()
-        ))
+        )))
 }
 
 /// Verifies every private asset required by the manifest and bundle shape is present.

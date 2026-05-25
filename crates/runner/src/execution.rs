@@ -7,10 +7,10 @@ use super::{
     EvaluationJobExecution, EvaluationLimitConfig, EvaluationLogs, EvaluatorRequest,
     EvaluatorRunResult, ExecutionResult, JobRequirement, OutputTreeLimits, PipedStdioRequest,
     Result, RetainedRunnerTree, RunPlanRequest, RunnerAttempt, RunnerContext, RunnerStorage,
-    ScoringMode, ServiceError, SetupBuildRequest, SolutionRunRequest, cleanup_paths,
-    configure_run_count_limits, create_private_host_dir, evaluation_runner_log_key,
+    ScoringMode, ServiceError, SetupBuildRequest, SolutionRunRequest, append_named_logs,
+    cleanup_paths, configure_run_count_limits, create_private_host_dir, evaluation_runner_log_key,
     extract_zip_safe, make_container_readable_tree, read_limited_result_json, resolve_run_plan,
-    sanitize_runner_error, validate_evaluator_result,
+    sanitize_runner_error, validate_evaluator_result, visible_log_content,
 };
 
 /// Execute one evaluation job in Docker and return the validated evaluator result.
@@ -54,30 +54,6 @@ pub async fn execute_evaluation_job(
     tokio::fs::create_dir_all(&session_root).await?;
     tokio::fs::create_dir_all(&evaluator_output_root).await?;
 
-    let bundle_key = match eval_type {
-        ScoringMode::Validation => &payload.public_bundle_key,
-        ScoringMode::Official => &payload.bundle_key,
-    };
-    let bundle_archive_path = working_root.join("challenge-bundle.tar");
-    storage
-        .get_to_file(
-            bundle_key,
-            &bundle_archive_path,
-            agentics_storage::StorageWriteIntent::new(
-                "challenge bundle archive",
-                config.storage_max_bundle_archive_bytes,
-            ),
-        )
-        .await?;
-    agentics_storage::unpack_tar_to_directory(&bundle_archive_path, &challenge_bundle_root).await?;
-    make_container_readable_tree(&challenge_bundle_root).await?;
-    let bundle_dir = challenge_bundle_root.as_path();
-    let spec = agentics_contracts::challenge_bundle::read_challenge_bundle_spec(bundle_dir).await?;
-    if config.requires_digest_pinned_images() {
-        agentics_contracts::challenge_bundle::validate_digest_pinned_images(&spec)?;
-    }
-    let result_path =
-        evaluator_output_root.join(spec.execution.trusted_evaluator().result_file.as_path());
     let limits = EvaluationLimitConfig {
         max_runs: config.runner_max_runs,
         max_result_json_bytes: config.runner_max_result_json_bytes,
@@ -105,6 +81,33 @@ pub async fn execute_evaluation_job(
     };
 
     let execution = async {
+        let bundle_key = match eval_type {
+            ScoringMode::Validation => &payload.public_bundle_key,
+            ScoringMode::Official => &payload.bundle_key,
+        };
+        let bundle_archive_path = working_root.join("challenge-bundle.tar");
+        storage
+            .get_to_file(
+                bundle_key,
+                &bundle_archive_path,
+                agentics_storage::StorageWriteIntent::new(
+                    "challenge bundle archive",
+                    config.storage_max_bundle_archive_bytes,
+                ),
+            )
+            .await?;
+        agentics_storage::unpack_tar_to_directory(&bundle_archive_path, &challenge_bundle_root)
+            .await?;
+        make_container_readable_tree(&challenge_bundle_root).await?;
+        let bundle_dir = challenge_bundle_root.as_path();
+        let spec =
+            agentics_contracts::challenge_bundle::read_challenge_bundle_spec(bundle_dir).await?;
+        if config.requires_digest_pinned_images() {
+            agentics_contracts::challenge_bundle::validate_digest_pinned_images(&spec)?;
+        }
+        let result_path =
+            evaluator_output_root.join(spec.execution.trusted_evaluator().result_file.as_path());
+
         let target = spec.target(&payload.target).ok_or_else(|| {
             ServiceError::Runner(format!(
                 "challenge contract does not declare target `{}`",
@@ -266,6 +269,14 @@ pub async fn execute_evaluation_job(
         let mut result: EvaluatorRunResult = serde_json::from_str(&result_raw)
             .map_err(|e| ServiceError::Runner(format!("invalid result.json: {e}")))?;
         validate_evaluator_result(&mut result, eval_type, &spec.metric_schema, limits)?;
+        if !result.logs.is_empty() {
+            let result_logs = result.logs.join("\n");
+            append_named_logs(
+                &mut logs,
+                "evaluator:result.logs",
+                visible_log_content(eval_type, &result_logs),
+            );
+        }
 
         Ok(ExecutionResult {
             result,

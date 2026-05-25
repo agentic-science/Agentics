@@ -27,6 +27,7 @@ pub const ENV_DGX_LOOP_IMAGE_ROOT: &str = "AGENTICS_DGX_LOOP_IMAGE_ROOT";
 pub const ENV_DGX_DOCKER_DATA_ROOT: &str = "AGENTICS_DGX_DOCKER_DATA_ROOT";
 pub const ENV_DGX_DOCKER_LOOP_IMAGE: &str = "AGENTICS_DGX_DOCKER_LOOP_IMAGE";
 pub const ENV_DGX_PHASE_MOUNT_ROOT: &str = "AGENTICS_DGX_PHASE_MOUNT_ROOT";
+pub const ENV_STORAGE_WORK_ROOT: &str = "AGENTICS_STORAGE_WORK_ROOT";
 pub const ENV_DGX_DOCKER_LOOP_SIZE: &str = "AGENTICS_DGX_DOCKER_LOOP_SIZE";
 pub const ENV_DGX_PHASE_LOOP_SIZE: &str = "AGENTICS_DGX_PHASE_LOOP_SIZE";
 pub const ENV_DGX_PHASES: &str = "AGENTICS_DGX_PHASES";
@@ -207,6 +208,7 @@ pub struct DgxStorageConfig {
     pub docker_data_root: PathBuf,
     pub docker_loop_image: PathBuf,
     pub phase_mount_root: PathBuf,
+    pub storage_work_root: PathBuf,
     pub docker_loop_size: String,
     pub phase_loop_size: String,
     pub service_user: String,
@@ -243,6 +245,11 @@ impl DgxStorageConfig {
             &state_root,
             Path::new("phase-mounts"),
         );
+        let storage_work_root = env_path_or_join(
+            ENV_STORAGE_WORK_ROOT,
+            &state_root,
+            Path::new("storage-work"),
+        );
 
         Ok(Self {
             state_root,
@@ -250,6 +257,7 @@ impl DgxStorageConfig {
             docker_data_root,
             docker_loop_image,
             phase_mount_root,
+            storage_work_root,
             docker_loop_size: support::env_non_empty(ENV_DGX_DOCKER_LOOP_SIZE)
                 .unwrap_or_else(|| DEFAULT_DOCKER_LOOP_SIZE.to_string()),
             phase_loop_size: support::env_non_empty(ENV_DGX_PHASE_LOOP_SIZE)
@@ -288,6 +296,7 @@ pub struct DgxProfileCheckConfig {
     pub docker_data_root: PathBuf,
     pub phase_mount_root: PathBuf,
     pub runner_runtime_root: PathBuf,
+    pub storage_work_root: PathBuf,
     pub runner_security_profile: RunnerSecurityProfile,
     pub runner_storage_mode: RunnerWritableStorageMode,
     pub runner_phase_mount_root: PathBuf,
@@ -323,6 +332,11 @@ impl DgxProfileCheckConfig {
                 ENV_RUNNER_RUNTIME_ROOT,
                 &state_root,
                 Path::new("runtime"),
+            ),
+            storage_work_root: env_path_or_join(
+                ENV_STORAGE_WORK_ROOT,
+                &state_root,
+                Path::new("storage-work"),
             ),
             runner_security_profile: parse_runner_security_profile_env()?,
             runner_storage_mode: parse_runner_storage_mode_env()?,

@@ -766,24 +766,28 @@ async fn run_created_container(
     let wait_opts = WaitContainerOptionsBuilder::default()
         .condition("not-running")
         .build();
-    let wait_result = timeout(
-        Duration::from_secs(timeout_sec),
-        docker
-            .wait_container(container_id, Some(wait_opts))
-            .collect::<Vec<_>>(),
-    )
+    let wait_result = timeout(Duration::from_secs(timeout_sec), async {
+        let mut results = docker.wait_container(container_id, Some(wait_opts));
+        let mut exit_code = None;
+        while let Some(result) = results.next().await {
+            match result {
+                Ok(status) => exit_code = Some(status.status_code),
+                Err(bollard::errors::Error::DockerContainerWaitError { code, .. }) => {
+                    exit_code = Some(code);
+                }
+                Err(error) => {
+                    return Err(ServiceError::Docker(format!(
+                        "wait container failed: {error}"
+                    )));
+                }
+            }
+        }
+        Ok::<i64, ServiceError>(exit_code.unwrap_or(1))
+    })
     .await;
 
     let (exit_code, timed_out) = match wait_result {
-        Ok(results) => {
-            let exit_code = results
-                .into_iter()
-                .flatten()
-                .last()
-                .map(|status| status.status_code)
-                .unwrap_or(1);
-            (exit_code, false)
-        }
+        Ok(exit_code) => (exit_code?, false),
         Err(_) => {
             let kill_opts = KillContainerOptionsBuilder::default()
                 .signal("SIGKILL")
@@ -816,9 +820,17 @@ async fn wait_container_exit(docker: &Docker, container_id: &str) -> Result<i64>
     let mut results = docker.wait_container(container_id, Some(wait_opts));
     let mut exit_code = 1;
     while let Some(result) = results.next().await {
-        let status = result
-            .map_err(|error| ServiceError::Docker(format!("wait container failed: {error}")))?;
-        exit_code = status.status_code;
+        match result {
+            Ok(status) => exit_code = status.status_code,
+            Err(bollard::errors::Error::DockerContainerWaitError { code, .. }) => {
+                exit_code = code;
+            }
+            Err(error) => {
+                return Err(ServiceError::Docker(format!(
+                    "wait container failed: {error}"
+                )));
+            }
+        }
     }
     Ok(exit_code)
 }

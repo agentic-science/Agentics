@@ -23,9 +23,9 @@
 //! separate local filesystem concern and is not represented by this crate.
 
 use std::fs;
-use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use agentics_config::{Config, StorageBackend};
 use agentics_domain::error::ServiceError;
@@ -37,6 +37,9 @@ use aws_sdk_s3::primitives::ByteStream;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 pub type Result<T> = std::result::Result<T, StorageError>;
+
+mod tar_archive;
+pub use tar_archive::{pack_directory_to_tar, unpack_tar_to_directory};
 
 /// Local storage-layer failures before conversion to service/API errors.
 #[derive(Debug, thiserror::Error)]
@@ -161,6 +164,13 @@ pub trait Storage: std::fmt::Debug + Send + Sync {
 
     /// List object keys below a storage-relative prefix.
     async fn list_prefix(&self, prefix: &StorageKey) -> Result<Vec<StorageKey>>;
+
+    /// Delete every object below a storage-relative prefix older than the cutoff.
+    async fn delete_prefix_older_than(
+        &self,
+        prefix: &StorageKey,
+        older_than: SystemTime,
+    ) -> Result<u64>;
 
     /// Delete every object below a storage-relative prefix.
     async fn delete_prefix(&self, prefix: &StorageKey) -> Result<u64> {
@@ -296,13 +306,15 @@ impl Storage for LocalStorage {
         }
         let temporary_full = parent.join(format!(".agentics-write-{}", uuid::Uuid::new_v4()));
         let copy_result = async {
-            tokio::fs::copy(source, &temporary_full).await?;
+            let copied = tokio::fs::copy(source, &temporary_full).await?;
+            if copied != len {
+                return Err(StorageError::Internal(format!(
+                    "local source file length changed while storing {key}: expected {len}, copied {copied}"
+                )));
+            }
             self.reject_symlink_prefixes(&key_path)?;
             self.reject_symlink_object(&full)?;
-            if tokio::fs::try_exists(&full).await? {
-                return Err(StorageError::ObjectConflict(key.to_string()));
-            }
-            tokio::fs::rename(&temporary_full, &full).await?;
+            finalize_local_temp_without_overwrite(&temporary_full, &full, key.as_str()).await?;
             Ok::<(), StorageError>(())
         }
         .await;
@@ -332,7 +344,13 @@ impl Storage for LocalStorage {
         if tokio::fs::try_exists(&durable_full).await? {
             return Err(StorageError::ObjectConflict(durable_key.to_string()));
         }
-        tokio::fs::hard_link(&temporary_full, &durable_full).await?;
+        match tokio::fs::hard_link(&temporary_full, &durable_full).await {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                return Err(StorageError::ObjectConflict(durable_key.to_string()));
+            }
+            Err(error) => return Err(error.into()),
+        }
         if let Err(error) = tokio::fs::remove_file(&temporary_full).await {
             let cleanup_result = tokio::fs::remove_file(&durable_full).await;
             if let Err(cleanup_error) = cleanup_result
@@ -357,7 +375,20 @@ impl Storage for LocalStorage {
             Err(error) => return Err(error.into()),
         };
         intent.ensure_len(metadata.len())?;
-        tokio::fs::read(&full).await.map_err(Into::into)
+        let bytes = tokio::fs::read(&full).await?;
+        let actual = u64::try_from(bytes.len()).map_err(|_| StorageError::ObjectTooLarge {
+            label: intent.label(),
+            actual: u64::MAX,
+            limit: intent.max_bytes(),
+        })?;
+        intent.ensure_len(actual)?;
+        if actual != metadata.len() {
+            return Err(StorageError::Internal(format!(
+                "local object length changed while reading {key}: expected {}, read {actual}",
+                metadata.len()
+            )));
+        }
+        Ok(bytes)
     }
 
     async fn get_to_file(
@@ -403,12 +434,12 @@ impl Storage for LocalStorage {
             }
             file.flush().await?;
             drop(file);
-            if tokio::fs::try_exists(destination).await? {
-                return Err(StorageError::ObjectConflict(
-                    destination.display().to_string(),
-                ));
-            }
-            tokio::fs::rename(&temporary, destination).await?;
+            finalize_local_temp_without_overwrite(
+                &temporary,
+                destination,
+                &destination.display().to_string(),
+            )
+            .await?;
             Ok::<(), StorageError>(())
         }
         .await;
@@ -443,6 +474,20 @@ impl Storage for LocalStorage {
             .await
             .map_err(|e| StorageError::Internal(e.to_string()))?
     }
+
+    async fn delete_prefix_older_than(
+        &self,
+        prefix: &StorageKey,
+        older_than: SystemTime,
+    ) -> Result<u64> {
+        let root = self.root.clone();
+        let prefix = prefix.as_str().to_string();
+        tokio::task::spawn_blocking(move || {
+            delete_local_prefix_older_than(&root, &prefix, older_than)
+        })
+        .await
+        .map_err(|e| StorageError::Internal(e.to_string()))?
+    }
 }
 
 /// S3-compatible durable object storage.
@@ -451,7 +496,6 @@ pub struct S3Storage {
     client: aws_sdk_s3::Client,
     bucket: String,
     prefix: Option<String>,
-    conditional_put: bool,
 }
 
 /// Connection settings for S3-compatible durable object storage.
@@ -503,7 +547,6 @@ impl S3Storage {
             client: aws_sdk_s3::Client::from_conf(s3_config.build()),
             bucket,
             prefix: normalized_s3_prefix(options.prefix.as_deref())?,
-            conditional_put: options.endpoint_url.is_none(),
         })
     }
 
@@ -563,19 +606,14 @@ impl Storage for S3Storage {
             limit: intent.max_bytes(),
         })?;
         intent.ensure_len(len)?;
-        if self.exists(key).await? {
-            return Err(StorageError::ObjectConflict(key.to_string()));
-        }
         let object_key = self.object_key(key);
-        let mut put_request = self
+        let put_request = self
             .client
             .put_object()
             .bucket(&self.bucket)
             .key(&object_key)
-            .body(ByteStream::from(content.to_vec()));
-        if self.conditional_put {
-            put_request = put_request.if_none_match("*");
-        }
+            .body(ByteStream::from(content.to_vec()))
+            .if_none_match("*");
         let put_result = put_request.send().await;
         if let Err(error) = put_result {
             if s3_error_is_conflict(&error) {
@@ -598,22 +636,17 @@ impl Storage for S3Storage {
     ) -> Result<StorageKey> {
         let len = tokio::fs::metadata(source).await?.len();
         intent.ensure_len(len)?;
-        if self.exists(key).await? {
-            return Err(StorageError::ObjectConflict(key.to_string()));
-        }
         let object_key = self.object_key(key);
         let body = ByteStream::from_path(source)
             .await
             .map_err(|e| StorageError::Io(std::io::Error::other(e)))?;
-        let mut put_request = self
+        let put_request = self
             .client
             .put_object()
             .bucket(&self.bucket)
             .key(&object_key)
-            .body(body);
-        if self.conditional_put {
-            put_request = put_request.if_none_match("*");
-        }
+            .body(body)
+            .if_none_match("*");
         let put_result = put_request.send().await;
         if let Err(error) = put_result {
             if s3_error_is_conflict(&error) {
@@ -633,26 +666,37 @@ impl Storage for S3Storage {
         temporary_key: &StorageKey,
         durable_key: &StorageKey,
     ) -> Result<StorageKey> {
-        if self.exists(durable_key).await? {
-            return Err(StorageError::ObjectConflict(durable_key.to_string()));
-        }
         let source_len = self
             .object_len(temporary_key)
             .await?
             .ok_or_else(|| StorageError::ObjectNotFound(temporary_key.to_string()))?;
-        let source = format!("{}/{}", self.bucket, self.object_key(temporary_key));
-        let copy_result = self
+        let source = self
             .client
-            .copy_object()
+            .get_object()
+            .bucket(&self.bucket)
+            .key(self.object_key(temporary_key))
+            .send()
+            .await
+            .map_err(|e| StorageError::Backend(format!("{e:?}")))?;
+        let put_result = self
+            .client
+            .put_object()
             .bucket(&self.bucket)
             .key(self.object_key(durable_key))
-            .copy_source(source)
+            .body(source.body)
+            .if_none_match("*")
             .send()
             .await;
-        if let Err(error) = copy_result {
+        if let Err(error) = put_result {
+            if s3_error_is_conflict(&error) {
+                return Err(StorageError::ObjectConflict(durable_key.to_string()));
+            }
             return Err(StorageError::Backend(format!("{error:?}")));
         }
-        self.verify_object_len(durable_key, source_len).await?;
+        if let Err(error) = self.verify_object_len(durable_key, source_len).await {
+            drop(self.delete(durable_key).await);
+            return Err(error);
+        }
         self.delete(temporary_key).await?;
         Ok(durable_key.clone())
     }
@@ -672,19 +716,41 @@ impl Storage for S3Storage {
             .send()
             .await
             .map_err(|e| StorageError::Backend(format!("{e:?}")))?;
-        let bytes = output
-            .body
-            .collect()
-            .await
-            .map_err(|e| StorageError::Backend(format!("{e:?}")))?
-            .into_bytes();
-        let len = u64::try_from(bytes.len()).map_err(|_| StorageError::ObjectTooLarge {
-            label: intent.label(),
-            actual: u64::MAX,
-            limit: intent.max_bytes(),
-        })?;
-        intent.ensure_len(len)?;
-        Ok(bytes.to_vec())
+        let mut body = output.body.into_async_read();
+        let mut bytes = Vec::new();
+        let mut read_total = 0u64;
+        let mut buffer = [0u8; 64 * 1024];
+        loop {
+            let len = body
+                .read(&mut buffer)
+                .await
+                .map_err(|e| StorageError::Backend(format!("{e:?}")))?;
+            if len == 0 {
+                break;
+            }
+            let len_u64 = u64::try_from(len).map_err(|_| {
+                StorageError::Internal("S3 download chunk length overflow".to_string())
+            })?;
+            read_total =
+                read_total
+                    .checked_add(len_u64)
+                    .ok_or_else(|| StorageError::ObjectTooLarge {
+                        label: intent.label(),
+                        actual: u64::MAX,
+                        limit: intent.max_bytes(),
+                    })?;
+            intent.ensure_len(read_total)?;
+            let chunk = buffer.get(..len).ok_or_else(|| {
+                StorageError::Internal("S3 download chunk range invalid".to_string())
+            })?;
+            bytes.extend_from_slice(chunk);
+        }
+        if read_total != object_len {
+            return Err(StorageError::Internal(format!(
+                "S3 object length mismatch while reading {key}: expected {object_len}, read {read_total}"
+            )));
+        }
+        Ok(bytes)
     }
 
     async fn get_to_file(
@@ -756,12 +822,12 @@ impl Storage for S3Storage {
             }
             file.flush().await?;
             drop(file);
-            if tokio::fs::try_exists(destination).await? {
-                return Err(StorageError::ObjectConflict(
-                    destination.display().to_string(),
-                ));
-            }
-            tokio::fs::rename(&temporary, destination).await?;
+            finalize_local_temp_without_overwrite(
+                &temporary,
+                destination,
+                &destination.display().to_string(),
+            )
+            .await?;
             Ok::<(), StorageError>(())
         }
         .await;
@@ -800,7 +866,9 @@ impl Storage for S3Storage {
             for object in output.contents() {
                 if let Some(key) = object.key() {
                     let logical_key = self.strip_prefix(key)?;
-                    keys.push(logical_key);
+                    if storage_key_is_within_prefix(&logical_key, prefix) {
+                        keys.push(logical_key);
+                    }
                 }
             }
             continuation_token = output.next_continuation_token().map(ToOwned::to_owned);
@@ -809,6 +877,56 @@ impl Storage for S3Storage {
             }
         }
         Ok(keys)
+    }
+
+    async fn delete_prefix_older_than(
+        &self,
+        prefix: &StorageKey,
+        older_than: SystemTime,
+    ) -> Result<u64> {
+        let mut continuation_token = None;
+        let physical_prefix = self.object_key(prefix);
+        let mut keys_to_delete = Vec::new();
+        loop {
+            let output = self
+                .client
+                .list_objects_v2()
+                .bucket(&self.bucket)
+                .prefix(&physical_prefix)
+                .set_continuation_token(continuation_token.clone())
+                .send()
+                .await
+                .map_err(|e| StorageError::Backend(format!("{e:?}")))?;
+            for object in output.contents() {
+                let Some(key) = object.key() else {
+                    continue;
+                };
+                let logical_key = self.strip_prefix(key)?;
+                if !storage_key_is_within_prefix(&logical_key, prefix) {
+                    continue;
+                }
+                let Some(last_modified) = object.last_modified() else {
+                    continue;
+                };
+                let modified = SystemTime::try_from(*last_modified)
+                    .map_err(|e| StorageError::Backend(format!("{e:?}")))?;
+                if modified < older_than {
+                    keys_to_delete.push(logical_key);
+                }
+            }
+            continuation_token = output.next_continuation_token().map(ToOwned::to_owned);
+            if continuation_token.is_none() {
+                break;
+            }
+        }
+        let mut deleted = 0u64;
+        for key in keys_to_delete {
+            self.delete(&key).await?;
+            deleted = deleted.checked_add(1).ok_or_else(|| {
+                StorageError::Internal("deleted object count overflow".to_string())
+            })?;
+        }
+        Ok(deleted)
     }
 }
 
@@ -850,26 +968,6 @@ impl S3Storage {
     }
 }
 
-/// Create an immutable tar archive from a validated bundle directory.
-pub async fn pack_directory_to_tar(source_dir: &Path, archive_path: &Path) -> Result<()> {
-    let source_dir = source_dir.to_path_buf();
-    let archive_path = archive_path.to_path_buf();
-    tokio::task::spawn_blocking(move || pack_directory_to_tar_blocking(&source_dir, &archive_path))
-        .await
-        .map_err(|e| StorageError::Internal(e.to_string()))?
-}
-
-/// Extract an Agentics-managed bundle tar archive into a destination directory.
-pub async fn unpack_tar_to_directory(archive_path: &Path, destination_dir: &Path) -> Result<()> {
-    let archive_path = archive_path.to_path_buf();
-    let destination_dir = destination_dir.to_path_buf();
-    tokio::task::spawn_blocking(move || {
-        unpack_tar_to_directory_blocking(&archive_path, &destination_dir)
-    })
-    .await
-    .map_err(|e| StorageError::Internal(e.to_string()))?
-}
-
 async fn put_local_bytes(
     storage: &LocalStorage,
     key: &StorageKey,
@@ -899,14 +997,35 @@ async fn put_local_bytes(
         drop(temporary);
         storage.reject_symlink_prefixes(key_path)?;
         storage.reject_symlink_object(full)?;
-        if tokio::fs::try_exists(full).await? {
-            return Err(StorageError::ObjectConflict(key.to_string()));
-        }
-        tokio::fs::rename(&temporary_full, full).await?;
+        finalize_local_temp_without_overwrite(&temporary_full, full, key.as_str()).await?;
         Ok::<(), StorageError>(())
     }
     .await;
     cleanup_temp_file_on_error(write_result, &temporary_full).await
+}
+
+async fn finalize_local_temp_without_overwrite(
+    temporary: &Path,
+    destination: &Path,
+    conflict_label: &str,
+) -> Result<()> {
+    match tokio::fs::hard_link(temporary, destination).await {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            return Err(StorageError::ObjectConflict(conflict_label.to_string()));
+        }
+        Err(error) => return Err(error.into()),
+    }
+    if let Err(error) = tokio::fs::remove_file(temporary).await {
+        let cleanup = tokio::fs::remove_file(destination).await;
+        if let Err(cleanup_error) = cleanup
+            && cleanup_error.kind() != std::io::ErrorKind::NotFound
+        {
+            return Err(cleanup_error.into());
+        }
+        return Err(error.into());
+    }
+    Ok(())
 }
 
 async fn cleanup_temp_file_on_error(result: Result<()>, temporary: &Path) -> Result<()> {
@@ -954,6 +1073,42 @@ fn list_local_prefix(root: &Path, prefix: &str) -> Result<Vec<StorageKey>> {
     Ok(keys)
 }
 
+fn delete_local_prefix_older_than(
+    root: &Path,
+    prefix: &str,
+    older_than: SystemTime,
+) -> Result<u64> {
+    let keys = list_local_prefix(root, prefix)?;
+    let mut deleted = 0u64;
+    for key in keys {
+        let path = root.join(key.as_path());
+        let metadata = match fs::symlink_metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => return Err(error.into()),
+        };
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            continue;
+        }
+        let modified = metadata.modified()?;
+        if modified < older_than {
+            fs::remove_file(&path)?;
+            deleted = deleted.checked_add(1).ok_or_else(|| {
+                StorageError::Internal("deleted object count overflow".to_string())
+            })?;
+        }
+    }
+    Ok(deleted)
+}
+
+fn storage_key_is_within_prefix(key: &StorageKey, prefix: &StorageKey) -> bool {
+    key == prefix
+        || key
+            .as_str()
+            .strip_prefix(prefix.as_str())
+            .is_some_and(|remainder| remainder.starts_with('/'))
+}
+
 fn normalized_s3_prefix(value: Option<&str>) -> Result<Option<String>> {
     let Some(prefix) = value.map(str::trim).filter(|value| !value.is_empty()) else {
         return Ok(None);
@@ -974,106 +1129,6 @@ fn s3_error_is_not_found<E: std::fmt::Debug + std::fmt::Display>(error: &E) -> b
 fn s3_error_is_conflict<E: std::fmt::Debug + std::fmt::Display>(error: &E) -> bool {
     let text = format!("{error} {error:?}");
     text.contains("PreconditionFailed") || text.contains("AlreadyExists") || text.contains("412")
-}
-
-fn pack_directory_to_tar_blocking(source_dir: &Path, archive_path: &Path) -> Result<()> {
-    if let Some(parent) = archive_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let temporary = archive_path.with_extension(format!("agentics-tar-{}", uuid::Uuid::new_v4()));
-    let file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temporary)?;
-    let result = (|| {
-        let mut builder = tar::Builder::new(file);
-        append_bundle_dir(&mut builder, source_dir, source_dir)?;
-        builder.finish()?;
-        fs::rename(&temporary, archive_path)?;
-        Ok::<(), StorageError>(())
-    })();
-    if let Err(error) = result {
-        if let Err(cleanup_error) = fs::remove_file(&temporary)
-            && cleanup_error.kind() != std::io::ErrorKind::NotFound
-        {
-            return Err(cleanup_error.into());
-        }
-        return Err(error);
-    }
-    Ok(())
-}
-
-fn append_bundle_dir(builder: &mut tar::Builder<fs::File>, root: &Path, dir: &Path) -> Result<()> {
-    for entry in fs::read_dir(dir)? {
-        let path = entry?.path();
-        let metadata = fs::symlink_metadata(&path)?;
-        let relative = path
-            .strip_prefix(root)
-            .map_err(|e| StorageError::Internal(e.to_string()))?;
-        if metadata.is_dir() {
-            builder.append_dir(relative, &path)?;
-            append_bundle_dir(builder, root, &path)?;
-        } else if metadata.is_file() {
-            builder.append_path_with_name(&path, relative)?;
-        } else {
-            return Err(StorageError::InvalidKey(format!(
-                "bundle archive contains unsupported filesystem entry: {}",
-                path.display()
-            )));
-        }
-    }
-    Ok(())
-}
-
-fn unpack_tar_to_directory_blocking(archive_path: &Path, destination_dir: &Path) -> Result<()> {
-    fs::create_dir_all(destination_dir)?;
-    let file = fs::File::open(archive_path)?;
-    let mut archive = tar::Archive::new(file);
-    for entry in archive.entries()? {
-        let mut entry = entry?;
-        let relative = entry.path()?.into_owned();
-        validate_tar_path(&relative)?;
-        let target = destination_dir.join(&relative);
-        let entry_type = entry.header().entry_type();
-        if entry_type.is_dir() {
-            fs::create_dir_all(&target)?;
-        } else if entry_type.is_file() {
-            if let Some(parent) = target.parent() {
-                fs::create_dir_all(parent)?;
-            }
-            let mut file = fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&target)?;
-            std::io::copy(&mut entry, &mut file)?;
-            file.flush()?;
-        } else {
-            return Err(StorageError::InvalidKey(format!(
-                "bundle archive contains unsupported tar entry: {}",
-                relative.display()
-            )));
-        }
-    }
-    Ok(())
-}
-
-fn validate_tar_path(path: &Path) -> Result<()> {
-    if path.as_os_str().is_empty() || path.is_absolute() {
-        return Err(StorageError::InvalidKey(
-            "bundle archive contains unsafe path".to_string(),
-        ));
-    }
-    for component in path.components() {
-        match component {
-            Component::Normal(_) => {}
-            _ => {
-                return Err(StorageError::InvalidKey(
-                    "bundle archive contains unsafe path".to_string(),
-                ));
-            }
-        }
-    }
-    Ok(())
 }
 
 fn invalid_storage_key() -> StorageError {

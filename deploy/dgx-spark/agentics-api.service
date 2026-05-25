@@ -15,7 +15,7 @@ RestartSec=5s
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/srv/agentics/storage /run/agentics
+ReadWritePaths=/srv/agentics/storage /srv/agentics/storage-work /run/agentics
 
 [Install]
 WantedBy=multi-user.target

@@ -22,7 +22,7 @@ ALTER TABLE challenge_private_assets
 
 ALTER TABLE challenge_private_assets
   ADD CONSTRAINT challenge_private_assets_status_check
-  CHECK (status IN ('pending', 'active', 'failed'));
+  CHECK (status IN ('pending', 'active', 'failed', 'purging'));
 
 ALTER TABLE challenge_private_assets
   DROP CONSTRAINT IF EXISTS challenge_private_assets_draft_id_asset_name_key;

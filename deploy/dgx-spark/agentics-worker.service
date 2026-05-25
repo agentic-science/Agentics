@@ -16,7 +16,7 @@ RestartSec=5s
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ReadWritePaths=/srv/agentics/storage /srv/agentics/runtime /srv/agentics/phase-mounts/solution-setup /srv/agentics/phase-mounts/solution-build /srv/agentics/phase-mounts/solution-run /srv/agentics/phase-mounts/evaluator-setup /srv/agentics/phase-mounts/evaluator-score /run/agentics
+ReadWritePaths=/srv/agentics/storage /srv/agentics/storage-work /srv/agentics/runtime /srv/agentics/phase-mounts/solution-setup /srv/agentics/phase-mounts/solution-build /srv/agentics/phase-mounts/solution-run /srv/agentics/phase-mounts/evaluator-setup /srv/agentics/phase-mounts/evaluator-score /run/agentics
 
 [Install]
 WantedBy=multi-user.target

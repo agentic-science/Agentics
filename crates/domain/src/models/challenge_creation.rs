@@ -254,6 +254,7 @@ pub enum ChallengePrivateAssetStatus {
     Pending,
     Active,
     Failed,
+    Purging,
 }
 
 impl ChallengePrivateAssetStatus {
@@ -263,6 +264,7 @@ impl ChallengePrivateAssetStatus {
             Self::Pending => "pending",
             Self::Active => "active",
             Self::Failed => "failed",
+            Self::Purging => "purging",
         }
     }
 
@@ -272,6 +274,7 @@ impl ChallengePrivateAssetStatus {
             "pending" => Some(Self::Pending),
             "active" => Some(Self::Active),
             "failed" => Some(Self::Failed),
+            "purging" => Some(Self::Purging),
             _ => None,
         }
     }
@@ -497,4 +500,5 @@ pub struct ReviewChallengeDraftRequest {
 pub struct ChallengeDraftCleanupResponse {
     pub abandoned_drafts: i64,
     pub purged_private_assets: i64,
+    pub purged_temporary_storage_objects: i64,
 }

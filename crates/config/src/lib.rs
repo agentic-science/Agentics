@@ -106,6 +106,8 @@ pub struct Config {
     pub storage_max_statement_bytes: u64,
     #[serde(default = "storage_config::default_storage_max_json_artifact_bytes")]
     pub storage_max_json_artifact_bytes: u64,
+    #[serde(default = "storage_config::default_storage_tmp_object_grace_hours")]
+    pub storage_tmp_object_grace_hours: u64,
     #[serde(default = "default_challenges_root")]
     pub challenges_root: String,
     #[serde(default = "default_admin_username")]

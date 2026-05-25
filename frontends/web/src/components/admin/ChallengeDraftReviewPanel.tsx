@@ -186,6 +186,7 @@ export function ChallengeDraftReviewPanel({
         t("cleanupResult", {
           drafts: response.abandoned_drafts,
           assets: response.purged_private_assets,
+          tempObjects: response.purged_temporary_storage_objects,
         }),
       );
       await onRefresh({ quiet: true });

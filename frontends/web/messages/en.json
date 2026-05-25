@@ -403,7 +403,7 @@
       "invalidReview": "Invalid review message.",
       "completed": "Draft {id} {action} completed.",
       "cleanupConfirm": "Clean up stale challenge drafts and delete expired private assets?",
-      "cleanupResult": "Cleanup abandoned {drafts} drafts and purged {assets} assets.",
+      "cleanupResult": "Cleanup abandoned {drafts} drafts, purged {assets} assets, and removed {tempObjects} temporary storage objects.",
       "cleanupSignIn": "Sign in before cleaning up stale drafts.",
       "draft": "Draft",
       "status": "Status",

@@ -173,8 +173,10 @@ pub(crate) fn render_challenge_draft_cleanup(
     match format {
         OutputFormat::Json => pretty_json(response),
         OutputFormat::Table => Ok(format!(
-            "abandoned_drafts: {}\npurged_private_assets: {}",
-            response.abandoned_drafts, response.purged_private_assets
+            "abandoned_drafts: {}\npurged_private_assets: {}\npurged_temporary_storage_objects: {}",
+            response.abandoned_drafts,
+            response.purged_private_assets,
+            response.purged_temporary_storage_objects
         )),
     }
 }

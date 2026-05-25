@@ -175,6 +175,7 @@ fn test_storage_config() -> Result<DgxStorageConfig, StorageError> {
     config.docker_data_root = test_state_root.join("docker-data-root");
     config.docker_loop_image = config.loop_image_root.join("docker-data-root.xfs");
     config.phase_mount_root = test_state_root.join("phase-mounts");
+    config.storage_work_root = test_state_root.join("storage-work");
     config.docker_loop_size = env_non_empty(ENV_DGX_TEST_DOCKER_LOOP_SIZE)
         .unwrap_or_else(|| DEFAULT_TEST_DOCKER_LOOP_SIZE.to_string());
     config.phase_loop_size = env_non_empty(ENV_DGX_TEST_PHASE_LOOP_SIZE)
@@ -250,6 +251,7 @@ fn validate_destructive_roots(
         ("loop image root", &config.loop_image_root),
         ("Docker data root", &config.docker_data_root),
         ("phase mount root", &config.phase_mount_root),
+        ("storage work root", &config.storage_work_root),
     ] {
         require_safe_destructive_path(path, label, &allowed)?;
     }
@@ -269,6 +271,7 @@ impl StoragePlan {
             StorageAction::EnsureDir(config.docker_data_root.clone()),
             StorageAction::EnsureDir(config.phase_mount_root.clone()),
             StorageAction::EnsureDir(config.state_root.join("storage")),
+            StorageAction::EnsureDir(config.storage_work_root.clone()),
             StorageAction::EnsureDir(config.state_root.join("challenges")),
             StorageAction::EnsureDir(config.state_root.join("runtime")),
             StorageAction::EnsureImage(
@@ -595,6 +598,7 @@ async fn chown_owned_paths(config: &DgxStorageConfig) -> Result<String, StorageE
     let user_group = format!("{}:{}", config.service_user, config.service_group);
     for path in [
         config.state_root.join("storage"),
+        config.storage_work_root.clone(),
         config.state_root.join("challenges"),
         config.state_root.join("runtime"),
         config.phase_mount_root.clone(),

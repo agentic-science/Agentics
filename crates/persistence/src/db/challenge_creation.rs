@@ -556,6 +556,7 @@ pub async fn list_unpublished_private_assets_for_purge(
         JOIN challenge_drafts d ON d.id = a.draft_id
         WHERE d.status IN ('abandoned', 'rejected')
           AND d.updated_at < NOW() - ($1::TEXT || ' days')::INTERVAL
+          AND a.status IN ('pending', 'active', 'failed', 'purging')
         ORDER BY a.created_at ASC
         "#,
     )
@@ -575,6 +576,34 @@ pub async fn list_unpublished_private_assets_for_purge(
             })
         })
         .collect()
+}
+
+/// Mark a purge-eligible private asset as purging before deleting storage.
+pub async fn mark_challenge_private_asset_purging(
+    pool: &PgPool,
+    asset_row_id: &ChallengePrivateAssetId,
+) -> Result<Option<ChallengePrivateAssetPurgeRecord>> {
+    let row = sqlx::query(
+        r#"
+        UPDATE challenge_private_assets
+        SET status = 'purging'
+        WHERE id = $1::uuid
+          AND status IN ('pending', 'active', 'failed', 'purging')
+        RETURNING id, storage_key, temporary_storage_key
+        "#,
+    )
+    .bind(asset_row_id.as_str())
+    .fetch_optional(pool)
+    .await?;
+
+    row.map(|row| {
+        Ok(ChallengePrivateAssetPurgeRecord {
+            id: challenge_private_asset_id_from_row(&row, "id")?,
+            storage_key: storage_key_from_row(&row, "storage_key")?,
+            temporary_storage_key: optional_storage_key_from_row(&row, "temporary_storage_key")?,
+        })
+    })
+    .transpose()
 }
 
 /// Delete a private asset record after its object has been removed.

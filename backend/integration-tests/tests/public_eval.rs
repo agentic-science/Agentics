@@ -50,10 +50,14 @@ async fn store_challenge_bundle_objects(
     let temp = tempfile::tempdir().expect("bundle archive tempdir");
     let private_archive = temp.path().join("private.tar");
     let public_archive = temp.path().join("public.tar");
-    pack_directory_to_tar(private_bundle, &private_archive)
+    let bundle_archive_intent = StorageWriteIntent::new(
+        "challenge bundle archive",
+        config.storage_max_bundle_archive_bytes,
+    );
+    pack_directory_to_tar(private_bundle, &private_archive, bundle_archive_intent)
         .await
         .expect("pack private challenge bundle");
-    pack_directory_to_tar(public_bundle, &public_archive)
+    pack_directory_to_tar(public_bundle, &public_archive, bundle_archive_intent)
         .await
         .expect("pack public challenge bundle");
     let private_key = StorageKey::try_new(format!(

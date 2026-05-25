@@ -119,6 +119,7 @@ async fn run(cli: Cli) -> Result<(HostProbeMode, Vec<ReportLine>), ProfileCheckE
         expected_docker_host(&config),
         check_xfs_mount(&config.docker_data_root, "Agentics Docker data root"),
         check_runtime_root(&config.runner_runtime_root),
+        check_runtime_root_with_label(&config.storage_work_root, "storage work root"),
         check_private_host_dir(
             &config.runner_phase_mount_root,
             "runner phase mount root permissions",
@@ -210,31 +211,26 @@ fn check_xfs_mount(path: &Path, label: &str) -> ReportLine {
 }
 
 fn check_runtime_root(path: &Path) -> ReportLine {
+    check_runtime_root_with_label(path, "runner runtime root")
+}
+
+fn check_runtime_root_with_label(path: &Path, label: &str) -> ReportLine {
     if !path.is_absolute() {
-        return ReportLine::fail(
-            "runner runtime root",
-            format!("{} must be absolute", path.display()),
-        );
+        return ReportLine::fail(label, format!("{} must be absolute", path.display()));
     }
     if !path.is_dir() {
-        return ReportLine::fail(
-            "runner runtime root",
-            format!("{} is missing", path.display()),
-        );
+        return ReportLine::fail(label, format!("{} is missing", path.display()));
     }
     if let Some(error) = private_host_dir_error(path) {
-        return ReportLine::fail("runner runtime root", error);
+        return ReportLine::fail(label, error);
     }
     if !writable_probe(path) {
         return ReportLine::fail(
-            "runner runtime root",
+            label,
             format!("{} is not writable by this user", path.display()),
         );
     }
-    ReportLine::pass(
-        "runner runtime root",
-        format!("{} is private and writable", path.display()),
-    )
+    ReportLine::pass(label, format!("{} is private and writable", path.display()))
 }
 
 fn check_private_host_dir(path: &Path, label: &str) -> ReportLine {

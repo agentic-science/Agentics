@@ -8,6 +8,7 @@ const DEFAULT_STORAGE_BACKEND: StorageBackend = StorageBackend::Local;
 const DEFAULT_STORAGE_MAX_BUNDLE_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 const DEFAULT_STORAGE_MAX_STATEMENT_BYTES: u64 = 1024 * 1024;
 const DEFAULT_STORAGE_MAX_JSON_ARTIFACT_BYTES: u64 = 1024 * 1024;
+const DEFAULT_STORAGE_TMP_OBJECT_GRACE_HOURS: u64 = 24;
 
 /// Durable storage backend for platform objects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -54,6 +55,11 @@ pub(crate) fn default_storage_max_json_artifact_bytes() -> u64 {
     DEFAULT_STORAGE_MAX_JSON_ARTIFACT_BYTES
 }
 
+/// Default age after which temporary storage objects are eligible for cleanup.
+pub(crate) fn default_storage_tmp_object_grace_hours() -> u64 {
+    DEFAULT_STORAGE_TMP_OBJECT_GRACE_HOURS
+}
+
 /// Validate durable object storage configuration.
 pub(crate) fn validate_object_storage_config(config: &Config) -> anyhow::Result<()> {
     if config.storage_max_bundle_archive_bytes == 0 {
@@ -64,6 +70,9 @@ pub(crate) fn validate_object_storage_config(config: &Config) -> anyhow::Result<
     }
     if config.storage_max_json_artifact_bytes == 0 {
         anyhow::bail!("AGENTICS_STORAGE_MAX_JSON_ARTIFACT_BYTES must be greater than zero");
+    }
+    if config.storage_tmp_object_grace_hours == 0 {
+        anyhow::bail!("AGENTICS_STORAGE_TMP_OBJECT_GRACE_HOURS must be greater than zero");
     }
     if let Some(work_root) = config
         .storage_work_root

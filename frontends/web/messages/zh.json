@@ -403,7 +403,7 @@
       "invalidReview": "审核消息无效。",
       "completed": "草稿 {id} 的 {action} 已完成。",
       "cleanupConfirm": "清理过期挑战草稿并删除过期私有资产？",
-      "cleanupResult": "清理放弃草稿 {drafts} 个，清除私有资产 {assets} 个。",
+      "cleanupResult": "清理放弃草稿 {drafts} 个，清除私有资产 {assets} 个，并删除临时存储对象 {tempObjects} 个。",
       "cleanupSignIn": "请先登录再清理过期草稿。",
       "draft": "草稿",
       "status": "状态",

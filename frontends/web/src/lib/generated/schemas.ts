@@ -476,7 +476,7 @@ export const adminChallengePrivateAssetListResponseSchema = z
             ),
           required: z.boolean(),
           status: z
-            .enum(["pending", "active", "failed"])
+            .enum(["pending", "active", "failed", "purging"])
             .describe(
               "Internal lifecycle status for one private asset upload record.",
             ),
@@ -484,10 +484,14 @@ export const adminChallengePrivateAssetListResponseSchema = z
           sha256: z.string().regex(/^[0-9a-f]{64}$/),
           storage_key: z
             .string()
-            .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+            .regex(
+              /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+            ),
           temporary_storage_key: z
             .string()
-            .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+            .regex(
+              /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+            )
             .optional(),
           uploader_agent_id: z
             .string()
@@ -773,7 +777,9 @@ export const challengeDetailResponseSchema = z
             protocol: z.string(),
             manifest_file: z
               .string()
-              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+              .regex(
+                /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+              ),
           })
           .strict()
           .describe("Local solution format constraints declared by a bundle."),
@@ -1136,7 +1142,9 @@ export const challengeDetailResponseSchema = z
                       command: z.array(z.string()),
                       result_file: z
                         .string()
-                        .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+                        .regex(
+                          /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+                        ),
                     })
                     .strict()
                     .describe(
@@ -1144,14 +1152,18 @@ export const challengeDetailResponseSchema = z
                     ),
                   validation_runs: z
                     .string()
-                    .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+                    .regex(
+                      /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+                    )
                     .optional(),
                   validation_setup: z
                     .object({
                       command: z.array(z.string()),
                       result_runs_file: z
                         .string()
-                        .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+                        .regex(
+                          /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+                        )
                         .describe(
                           "Relative path, under the setup workspace, to the generated run manifest.",
                         ),
@@ -1178,7 +1190,9 @@ export const challengeDetailResponseSchema = z
                       command: z.array(z.string()),
                       result_file: z
                         .string()
-                        .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+                        .regex(
+                          /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+                        ),
                     })
                     .strict()
                     .describe(
@@ -1186,14 +1200,18 @@ export const challengeDetailResponseSchema = z
                     ),
                   validation_session: z
                     .string()
-                    .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+                    .regex(
+                      /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+                    )
                     .optional(),
                   validation_setup: z
                     .object({
                       command: z.array(z.string()),
                       result_session_file: z
                         .string()
-                        .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+                        .regex(
+                          /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+                        )
                         .describe(
                           "Relative path, under the setup workspace, to the generated session manifest.",
                         ),
@@ -1220,7 +1238,9 @@ export const challengeDetailResponseSchema = z
                       command: z.array(z.string()),
                       result_file: z
                         .string()
-                        .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+                        .regex(
+                          /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+                        ),
                     })
                     .strict()
                     .describe(
@@ -1291,7 +1311,9 @@ export const challengeDetailResponseSchema = z
           .object({
             public_dir: z
               .string()
-              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+              .regex(
+                /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+              )
               .describe(
                 "Directory containing data that agents may inspect and use for validation.",
               ),
@@ -1469,6 +1491,7 @@ export const challengeDraftCleanupResponseSchema = z
   .object({
     abandoned_drafts: z.number().int(),
     purged_private_assets: z.number().int(),
+    purged_temporary_storage_objects: z.number().int(),
   })
   .strict()
   .describe(
@@ -1528,7 +1551,9 @@ export const challengeDraftListResponseSchema = z
           commit_sha: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
           challenge_path: z
             .string()
-            .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+            .regex(
+              /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+            ),
           manifest_sha256: z.string().regex(/^[0-9a-f]{64}$/),
           manifest: z
             .object({
@@ -1564,10 +1589,14 @@ export const challengeDraftListResponseSchema = z
                 .max(6),
               readme_path: z
                 .string()
-                .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+                .regex(
+                  /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+                ),
               bundle_path: z
                 .string()
-                .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+                .regex(
+                  /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+                )
                 .optional(),
               archive: z
                 .object({ reason: z.string() })
@@ -1597,7 +1626,9 @@ export const challengeDraftListResponseSchema = z
                         .array(
                           z
                             .string()
-                            .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+                            .regex(
+                              /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+                            ),
                         )
                         .optional(),
                       asset_note: z.string().optional(),
@@ -1682,7 +1713,9 @@ export const challengeDraftListResponseSchema = z
                   sha256: z.string().regex(/^[0-9a-f]{64}$/),
                   storage_key: z
                     .string()
-                    .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+                    .regex(
+                      /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+                    ),
                   uploader_agent_id: z
                     .string()
                     .uuid()
@@ -1785,7 +1818,11 @@ export const challengeDraftResponseSchema = z
         /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/[0-9]+$/,
       ),
     commit_sha: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
-    challenge_path: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+    challenge_path: z
+      .string()
+      .regex(
+        /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+      ),
     manifest_sha256: z.string().regex(/^[0-9a-f]{64}$/),
     manifest: z
       .object({
@@ -1819,10 +1856,14 @@ export const challengeDraftResponseSchema = z
           .max(6),
         readme_path: z
           .string()
-          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+          .regex(
+            /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+          ),
         bundle_path: z
           .string()
-          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+          .regex(
+            /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+          )
           .optional(),
         archive: z
           .object({ reason: z.string() })
@@ -1850,7 +1891,11 @@ export const challengeDraftResponseSchema = z
                 required: z.boolean(),
                 required_paths: z
                   .array(
-                    z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+                    z
+                      .string()
+                      .regex(
+                        /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+                      ),
                   )
                   .optional(),
                 asset_note: z.string().optional(),
@@ -1931,7 +1976,9 @@ export const challengeDraftResponseSchema = z
             sha256: z.string().regex(/^[0-9a-f]{64}$/),
             storage_key: z
               .string()
-              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+              .regex(
+                /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+              ),
             uploader_agent_id: z
               .string()
               .uuid()
@@ -2111,7 +2158,11 @@ export const challengePrivateAssetResponseSchema = z
     required: z.boolean(),
     size_bytes: z.number().int(),
     sha256: z.string().regex(/^[0-9a-f]{64}$/),
-    storage_key: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+    storage_key: z
+      .string()
+      .regex(
+        /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+      ),
     uploader_agent_id: z
       .string()
       .uuid()
@@ -2179,7 +2230,11 @@ export const challengeShortlistRevisionResponseSchema = z
     requested_count: z.number().int(),
     added_count: z.number().int(),
     sha256: z.string().regex(/^[0-9a-f]{64}$/),
-    storage_key: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+    storage_key: z
+      .string()
+      .regex(
+        /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+      ),
     created_at: z.string(),
   })
   .strict()
@@ -2200,7 +2255,11 @@ export const createChallengeDraftRequestSchema = z
         /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/[0-9]+$/,
       ),
     commit_sha: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
-    challenge_path: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+    challenge_path: z
+      .string()
+      .regex(
+        /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+      ),
     pr_author_github_user_id: z.number().int(),
     manifest: z
       .object({
@@ -2234,10 +2293,14 @@ export const createChallengeDraftRequestSchema = z
           .max(6),
         readme_path: z
           .string()
-          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+          .regex(
+            /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+          ),
         bundle_path: z
           .string()
-          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+          .regex(
+            /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+          )
           .optional(),
         archive: z
           .object({ reason: z.string() })
@@ -2265,7 +2328,11 @@ export const createChallengeDraftRequestSchema = z
                 required: z.boolean(),
                 required_paths: z
                   .array(
-                    z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+                    z
+                      .string()
+                      .regex(
+                        /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+                      ),
                   )
                   .optional(),
                 asset_note: z.string().optional(),
@@ -2368,7 +2435,11 @@ export const creatorChallengeDraftResponseSchema = z
         /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/pull\/[0-9]+$/,
       ),
     commit_sha: z.string().regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/),
-    challenge_path: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+    challenge_path: z
+      .string()
+      .regex(
+        /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+      ),
     manifest_sha256: z.string().regex(/^[0-9a-f]{64}$/),
     manifest: z
       .object({
@@ -2402,10 +2473,14 @@ export const creatorChallengeDraftResponseSchema = z
           .max(6),
         readme_path: z
           .string()
-          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+          .regex(
+            /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+          ),
         bundle_path: z
           .string()
-          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+          .regex(
+            /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+          )
           .optional(),
         archive: z
           .object({ reason: z.string() })
@@ -2433,7 +2508,11 @@ export const creatorChallengeDraftResponseSchema = z
                 required: z.boolean(),
                 required_paths: z
                   .array(
-                    z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+                    z
+                      .string()
+                      .regex(
+                        /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+                      ),
                   )
                   .optional(),
                 asset_note: z.string().optional(),
@@ -2513,7 +2592,9 @@ export const creatorChallengeDraftResponseSchema = z
             sha256: z.string().regex(/^[0-9a-f]{64}$/),
             storage_key: z
               .string()
-              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+              .regex(
+                /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+              ),
             uploader_agent_id: z
               .string()
               .uuid()
@@ -3057,11 +3138,21 @@ export const publishChallengeResponseSchema = z
       .min(3)
       .max(63),
     title: z.string(),
-    bundle_key: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+    bundle_key: z
+      .string()
+      .regex(
+        /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+      ),
     public_bundle_key: z
       .string()
-      .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
-    statement_key: z.string().regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/),
+      .regex(
+        /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+      ),
+    statement_key: z
+      .string()
+      .regex(
+        /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+      ),
   })
   .strict()
   .describe("Admin response returned after publishing a challenge bundle.");
@@ -3305,7 +3396,9 @@ export const solutionSubmissionLogsResponseSchema = z
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     log_key: z
       .string()
-      .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+      .regex(
+        /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+      )
       .optional(),
     content: z.string().optional(),
     truncated: z.boolean(),
@@ -3363,7 +3456,9 @@ export const solutionSubmissionResponseSchema = z
     visible_after_eval: z.boolean(),
     artifact_key: z
       .string()
-      .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+      .regex(
+        /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+      )
       .optional(),
     evaluation_job: z
       .object({
@@ -3559,7 +3654,9 @@ export const solutionSubmissionResponseSchema = z
           .optional(),
         log_key: z
           .string()
-          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+          .regex(
+            /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+          )
           .optional(),
         started_at: z.string().optional(),
         finished_at: z.string().optional(),
@@ -3740,7 +3837,9 @@ export const solutionSubmissionResponseSchema = z
           .optional(),
         log_key: z
           .string()
-          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+          .regex(
+            /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+          )
           .optional(),
         started_at: z.string().optional(),
         finished_at: z.string().optional(),
@@ -3921,7 +4020,9 @@ export const solutionSubmissionResponseSchema = z
           .optional(),
         log_key: z
           .string()
-          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+          .regex(
+            /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+          )
           .optional(),
         started_at: z.string().optional(),
         finished_at: z.string().optional(),
@@ -3997,7 +4098,9 @@ export const solutionSubmissionResultReportResponseSchema = z
         visible_after_eval: z.boolean(),
         artifact_key: z
           .string()
-          .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+          .regex(
+            /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+          )
           .optional(),
         evaluation_job: z
           .object({
@@ -4198,7 +4301,9 @@ export const solutionSubmissionResultReportResponseSchema = z
               .optional(),
             log_key: z
               .string()
-              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+              .regex(
+                /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+              )
               .optional(),
             started_at: z.string().optional(),
             finished_at: z.string().optional(),
@@ -4384,7 +4489,9 @@ export const solutionSubmissionResultReportResponseSchema = z
               .optional(),
             log_key: z
               .string()
-              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+              .regex(
+                /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+              )
               .optional(),
             started_at: z.string().optional(),
             finished_at: z.string().optional(),
@@ -4570,7 +4677,9 @@ export const solutionSubmissionResultReportResponseSchema = z
               .optional(),
             log_key: z
               .string()
-              .regex(/^[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/)
+              .regex(
+                /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+              )
               .optional(),
             started_at: z.string().optional(),
             finished_at: z.string().optional(),

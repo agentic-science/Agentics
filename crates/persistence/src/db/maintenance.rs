@@ -276,7 +276,15 @@ async fn put_bundle_archive_if_missing(
     let archive_path = storage_work_root(config)?
         .join("_tmp")
         .join(format!("{label}-{}.tar", uuid::Uuid::new_v4()));
-    pack_directory_to_tar(bundle_dir, &archive_path).await?;
+    pack_directory_to_tar(
+        bundle_dir,
+        &archive_path,
+        StorageWriteIntent::new(
+            "challenge bundle archive",
+            config.storage_max_bundle_archive_bytes,
+        ),
+    )
+    .await?;
     let result = storage
         .put_file(
             key,

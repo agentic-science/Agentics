@@ -160,6 +160,13 @@ impl ChallengeDraftsRepository<'_> {
         db::challenge_creation::delete_challenge_private_asset(self.pool, asset_row_id).await
     }
 
+    pub async fn mark_private_asset_purging(
+        &self,
+        asset_row_id: &agentics_domain::models::ids::ChallengePrivateAssetId,
+    ) -> Result<Option<ChallengePrivateAssetPurgeRecord>> {
+        db::challenge_creation::mark_challenge_private_asset_purging(self.pool, asset_row_id).await
+    }
+
     pub async fn approve_validated_with_audit(
         &self,
         draft_id: &ChallengeDraftId,

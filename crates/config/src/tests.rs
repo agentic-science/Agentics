@@ -282,6 +282,13 @@ fn object_storage_config_requires_backend_specific_settings() {
         ),
         (
             Config {
+                storage_tmp_object_grace_hours: 0,
+                ..test_config()
+            },
+            "AGENTICS_STORAGE_TMP_OBJECT_GRACE_HOURS",
+        ),
+        (
+            Config {
                 storage_backend: super::StorageBackend::S3,
                 s3_bucket: Some("agentics-test".to_string()),
                 s3_prefix: Some("../bad".to_string()),
@@ -536,6 +543,8 @@ fn test_config() -> Config {
         storage_max_bundle_archive_bytes: super::default_storage_max_bundle_archive_bytes(),
         storage_max_statement_bytes: super::default_storage_max_statement_bytes(),
         storage_max_json_artifact_bytes: super::default_storage_max_json_artifact_bytes(),
+        storage_tmp_object_grace_hours:
+            super::storage_config::default_storage_tmp_object_grace_hours(),
         challenges_root: String::new(),
         admin_username: super::default_admin_username(),
         admin_password: super::default_admin_password(),

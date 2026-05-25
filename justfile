@@ -24,10 +24,22 @@ infra-down:
 rustfs-up:
     docker volume create {{rustfs_volume}}
     docker rm -f {{rustfs_container}} >/dev/null 2>&1 || true
-    @if [ "${AGENTICS_RUSTFS_DOCKER_NETWORK:-host}" = "host" ]; then \
+    @requested_network="${AGENTICS_RUSTFS_DOCKER_NETWORK:-}"; \
+    custom_ports=0; \
+    if [ -n "${AGENTICS_RUSTFS_PORT:-}" ] && [ "${AGENTICS_RUSTFS_PORT}" != "9000" ]; then custom_ports=1; fi; \
+    if [ -n "${AGENTICS_RUSTFS_CONSOLE_PORT:-}" ] && [ "${AGENTICS_RUSTFS_CONSOLE_PORT}" != "9001" ]; then custom_ports=1; fi; \
+    if [ "$requested_network" = "host" ] && [ "$custom_ports" = "1" ]; then \
+      echo "AGENTICS_RUSTFS_DOCKER_NETWORK=host cannot honor custom RustFS ports; unset it or set it to bridge" >&2; \
+      exit 2; \
+    fi; \
+    if [ -z "$requested_network" ] && [ "$custom_ports" = "1" ]; then requested_network="bridge"; fi; \
+    if [ "${requested_network:-host}" = "host" ]; then \
       network_args="--network host"; \
-    else \
+    elif [ "$requested_network" = "bridge" ]; then \
       network_args="-p ${AGENTICS_RUSTFS_PORT:-9000}:9000 -p ${AGENTICS_RUSTFS_CONSOLE_PORT:-9001}:9001"; \
+    else \
+      echo "AGENTICS_RUSTFS_DOCKER_NETWORK must be host or bridge" >&2; \
+      exit 2; \
     fi; \
     docker run -d --name {{rustfs_container}} $network_args -v {{rustfs_volume}}:/data -e RUSTFS_ACCESS_KEY="${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}" -e RUSTFS_SECRET_KEY="${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}" -e RUSTFS_CONSOLE_ENABLE=true rustfs/rustfs:latest /data
 

@@ -8,6 +8,7 @@ import {
   adminChallengeListResponseSchema,
   challengeDetailResponseSchema,
   leaderboardResponseSchema,
+  publishChallengeResponseSchema,
   solutionSubmissionResponseSchema,
 } from "./schemas";
 
@@ -474,6 +475,19 @@ describe("frontend API schemas", () => {
         official_evaluation: null,
         created_at: "2026-04-28T00:00:00Z",
         updated_at: "2026-04-28T00:00:00Z",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects storage keys with parent-directory components", () => {
+    expect(() =>
+      publishChallengeResponseSchema.parse({
+        challenge_id: sampleChallengeId,
+        challenge_name: "sample-sum",
+        title: "Sample Sum",
+        bundle_key: "challenge-bundles/sample-sum/bundle.tar",
+        public_bundle_key: "challenge-public-bundles/sample-sum/../bundle.tar",
+        statement_key: "challenge-statements/sample-sum/statement.md",
       }),
     ).toThrow();
   });

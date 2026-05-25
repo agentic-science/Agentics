@@ -126,6 +126,7 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         storage_max_bundle_archive_bytes: 1024 * 1024 * 1024,
         storage_max_statement_bytes: 1024 * 1024,
         storage_max_json_artifact_bytes: 1024 * 1024,
+        storage_tmp_object_grace_hours: 24,
         challenges_root: challenges_root.to_string_lossy().to_string(),
         admin_username: "admin".to_string(),
         admin_password: SecretString::from("secret"),

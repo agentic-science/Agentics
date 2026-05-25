@@ -453,8 +453,16 @@ async fn worker_reports_build_phase_failure(pool: sqlx::PgPool) {
     .fetch_one(&pool)
     .await
     .expect("failed to query failed job");
-    assert!(last_error.0.contains("zip_project phase failed"));
-    assert!(last_error.0.contains("\"phase\":\"build\""));
+    assert!(
+        last_error.0.contains("zip_project phase failed"),
+        "last_error={}",
+        last_error.0
+    );
+    assert!(
+        last_error.0.contains("\"phase\":\"build\""),
+        "last_error={}",
+        last_error.0
+    );
 }
 
 /// Verifies that worker blocks run stage internet access.
@@ -613,5 +621,9 @@ python main.py
     .fetch_one(&pool)
     .await
     .expect("failed to query failed job");
-    assert!(last_error.0.contains("\"phase\":\"run\""));
+    assert!(
+        last_error.0.contains("\"phase\":\"run\""),
+        "last_error={}",
+        last_error.0
+    );
 }

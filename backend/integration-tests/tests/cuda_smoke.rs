@@ -193,10 +193,14 @@ async fn publish_cuda_smoke_challenge(
         .unwrap_or_else(|| std::env::temp_dir().join("agentics-storage-work"))
         .join("cuda-private.tar");
     let public_archive = private_archive.with_file_name("cuda-public.tar");
-    pack_directory_to_tar(private_bundle, &private_archive)
+    let bundle_archive_intent = StorageWriteIntent::new(
+        "challenge bundle archive",
+        config.storage_max_bundle_archive_bytes,
+    );
+    pack_directory_to_tar(private_bundle, &private_archive, bundle_archive_intent)
         .await
         .expect("pack private bundle");
-    pack_directory_to_tar(public_bundle, &public_archive)
+    pack_directory_to_tar(public_bundle, &public_archive, bundle_archive_intent)
         .await
         .expect("pack public bundle");
     storage
