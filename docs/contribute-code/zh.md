@@ -181,7 +181,8 @@ just rustfs-down
 ```
 
 该测试使用官方 `rustfs/rustfs` image 和 Docker named volume。Agentics 仍会在写入
-S3 前执行自己的 per-object byte limits。
+S3 前执行自己的 per-object byte limits。Dev、test 和 production 的 durable storage
+默认都是 RustFS/S3；只有测试明确针对 local backend 时才使用 local filesystem storage。
 
 Rust change-risk coverage 使用 `cargo llvm-cov` 写出 LCOV，再用 `cargo crap`
 排序复杂且覆盖不足的函数：

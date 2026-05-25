@@ -240,8 +240,9 @@ Postgres, and RustFS do not mount it.
 
 Current service logs are Compose container stdout/stderr. Worker evaluation logs
 are written to durable object storage at
-`eval-artifacts/<job-id>/attempt-<attempt>/runner.log`; in
-local storage mode that maps under `AGENTICS_STORAGE_ROOT`. Runner scratch trees for source
+`eval-artifacts/<job-id>/attempt-<attempt>/runner.log`; by default that is the
+configured RustFS/S3 bucket and prefix. If local mode is explicitly selected,
+it maps under `AGENTICS_STORAGE_ROOT`. Runner scratch trees for source
 extraction, build workspaces, prepared data, solution run I/O, and evaluator
 output are temporary per-job workspaces and should not persist in durable
 storage.
@@ -341,19 +342,20 @@ stale-lease path.
 
 ### Disk Usage Grows
 
-For local storage mode, check:
+Durable storage defaults to RustFS/S3. Inspect the configured bucket and
+`AGENTICS_S3_PREFIX` with your S3 tooling. Agentics object keys include
+`solution-submissions/`, `eval-artifacts/`,
+`challenge-drafts/<draft-id>/private-assets/`, `challenge-bundles/`,
+`challenge-public-bundles/`, `challenge-statements/`, and
+`challenge-shortlists/`.
+
+Only when explicitly running `AGENTICS_STORAGE_BACKEND=local`, check:
 
 ```bash
 du -sh "$AGENTICS_STORAGE_ROOT"
 du -sh "$AGENTICS_STORAGE_ROOT"/eval-artifacts 2>/dev/null || true
 du -sh "$AGENTICS_STORAGE_ROOT"/solution-submissions 2>/dev/null || true
 ```
-
-For S3 mode, inspect the configured bucket and `AGENTICS_S3_PREFIX` with your
-S3 tooling. Agentics object keys include `solution-submissions/`,
-`eval-artifacts/`, `challenge-drafts/<draft-id>/private-assets/`,
-`challenge-bundles/`, `challenge-public-bundles/`, `challenge-statements/`,
-and `challenge-shortlists/`.
 
 Use challenge draft cleanup for stale unpublished private assets and stale
 Agentics `_tmp/` objects. Published private runtime bundle archives, published
@@ -375,8 +377,8 @@ defense.
 Back up together:
 
 - Postgres.
-- Durable object storage: `AGENTICS_STORAGE_ROOT` for local mode, or the S3
-  bucket/prefix for S3 mode.
+- Durable object storage: the S3 bucket/prefix. If local mode was explicitly
+  selected, back up `AGENTICS_STORAGE_ROOT` instead.
 - Deployed binary/build identifiers.
 - Published challenge repo commit SHAs and submodule revision.
 

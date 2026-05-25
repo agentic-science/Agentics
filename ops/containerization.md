@@ -171,9 +171,11 @@ Recommended base properties:
 - worker depends on API config, database, storage, and Docker socket readiness;
 - web depends on API reachability or its configured API base URL.
 
-For RustFS/S3 mode, prefer S3-compatible storage in a follow-up where practical.
-The first dev pass keeps local filesystem storage because `agentics-local-demo`
-already writes deterministic fake solution artifacts there.
+RustFS/S3 is the default durable storage path for dev, test, and production.
+`agentics-local-demo` uploads deterministic fake solution artifacts through the
+same storage abstraction as real submissions. Local filesystem storage remains
+available only as an explicit backend override and for focused local-storage
+tests.
 
 ## Runner Container Ownership
 
@@ -424,7 +426,8 @@ Before or during containerization, improve the integration test suite:
 6. Make integration test database URL resolution explicitly env-driven.
 7. Make Docker host/socket resolution explicitly env-driven.
 8. Keep quota-sensitive and DGX GPU tests explicit; do not skip them silently.
-9. Add one meaningful RustFS/S3-backed integration smoke path.
+9. Keep integration tests RustFS/S3-backed by default; local filesystem storage
+   should appear only in explicit local-backend tests.
 10. Collect Compose logs and runner cleanup diagnostics on failure.
 
 ### Quota And DGX Tests

@@ -10,8 +10,8 @@ Linux host setup 应使用 DGX host-preparation 文档。
 Local 已验证目标是单机 Compose deployment：
 
 - Postgres、API、worker 和 web 作为 Compose services 运行。
-- Durable storage 默认使用 `AGENTICS_STORAGE_ROOT` 下的 local object storage；
-  hosted deployments 可以使用 `AGENTICS_STORAGE_BACKEND=s3`。
+- Durable storage 默认使用 RustFS/S3。Local filesystem storage 只作为
+  `AGENTICS_STORAGE_BACKEND=local` 的显式 escape hatch。
 - Worker 连接 host Docker daemon，并创建 sibling runner containers。
 - Public traffic 应先进入 reverse proxy，再转发到 API 或 web 进程。
 
@@ -39,7 +39,7 @@ Ports 和 paths 记录在 `docs/ports-and-paths/zh.md`。
 | API | `just compose-dev-up` service `api` | `${AGENTICS_API_PORT:-3100}` |
 | Worker | `just compose-dev-up` service `worker` | 无 |
 | Web | `just compose-dev-up` service `web` | `${AGENTICS_WEB_PORT:-3001}` |
-| RustFS | `just compose-prod-up` service `rustfs` | internal `9000`，console internal `9001` |
+| RustFS | `just compose-dev-up` 和 `just compose-prod-up` service `rustfs` | dev host ports `9000`/`9001`；production internal `9000`/`9001` |
 
 ## 环境变量
 
@@ -55,10 +55,10 @@ Production Compose environment source：
 cp deploy/compose/env/prod.env.example deploy/compose/env/prod.env
 ```
 
-启动 production 前必须替换所有 placeholder。Production env file 默认使用
-`AGENTICS_STORAGE_BACKEND=s3`，并把 RustFS 配置为 `http://rustfs:9000`。External
-S3 是 env-only override：修改 S3 endpoint、bucket、prefix、force-path-style flag
-和 credentials provider，不需要修改 Compose graph。
+Local 和 production Compose 默认都使用 `AGENTICS_STORAGE_BACKEND=s3`，并把 RustFS
+配置为 `http://rustfs:9000`。启动 production 前必须替换所有 placeholder。External
+S3 是 production 的 env-only override：修改 S3 endpoint、bucket、prefix、
+force-path-style flag 和 credentials provider，不需要修改 Compose graph。
 
 如果绑定到非 loopback 地址，必须修改 `AGENTICS_ADMIN_PASSWORD`。Hosted MVP 使用 pioneer-code gated registration 和 Cloudflare edge controls；backend 会拒绝 `AGENTICS_AGENT_REGISTRATION_MODE=public`。
 
@@ -157,20 +157,13 @@ Cloudflare 或其他外部 ingress 管理。它应该：
 
 Agentics durable storage 以 object key 为边界。它保存 uploaded solution ZIPs、
 runner logs、private asset ZIP overlays、不可变的 private/public challenge bundle
-archives、public statements，以及小型 creator/admin JSON artifacts。Local mode 会把
-object keys 映射到 `AGENTICS_STORAGE_ROOT` 下。S3 mode 会把同样的 object keys 存入
-配置的 bucket 和 prefix。`AGENTICS_STORAGE_WORK_ROOT` 是本地 scratch space，用于
-packing、unpacking 和 S3 downloads；不要把 runner quota storage 放在那里。
+archives、public statements，以及小型 creator/admin JSON artifacts。S3 mode 会把
+object keys 存入配置的 bucket 和 prefix。Local mode 会把同样的 keys 映射到
+`AGENTICS_STORAGE_ROOT` 下，但现在只作为 narrow local experiments 的显式 opt-in。
+`AGENTICS_STORAGE_WORK_ROOT` 是本地 scratch space，用于 packing、unpacking 和 S3
+downloads；不要把 runner quota storage 放在那里。
 
-Compose rehearsal 使用 local mode：
-
-```bash
-export AGENTICS_STORAGE_BACKEND='local'
-export AGENTICS_STORAGE_ROOT="$PWD/storage"
-export AGENTICS_STORAGE_WORK_ROOT="$PWD/storage-work"
-```
-
-Hosted object storage 可使用 S3 或 RustFS-compatible storage：
+Dev、test 和 hosted object storage 都应使用 S3 或 RustFS-compatible storage：
 
 ```bash
 export AGENTICS_STORAGE_BACKEND='s3'
@@ -182,7 +175,7 @@ export AGENTICS_S3_FORCE_PATH_STYLE='true'
 export AGENTICS_STORAGE_WORK_ROOT='/srv/agentics/storage-work'
 ```
 
-Production Compose 默认使用 RustFS 作为单机 S3-compatible durable storage
+Dev 和 production Compose 默认使用 RustFS 作为单机 S3-compatible durable storage
 service。RustFS credentials 通过 `AGENTICS_RUSTFS_ACCESS_KEY` 和
 `AGENTICS_RUSTFS_SECRET_KEY` 配置，并在 app services 内映射为 AWS SDK 环境变量。
 Production RustFS data 位于 Compose named volume；需要和 Postgres 一起备份该
@@ -210,8 +203,8 @@ durable writes 前执行 object-size limits，并在 S3 upload 后验证 object 
 
 Hosted 或 public MVP operation：
 
-- Local mode 下，将 `AGENTICS_STORAGE_ROOT` 放在 persistent volume 上。
-- S3 mode 下，按 storage provider policy 备份或复制 bucket/prefix。
+- 按 storage provider policy 备份或复制 S3 bucket/prefix。
+- 如果显式 opt into local mode，将 `AGENTICS_STORAGE_ROOT` 放在 persistent volume 上。
 - 同步备份 Postgres 和 durable object storage。
 - 保持 published private runtime bundles 和 public-only bundles 不可变。
 - 使用 stale draft cleanup 清理 unpublished private assets，不要手动删除 objects。

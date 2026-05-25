@@ -232,10 +232,11 @@ Check service 会有意挂载 host Docker socket。API、web、Postgres 和 Rust
 ## Logs
 
 当前 service logs 是 Compose container stdout/stderr。Worker evaluation logs 会写入
-durable object storage 的 `eval-artifacts/<job-id>/attempt-<attempt>/runner.log`；local
-storage mode 下它映射到 `AGENTICS_STORAGE_ROOT`。Source extraction、build workspaces、prepared
-data、solution run I/O 和 evaluator output 等 runner scratch trees 是 per-job
-temporary workspaces，不应持久化在 durable storage 中。
+durable object storage 的 `eval-artifacts/<job-id>/attempt-<attempt>/runner.log`；默认位于
+配置的 RustFS/S3 bucket 和 prefix。如果显式选择 local mode，它会映射到
+`AGENTICS_STORAGE_ROOT`。Source extraction、build workspaces、prepared data、solution run
+I/O 和 evaluator output 等 runner scratch trees 是 per-job temporary workspaces，不应持久化在
+durable storage 中。
 
 MVP rehearsal 最小日志保留策略：
 
@@ -328,16 +329,18 @@ reconciliation 和 stale-lease path 负责。
 
 Local storage mode 下检查：
 
+Durable storage 默认使用 RustFS/S3。用你的 S3 tooling 检查配置的 bucket 和
+`AGENTICS_S3_PREFIX`。Agentics object keys 包括 `solution-submissions/`、`eval-artifacts/`、
+`challenge-drafts/<draft-id>/private-assets/`、`challenge-bundles/`、
+`challenge-public-bundles/`、`challenge-statements/` 和 `challenge-shortlists/`。
+
+只有显式运行 `AGENTICS_STORAGE_BACKEND=local` 时，检查：
+
 ```bash
 du -sh "$AGENTICS_STORAGE_ROOT"
 du -sh "$AGENTICS_STORAGE_ROOT"/eval-artifacts 2>/dev/null || true
 du -sh "$AGENTICS_STORAGE_ROOT"/solution-submissions 2>/dev/null || true
 ```
-
-S3 mode 下，用你的 S3 tooling 检查配置的 bucket 和 `AGENTICS_S3_PREFIX`。Agentics
-object keys 包括 `solution-submissions/`、`eval-artifacts/`、
-`challenge-drafts/<draft-id>/private-assets/`、`challenge-bundles/`、
-`challenge-public-bundles/`、`challenge-statements/` 和 `challenge-shortlists/`。
 
 使用 challenge draft cleanup 清理 stale unpublished private assets 和 stale Agentics
 `_tmp/` objects。Published private runtime bundle archives、published public-only bundle
@@ -358,8 +361,8 @@ stale `_tmp/` keys 的第二道防线。
 一起备份：
 
 - Postgres。
-- Durable object storage：local mode 下是 `AGENTICS_STORAGE_ROOT`，S3 mode 下是
-  S3 bucket/prefix。
+- Durable object storage：S3 bucket/prefix。如果显式选择了 local mode，则改为备份
+  `AGENTICS_STORAGE_ROOT`。
 - Deployed binary/build identifiers。
 - Published challenge repo commit SHAs 和 submodule revision。
 

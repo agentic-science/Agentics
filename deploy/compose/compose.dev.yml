@@ -8,7 +8,14 @@ x-rust-dev: &rust-dev
     AGENTICS_DATABASE_URL: postgres://agentics:agentics@postgres:5432/agentics_demo
     AGENTICS_DEMO_DATABASE_URL: postgres://agentics:agentics@postgres:5432/agentics_demo
     AGENTICS_DEMO_DATABASE_URL_CONFIRM: non-loopback-demo-db
-    AGENTICS_STORAGE_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/storage
+    AGENTICS_STORAGE_BACKEND: ${AGENTICS_STORAGE_BACKEND:-s3}
+    AGENTICS_S3_BUCKET: ${AGENTICS_S3_BUCKET:-agentics}
+    AGENTICS_S3_PREFIX: ${AGENTICS_S3_PREFIX:-dev}
+    AGENTICS_S3_REGION: ${AGENTICS_S3_REGION:-us-east-1}
+    AGENTICS_S3_ENDPOINT_URL: ${AGENTICS_S3_ENDPOINT_URL:-http://rustfs:9000}
+    AGENTICS_S3_FORCE_PATH_STYLE: ${AGENTICS_S3_FORCE_PATH_STYLE:-true}
+    AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}}
+    AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}}
     AGENTICS_STORAGE_WORK_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/storage-work
     AGENTICS_RUNNER_RUNTIME_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/runtime
     AGENTICS_RUNNER_PHASE_MOUNT_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/phase-mounts
@@ -42,6 +49,47 @@ services:
   postgres:
     ports:
       - "127.0.0.1:${AGENTICS_POSTGRES_PORT:-5432}:5432"
+
+  rustfs:
+    image: rustfs/rustfs:latest@sha256:f7cb98ef492fa3c3ed0dbd65df3ce2dd205c666e24e7d7234d9402c9ed1001f9
+    environment:
+      RUSTFS_ADDRESS: :9000
+      RUSTFS_CONSOLE_ADDRESS: :9001
+      RUSTFS_ACCESS_KEY: ${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}
+      RUSTFS_SECRET_KEY: ${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}
+      RUSTFS_CONSOLE_ENABLE: "true"
+    ports:
+      - "127.0.0.1:${AGENTICS_RUSTFS_PORT:-9000}:9000"
+      - "127.0.0.1:${AGENTICS_RUSTFS_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - rustfs_data:/data
+    command: ["/data"]
+
+  rustfs-bucket-init:
+    image: minio/mc:latest@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    depends_on:
+      rustfs:
+        condition: service_started
+    environment:
+      AGENTICS_RUSTFS_ACCESS_KEY: ${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}
+      AGENTICS_RUSTFS_SECRET_KEY: ${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}
+      AGENTICS_S3_BUCKET: ${AGENTICS_S3_BUCKET:-agentics}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+          if mc alias set dev http://rustfs:9000 "$${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}" "$${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}" >/dev/null 2>&1; then
+            mc mb -p "dev/$${AGENTICS_S3_BUCKET:-agentics}" >/dev/null 2>&1 || true
+            mc anonymous set none "dev/$${AGENTICS_S3_BUCKET:-agentics}" >/dev/null 2>&1 || true
+            exit 0
+          fi
+          sleep 1
+        done
+        mc alias set dev http://rustfs:9000 "$${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}" "$${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}" >/dev/null
+        mc mb -p "dev/$${AGENTICS_S3_BUCKET:-agentics}" >/dev/null 2>&1 || true
+        mc anonymous set none "dev/$${AGENTICS_S3_BUCKET:-agentics}" >/dev/null 2>&1 || true
+    restart: "no"
 
   rust-build:
     <<: *rust-dev
@@ -85,6 +133,8 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      rustfs-bucket-init:
+        condition: service_completed_successfully
     ports:
       - "${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:${AGENTICS_API_PORT:-3100}:3100"
     command:
@@ -100,6 +150,8 @@ services:
     depends_on:
       api:
         condition: service_started
+      rustfs-bucket-init:
+        condition: service_completed_successfully
     command:
       - cargo
       - run
@@ -115,6 +167,8 @@ services:
     <<: *rust-dev
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      rustfs-bucket-init:
         condition: service_completed_successfully
     volumes:
       - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics
@@ -157,3 +211,6 @@ services:
       - 0.0.0.0
       - -p
       - "3001"
+
+volumes:
+  rustfs_data:

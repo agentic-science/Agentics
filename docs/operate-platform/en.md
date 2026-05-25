@@ -165,14 +165,16 @@ requests cannot see a GPU, and CPU-only workers cannot claim GPU jobs.
 ## Logs And Backups
 
 Process logs are emitted to stdout and stderr. Worker evaluation logs are stored
-in durable object storage at `eval-artifacts/<job-id>/attempt-<attempt>/runner.log`;
-in local mode that path is under `AGENTICS_STORAGE_ROOT`.
+in durable object storage at
+`eval-artifacts/<job-id>/attempt-<attempt>/runner.log`; by default that is the
+configured RustFS/S3 bucket and prefix. If local mode is explicitly selected,
+that path is under `AGENTICS_STORAGE_ROOT`.
 
 Back up together:
 
 - Postgres.
-- Durable object storage: `AGENTICS_STORAGE_ROOT` for local mode, or the S3
-  bucket/prefix for S3 mode.
+- Durable object storage: the S3 bucket/prefix by default. If local mode is
+  explicitly selected, back up `AGENTICS_STORAGE_ROOT` instead.
 - Deployed binary or build identifiers.
 - Published challenge repository commit SHAs and submodule revision.
 

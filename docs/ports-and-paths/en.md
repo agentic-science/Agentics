@@ -55,12 +55,13 @@ workers.
 
 ## Durable Object Storage
 
-`AGENTICS_STORAGE_BACKEND=local|s3` selects durable storage. Local mode maps
-object keys below `AGENTICS_STORAGE_ROOT`. S3 mode stores the same keys under
-`AGENTICS_S3_BUCKET` and optional `AGENTICS_S3_PREFIX`; credentials come from
-the AWS SDK provider chain. `AGENTICS_STORAGE_WORK_ROOT` is host-local scratch
-for bundle archives, unpacked bundles, and S3 downloads. Stale `_tmp/` durable
-objects are eligible for Agentics cleanup after
+`AGENTICS_STORAGE_BACKEND=s3` is the default durable storage mode for dev,
+testing, and production. It stores object keys under `AGENTICS_S3_BUCKET` and
+optional `AGENTICS_S3_PREFIX`; credentials come from the AWS SDK provider
+chain. `AGENTICS_STORAGE_BACKEND=local` is an explicit opt-in that maps object
+keys below `AGENTICS_STORAGE_ROOT`. `AGENTICS_STORAGE_WORK_ROOT` is host-local
+scratch for bundle archives, unpacked bundles, and S3 downloads. Stale `_tmp/`
+durable objects are eligible for Agentics cleanup after
 `AGENTICS_STORAGE_TMP_OBJECT_GRACE_HOURS`, which defaults to 24 hours.
 
 Current object-key prefixes:

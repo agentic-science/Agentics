@@ -161,14 +161,15 @@ digest-pinned `AGENTICS_WORKER_GPU_PROBE_IMAGE`；如果 Docker GPU device reque
 ## Logs 和 Backups
 
 Process logs 输出到 stdout 和 stderr。Worker evaluation logs 存储在 durable object
-storage 的 `eval-artifacts/<job-id>/attempt-<attempt>/runner.log`；local mode 下该 path
-位于 `AGENTICS_STORAGE_ROOT`。
+storage 的 `eval-artifacts/<job-id>/attempt-<attempt>/runner.log`；默认位于配置的
+RustFS/S3 bucket 和 prefix。如果显式选择 local mode，该 path 位于
+`AGENTICS_STORAGE_ROOT`。
 
 需要一起备份：
 
 - Postgres。
-- Durable object storage：local mode 下是 `AGENTICS_STORAGE_ROOT`，S3 mode 下是
-  S3 bucket/prefix。
+- Durable object storage：默认是 S3 bucket/prefix。如果显式选择 local mode，则改为备份
+  `AGENTICS_STORAGE_ROOT`。
 - Deployed binary 或 build identifiers。
 - Published challenge repository commit SHAs 和 submodule revision。
 

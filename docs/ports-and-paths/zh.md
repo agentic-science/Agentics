@@ -52,11 +52,12 @@ slots，并使用 Docker `storage_opt.size` 约束 container-layer writes。Slot
 
 ## Durable Object Storage
 
-`AGENTICS_STORAGE_BACKEND=local|s3` 选择 durable storage。Local mode 会把 object
-keys 映射到 `AGENTICS_STORAGE_ROOT` 下。S3 mode 会把同样的 keys 存入
-`AGENTICS_S3_BUCKET` 和可选 `AGENTICS_S3_PREFIX`；credentials 来自 AWS SDK
-provider chain。`AGENTICS_STORAGE_WORK_ROOT` 是 host-local scratch，用于 bundle
-archives、unpacked bundles 和 S3 downloads。Stale `_tmp/` durable objects 会在
+`AGENTICS_STORAGE_BACKEND=s3` 是 dev、testing 和 production 的默认 durable storage
+mode。它会把 object keys 存入 `AGENTICS_S3_BUCKET` 和可选
+`AGENTICS_S3_PREFIX`；credentials 来自 AWS SDK provider chain。
+`AGENTICS_STORAGE_BACKEND=local` 是显式 opt-in，会把 object keys 映射到
+`AGENTICS_STORAGE_ROOT` 下。`AGENTICS_STORAGE_WORK_ROOT` 是 host-local scratch，用于
+bundle archives、unpacked bundles 和 S3 downloads。Stale `_tmp/` durable objects 会在
 `AGENTICS_STORAGE_TMP_OBJECT_GRACE_HOURS` 后由 Agentics cleanup 清理，默认是 24 小时。
 
 当前 object-key prefixes：

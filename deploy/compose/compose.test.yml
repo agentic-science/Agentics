@@ -5,6 +5,44 @@ services:
       POSTGRES_PASSWORD: agentics
       POSTGRES_DB: agentics_test
 
+  rustfs:
+    image: rustfs/rustfs:latest@sha256:f7cb98ef492fa3c3ed0dbd65df3ce2dd205c666e24e7d7234d9402c9ed1001f9
+    environment:
+      RUSTFS_ADDRESS: :9000
+      RUSTFS_CONSOLE_ADDRESS: :9001
+      RUSTFS_ACCESS_KEY: ${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}
+      RUSTFS_SECRET_KEY: ${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}
+      RUSTFS_CONSOLE_ENABLE: "true"
+    volumes:
+      - rustfs_data:/data
+    command: ["/data"]
+
+  rustfs-bucket-init:
+    image: minio/mc:latest@sha256:a7fe349ef4bd8521fb8497f55c6042871b2ae640607cf99d9bede5e9bdf11727
+    depends_on:
+      rustfs:
+        condition: service_started
+    environment:
+      AGENTICS_RUSTFS_ACCESS_KEY: ${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}
+      AGENTICS_RUSTFS_SECRET_KEY: ${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}
+      AGENTICS_S3_BUCKET: ${AGENTICS_S3_BUCKET:-agentics}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+          if mc alias set test http://rustfs:9000 "$${AGENTICS_RUSTFS_ACCESS_KEY}" "$${AGENTICS_RUSTFS_SECRET_KEY}" >/dev/null 2>&1; then
+            mc mb -p "test/$${AGENTICS_S3_BUCKET}" >/dev/null 2>&1 || true
+            mc anonymous set none "test/$${AGENTICS_S3_BUCKET}" >/dev/null 2>&1 || true
+            exit 0
+          fi
+          sleep 1
+        done
+        mc alias set test http://rustfs:9000 "$${AGENTICS_RUSTFS_ACCESS_KEY}" "$${AGENTICS_RUSTFS_SECRET_KEY}" >/dev/null
+        mc mb -p "test/$${AGENTICS_S3_BUCKET}" >/dev/null 2>&1 || true
+        mc anonymous set none "test/$${AGENTICS_S3_BUCKET}" >/dev/null 2>&1 || true
+    restart: "no"
+
   tests:
     image: rust:1-bookworm
     working_dir: /workspace/Agentics
@@ -13,6 +51,14 @@ services:
     environment:
       DATABASE_URL: postgres://agentics:agentics@postgres:5432/agentics_test
       AGENTICS_DATABASE_URL: postgres://agentics:agentics@postgres:5432/agentics_test
+      AGENTICS_STORAGE_BACKEND: ${AGENTICS_STORAGE_BACKEND:-s3}
+      AGENTICS_S3_BUCKET: ${AGENTICS_S3_BUCKET:-agentics}
+      AGENTICS_S3_PREFIX: ${AGENTICS_S3_PREFIX:-test/local}
+      AGENTICS_S3_REGION: ${AGENTICS_S3_REGION:-us-east-1}
+      AGENTICS_S3_ENDPOINT_URL: ${AGENTICS_S3_ENDPOINT_URL:-http://rustfs:9000}
+      AGENTICS_S3_FORCE_PATH_STYLE: ${AGENTICS_S3_FORCE_PATH_STYLE:-true}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}}
       AGENTICS_RUNNER_NAMESPACE: ${AGENTICS_RUNNER_NAMESPACE:-agentics-test}
       AGENTICS_TEST_RUNNER_RUNTIME_ROOT: ${AGENTICS_TEST_RUNNER_RUNTIME_ROOT:?set AGENTICS_TEST_RUNNER_RUNTIME_ROOT}
       AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT: ${AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT:?set AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT}
@@ -21,6 +67,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      rustfs-bucket-init:
+        condition: service_completed_successfully
     volumes:
       - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics:ro
       - ${AGENTICS_TEST_ROOT:?set AGENTICS_TEST_ROOT}:${AGENTICS_TEST_ROOT:?set AGENTICS_TEST_ROOT}
@@ -35,3 +83,6 @@ services:
       - integration-tests
       - --
       - --include-ignored
+
+volumes:
+  rustfs_data:

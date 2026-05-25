@@ -11,8 +11,8 @@ host-preparation docs for Linux host setup.
 The local verified target is a single-machine Compose deployment:
 
 - Postgres, API, worker, and web run as Compose services.
-- Durable storage defaults to local object storage under
-  `AGENTICS_STORAGE_ROOT`; hosted deployments may use `AGENTICS_STORAGE_BACKEND=s3`.
+- Durable storage defaults to RustFS/S3. Local filesystem storage is an
+  explicit escape hatch via `AGENTICS_STORAGE_BACKEND=local`.
 - The worker talks to the host Docker daemon and creates sibling runner containers.
 - Public traffic should terminate at a reverse proxy before reaching the API or web process.
 
@@ -42,7 +42,7 @@ Production Compose defaults and placeholders live in
 | API | `just compose-dev-up` service `api` | `${AGENTICS_API_PORT:-3100}` |
 | Worker | `just compose-dev-up` service `worker` | none |
 | Web | `just compose-dev-up` service `web` | `${AGENTICS_WEB_PORT:-3001}` |
-| RustFS | `just compose-prod-up` service `rustfs` | internal `9000`, console internal `9001` |
+| RustFS | `just compose-dev-up` and `just compose-prod-up` service `rustfs` | dev host ports `9000`/`9001`; production internal `9000`/`9001` |
 
 ## Environment
 
@@ -58,11 +58,11 @@ Production Compose environment source:
 cp deploy/compose/env/prod.env.example deploy/compose/env/prod.env
 ```
 
-Replace every placeholder before starting production. The production env file
-uses `AGENTICS_STORAGE_BACKEND=s3` with RustFS at `http://rustfs:9000` by
-default. External S3 is an env-only override: change the S3 endpoint, bucket,
-prefix, force-path-style flag, and credentials provider without changing the
-Compose graph.
+Local and production Compose both use `AGENTICS_STORAGE_BACKEND=s3` with RustFS
+at `http://rustfs:9000` by default. Replace every placeholder before starting
+production. External S3 is an env-only production override: change the S3
+endpoint, bucket, prefix, force-path-style flag, and credentials provider
+without changing the Compose graph.
 
 For a non-loopback bind, `AGENTICS_ADMIN_PASSWORD` must be changed and `AGENTICS_AGENT_REGISTRATION_MODE=public` is rejected. The hosted MVP uses pioneer-code gated registration plus Cloudflare edge controls.
 
@@ -163,20 +163,13 @@ route web traffic to `${AGENTICS_COMPOSE_BIND_IP}:${AGENTICS_WEB_PORT:-3001}`.
 Agentics durable storage is object-key based. It stores uploaded solution ZIPs,
 runner logs, private asset ZIP overlays, immutable private/public challenge
 bundle archives, public statements, and small creator/admin JSON artifacts.
-Local mode maps object keys under `AGENTICS_STORAGE_ROOT`. S3 mode stores the
-same object keys in the configured bucket and prefix. `AGENTICS_STORAGE_WORK_ROOT`
-is local scratch space for packing, unpacking, and S3 downloads; do not put
-runner quota storage there.
+S3 mode stores object keys in the configured bucket and prefix. Local mode maps
+the same keys under `AGENTICS_STORAGE_ROOT`, but it is now an explicit opt-in
+for narrow local experiments. `AGENTICS_STORAGE_WORK_ROOT` is local scratch
+space for packing, unpacking, and S3 downloads; do not put runner quota storage
+there.
 
-Use local mode for the Compose rehearsal:
-
-```bash
-export AGENTICS_STORAGE_BACKEND='local'
-export AGENTICS_STORAGE_ROOT="$PWD/storage"
-export AGENTICS_STORAGE_WORK_ROOT="$PWD/storage-work"
-```
-
-Use S3 or RustFS-compatible storage for hosted object storage:
+Use S3 or RustFS-compatible storage for dev, test, and hosted object storage:
 
 ```bash
 export AGENTICS_STORAGE_BACKEND='s3'
@@ -188,8 +181,8 @@ export AGENTICS_S3_FORCE_PATH_STYLE='true'
 export AGENTICS_STORAGE_WORK_ROOT='/srv/agentics/storage-work'
 ```
 
-Production Compose uses RustFS as the default single-host S3-compatible durable
-storage service. The RustFS credentials are configured as
+Dev and production Compose use RustFS as the default single-host S3-compatible
+durable storage service. The RustFS credentials are configured as
 `AGENTICS_RUSTFS_ACCESS_KEY` and `AGENTICS_RUSTFS_SECRET_KEY` and are mapped to
 the AWS SDK environment variables inside app services. The production RustFS
 data lives in a Compose named volume; back up that volume together with
@@ -220,9 +213,10 @@ durable writes and verifies S3 object length after upload.
 
 For hosted or public MVP operation:
 
-- In local mode, put `AGENTICS_STORAGE_ROOT` on a persistent volume.
-- In S3 mode, back up or replicate the bucket/prefix according to the storage
-  provider's policy.
+- Back up or replicate the S3 bucket/prefix according to the storage provider's
+  policy.
+- If you explicitly opt into local mode, put `AGENTICS_STORAGE_ROOT` on a
+  persistent volume.
 - Back up Postgres and durable object storage together.
 - Keep published private runtime bundles and public-only bundles immutable.
 - Use stale draft cleanup for unpublished private assets, not manual object

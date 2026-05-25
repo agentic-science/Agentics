@@ -188,6 +188,8 @@ just rustfs-down
 
 The test uses the official `rustfs/rustfs` image and a Docker named volume.
 Agentics still enforces its own per-object byte limits before writing to S3.
+Durable storage defaults to RustFS/S3 in dev, test, and production; use local
+filesystem storage only when a test explicitly targets the local backend.
 
 For Rust change-risk coverage, use `cargo llvm-cov` to write LCOV and
 `cargo crap` to rank complex, under-covered functions:
