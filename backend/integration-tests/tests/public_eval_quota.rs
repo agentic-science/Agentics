@@ -2,11 +2,11 @@
 
 mod helpers;
 
-use std::path::Path;
+use std::{fs, path::Path};
 
 use agentics_config::RunnerWritableStorageMode;
 use helpers::{
-    api_url, examples_challenges_root, published_challenge_id, run_worker_once,
+    api_url, copy_dir_all, examples_challenges_root, published_challenge_id, run_worker_once,
     sample_sum_solution, solution_zip_base64_with_scripts, spawn_app_with_config, test_config,
     zip_project_zip_base64,
 };
@@ -166,6 +166,29 @@ fn quota_test_setup_error(reason: String) -> String {
     )
 }
 
+/// Create a challenge fixture root whose sample-sum bundle enforces a small run disk limit.
+fn quota_sensitive_challenges_root(run_disk_limit_mb: u64) -> tempfile::TempDir {
+    let challenges =
+        tempfile::tempdir().expect("failed to create quota-sensitive challenge fixture root");
+    copy_dir_all(&examples_challenges_root(), challenges.path());
+
+    let spec_path = challenges
+        .path()
+        .join("sample-sum")
+        .join("v1")
+        .join("spec.json");
+    let spec_bytes = fs::read(&spec_path).expect("failed to read copied sample-sum spec");
+    let mut spec: serde_json::Value =
+        serde_json::from_slice(&spec_bytes).expect("sample-sum spec should parse");
+    spec["targets"][0]["resource_profile"]["solution"]["run"]["disk_limit_mb"] =
+        serde_json::json!(run_disk_limit_mb);
+    let rewritten =
+        serde_json::to_vec_pretty(&spec).expect("rewritten sample-sum spec should serialize");
+    fs::write(&spec_path, rewritten).expect("failed to write copied sample-sum spec");
+
+    challenges
+}
+
 /// Verifies that worker enforces run writable disk limit.
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_enforces_run_writable_disk_limit(pool: sqlx::PgPool) {
@@ -174,19 +197,10 @@ async fn worker_enforces_run_writable_disk_limit(pool: sqlx::PgPool) {
     }
 
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
-    let config = quota_sensitive_runner_config(storage.path(), &examples_challenges_root());
+    let challenges = quota_sensitive_challenges_root(QUOTA_TEST_REQUIRED_SLOT_CLASS_MB);
+    let config = quota_sensitive_runner_config(storage.path(), challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
-    sqlx::query(
-        r#"
-        UPDATE challenges
-        SET spec_json = jsonb_set(spec_json, '{targets,0,resource_profile,solution,run,disk_limit_mb}', '64'::jsonb)
-        WHERE name = 'sample-sum'
-        "#,
-    )
-    .execute(&pool)
-    .await
-    .expect("failed to lower test resource profile disk limit");
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))

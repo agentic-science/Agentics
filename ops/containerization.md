@@ -124,6 +124,8 @@ deploy/compose/env/test.env.example
 just compose-dev-up
 just compose-dev-down
 just compose-dev-logs
+just compose-test-docker-up
+just compose-test-docker-down
 just compose-test-integration
 ```
 
@@ -338,7 +340,7 @@ Current integration tests:
 - connect to a real Postgres database;
 - spawn the API router in-process on an ephemeral port;
 - run worker cycles in-process;
-- use the host Docker daemon for runner containers;
+- use a dedicated test Docker daemon for runner containers;
 - use local temporary storage roots unless a test overrides config;
 - include ignored DGX/GPU/quota tests when run with `--include-ignored`.
 
@@ -354,10 +356,24 @@ tests
 The `tests` service runs the Rust test command and mounts:
 
 ```text
-/var/run/docker.sock:/var/run/docker.sock
+/srv/agentics-test/docker.sock:/srv/agentics-test/docker.sock
 /srv/agentics-test:/srv/agentics-test
 repo checkout at the same absolute path, or a build context image containing it
 ```
+
+Before running the test Compose project, start a dedicated test Docker daemon:
+
+```bash
+sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just compose-test-docker-up
+```
+
+That daemon listens on `unix:///srv/agentics-test/docker.sock`, uses
+`/srv/agentics-test/docker-data-root`, and must run overlay2 on an XFS data root
+mounted with `prjquota`. `just compose-test-integration` verifies the daemon is
+reachable, loads `agentics-linux-arm64-cpu:ubuntu26.04-local` into it when
+missing, and passes `AGENTICS_TEST_DOCKER_HOST` to the test container. This keeps
+quota-sensitive runner containers off the workstation Docker daemon and lets the
+`--storage-opt size=...` Docker layer quota path be tested for real.
 
 The test command pattern is:
 

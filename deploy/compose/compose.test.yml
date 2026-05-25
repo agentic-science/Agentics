@@ -1,4 +1,10 @@
 services:
+  postgres:
+    environment:
+      POSTGRES_USER: agentics
+      POSTGRES_PASSWORD: agentics
+      POSTGRES_DB: agentics_test
+
   tests:
     image: rust:1-bookworm
     working_dir: /workspace/Agentics
@@ -10,6 +16,7 @@ services:
       AGENTICS_RUNNER_NAMESPACE: ${AGENTICS_RUNNER_NAMESPACE:-agentics-test}
       AGENTICS_TEST_RUNNER_RUNTIME_ROOT: ${AGENTICS_TEST_RUNNER_RUNTIME_ROOT:?set AGENTICS_TEST_RUNNER_RUNTIME_ROOT}
       AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT: ${AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT:?set AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT}
+      AGENTICS_TEST_DOCKER_HOST: ${AGENTICS_TEST_DOCKER_HOST:?set AGENTICS_TEST_DOCKER_HOST}
       TMPDIR: ${AGENTICS_TEST_TMPDIR:?set AGENTICS_TEST_TMPDIR}
     depends_on:
       postgres:
@@ -17,7 +24,7 @@ services:
     volumes:
       - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics:ro
       - ${AGENTICS_TEST_ROOT:?set AGENTICS_TEST_ROOT}:${AGENTICS_TEST_ROOT:?set AGENTICS_TEST_ROOT}
-      - /var/run/docker.sock:/var/run/docker.sock
+      - ${AGENTICS_TEST_DOCKER_SOCKET_PATH:?set AGENTICS_TEST_DOCKER_SOCKET_PATH}:${AGENTICS_TEST_DOCKER_SOCKET_PATH:?set AGENTICS_TEST_DOCKER_SOCKET_PATH}
       - cargo_registry:/usr/local/cargo/registry
       - cargo_git:/usr/local/cargo/git
       - cargo_target:/workspace/Agentics/target

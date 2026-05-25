@@ -88,6 +88,89 @@ compose-dev-logs:
       namespace="${AGENTICS_RUNNER_NAMESPACE:-$project}"; \
       AGENTICS_REPO_ROOT="$PWD" AGENTICS_DEV_ROOT="$root" AGENTICS_RUNNER_NAMESPACE="$namespace" {{compose_dev}} -p "$project" logs -f
 
+# Start the dedicated Docker daemon used by containerized integration tests
+compose-test-docker-up:
+    @set -eu; \
+      root="${AGENTICS_TEST_ROOT:-/srv/agentics-test}"; \
+      socket="${AGENTICS_TEST_DOCKER_SOCKET_PATH:-$root/docker.sock}"; \
+      host="${AGENTICS_TEST_DOCKER_HOST:-unix://$socket}"; \
+      data_root="${AGENTICS_TEST_DOCKER_DATA_ROOT:-$root/docker-data-root}"; \
+      exec_root="${AGENTICS_TEST_DOCKER_EXEC_ROOT:-$root/docker-exec}"; \
+      pidfile="${AGENTICS_TEST_DOCKER_PIDFILE:-$root/docker.pid}"; \
+      logfile="${AGENTICS_TEST_DOCKER_LOG:-$root/dockerd.log}"; \
+      if docker --host "$host" info >/dev/null 2>&1; then \
+        printf 'Dedicated test Docker daemon is already reachable at %s.\n' "$host"; \
+        exit 0; \
+      fi; \
+      if [ "$(id -u)" -ne 0 ]; then \
+        printf 'Starting the dedicated test Docker daemon requires root. Run: sudo env AGENTICS_TEST_ROOT=%s just compose-test-docker-up\n' "$root" >&2; \
+        exit 2; \
+      fi; \
+      if [ ! -d "$data_root" ]; then \
+        printf 'Prepared Docker data root is required at %s. Run agentics-prepare-dgx-spark-test-storage as root first.\n' "$data_root" >&2; \
+        exit 2; \
+      fi; \
+      socket_dir="$(dirname "$socket")"; \
+      mkdir -p "$socket_dir" "$exec_root"; \
+      rm -f "$socket" "$pidfile"; \
+      group="${AGENTICS_TEST_DOCKER_GROUP:-$(id -gn "${SUDO_USER:-$(id -un)}")}"; \
+      nohup dockerd \
+        --data-root "$data_root" \
+        --exec-root "$exec_root" \
+        --host "unix://$socket" \
+        --pidfile "$pidfile" \
+        --storage-driver overlay2 \
+        --bridge none \
+        --iptables=true \
+        --live-restore=false \
+        --log-driver json-file \
+        --log-opt max-file=3 \
+        --log-opt max-size=10m \
+        --containerd-namespace agentics-test \
+        --containerd-plugins-namespace agentics-test-plugins \
+        --group "$group" \
+        >"$logfile" 2>&1 & \
+      for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
+        if docker --host "$host" info >/dev/null 2>&1; then \
+          printf 'Dedicated test Docker daemon is ready at %s.\n' "$host"; \
+          exit 0; \
+        fi; \
+        sleep 1; \
+      done; \
+      printf 'Dedicated test Docker daemon did not become ready. Last log lines from %s:\n' "$logfile" >&2; \
+      tail -n 40 "$logfile" >&2 || true; \
+      exit 1
+
+# Stop the dedicated Docker daemon used by containerized integration tests
+compose-test-docker-down:
+    @set -eu; \
+      root="${AGENTICS_TEST_ROOT:-/srv/agentics-test}"; \
+      socket="${AGENTICS_TEST_DOCKER_SOCKET_PATH:-$root/docker.sock}"; \
+      pidfile="${AGENTICS_TEST_DOCKER_PIDFILE:-$root/docker.pid}"; \
+      if [ "$(id -u)" -ne 0 ]; then \
+        printf 'Stopping the dedicated test Docker daemon requires root. Run: sudo env AGENTICS_TEST_ROOT=%s just compose-test-docker-down\n' "$root" >&2; \
+        exit 2; \
+      fi; \
+      if [ ! -f "$pidfile" ]; then \
+        rm -f "$socket"; \
+        printf 'No dedicated test Docker pidfile found at %s.\n' "$pidfile"; \
+        exit 0; \
+      fi; \
+      pid="$(cat "$pidfile")"; \
+      if kill -0 "$pid" >/dev/null 2>&1; then \
+        kill "$pid"; \
+        for _ in 1 2 3 4 5 6 7 8 9 10; do \
+          if ! kill -0 "$pid" >/dev/null 2>&1; then break; fi; \
+          sleep 1; \
+        done; \
+        if kill -0 "$pid" >/dev/null 2>&1; then \
+          printf 'Dedicated test Docker daemon pid %s did not stop; inspect it before retrying.\n' "$pid" >&2; \
+          exit 1; \
+        fi; \
+      fi; \
+      rm -f "$pidfile" "$socket"; \
+      printf 'Dedicated test Docker daemon stopped.\n'
+
 # Run the existing ignored integration suite in a containerized test harness
 compose-test-integration:
     @set -eu; \
@@ -96,15 +179,32 @@ compose-test-integration:
       root="${AGENTICS_TEST_ROOT:-/srv/agentics-test}"; \
       runtime_root="${AGENTICS_TEST_RUNNER_RUNTIME_ROOT:-$root/runtime/$run_id}"; \
       phase_root="${AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT:-$root/phase-mounts}"; \
-      tmpdir="${AGENTICS_TEST_TMPDIR:-$root/tmp/$run_id}"; \
+      tmpdir="${AGENTICS_TEST_TMPDIR:-$runtime_root/tmp}"; \
+      docker_socket="${AGENTICS_TEST_DOCKER_SOCKET_PATH:-$root/docker.sock}"; \
+      docker_host="${AGENTICS_TEST_DOCKER_HOST:-unix://$docker_socket}"; \
+      runner_image="${AGENTICS_TEST_RUNNER_IMAGE:-agentics-linux-arm64-cpu:ubuntu26.04-local}"; \
       if [ ! -d "$root/runtime" ] || [ ! -d "$phase_root" ]; then \
         printf 'Prepared test root is required at %s. Run agentics-prepare-dgx-spark-test-storage as root before compose-test-integration.\n' "$root" >&2; \
         exit 2; \
       fi; \
+      case "$docker_host" in unix://*) ;; *) printf 'compose-test-integration requires a Unix AGENTICS_TEST_DOCKER_HOST, got %s.\n' "$docker_host" >&2; exit 2 ;; esac; \
+      if ! docker --host "$docker_host" info >/dev/null 2>&1; then \
+        printf 'Dedicated test Docker daemon is required at %s. Run sudo env AGENTICS_TEST_ROOT=%s just compose-test-docker-up first.\n' "$docker_host" "$root" >&2; \
+        exit 2; \
+      fi; \
       mkdir -p "$runtime_root" "$tmpdir"; \
+      if ! docker --host "$docker_host" image inspect "$runner_image" >/dev/null 2>&1; then \
+        if ! docker image inspect "$runner_image" >/dev/null 2>&1; then \
+          docker build --platform linux/arm64 -t "$runner_image" docker/images/linux-arm64-cpu; \
+        fi; \
+        image_tar="$runtime_root/runner-image.tar"; \
+        docker image save -o "$image_tar" "$runner_image"; \
+        docker --host "$docker_host" image load -i "$image_tar" >/dev/null; \
+        rm -f "$image_tar"; \
+      fi; \
       status=0; \
-      AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_RUNNER_NAMESPACE="$project" {{compose_test}} -p "$project" up --abort-on-container-exit --exit-code-from tests || status=$?; \
-      AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_RUNNER_NAMESPACE="$project" {{compose_test}} -p "$project" down -v --remove-orphans; \
+      AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" {{compose_test}} -p "$project" up --abort-on-container-exit --exit-code-from tests || status=$?; \
+      AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" {{compose_test}} -p "$project" down -v --remove-orphans; \
       exit "$status"
 
 # Run database migrations

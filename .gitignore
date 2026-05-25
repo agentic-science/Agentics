@@ -33,6 +33,8 @@ __pycache__/
 .venv/
 venv/
 env/
+!deploy/compose/env/
+!deploy/compose/env/*.env.example
 
 # Python test and type-check artifacts
 .pytest_cache/

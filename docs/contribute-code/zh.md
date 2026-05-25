@@ -102,6 +102,7 @@ just compose-dev-logs
 本地 integration-test 迭代可以在容器中运行现有 Rust integration suite：
 
 ```bash
+sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just compose-test-docker-up
 just compose-test-integration
 ```
 
@@ -111,10 +112,12 @@ just compose-test-integration
 cargo test -p integration-tests -- --include-ignored
 ```
 
-它仍然使用 host Docker socket 来创建 runner containers，因此 Linux quota test
-root 必须先用 `agentics-prepare-dgx-spark-test-storage` 准备在
-`/srv/agentics-test`。Wrapper 会为每次运行使用唯一的 Compose project 和 runner
-namespace，并在 tests service 退出后删除 test-scoped Compose volumes。
+它使用 `unix:///srv/agentics-test/docker.sock` 上的专用 test Docker daemon，
+其 data root 是 `/srv/agentics-test/docker-data-root`，因此 Docker layer quota
+会在 overlay2 on XFS with `prjquota` 上测试，而不是依赖 workstation daemon。
+先用 `agentics-prepare-dgx-spark-test-storage` 准备 Linux quota test root，再用上面的
+rootful command 启动专用 daemon。Wrapper 会为每次运行使用唯一的 Compose project
+和 runner namespace，并在 tests service 退出后删除 test-scoped Compose volumes。
 
 ## 运行本地服务
 

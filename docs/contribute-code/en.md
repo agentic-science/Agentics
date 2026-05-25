@@ -105,6 +105,7 @@ For local integration-test iteration, run the existing Rust integration suite in
 a container:
 
 ```bash
+sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just compose-test-docker-up
 just compose-test-integration
 ```
 
@@ -114,11 +115,14 @@ This starts a test-scoped Postgres service and runs:
 cargo test -p integration-tests -- --include-ignored
 ```
 
-inside a Rust container. It still uses the host Docker socket for runner
-containers, so the Linux quota test root must be prepared at `/srv/agentics-test`
-first with `agentics-prepare-dgx-spark-test-storage`. The wrapper uses a unique
-Compose project and runner namespace for each run, then removes test-scoped
-Compose volumes after the test service exits.
+inside a Rust container. It uses a dedicated test Docker daemon at
+`unix:///srv/agentics-test/docker.sock`, backed by
+`/srv/agentics-test/docker-data-root`, so Docker layer quotas are tested against
+overlay2 on XFS with `prjquota` instead of the workstation daemon. Prepare the
+Linux quota test root first with `agentics-prepare-dgx-spark-test-storage`, then
+start the dedicated daemon with the rootful command above. The wrapper uses a
+unique Compose project and runner namespace for each run, then removes
+test-scoped Compose volumes after the test service exits.
 
 ## Run The Stack
 
