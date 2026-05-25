@@ -222,6 +222,16 @@ missing, malformed, or do not point at a prepared bounded test quota root.
 Do not change `/srv/agentics/phase-mounts` ownership to make local tests pass;
 those slots belong to the hosted worker service user.
 
+For production Compose, use the wrapper so checks run with the same env file and
+Compose project name as the deployed stack:
+
+```bash
+just compose-prod-check
+```
+
+The check service mounts the host Docker socket intentionally. API, web,
+Postgres, and RustFS do not mount it.
+
 ## Logs
 
 Current logging is process stdout/stderr. For hosted rehearsal, run each service
@@ -305,6 +315,26 @@ Actions:
 2. Inspect `/admin/service-heartbeats`.
 3. Restart the worker.
 4. Avoid editing evaluation rows manually unless the database is a disposable test database.
+
+For production Compose shutdown, runner handling is explicit:
+
+- `just compose-prod-down --runner keep --dry-run` reports Compose services
+  that would be stopped and changes nothing.
+- `just compose-prod-down --runner keep` stops Compose services and keeps
+  runner containers.
+- `just compose-prod-down --runner clean --dry-run` reports Compose services
+  and exact production runner containers that would be affected and changes
+  nothing.
+- `just compose-prod-down --runner clean` stops worker services first, removes
+  only containers labelled `agentics.runner=zip_project`,
+  `agentics.runner_scope=hosted-worker`, and
+  `agentics.runner_namespace=agentics-prod`, then stops the rest of the stack.
+
+`agentics-compose-prod clean-runners` and the matching just recipe use the same
+exact label filters and report job id, worker id, attempt count, phase, and DB
+claim status when the production database is reachable. The command does not
+repair database state; stale job repair remains the worker reconciliation and
+stale-lease path.
 
 ### Disk Usage Grows
 

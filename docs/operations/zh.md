@@ -217,6 +217,15 @@ root，quota-sensitive integration tests 会 fail fast。
 不要为了让本地测试通过而修改 `/srv/agentics/phase-mounts` ownership；这些 slots
 属于 hosted worker service user。
 
+Production Compose 下，请通过 wrapper 运行检查，这样 check 会使用和 deployed stack
+相同的 env file 和 Compose project name：
+
+```bash
+just compose-prod-check
+```
+
+Check service 会有意挂载 host Docker socket。API、web、Postgres 和 RustFS 不挂载它。
+
 ## Logs
 
 当前日志输出到进程 stdout/stderr。Hosted rehearsal 应使用 supervisor 捕获每个服务的日志，例如
@@ -295,6 +304,23 @@ Actions：
 2. 查看 `/admin/service-heartbeats`。
 3. 重启 worker。
 4. 除非数据库是 disposable test database，否则不要手动编辑 evaluation rows。
+
+Production Compose shutdown 中，runner handling 必须显式选择：
+
+- `just compose-prod-down --runner keep --dry-run` 只报告会被停止的 Compose services，
+  不做任何修改。
+- `just compose-prod-down --runner keep` 会停止 Compose services，并保留 runner
+  containers。
+- `just compose-prod-down --runner clean --dry-run` 会报告会受影响的 Compose services
+  和精确匹配的 production runner containers，不做任何修改。
+- `just compose-prod-down --runner clean` 会先停止 worker services，只删除带
+  `agentics.runner=zip_project`、`agentics.runner_scope=hosted-worker` 和
+  `agentics.runner_namespace=agentics-prod` labels 的 containers，然后停止剩余 stack。
+
+`agentics-compose-prod clean-runners` 及对应 just recipe 使用同样的精确 label filters，
+并在 production database 可达时报告 job id、worker id、attempt count、phase 和 DB
+claim status。该命令不修复 database state；stale job repair 仍由 worker
+reconciliation 和 stale-lease path 负责。
 
 ### Disk Usage 增长
 

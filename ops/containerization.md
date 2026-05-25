@@ -119,21 +119,30 @@ Implemented so far:
 deploy/compose/compose.yml
 deploy/compose/compose.dev.yml
 deploy/compose/compose.test.yml
+deploy/compose/compose.prod.yml
 deploy/compose/env/dev.env.example
 deploy/compose/env/test.env.example
+deploy/compose/env/prod.env.example
+docker/app/Dockerfile
+docker/web/Dockerfile
 just compose-dev-up
 just compose-dev-down
 just compose-dev-logs
 just compose-test-docker-up
 just compose-test-docker-down
 just compose-test-integration
+just compose-prod-build
+just compose-prod-up
+just compose-prod-down --runner keep|clean
+just compose-prod-check
 ```
 
 Potential later ops binaries include focused wrappers such as
-`agentics-compose-dev`, `agentics-compose-test`, `agentics-compose-prod`, and
-`agentics-runner-cleanup`. Do not add one giant unrelated ops executable. Use
-separate binaries for separate operational tasks, or cohesive subcommands only
-when the task family is clearly one thing.
+`agentics-compose-dev` and `agentics-compose-test`. Production now uses the
+focused `agentics-compose-prod` wrapper because build, up, down, logs, checks,
+and runner cleanup are one cohesive task family. Do not add one giant unrelated
+ops executable. Use separate binaries for separate operational tasks, or
+cohesive subcommands only when the task family is clearly one thing.
 
 ## Shared Compose Base
 
@@ -452,16 +461,20 @@ of the tests.
 Production should start from a Compose project with durable state, prebuilt
 images, explicit secrets, bounded runner storage, and deterministic cleanup.
 
-Target shape:
+Implemented first-pass shape:
 
 ```bash
-agentics-compose-prod up
-agentics-compose-prod down
-agentics-compose-prod upgrade
-agentics-compose-prod backup
-agentics-compose-prod rollback
-agentics-runner-cleanup --namespace agentics-prod
+just compose-prod-build
+just compose-prod-up
+just compose-prod-check
+just compose-prod-down --runner keep
+just compose-prod-down --runner clean
+just compose-prod-clean-runners --namespace agentics-prod
 ```
+
+Upgrade, backup, and rollback wrappers are still later work. The current
+rollback path is explicit stop, external restore, image rebuild or replacement,
+and restart.
 
 ### Production Services
 
@@ -475,6 +488,9 @@ Production stack:
 - optional `worker-gpu` profile;
 - `migrate` one-shot job;
 - optional admin/check jobs.
+
+The first pass builds images locally from the checkout. Registry publishing can
+reuse `AGENTICS_APP_IMAGE` and `AGENTICS_WEB_IMAGE` overrides later.
 
 ### Production State
 
@@ -519,12 +535,28 @@ Required cleanup paths:
 - worker startup reconciliation by namespace;
 - worker-cycle reconciliation by namespace;
 - explicit ops cleanup command by namespace;
-- pre-up check that no stale prod runner containers are present unless they
-  match live database claims;
 - post-down cleanup option for intentionally stopping the platform.
 
-The cleanup command should have dry-run output and destructive confirmation for
-production namespaces.
+`agentics-compose-prod down` requires `--runner keep` or `--runner clean`.
+Choosing `--runner clean` is the explicit confirmation. The dry-run variants are
+strictly non-mutating:
+
+```bash
+just compose-prod-down --runner keep --dry-run
+just compose-prod-down --runner clean --dry-run
+```
+
+Cleanup uses exact labels:
+
+```text
+agentics.runner=zip_project
+agentics.runner_scope=hosted-worker
+agentics.runner_namespace=<namespace>
+```
+
+It reports job id, worker id, attempt count, phase, and database claim status
+when the production database is reachable. It does not mutate database state;
+stale job repair remains worker reconciliation and stale-lease behavior.
 
 ## Implementation Phases
 
@@ -565,12 +597,13 @@ production namespaces.
 
 ### Phase 4: Production Compose
 
-- Add production Compose override.
-- Add production env example and secret guidance.
-- Add prebuilt image flow.
-- Add production startup checks.
-- Add production cleanup/dry-run commands.
-- Update operator docs in English and Chinese.
+- Add production Compose override. Done.
+- Add production env example and secret guidance. Done.
+- Add local production image build flow. Done.
+- Add production startup checks. Done through the `check` service and wrapper.
+- Add production cleanup/dry-run commands. Done.
+- Update operator docs in English and Chinese. Done.
+- Add registry publishing, backup, upgrade, and rollback wrappers. Later.
 
 ### Phase 5: Black-Box E2E
 
@@ -585,8 +618,6 @@ production namespaces.
 - Should RustFS be mandatory in dev/test, or should local filesystem storage
   remain available for the fastest inner loop?
 - Where should host-visible dev/test roots live by default on non-DGX machines?
-- Should the Compose wrapper live as one cohesive `agentics-compose-*` task
-  family or as separate dev/test/prod binaries?
 - When production moves beyond the first Compose version, is a dedicated Docker
   daemon/socket worth the extra operational setup?
 

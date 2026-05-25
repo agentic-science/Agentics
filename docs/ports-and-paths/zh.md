@@ -8,16 +8,20 @@ reference。
 | Surface | Env var | Default | Scope |
 | --- | --- | --- | --- |
 | Compose dev Postgres host port | `AGENTICS_POSTGRES_PORT` | `deploy/compose/env/dev.env.example` 中的 `55432` | Local Compose development |
+| Production Compose bind address | `AGENTICS_COMPOSE_BIND_IP` | `127.0.0.1` | Production API 和 web host publishes |
 | API listen port | `AGENTICS_API_PORT` | `3100` | API service，默认 loopback |
 | Web listen port | `AGENTICS_WEB_PORT` | `3001` | Next.js web service，默认 loopback |
+| Production RustFS S3 endpoint | `AGENTICS_S3_ENDPOINT_URL` | `http://rustfs:9000` | Internal production Compose storage |
 | RustFS S3 test port | `AGENTICS_RUSTFS_PORT` | `9000` | Local Docker RustFS test service |
 | RustFS console test port | `AGENTICS_RUSTFS_CONSOLE_PORT` | `9001` | Local Docker RustFS console |
 | Persistent private-bundle backup RustFS S3 port | `AGENTICS_RUSTFS_BACKUP_API_PORT` | `9100` | LAN-accessible private bundle backup store |
 | Persistent private-bundle backup RustFS console port | `AGENTICS_RUSTFS_BACKUP_CONSOLE_PORT` | `9101` | LAN-accessible private bundle backup console |
 | Public HTTPS | reverse proxy config | `443` | 仅 hosted ingress |
 
-Local Compose development 读取 `deploy/compose/env/dev.env.example`。DGX hosted
-profile 将 `deploy/dgx-spark/agentics.env.example` 复制到
+Local Compose development 读取 `deploy/compose/env/dev.env.example`。Production
+Compose 使用 `deploy/compose/env/prod.env`，从
+`deploy/compose/env/prod.env.example` 复制得到。DGX hosted profile 将
+`deploy/dgx-spark/agentics.env.example` 复制到
 `/etc/agentics/agentics.env`。
 
 ## DGX Paths
@@ -33,6 +37,8 @@ profile 将 `deploy/dgx-spark/agentics.env.example` 复制到
 | Storage root | `/srv/agentics/storage` |
 | Storage work root | `/srv/agentics/storage-work` |
 | Runner runtime root | `/srv/agentics/runtime` |
+| Production Compose storage work root | `/srv/agentics/storage-work` |
+| Production host Docker socket | 默认 `/var/run/docker.sock` |
 | Agentics Docker socket | `/run/agentics/docker.sock` |
 | Agentics Docker data root | `/srv/agentics/docker-data-root` |
 | Loop image root | `/srv/agentics/loop-images` |

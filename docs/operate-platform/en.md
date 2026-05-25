@@ -19,6 +19,8 @@ post-MVP targets.
 ## Configuration Sources
 
 - Local Compose development: `deploy/compose/env/dev.env.example`.
+- Production Compose: copy `deploy/compose/env/prod.env.example` to
+  `deploy/compose/env/prod.env` and replace placeholders.
 - DGX Spark hosted profile: `deploy/dgx-spark/agentics.env.example`.
 - Ports, filesystem paths, and target policy: `docs/ports-and-paths/en.md`.
 
@@ -29,6 +31,16 @@ The local defaults use:
 - Postgres host port: `55432`
 - Challenge root: `examples/challenges`
 - Storage root: `.agentics-compose/dev/storage`
+
+The production Compose defaults use:
+
+- Project name: `agentics-prod`
+- API bind: `${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:3100`
+- Web bind: `${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:3001`
+- Storage backend: RustFS-compatible S3 at `http://rustfs:9000`
+- Runner namespace: `agentics-prod`
+- Runner profile: `AGENTICS_RUNNER_SECURITY_PROFILE=production` with
+  `AGENTICS_HOST_PROBE_MODE=require`
 
 The DGX profile uses `/etc/agentics`, `/opt/agentics/current`,
 `/srv/agentics`, and the Agentics-owned Docker socket at
@@ -44,6 +56,23 @@ For local Compose operation:
 3. Run `agentics-check-local-mvp` with `AGENTICS_WEB_BASE_URL` and admin
    credentials when web and admin checks are needed.
 4. Stop the stack with `just compose-dev-down`.
+
+For production Compose operation:
+
+1. Prepare `/srv/agentics/runtime`, `/srv/agentics/phase-mounts`, and
+   `/srv/agentics/storage-work` for the configured runtime UID and GID.
+2. Copy and edit `deploy/compose/env/prod.env`.
+3. Build and start with `just compose-prod-build` and `just compose-prod-up`.
+4. Run `just compose-prod-check`.
+5. Stop with an explicit runner policy:
+
+   ```bash
+   just compose-prod-down --runner keep
+   just compose-prod-down --runner clean
+   ```
+
+Use the same commands with `--dry-run` first when you want to inspect affected
+services and runner containers without stopping or removing anything.
 
 For DGX Spark, use [DGX Spark operations](../dgx-spark/en.md). The systemd
 units under `deploy/dgx-spark/` are Linux-only and use the release symlink

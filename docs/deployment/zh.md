@@ -1,8 +1,9 @@
 # Deployment Baseline
 
-本文档定义 MVP 的本地 Compose 部署演练。Hosted MVP profile 运行在 NVIDIA DGX
-Spark 上，并单独记录在 `docs/dgx-spark/zh.md`。本文件用于 local containerized
-rehearsal；hosted Linux operation 应使用 DGX profile 文档。
+本文档定义 MVP 的本地 Compose 部署演练，以及第一版单机 production Compose
+stack。Hosted MVP profile 运行在 NVIDIA DGX Spark 上，并单独记录在
+`docs/dgx-spark/zh.md`。本文件用于 containerized local 和 production operation；
+Linux host preparation 应使用 DGX profile 文档。
 
 ## 当前目标
 
@@ -14,14 +15,24 @@ Local 已验证目标是单机 Compose deployment：
 - Worker 连接 host Docker daemon，并创建 sibling runner containers。
 - Public traffic 应先进入 reverse proxy，再转发到 API 或 web 进程。
 
+Production Compose 目标是名为 `agentics-prod` 的单机 project：
+
+- Postgres 和 RustFS 作为 Compose-managed durable services 运行。
+- API、worker、checks 和 migrations 使用本地构建的 production app image。
+- Web 使用本地构建的 production Next.js image，并由 Bun serve。
+- API 和 web ports 绑定到 `AGENTICS_COMPOSE_BIND_IP`，默认是 `127.0.0.1`，
+  因此 public ingress 和 TLS 保持在 Compose 外部。
+- 只有 worker 和 check services 挂载 host Docker socket。
+
 Local Compose rehearsal 验证 service wiring 和平台行为。它不验证 DGX GPU runtime、ARM64 CUDA
 images、public TLS、production ingress 或 Linux systemd startup。
 
 `deploy/dgx-spark/` 下的 systemd units 是仅适用于 Linux 的 DGX hosted artifacts，
 并使用 `/opt/agentics/current` release paths。
 
-Local Compose defaults 位于 `deploy/compose/env/dev.env.example`。Ports 和 paths
-记录在 `docs/ports-and-paths/zh.md`。
+Local Compose defaults 位于 `deploy/compose/env/dev.env.example`。Production
+Compose defaults 和 placeholders 位于 `deploy/compose/env/prod.env.example`。
+Ports 和 paths 记录在 `docs/ports-and-paths/zh.md`。
 
 ## 必需服务
 
@@ -31,6 +42,7 @@ Local Compose defaults 位于 `deploy/compose/env/dev.env.example`。Ports 和 p
 | API | `just compose-dev-up` service `api` | `${AGENTICS_API_PORT:-3100}` |
 | Worker | `just compose-dev-up` service `worker` | 无 |
 | Web | `just compose-dev-up` service `web` | `${AGENTICS_WEB_PORT:-3001}` |
+| RustFS | `just compose-prod-up` service `rustfs` | internal `9000`，console internal `9001` |
 
 ## 环境变量
 
@@ -39,6 +51,17 @@ Local Compose environment source：
 ```bash
 deploy/compose/env/dev.env.example
 ```
+
+Production Compose environment source：
+
+```bash
+cp deploy/compose/env/prod.env.example deploy/compose/env/prod.env
+```
+
+启动 production 前必须替换所有 placeholder。Production env file 默认使用
+`AGENTICS_STORAGE_BACKEND=s3`，并把 RustFS 配置为 `http://rustfs:9000`。External
+S3 是 env-only override：修改 S3 endpoint、bucket、prefix、force-path-style flag
+和 credentials provider，不需要修改 Compose graph。
 
 如果绑定到非 loopback 地址，必须修改 `AGENTICS_ADMIN_PASSWORD`。Hosted MVP 使用 pioneer-code gated registration 和 Cloudflare edge controls；backend 会拒绝 `AGENTICS_AGENT_REGISTRATION_MODE=public`。
 
@@ -52,6 +75,8 @@ export NEXT_PUBLIC_AGENTICS_API_BASE_URL=''
 当 web 进程代理 admin requests 到 API 时，保持 `NEXT_PUBLIC_AGENTICS_API_BASE_URL` 未设置。只有当浏览器可以安全地直连 API origin，并且 CORS 已正确配置时，才设置它。
 
 ## 启动顺序
+
+Local development：
 
 1. 启动 Compose dev stack：
 
@@ -70,9 +95,54 @@ export NEXT_PUBLIC_AGENTICS_API_BASE_URL=''
    credentials 后运行 `agentics-check-local-mvp`。
 5. 用 `just compose-dev-down` 停止 stack。
 
+Production Compose：
+
+1. 准备 host-owned directories 和 runner quota storage：
+
+   ```bash
+   sudo install -d -m 0700 -o <runtime-uid> -g <runtime-gid> /srv/agentics/runtime
+   sudo install -d -m 0700 -o <runtime-uid> -g <runtime-gid> /srv/agentics/phase-mounts
+   sudo install -d -m 0700 -o <runtime-uid> -g <runtime-gid> /srv/agentics/storage-work
+   ```
+
+2. 创建并编辑 production env file：
+
+   ```bash
+   cp deploy/compose/env/prod.env.example deploy/compose/env/prod.env
+   ```
+
+3. 构建并启动：
+
+   ```bash
+   just compose-prod-build
+   just compose-prod-up
+   ```
+
+4. 运行 production checks 并查看 logs：
+
+   ```bash
+   just compose-prod-check
+   just compose-prod-logs
+   ```
+
+5. 显式停止：
+
+   ```bash
+   just compose-prod-down --runner keep --dry-run
+   just compose-prod-down --runner keep
+   just compose-prod-down --runner clean --dry-run
+   just compose-prod-down --runner clean
+   ```
+
+`--runner keep --dry-run` 和 `--runner clean --dry-run` 都不会停止 services。
+`--runner keep` 会停止 Compose services 并保留 runner containers。
+`--runner clean` 会先停止 worker services，只删除带精确 Agentics labels 的 production
+runner containers，然后停止剩余 Compose stack。
+
 ## Reverse Proxy 假设
 
-MVP edge layer 由 Cloudflare 管理。它应该：
+Production Compose stack 不包含 reverse proxy 或 TLS service。MVP edge layer 由
+Cloudflare 或其他外部 ingress 管理。它应该：
 
 - 终止 TLS。
 - 将 public web traffic 转发到 web 进程。
@@ -81,6 +151,10 @@ MVP edge layer 由 Cloudflare 管理。它应该：
 - 将 request body size 限制在不高于 backend limits 的范围内。
 - 保留 `Authorization` 和 `Content-Type` headers。
 - 如果 hosted MVP 不准备公开 admin access，应限制 admin paths 只允许可信 operators 访问。
+
+对于 production Compose，将 `/healthz`、`/api/*`、`/admin/*` 等 API paths 转发到
+`${AGENTICS_COMPOSE_BIND_IP}:${AGENTICS_API_PORT:-3100}`，并把 web traffic 转发到
+`${AGENTICS_COMPOSE_BIND_IP}:${AGENTICS_WEB_PORT:-3001}`。
 
 ## Storage 和备份
 
@@ -110,6 +184,12 @@ export AGENTICS_S3_ENDPOINT_URL='https://s3.example.internal'
 export AGENTICS_S3_FORCE_PATH_STYLE='true'
 export AGENTICS_STORAGE_WORK_ROOT='/srv/agentics/storage-work'
 ```
+
+Production Compose 默认使用 RustFS 作为单机 S3-compatible durable storage
+service。RustFS credentials 通过 `AGENTICS_RUSTFS_ACCESS_KEY` 和
+`AGENTICS_RUSTFS_SECRET_KEY` 配置，并在 app services 内映射为 AWS SDK 环境变量。
+Production RustFS data 位于 Compose named volume；需要和 Postgres 一起备份该
+volume，或者在 deployment 前通过 env 切换到 external S3。
 
 如果重复进行 MVP production rehearsal，并希望 stack rebuild 后备份 migrated challenge
 private bundles，可以启动专用 RustFS backup compose service：
@@ -190,12 +270,24 @@ disk boundary。
 
 MVP 演练期间不要手动回滚数据库迁移，除非该 migration 明确可逆，并且 storage snapshot 来自同一时间点。
 
+Production Compose 下，普通 binary 或 image rollback 使用
+`just compose-prod-down --runner keep`，让正在运行的 evaluations 后续由 worker
+reconciliation 处理。只有当 operator 明确选择终止匹配的 production runner
+containers 时，才使用 `just compose-prod-down --runner clean`。Dry-run 形式不会停止
+services。
+
 ## 验证
 
 运行：
 
 ```bash
 agentics-check-local-mvp
+```
+
+Production Compose 使用：
+
+```bash
+just compose-prod-check
 ```
 
 然后使用根目录 `README.md` 中的 submitter flow 或

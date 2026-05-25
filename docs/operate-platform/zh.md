@@ -18,6 +18,8 @@ allowlist 对齐。`linux-amd64-cpu` 和 `linux-amd64-cuda` 是 post-MVP targets
 ## Configuration Sources
 
 - Local Compose development：`deploy/compose/env/dev.env.example`。
+- Production Compose：复制 `deploy/compose/env/prod.env.example` 到
+  `deploy/compose/env/prod.env`，并替换 placeholders。
 - DGX Spark hosted profile：`deploy/dgx-spark/agentics.env.example`。
 - Ports、filesystem paths 和 target policy：`docs/ports-and-paths/zh.md`。
 
@@ -28,6 +30,16 @@ Local defaults 使用：
 - Postgres host port：`55432`
 - Challenge root：`examples/challenges`
 - Storage root：`.agentics-compose/dev/storage`
+
+Production Compose defaults 使用：
+
+- Project name：`agentics-prod`
+- API bind：`${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:3100`
+- Web bind：`${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:3001`
+- Storage backend：RustFS-compatible S3 at `http://rustfs:9000`
+- Runner namespace：`agentics-prod`
+- Runner profile：`AGENTICS_RUNNER_SECURITY_PROFILE=production`，并使用
+  `AGENTICS_HOST_PROBE_MODE=require`
 
 DGX profile 使用 `/etc/agentics`、`/opt/agentics/current`、`/srv/agentics`，以及
 Agentics-owned Docker socket `/run/agentics/docker.sock`。
@@ -42,6 +54,23 @@ Local Compose operation：
 3. 如果需要 web 和 admin checks，设置 `AGENTICS_WEB_BASE_URL` 和 admin
    credentials 后运行 `agentics-check-local-mvp`。
 4. 使用 `just compose-dev-down` 停止 stack。
+
+Production Compose operation：
+
+1. 为配置的 runtime UID 和 GID 准备 `/srv/agentics/runtime`、
+   `/srv/agentics/phase-mounts` 和 `/srv/agentics/storage-work`。
+2. 复制并编辑 `deploy/compose/env/prod.env`。
+3. 使用 `just compose-prod-build` 和 `just compose-prod-up` 构建并启动。
+4. 运行 `just compose-prod-check`。
+5. 使用显式 runner policy 停止：
+
+   ```bash
+   just compose-prod-down --runner keep
+   just compose-prod-down --runner clean
+   ```
+
+如果要先查看受影响 services 和 runner containers，而不停止或删除任何东西，先加上
+`--dry-run` 运行同样的命令。
 
 DGX Spark 使用 [DGX Spark operations](../dgx-spark/zh.md)。`deploy/dgx-spark/`
 下的 systemd units 仅适用于 Linux，并使用 release symlink `/opt/agentics/current`。

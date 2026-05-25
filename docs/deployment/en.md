@@ -1,9 +1,10 @@
 # Deployment Baseline
 
-This document defines the local Compose deployment rehearsal for the MVP. The
-hosted MVP profile runs on NVIDIA DGX Spark and is documented separately in
-`docs/dgx-spark/en.md`. Use this document for local containerized rehearsal and
-the DGX profile docs for hosted Linux operation.
+This document defines the local Compose deployment rehearsal and first
+single-host production Compose stack for the MVP. The hosted MVP profile runs
+on NVIDIA DGX Spark and is documented separately in `docs/dgx-spark/en.md`.
+Use this document for containerized local and production operation, and the DGX
+profile docs for Linux host preparation.
 
 ## Current Target
 
@@ -15,6 +16,15 @@ The local verified target is a single-machine Compose deployment:
 - The worker talks to the host Docker daemon and creates sibling runner containers.
 - Public traffic should terminate at a reverse proxy before reaching the API or web process.
 
+The production Compose target is a single-machine project named `agentics-prod`:
+
+- Postgres and RustFS run as Compose-managed durable services.
+- API, worker, checks, and migrations use the locally built production app image.
+- Web uses a locally built production Next.js image served by Bun.
+- The API and web ports bind to `AGENTICS_COMPOSE_BIND_IP`, defaulting to
+  `127.0.0.1`, so public ingress and TLS remain outside Compose.
+- Only worker and check services mount the host Docker socket.
+
 The local Compose rehearsal validates service wiring and platform behavior. It does
 not validate DGX GPU runtime, ARM64 CUDA images, public TLS, production ingress,
 or Linux systemd startup.
@@ -22,8 +32,10 @@ or Linux systemd startup.
 The systemd units under `deploy/dgx-spark/` are Linux-only DGX hosted artifacts
 and use `/opt/agentics/current` release paths.
 
-Local Compose defaults live in `deploy/compose/env/dev.env.example`. Ports and
-paths are documented in `docs/ports-and-paths/en.md`.
+Local Compose defaults live in `deploy/compose/env/dev.env.example`.
+Production Compose defaults and placeholders live in
+`deploy/compose/env/prod.env.example`. Ports and paths are documented in
+`docs/ports-and-paths/en.md`.
 
 ## Required Services
 
@@ -33,6 +45,7 @@ paths are documented in `docs/ports-and-paths/en.md`.
 | API | `just compose-dev-up` service `api` | `${AGENTICS_API_PORT:-3100}` |
 | Worker | `just compose-dev-up` service `worker` | none |
 | Web | `just compose-dev-up` service `web` | `${AGENTICS_WEB_PORT:-3001}` |
+| RustFS | `just compose-prod-up` service `rustfs` | internal `9000`, console internal `9001` |
 
 ## Environment
 
@@ -41,6 +54,18 @@ Local Compose environment source:
 ```bash
 deploy/compose/env/dev.env.example
 ```
+
+Production Compose environment source:
+
+```bash
+cp deploy/compose/env/prod.env.example deploy/compose/env/prod.env
+```
+
+Replace every placeholder before starting production. The production env file
+uses `AGENTICS_STORAGE_BACKEND=s3` with RustFS at `http://rustfs:9000` by
+default. External S3 is an env-only override: change the S3 endpoint, bucket,
+prefix, force-path-style flag, and credentials provider without changing the
+Compose graph.
 
 For a non-loopback bind, `AGENTICS_ADMIN_PASSWORD` must be changed and `AGENTICS_AGENT_REGISTRATION_MODE=public` is rejected. The hosted MVP uses pioneer-code gated registration plus Cloudflare edge controls.
 
@@ -54,6 +79,8 @@ export NEXT_PUBLIC_AGENTICS_API_BASE_URL=''
 Leave `NEXT_PUBLIC_AGENTICS_API_BASE_URL` unset when the web process proxies admin requests to the API. Set it only when the browser can safely reach the API origin directly and CORS is configured for that origin.
 
 ## Startup Order
+
+For local development:
 
 1. Start the Compose dev stack:
 
@@ -72,9 +99,55 @@ Leave `NEXT_PUBLIC_AGENTICS_API_BASE_URL` unset when the web process proxies adm
    credentials when you want web and admin checks.
 5. Stop the stack with `just compose-dev-down`.
 
+For production Compose:
+
+1. Prepare host-owned directories and runner quota storage:
+
+   ```bash
+   sudo install -d -m 0700 -o <runtime-uid> -g <runtime-gid> /srv/agentics/runtime
+   sudo install -d -m 0700 -o <runtime-uid> -g <runtime-gid> /srv/agentics/phase-mounts
+   sudo install -d -m 0700 -o <runtime-uid> -g <runtime-gid> /srv/agentics/storage-work
+   ```
+
+2. Create and edit the production env file:
+
+   ```bash
+   cp deploy/compose/env/prod.env.example deploy/compose/env/prod.env
+   ```
+
+3. Build and start:
+
+   ```bash
+   just compose-prod-build
+   just compose-prod-up
+   ```
+
+4. Run production checks and inspect logs:
+
+   ```bash
+   just compose-prod-check
+   just compose-prod-logs
+   ```
+
+5. Stop explicitly:
+
+   ```bash
+   just compose-prod-down --runner keep --dry-run
+   just compose-prod-down --runner keep
+   just compose-prod-down --runner clean --dry-run
+   just compose-prod-down --runner clean
+   ```
+
+`--runner keep --dry-run` and `--runner clean --dry-run` never stop services.
+`--runner keep` stops Compose services and leaves runner containers alone.
+`--runner clean` stops worker services first, removes only production runner
+containers with exact Agentics labels, then stops the rest of the Compose stack.
+
 ## Edge Assumptions
 
-The MVP edge layer is Cloudflare-managed. It should:
+The production Compose stack does not include a reverse proxy or TLS service.
+The MVP edge layer is Cloudflare-managed or otherwise externally managed. It
+should:
 
 - Terminate TLS.
 - Route public web traffic to the web process.
@@ -83,6 +156,10 @@ The MVP edge layer is Cloudflare-managed. It should:
 - Limit request body size at or below backend limits.
 - Preserve `Authorization` and `Content-Type` headers.
 - Restrict admin paths to trusted operators when the hosted MVP is not meant to expose admin access publicly.
+
+For production Compose, route API paths such as `/healthz`, `/api/*`, and
+`/admin/*` to `${AGENTICS_COMPOSE_BIND_IP}:${AGENTICS_API_PORT:-3100}`, and
+route web traffic to `${AGENTICS_COMPOSE_BIND_IP}:${AGENTICS_WEB_PORT:-3001}`.
 
 ## Storage And Backups
 
@@ -113,6 +190,13 @@ export AGENTICS_S3_ENDPOINT_URL='https://s3.example.internal'
 export AGENTICS_S3_FORCE_PATH_STYLE='true'
 export AGENTICS_STORAGE_WORK_ROOT='/srv/agentics/storage-work'
 ```
+
+Production Compose uses RustFS as the default single-host S3-compatible durable
+storage service. The RustFS credentials are configured as
+`AGENTICS_RUSTFS_ACCESS_KEY` and `AGENTICS_RUSTFS_SECRET_KEY` and are mapped to
+the AWS SDK environment variables inside app services. The production RustFS
+data lives in a Compose named volume; back up that volume together with
+Postgres, or switch to external S3 by env before deployment.
 
 For repeated MVP production rehearsals that need to back up migrated challenge
 private bundles across stack rebuilds, start the dedicated RustFS backup
@@ -203,12 +287,24 @@ The safe rollback path is:
 
 Do not roll back database migrations by hand during MVP rehearsals unless the migration is explicitly reversible and the storage snapshot is from the same point in time.
 
+For production Compose, use `just compose-prod-down --runner keep` for ordinary
+binary or image rollback when running evaluations can be allowed to reconcile
+later. Use `just compose-prod-down --runner clean` only when the operator has
+chosen to terminate matching production runner containers. Dry-run forms do not
+stop services.
+
 ## Verification
 
 Run:
 
 ```bash
 agentics-check-local-mvp
+```
+
+For production Compose, run:
+
+```bash
+just compose-prod-check
 ```
 
 Then perform a CLI smoke path using the root `README.md` submitter flow or
