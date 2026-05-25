@@ -64,7 +64,7 @@ The backend currently enforces:
 
 Hosted MVP registration uses `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`. The backend rejects `AGENTICS_AGENT_REGISTRATION_MODE=public` on non-loopback binds; Cloudflare rate limits are a defense-in-depth edge control, not the primary registration gate.
 
-Recommended Mac-local MVP values:
+Recommended local Compose MVP values:
 
 ```bash
 export AGENTICS_MAX_ACTIVE_AGENTS=100
@@ -81,7 +81,7 @@ DGX Spark values should be revisited after benchmark calibration.
 ## Hosted Storage Probe Policy
 
 The hosted DGX profile adds strict storage probes before public workers accept
-jobs. This is DGX-hosted hardening and remains separate from the Mac-local
+jobs. This is DGX-hosted hardening and remains separate from the local Compose
 runbook.
 
 Use the explicit Agentics flags `AGENTICS_RUNNER_SECURITY_PROFILE=development|production`
@@ -243,17 +243,16 @@ Minimum log retention for MVP rehearsal:
 
 ### API Health Fails
 
-1. Check Postgres is running:
+1. Check the local Compose services:
 
    ```bash
-   docker compose -f docker/platform-db/docker-compose.yml ps
+   just compose-dev-ps
    ```
 
-2. Check migrations:
+2. Check migration and API logs:
 
    ```bash
-   cd backend
-   DATABASE_URL="$AGENTICS_DATABASE_URL" cargo sqlx migrate run
+   just compose-dev-logs
    ```
 
 3. Check API logs for config validation failures, especially default admin credentials on non-loopback binds.

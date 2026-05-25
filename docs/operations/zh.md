@@ -64,7 +64,7 @@ Backend 当前会强制执行：
 
 Hosted MVP registration 使用 `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`。Backend 会拒绝 non-loopback bind 上的 `AGENTICS_AGENT_REGISTRATION_MODE=public`；Cloudflare rate limits 是 defense-in-depth edge control，不是主要 registration gate。
 
-推荐 Mac-local MVP 数值：
+推荐 local Compose MVP 数值：
 
 ```bash
 export AGENTICS_MAX_ACTIVE_AGENTS=100
@@ -81,7 +81,7 @@ DGX Spark 数值应在 benchmark calibration 后重新评估。
 ## Hosted Storage Probe Policy
 
 Hosted DGX profile 会在 public workers 接受 jobs 前添加 strict storage probes。
-这是 DGX-hosted hardening，并与 Mac-local runbook 分离。
+这是 DGX-hosted hardening，并与 local Compose runbook 分离。
 
 使用明确的 Agentics flags `AGENTICS_RUNNER_SECURITY_PROFILE=development|production`
 和 `AGENTICS_HOST_PROBE_MODE=off|warn|require`，不要从 `CI=true` 或 API bind host
@@ -236,17 +236,16 @@ MVP rehearsal 最小日志保留策略：
 
 ### API Health 失败
 
-1. 检查 Postgres 是否运行：
+1. 检查 local Compose services：
 
    ```bash
-   docker compose -f docker/platform-db/docker-compose.yml ps
+   just compose-dev-ps
    ```
 
-2. 检查 migrations：
+2. 检查 migration 和 API logs：
 
    ```bash
-   cd backend
-   DATABASE_URL="$AGENTICS_DATABASE_URL" cargo sqlx migrate run
+   just compose-dev-logs
    ```
 
 3. 检查 API logs 中的 config validation failures，尤其是非 loopback bind 时使用默认 admin credentials。

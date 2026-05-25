@@ -260,7 +260,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 ## v0.2 - Multi-Language ZIP Projects, Targets, GPU, and Capacity Controls
 
-v0.2 expands Agentics beyond the initial archive protocol into manifest-based multi-language solution submissions and target-aware execution. For the hosted MVP, target-aware execution is DGX-first: `linux-arm64-cpu` and `linux-arm64-cuda` run on `linux/arm64`, local platform development may use `macos-arm64-cpu` foreground rehearsal, and `linux-amd64-cpu` plus `linux-amd64-cuda` are post-MVP expansion targets.
+v0.2 expands Agentics beyond the initial archive protocol into manifest-based multi-language solution submissions and target-aware execution. For the hosted MVP, target-aware execution is DGX-first: `linux-arm64-cpu` and `linux-arm64-cuda` run on `linux/arm64`, local platform development may use `macos-arm64-cpu` Compose rehearsal, and `linux-amd64-cpu` plus `linux-amd64-cuda` are post-MVP expansion targets.
 
 ### Solution Submission Protocol
 
@@ -595,8 +595,8 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas` | Implemented | Active draft limits, private asset byte limits, validation-frequency limits, stale draft abandonment, and unpublished asset purge are implemented. |
 | `M0.2.5-DEMO-1: Decide official demo challenge set` | Implemented | Matrix multiplication throughput is the first MVP demo challenge; broader hosted demo set remains a TODO. |
 | `M0.2.5-DEMO-2: Package official demo challenges` | Implemented | Matrix demo lives in the challenge repository, uses private seed/config plus setup-generated official data, and passed the local GitHub draft/publish/submit smoke path. |
-| `M0.2.5-DEPLOY-1: Add hosted deployment baseline` | Implemented | Mac-local MVP deployment rehearsal is documented; DGX Spark hosted profile is now covered separately by DGX-1 and DGX-2. |
-| `M0.2.5-OPS-1: Add public quota and abuse limits` | Implemented | Backend-enforced quotas and pioneer-code gated registration are documented with recommended Mac-local MVP values and Cloudflare edge controls. |
+| `M0.2.5-DEPLOY-1: Add hosted deployment baseline` | Implemented | Local Compose MVP deployment rehearsal is documented; DGX Spark hosted profile is now covered separately by DGX-1 and DGX-2. |
+| `M0.2.5-OPS-1: Add public quota and abuse limits` | Implemented | Backend-enforced quotas and pioneer-code gated registration are documented with recommended local Compose MVP values and Cloudflare edge controls. |
 | `M0.2.5-OPS-2: Add health checks, observability, and runbook` | Implemented | Operations runbook and `agentics-check-local-mvp` cover health, capacity, heartbeat, logs, failures, and backups. |
 | `M0.2.5-DGX-1: Inventory DGX Spark host and container runtime` | Implemented | Linux host, GPU, NVIDIA toolkit, storage, XFS tooling, loopback tooling, default Docker server/storage driver, and NVIDIA Docker smoke evidence are summarized in `docs/dgx-spark/en.md`. |
 | `M0.2.5-DGX-2: Add DGX Spark deployment profile` | Implemented | Profile docs, env template, systemd units, Agentics-owned Docker config, Linux-gated storage/profile scripts, loopback XFS mounts with `/etc/fstab` entries, root-prepared runner quota slots, enabled Agentics-owned Docker daemon, and strict profile verification are in place. |

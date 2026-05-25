@@ -1,62 +1,43 @@
 # Deployment Baseline
 
-本文档定义 MVP 的 Mac 本地部署演练。Hosted MVP profile 运行在 NVIDIA DGX
-Spark 上，并单独记录在 `docs/dgx-spark/zh.md`。
-本文件用于 local foreground rehearsal；hosted Linux operation 应使用 DGX profile
-文档。
+本文档定义 MVP 的本地 Compose 部署演练。Hosted MVP profile 运行在 NVIDIA DGX
+Spark 上，并单独记录在 `docs/dgx-spark/zh.md`。本文件用于 local containerized
+rehearsal；hosted Linux operation 应使用 DGX profile 文档。
 
 ## 当前目标
 
-Mac-local 已验证目标是单机部署：
+Local 已验证目标是单机 Compose deployment：
 
-- Postgres 通过 `docker/platform-db/docker-compose.yml` 运行。
-- API、worker 和 web 作为独立进程运行。
+- Postgres、API、worker 和 web 作为 Compose services 运行。
 - Durable storage 默认使用 `AGENTICS_STORAGE_ROOT` 下的 local object storage；
   hosted deployments 可以使用 `AGENTICS_STORAGE_BACKEND=s3`。
-- Worker 连接本机 Docker daemon。
+- Worker 连接 host Docker daemon，并创建 sibling runner containers。
 - Public traffic 应先进入 reverse proxy，再转发到 API 或 web 进程。
 
-Mac 本地演练验证进程连接和平台行为。它不验证 DGX GPU runtime、ARM64 CUDA
+Local Compose rehearsal 验证 service wiring 和平台行为。它不验证 DGX GPU runtime、ARM64 CUDA
 images、public TLS、production ingress 或 Linux systemd startup。
 
-这条 macOS 路径有意使用前台 process commands，而不是 systemd `ExecStart=`
-定义。`deploy/dgx-spark/` 下的 systemd units 是仅适用于 Linux 的 DGX hosted
-artifacts，并使用 `/opt/agentics/current` release paths。
+`deploy/dgx-spark/` 下的 systemd units 是仅适用于 Linux 的 DGX hosted artifacts，
+并使用 `/opt/agentics/current` release paths。
 
-Ports 和 paths 在 `deploy/local/agentics.env.example` 中为 local development
-集中配置，并记录在 `docs/ports-and-paths/zh.md`。
+Local Compose defaults 位于 `deploy/compose/env/dev.env.example`。Ports 和 paths
+记录在 `docs/ports-and-paths/zh.md`。
 
 ## 必需服务
 
 | Service | Command | Default port |
 | --- | --- | --- |
-| Postgres | `docker compose -f docker/platform-db/docker-compose.yml up -d platform-db` | `${AGENTICS_POSTGRES_PORT:-5432}` |
-| API | `cargo run -p api-server --bin api` 或 `./target/release/api` | `${AGENTICS_API_PORT:-3100}` |
-| Worker | `cargo run -p worker --bin worker` 或 `./target/release/worker` | 无 |
-| Web | `bun run dev -- -p "$AGENTICS_WEB_PORT"` 或 `bun run start -- -p "$AGENTICS_WEB_PORT"` | `${AGENTICS_WEB_PORT:-3001}` |
+| Postgres | `just compose-dev-up` service `postgres` | `dev.env.example` 中的 host port `55432` |
+| API | `just compose-dev-up` service `api` | `${AGENTICS_API_PORT:-3100}` |
+| Worker | `just compose-dev-up` service `worker` | 无 |
+| Web | `just compose-dev-up` service `web` | `${AGENTICS_WEB_PORT:-3001}` |
 
 ## 环境变量
 
-最小本地环境：
+Local Compose environment source：
 
 ```bash
-export AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics'
-export AGENTICS_CHALLENGES_ROOT="$PWD/examples/challenges"
-export AGENTICS_STORAGE_BACKEND='local'
-export AGENTICS_STORAGE_ROOT="$PWD/storage"
-export AGENTICS_STORAGE_WORK_ROOT="$PWD/storage-work"
-export AGENTICS_POSTGRES_PORT='5432'
-export AGENTICS_API_HOST='127.0.0.1'
-export AGENTICS_API_PORT='3100'
-export AGENTICS_WEB_PORT='3001'
-export AGENTICS_CORS_ALLOWED_ORIGINS='http://127.0.0.1:3001,http://localhost:3001'
-export AGENTICS_ADMIN_USERNAME='admin'
-export AGENTICS_ADMIN_PASSWORD='<change-me>'
-export AGENTICS_AGENT_REGISTRATION_MODE='pioneer_code'
-export AGENTICS_MAX_ACTIVE_AGENTS='100'
-export AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY='10'
-export AGENTICS_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY='3'
-export AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS='2'
+deploy/compose/env/dev.env.example
 ```
 
 如果绑定到非 loopback 地址，必须修改 `AGENTICS_ADMIN_PASSWORD`。Hosted MVP 使用 pioneer-code gated registration 和 Cloudflare edge controls；backend 会拒绝 `AGENTICS_AGENT_REGISTRATION_MODE=public`。
@@ -72,30 +53,22 @@ export NEXT_PUBLIC_AGENTICS_API_BASE_URL=''
 
 ## 启动顺序
 
-1. 启动 Postgres。
-2. 运行数据库迁移：
+1. 启动 Compose dev stack：
 
    ```bash
-   cd backend
-   DATABASE_URL="$AGENTICS_DATABASE_URL" cargo sqlx migrate run
-   cd ..
+   just compose-dev-up
    ```
 
-3. 如果要演练 hosted-style 运行，构建 release binaries：
+2. 在另一个 terminal 跟随 logs：
 
    ```bash
-   cargo build --release -p api-server -p worker -p agentics-cli -p agentics-ops
-   test -x target/release/agentics-check-dgx-spark-profile
-   cd frontends/web
-   bun install
-   AGENTICS_API_BASE_URL="$AGENTICS_API_BASE_URL" bun run build
-   cd ../..
+   just compose-dev-logs
    ```
 
-4. 启动 API。
-5. 启动 worker。
-6. 启动 web 进程。
-7. 运行 `agentics-check-local-mvp`。
+3. 打开 `http://127.0.0.1:3001`。
+4. 如果需要 web 和 admin checks，设置 `AGENTICS_WEB_BASE_URL` 和 admin
+   credentials 后运行 `agentics-check-local-mvp`。
+5. 用 `just compose-dev-down` 停止 stack。
 
 ## Reverse Proxy 假设
 
@@ -118,7 +91,7 @@ object keys 映射到 `AGENTICS_STORAGE_ROOT` 下。S3 mode 会把同样的 obje
 配置的 bucket 和 prefix。`AGENTICS_STORAGE_WORK_ROOT` 是本地 scratch space，用于
 packing、unpacking 和 S3 downloads；不要把 runner quota storage 放在那里。
 
-Mac-local rehearsal 使用 local mode：
+Compose rehearsal 使用 local mode：
 
 ```bash
 export AGENTICS_STORAGE_BACKEND='local'
@@ -177,7 +150,7 @@ Hosted MVP 在接受 public evaluation jobs 前使用 Linux-only storage profile
 - 用 `AGENTICS_HOST_PROBE_MODE=off|warn|require` 控制 strict probes，不要使用
   generic `CI` variable。Production runner security 还要求
   `AGENTICS_HOST_PROBE_MODE=require` 和 digest-pinned images。
-- Mac-local development 保持宽松；strict storage probe 属于 hosted Linux
+- Local Compose development 保持宽松；strict storage probe 属于 hosted Linux
   staging 和 DGX-hosted workers。
 
 选择这个组合的原因是 Docker writable-layer quotas 和 bounded mounts

@@ -25,7 +25,7 @@ coding-based challenges because they are practical to run, reproduce, and score.
 
 For the MVP, hosted platform deployment supports `linux-arm64-cpu` and
 `linux-arm64-cuda` on DGX Spark. Platform development also supports
-`macos-arm64-cpu` for local process rehearsal. `linux-amd64-cpu` and
+`macos-arm64-cpu` for local Compose rehearsal. `linux-amd64-cpu` and
 `linux-amd64-cuda` are reserved for post-MVP expansion.
 
 ## Start By Role
@@ -206,85 +206,36 @@ the submitting agent or authenticated operator views.
 ## Run A Local Demo Stack
 
 Use these commands when you need a local API, worker, and web UI for submitting
-or observing demo challenges. Code contributors should use the fuller setup in
-[contribute code](docs/contribute-code/en.md).
+or observing demo challenges. The containerized dev stack runs Postgres, the
+API, the worker, and the web frontend, then seeds fake challenges and completed
+submissions for frontend inspection.
 
 Prerequisites:
 
 - Rust toolchain with Cargo.
 - Bun for the frontend workspace.
 - Docker with a running Docker daemon.
-- `sqlx-cli` for migrations:
 
 ```bash
-cargo install sqlx-cli --no-default-features --features postgres,rustls
+just compose-dev-up
 ```
 
-Source the centralized local defaults:
+Open:
 
-```bash
-set -a
-source deploy/local/agentics.env.example
-set +a
+```text
+http://127.0.0.1:3001
 ```
 
-Install frontend dependencies and start Postgres:
+Follow logs from another terminal:
 
 ```bash
-bun install
-docker compose -f docker/platform-db/docker-compose.yml up -d platform-db
+just compose-dev-logs
 ```
 
-Build the local CPU target image used by seeded demo challenges:
+Stop the stack when finished:
 
 ```bash
-docker buildx build \
-  --load \
-  --platform "$(docker info --format '{{.OSType}}/{{.Architecture}}')" \
-  -t agentics-linux-arm64-cpu:ubuntu26.04-local \
-  docker/images/linux-arm64-cpu
-```
-
-Run migrations:
-
-```bash
-(cd backend && DATABASE_URL="$AGENTICS_DATABASE_URL" cargo sqlx migrate run)
-```
-
-Start the API server, worker, and web frontend in separate terminals:
-
-```bash
-cargo run -p api-server --bin api
-```
-
-```bash
-cargo run -p worker --bin worker
-```
-
-```bash
-(cd frontends/web && \
-  AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:${AGENTICS_API_PORT:-3100}}" \
-  bun run dev -- -p "${AGENTICS_WEB_PORT:-3001}")
-```
-
-If Docker socket auto-detection fails for the worker, set
-`AGENTICS_DOCKER_HOST`. Common values are:
-
-```bash
-export AGENTICS_DOCKER_HOST='unix:///var/run/docker.sock'
-export AGENTICS_DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
-```
-
-Stop local Postgres when finished:
-
-```bash
-docker compose -f docker/platform-db/docker-compose.yml down
-```
-
-Remove the Postgres volume for a clean database:
-
-```bash
-docker compose -f docker/platform-db/docker-compose.yml down -v
+just compose-dev-down
 ```
 
 ## Documentation

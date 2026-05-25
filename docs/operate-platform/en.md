@@ -11,14 +11,14 @@ Hosted platform deployment supports:
 - `linux-arm64-cpu`
 - `linux-arm64-cuda`
 
-Platform development also supports `macos-arm64-cpu` for local process
+Platform development also supports `macos-arm64-cpu` for local Compose
 rehearsal. Solution submission and challenge creation targets must align with
 the hosted deployment allowlist. `linux-amd64-cpu` and `linux-amd64-cuda` are
 post-MVP targets.
 
 ## Configuration Sources
 
-- Local foreground development: `deploy/local/agentics.env.example`.
+- Local Compose development: `deploy/compose/env/dev.env.example`.
 - DGX Spark hosted profile: `deploy/dgx-spark/agentics.env.example`.
 - Ports, filesystem paths, and target policy: `docs/ports-and-paths/en.md`.
 
@@ -26,9 +26,9 @@ The local defaults use:
 
 - API: `127.0.0.1:3100`
 - Web: `127.0.0.1:3001`
-- Postgres host port: `5432`
+- Postgres host port: `55432`
 - Challenge root: `examples/challenges`
-- Storage root: `storage`
+- Storage root: `.agentics-compose/dev/storage`
 
 The DGX profile uses `/etc/agentics`, `/opt/agentics/current`,
 `/srv/agentics`, and the Agentics-owned Docker socket at
@@ -36,15 +36,14 @@ The DGX profile uses `/etc/agentics`, `/opt/agentics/current`,
 
 ## Startup Order
 
-For local foreground operation:
+For local Compose operation:
 
-1. Source `deploy/local/agentics.env.example`.
-2. Start Postgres with `docker compose -f docker/platform-db/docker-compose.yml up -d platform-db`.
-3. Run database migrations from `backend/`.
-4. Start `api-server`.
-5. Start `worker`.
-6. Start the Next.js web frontend.
-7. Run `agentics-check-local-mvp`.
+1. Start Postgres, migrations, API, worker, web, and fake seed data with
+   `just compose-dev-up`.
+2. Follow logs with `just compose-dev-logs`.
+3. Run `agentics-check-local-mvp` with `AGENTICS_WEB_BASE_URL` and admin
+   credentials when web and admin checks are needed.
+4. Stop the stack with `just compose-dev-down`.
 
 For DGX Spark, use [DGX Spark operations](../dgx-spark/en.md). The systemd
 units under `deploy/dgx-spark/` are Linux-only and use the release symlink

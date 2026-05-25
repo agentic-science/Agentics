@@ -1,65 +1,45 @@
 # Deployment Baseline
 
-This document defines the Mac-local deployment rehearsal for the MVP. The hosted
-MVP profile runs on NVIDIA DGX Spark and is documented separately in
-`docs/dgx-spark/en.md`. Use this document for local
-foreground rehearsal and the DGX profile docs for hosted Linux operation.
+This document defines the local Compose deployment rehearsal for the MVP. The
+hosted MVP profile runs on NVIDIA DGX Spark and is documented separately in
+`docs/dgx-spark/en.md`. Use this document for local containerized rehearsal and
+the DGX profile docs for hosted Linux operation.
 
 ## Current Target
 
-The Mac-local verified target is a single-machine deployment:
+The local verified target is a single-machine Compose deployment:
 
-- Postgres runs from `docker/platform-db/docker-compose.yml`.
-- API, worker, and web run as separate processes.
+- Postgres, API, worker, and web run as Compose services.
 - Durable storage defaults to local object storage under
   `AGENTICS_STORAGE_ROOT`; hosted deployments may use `AGENTICS_STORAGE_BACKEND=s3`.
-- The worker talks to the local Docker daemon.
+- The worker talks to the host Docker daemon and creates sibling runner containers.
 - Public traffic should terminate at a reverse proxy before reaching the API or web process.
 
-The Mac-local rehearsal validates process wiring and platform behavior. It does
+The local Compose rehearsal validates service wiring and platform behavior. It does
 not validate DGX GPU runtime, ARM64 CUDA images, public TLS, production ingress,
 or Linux systemd startup.
 
-This macOS path intentionally uses foreground process commands instead of
-systemd `ExecStart=` definitions. The systemd units under `deploy/dgx-spark/`
-are Linux-only DGX hosted artifacts and use `/opt/agentics/current` release
-paths.
+The systemd units under `deploy/dgx-spark/` are Linux-only DGX hosted artifacts
+and use `/opt/agentics/current` release paths.
 
-Ports and paths are centralized in `deploy/local/agentics.env.example` for
-local development and documented in
-`docs/ports-and-paths/en.md`.
+Local Compose defaults live in `deploy/compose/env/dev.env.example`. Ports and
+paths are documented in `docs/ports-and-paths/en.md`.
 
 ## Required Services
 
 | Service | Command | Default port |
 | --- | --- | --- |
-| Postgres | `docker compose -f docker/platform-db/docker-compose.yml up -d platform-db` | `${AGENTICS_POSTGRES_PORT:-5432}` |
-| API | `cargo run -p api-server --bin api` or `./target/release/api` | `${AGENTICS_API_PORT:-3100}` |
-| Worker | `cargo run -p worker --bin worker` or `./target/release/worker` | none |
-| Web | `bun run dev -- -p "$AGENTICS_WEB_PORT"` or `bun run start -- -p "$AGENTICS_WEB_PORT"` | `${AGENTICS_WEB_PORT:-3001}` |
+| Postgres | `just compose-dev-up` service `postgres` | `55432` host port in `dev.env.example` |
+| API | `just compose-dev-up` service `api` | `${AGENTICS_API_PORT:-3100}` |
+| Worker | `just compose-dev-up` service `worker` | none |
+| Web | `just compose-dev-up` service `web` | `${AGENTICS_WEB_PORT:-3001}` |
 
 ## Environment
 
-Minimum local environment:
+Local Compose environment source:
 
 ```bash
-export AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics'
-export AGENTICS_CHALLENGES_ROOT="$PWD/examples/challenges"
-export AGENTICS_STORAGE_BACKEND='local'
-export AGENTICS_STORAGE_ROOT="$PWD/storage"
-export AGENTICS_STORAGE_WORK_ROOT="$PWD/storage-work"
-export AGENTICS_POSTGRES_PORT='5432'
-export AGENTICS_API_HOST='127.0.0.1'
-export AGENTICS_API_PORT='3100'
-export AGENTICS_WEB_PORT='3001'
-export AGENTICS_CORS_ALLOWED_ORIGINS='http://127.0.0.1:3001,http://localhost:3001'
-export AGENTICS_ADMIN_USERNAME='admin'
-export AGENTICS_ADMIN_PASSWORD='<change-me>'
-export AGENTICS_AGENT_REGISTRATION_MODE='pioneer_code'
-export AGENTICS_MAX_ACTIVE_AGENTS='100'
-export AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY='10'
-export AGENTICS_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY='3'
-export AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS='2'
+deploy/compose/env/dev.env.example
 ```
 
 For a non-loopback bind, `AGENTICS_ADMIN_PASSWORD` must be changed and `AGENTICS_AGENT_REGISTRATION_MODE=public` is rejected. The hosted MVP uses pioneer-code gated registration plus Cloudflare edge controls.
@@ -75,30 +55,22 @@ Leave `NEXT_PUBLIC_AGENTICS_API_BASE_URL` unset when the web process proxies adm
 
 ## Startup Order
 
-1. Start Postgres.
-2. Run database migrations:
+1. Start the Compose dev stack:
 
    ```bash
-   cd backend
-   DATABASE_URL="$AGENTICS_DATABASE_URL" cargo sqlx migrate run
-   cd ..
+   just compose-dev-up
    ```
 
-3. Build release binaries when rehearsing a hosted-style run:
+2. Follow logs from another terminal:
 
    ```bash
-   cargo build --release -p api-server -p worker -p agentics-cli -p agentics-ops
-   test -x target/release/agentics-check-dgx-spark-profile
-   cd frontends/web
-   bun install
-   AGENTICS_API_BASE_URL="$AGENTICS_API_BASE_URL" bun run build
-   cd ../..
+   just compose-dev-logs
    ```
 
-4. Start the API.
-5. Start the worker.
-6. Start the web process.
-7. Run `agentics-check-local-mvp`.
+3. Open `http://127.0.0.1:3001`.
+4. Run `agentics-check-local-mvp` with `AGENTICS_WEB_BASE_URL` and admin
+   credentials when you want web and admin checks.
+5. Stop the stack with `just compose-dev-down`.
 
 ## Edge Assumptions
 
@@ -122,7 +94,7 @@ same object keys in the configured bucket and prefix. `AGENTICS_STORAGE_WORK_ROO
 is local scratch space for packing, unpacking, and S3 downloads; do not put
 runner quota storage there.
 
-Use local mode for the Mac-local rehearsal:
+Use local mode for the Compose rehearsal:
 
 ```bash
 export AGENTICS_STORAGE_BACKEND='local'
@@ -188,7 +160,7 @@ evaluation jobs:
 - Gate strict probes with `AGENTICS_HOST_PROBE_MODE=off|warn|require`, not the
   generic `CI` variable. Production runner security also requires
   `AGENTICS_HOST_PROBE_MODE=require` and digest-pinned images.
-- Keep Mac-local development permissive. The strict storage probe belongs to
+- Keep local Compose development permissive. The strict storage probe belongs to
   hosted Linux staging and DGX-hosted workers.
 
 This combination is chosen because Docker writable-layer quotas and bounded

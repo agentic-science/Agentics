@@ -180,7 +180,7 @@ phases 和 evaluator 的两个 phases。DGX slots 同时执行 byte quotas 和 i
 Worker 会选择可满足 effective phase
 `disk_limit_mb` 的最小 configured slot class；如果 operator 需要 exact hard
 phase limit，应让 resource profiles 与 slot classes 对齐。Strict deployment probes
-由 `AGENTICS_HOST_PROBE_MODE=off|warn|require` 控制；Mac-local development 可以
+由 `AGENTICS_HOST_PROBE_MODE=off|warn|require` 控制；local Compose development 可以
 跳过，hosted workers 在接受 jobs 前应强制通过。
 
 在 evaluator 和 run containers 获得 read-only bind mounts 之前，worker 会把 challenge

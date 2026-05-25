@@ -16,8 +16,8 @@
   services 和 execution backends 的内部 Rust crates。
 - `frontends/web/`：Next.js observer、creator 和 admin frontend。
 - `frontends/agentics-cli/`：agents、participants 和 admins 使用的 Rust CLI。
-- `docker/`：local Postgres Compose config 和 first-party image definitions。
-- `deploy/`：local 和 DGX Spark deployment configuration。
+- `docker/`：first-party image definitions 和 test storage helpers。
+- `deploy/`：Compose development/test 和 DGX Spark deployment configuration。
 - `ops/`：local 和 DGX workflows 使用的 Rust operational binaries。
 - `docs/`：product、protocol、role 和 operations documentation。
 
@@ -32,22 +32,9 @@ refactor direction。
 - Rust toolchain with Cargo。
 - Bun，用于 JavaScript 和 TypeScript workspaces。
 - Docker，并确保 Docker daemon 正在运行。
-- `sqlx-cli`，用于 database migrations。
-
-```bash
-cargo install sqlx-cli --no-default-features --features postgres,rustls
-```
 
 JS 和 TS dependency management 使用 `bun`。如果新增 Python tooling，Python
 environment 使用 `uv`。
-
-从 repository root 加载集中维护的本地默认值：
-
-```bash
-set -a
-source deploy/local/agentics.env.example
-set +a
-```
 
 ## 容器化开发与本地测试迭代
 
@@ -57,12 +44,12 @@ set +a
 just compose-dev-up
 ```
 
-这个命令会启动 Postgres、执行 migrations、启动 API，写入与
-`just local-demo up` 相同的 fake challenges 和 completed submissions，然后启动
-worker 和 Next.js frontend。Source files 会 bind mount 到 Rust 和 Bun
-containers 中，因此平时改代码不需要同步或复制文件。Cargo build output、Bun
-dependencies 和 Postgres data 放在 Compose volumes 中；demo storage 和 runner
-work roots 默认放在 `.agentics-compose/dev/` 下。
+这个命令会启动 Postgres、执行 migrations、启动 API，写入用于 frontend
+检查的确定性 fake challenges 和 completed submissions，然后启动 worker 和
+Next.js frontend。Source files 会 bind mount 到 Rust 和 Bun containers 中，
+因此平时改代码不需要同步或复制文件。Cargo build output、Bun dependencies 和
+Postgres data 放在 Compose volumes 中；demo storage 和 runner work roots 默认放在
+`.agentics-compose/dev/` 下。
 
 Worker 会使用 host Docker socket 来创建 sibling runner containers。这些 runner
 containers 会带上 `AGENTICS_RUNNER_NAMESPACE` label；只有在明确需要另一个 cleanup
@@ -119,76 +106,23 @@ cargo test -p integration-tests -- --include-ignored
 rootful command 启动专用 daemon。Wrapper 会为每次运行使用唯一的 Compose project
 和 runner namespace，并在 tests service 退出后删除 test-scoped Compose volumes。
 
-## 运行本地服务
-
-安装 frontend dependencies 并启动 Postgres：
-
-```bash
-bun install
-docker compose -f docker/platform-db/docker-compose.yml up -d platform-db
-```
-
-执行 migrations：
-
-```bash
-(cd backend && DATABASE_URL="$AGENTICS_DATABASE_URL" cargo sqlx migrate run)
-```
-
-在不同终端启动 API、worker 和 frontend：
-
-```bash
-cargo run -p api-server --bin api
-```
-
-```bash
-cargo run -p worker --bin worker
-```
-
-```bash
-(cd frontends/web && \
-  AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:${AGENTICS_API_PORT:-3100}}" \
-  bun run dev -- -p "${AGENTICS_WEB_PORT:-3001}")
-```
-
-API 默认运行在 `http://127.0.0.1:3100`，web frontend 默认运行在
-`http://127.0.0.1:3001`。
-
-如果 worker 找不到 Docker，设置 `AGENTICS_DOCKER_HOST`：
-
-```bash
-export AGENTICS_DOCKER_HOST='unix:///var/run/docker.sock'
-export AGENTICS_DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
-```
-
 ## Frontend Demo Data
 
-如果需要用确定性的 fake results 检查 observer frontend，运行：
+Compose dev stack 会在 web service 启动前写入确定性的 fake challenges、
+public leaderboards 和 completed submissions：
 
 ```bash
-just local-demo up
+just compose-dev-up
 ```
 
-该命令会启动 local Postgres、重建 disposable `agentics_demo` database、执行
-migrations、启动 API、为 example challenges 写入 fake public leaderboards 和
-completed submissions，然后启动 Next.js frontend。它不会启动 worker，因为 demo
-results 会直接写入 local database。
+打开 frontend：
 
-Local demo 会刻意使用与普通 foreground development 不同的 ports：API `13100`，
-web `13001`。默认情况下两个服务都会 bind 到 `127.0.0.1`。使用
-`just local-demo up --lan` 可以将 API 和 web frontend bind 到 `0.0.0.0`，方便
-同一网络内的其他机器检查 frontend。LAN mode 下，如果脚本能检测到 LAN address，
-它会同时打印 loopback 和 LAN URLs，并把 LAN host 加入 Next.js dev-server
-allowed origins，保证 HMR 可用。
-
-停止 demo processes：
-
-```bash
-just local-demo down
+```text
+http://127.0.0.1:3001
 ```
 
-使用 `just local-demo down --db` 可以同时停止 local Postgres container。
-使用 `just local-demo down --purge-data` 可以执行完整清理，并删除 generated demo
-logs、seeded artifact ZIPs 和 local Postgres volume。
+如果需要从另一台机器检查 frontend，请使用容器化开发章节中的 Tailscale/LAN
+环境变量。
 
 ## 构建二进制
 
@@ -260,11 +194,10 @@ just rust-risk-unit
 准备好的 DGX quota storage。LCOV 文件会写到
 `target/llvm-cov/agentics-workspace.lcov`。
 
-如果需要包含 DB-backed integration tests 的更完整信号，先启动本地 Postgres，
-然后运行：
+如果需要包含 DB-backed integration tests 的更完整信号，提供一个明确的 disposable
+PostgreSQL database URL，然后运行：
 
 ```bash
-just infra-up
 AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics_test' \
   just rust-risk-integration
 ```
@@ -334,10 +267,8 @@ level 保持一致。
 ## 关闭服务
 
 ```bash
-docker compose -f docker/platform-db/docker-compose.yml down
+just compose-dev-down
 ```
-
-只有在需要删除本地 Postgres volume 时才使用 `down -v`。
 
 ## 参考
 

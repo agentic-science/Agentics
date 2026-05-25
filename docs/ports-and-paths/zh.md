@@ -7,24 +7,16 @@ reference。
 
 | Surface | Env var | Default | Scope |
 | --- | --- | --- | --- |
-| Postgres host port | `AGENTICS_POSTGRES_PORT` | `5432` | Local Docker Compose 和 DGX rehearsal database access |
-| API listen port | `AGENTICS_API_PORT` | `3100` | API process on loopback |
-| Web listen port | `AGENTICS_WEB_PORT` | `3001` | Next.js web process on loopback |
+| Compose dev Postgres host port | `AGENTICS_POSTGRES_PORT` | `deploy/compose/env/dev.env.example` 中的 `55432` | Local Compose development |
+| API listen port | `AGENTICS_API_PORT` | `3100` | API service，默认 loopback |
+| Web listen port | `AGENTICS_WEB_PORT` | `3001` | Next.js web service，默认 loopback |
 | RustFS S3 test port | `AGENTICS_RUSTFS_PORT` | `9000` | Local Docker RustFS test service |
 | RustFS console test port | `AGENTICS_RUSTFS_CONSOLE_PORT` | `9001` | Local Docker RustFS console |
 | Public HTTPS | reverse proxy config | `443` | 仅 hosted ingress |
 
-Foreground development 使用 `deploy/local/agentics.env.example`。DGX hosted
+Local Compose development 读取 `deploy/compose/env/dev.env.example`。DGX hosted
 profile 将 `deploy/dgx-spark/agentics.env.example` 复制到
 `/etc/agentics/agentics.env`。
-
-`just local-demo` frontend-inspection harness 会刻意使用单独的 demo defaults，
-以便和普通 foreground development 并行运行：API `13100`、web `13001`，两个服务
-的 listen host 默认都是 `127.0.0.1`。运行 `just local-demo up --lan` 可将两个
-服务 bind 到 `0.0.0.0`，用于同一网络内检查。可通过 `AGENTICS_DEMO_API_HOST`、
-`AGENTICS_DEMO_WEB_HOST`、`AGENTICS_DEMO_API_PORT` 和
-`AGENTICS_DEMO_WEB_PORT` 覆盖。LAN mode 下，Demo 在检测到 LAN host 时还会设置
-`AGENTICS_WEB_ALLOWED_DEV_ORIGINS`，用于 Next.js HMR。
 
 ## DGX Paths
 
@@ -96,8 +88,8 @@ ports。如果显式设置 `AGENTICS_RUSTFS_DOCKER_NETWORK=host`，custom ports 
 host networking 不能 remap ports。如果改用 bind mounts，RustFS container 以 UID
 `10001` 运行，因此 host directory 必须允许该 UID 写入。
 
-Systemd units 仅适用于 Linux，并使用上述 release symlink paths。macOS
-development 使用前台 `cargo` 和 `bun` commands。
+Systemd units 仅适用于 Linux，并使用上述 release symlink paths。Local development
+使用 Compose dev stack。
 
 ## Base Image Source Paths
 
@@ -120,7 +112,7 @@ MVP 的 platform development 支持：
 
 - `linux-arm64-cpu`
 - `linux-arm64-cuda`
-- `macos-arm64-cpu`，仅用于 local process rehearsal。
+- `macos-arm64-cpu`，仅用于 local Compose rehearsal。
 
 Solution submission 和 challenge creation targets 必须与 platform deployment
 allowlist 对齐。`linux-amd64-cpu` 和 `linux-amd64-cuda` 保留给 post-MVP

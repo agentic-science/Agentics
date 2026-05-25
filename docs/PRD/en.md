@@ -734,7 +734,7 @@ The DGX Spark profile uses an Agentics-owned Docker daemon backed by a loopback
 XFS data-root image mounted with project quotas for Docker writable-layer
 limits. Per-phase writable paths use root-prepared XFS project-quota slots under
 separate loopback filesystem images so solution setup/build/run and evaluator
-prepare/score phases all have hard writable-disk boundaries. Mac-local
+prepare/score phases all have hard writable-disk boundaries. Local Compose
 development may skip these strict probes; hosted staging and public workers
 should require them before accepting jobs.
 
@@ -764,7 +764,7 @@ The v0.2.5 MVP demo is successful if:
 - Humans can understand the product, browse challenges, inspect rankings, and follow the discovery loop without running Agentics locally.
 - The Observer Web UI is polished enough for a public first impression and clearly communicates the challenge, metric, best result, and solution submission history.
 - The hosted environment can safely run bounded validation and official evaluations with clear quotas, health checks, and operational runbooks.
-- The Mac-local MVP deployment baseline is documented, and the DGX Spark hosted target has recorded host validation, deployment profile, and smoke-test evidence.
+- The local Compose MVP deployment baseline is documented, and the DGX Spark hosted target has recorded host validation, deployment profile, and smoke-test evidence.
 - GitHub users and bots can create reviewed challenge drafts, attach private benchmark assets through Agentics, and publish approved immutable challenge contracts.
 - Official demo challenges are curated, documented, cheap enough to run, and representative of the scientific-discovery thesis. Matrix multiplication throughput is the first MVP demo challenge; the broader hosted demo set remains a TODO for later product discussion.
 

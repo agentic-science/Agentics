@@ -1,4 +1,4 @@
-//! Entrypoint for local demo orchestration.
+//! Entrypoint for Compose-local demo database preparation.
 
 #[tokio::main]
 async fn main() -> std::process::ExitCode {

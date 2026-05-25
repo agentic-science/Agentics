@@ -8,8 +8,7 @@ smoke-evidence notes.
 
 The DGX Spark profile is Linux-only. The systemd units and storage scripts under
 `deploy/dgx-spark/` must not be used as macOS startup definitions. macOS
-rehearsal uses the foreground `cargo` and `bun` flow in
-[deployment](../deployment/en.md).
+rehearsal uses the local Compose flow in [deployment](../deployment/en.md).
 
 MVP hosted deployment targets are:
 

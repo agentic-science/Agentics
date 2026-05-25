@@ -1,6 +1,5 @@
 set fallback := true
 
-platform_db_compose := "docker compose -f docker/platform-db/docker-compose.yml"
 compose_dev := "docker compose --env-file deploy/compose/env/dev.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.dev.yml"
 compose_test := "docker compose --env-file deploy/compose/env/test.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.test.yml"
 crap_lcov_unit := "target/llvm-cov/agentics-workspace.lcov"
@@ -13,14 +12,6 @@ setup-hooks:
     chmod +x .commit-hooks/pre-commit
     git config core.hooksPath .commit-hooks
     @echo "Pre-commit hooks installed."
-
-# Start infrastructure (platform database)
-infra-up:
-    AGENTICS_POSTGRES_PORT="${AGENTICS_POSTGRES_PORT:-5432}" {{platform_db_compose}} up -d platform-db
-
-# Stop infrastructure
-infra-down:
-    {{platform_db_compose}} down
 
 # Start RustFS S3-compatible object storage for local storage tests
 rustfs-up:
@@ -62,10 +53,6 @@ dgx-profile *args:
     cargo build -p agentics-ops --bin agentics-manage-dgx-spark-profile
     sudo -E target/debug/agentics-manage-dgx-spark-profile {{args}}
 
-# Start a local demo stack with seeded fake frontend results
-local-demo *args:
-    cargo run -p agentics-ops --bin agentics-local-demo -- {{args}}
-
 # Start the containerized development stack with seeded fake data
 compose-dev-up:
     @root="${AGENTICS_DEV_ROOT:-$PWD/.agentics-compose/dev}"; \
@@ -80,6 +67,13 @@ compose-dev-down:
       project="${AGENTICS_COMPOSE_DEV_PROJECT:-agentics-dev-${USER:-local}}"; \
       namespace="${AGENTICS_RUNNER_NAMESPACE:-$project}"; \
       AGENTICS_REPO_ROOT="$PWD" AGENTICS_DEV_ROOT="$root" AGENTICS_RUNNER_NAMESPACE="$namespace" {{compose_dev}} -p "$project" down --remove-orphans
+
+# Show the containerized development stack status
+compose-dev-ps:
+    @root="${AGENTICS_DEV_ROOT:-$PWD/.agentics-compose/dev}"; \
+      project="${AGENTICS_COMPOSE_DEV_PROJECT:-agentics-dev-${USER:-local}}"; \
+      namespace="${AGENTICS_RUNNER_NAMESPACE:-$project}"; \
+      AGENTICS_REPO_ROOT="$PWD" AGENTICS_DEV_ROOT="$root" AGENTICS_RUNNER_NAMESPACE="$namespace" {{compose_dev}} -p "$project" ps
 
 # Follow logs from the containerized development stack
 compose-dev-logs:
@@ -206,29 +200,6 @@ compose-test-integration:
       AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" {{compose_test}} -p "$project" up --abort-on-container-exit --exit-code-from tests || status=$?; \
       AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" {{compose_test}} -p "$project" down -v --remove-orphans; \
       exit "$status"
-
-# Run database migrations
-migrate:
-    cd backend && cargo sqlx migrate run
-
-# Dev: API server
-dev-api:
-    cd backend && cargo run -p api-server
-
-# Dev: evaluation worker
-dev-worker:
-    cd backend && cargo run -p worker
-
-# Dev: Next.js frontend (separate service)
-dev-web:
-    cd frontends/web && AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:${AGENTICS_API_PORT:-3100}}" bun run dev -- -p "${AGENTICS_WEB_PORT:-3001}"
-
-# Dev: all three in parallel (requires tmux or multiple terminals)
-dev-all:
-    @echo "Run these in separate terminals:"
-    @echo "  just dev-api"
-    @echo "  just dev-worker"
-    @echo "  just dev-web"
 
 # Rust unit + integration tests
 test-rust:

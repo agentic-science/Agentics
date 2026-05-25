@@ -7,7 +7,7 @@
 
 DGX Spark profile 仅适用于 Linux。`deploy/dgx-spark/` 下的 systemd units 和
 storage scripts 不能作为 macOS startup definitions 使用。macOS rehearsal 使用
-[deployment](../deployment/zh.md) 中的前台 `cargo` 和 `bun` flow。
+[deployment](../deployment/zh.md) 中的 local Compose flow。
 
 MVP hosted deployment targets：
 

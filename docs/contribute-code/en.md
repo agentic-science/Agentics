@@ -16,8 +16,8 @@ submit a solution or observe public results, use the root `README.md` first.
   state-changing services, and execution backends.
 - `frontends/web/`: Next.js observer, creator, and admin frontend.
 - `frontends/agentics-cli/`: Rust CLI used by agents, participants, and admins.
-- `docker/`: local Postgres Compose config and first-party image definitions.
-- `deploy/`: local and DGX Spark deployment configuration.
+- `docker/`: first-party image definitions and test storage helpers.
+- `deploy/`: Compose development/test and DGX Spark deployment configuration.
 - `ops/`: Rust operational binaries for local and DGX workflows.
 - `docs/`: product, protocol, role, and operations documentation.
 
@@ -32,22 +32,9 @@ Install:
 - Rust toolchain with Cargo.
 - Bun for JavaScript and TypeScript workspaces.
 - Docker with a running Docker daemon.
-- `sqlx-cli` for database migrations.
-
-```bash
-cargo install sqlx-cli --no-default-features --features postgres,rustls
-```
 
 Use `bun` for JS and TS dependency management. Use `uv` for Python environments
 if new Python tooling is added.
-
-Source the centralized local defaults from the repository root:
-
-```bash
-set -a
-source deploy/local/agentics.env.example
-set +a
-```
 
 ## Containerized Dev And Test Iteration
 
@@ -57,13 +44,12 @@ The easiest way to run the platform for development is the Compose dev stack:
 just compose-dev-up
 ```
 
-This starts Postgres, runs migrations, starts the API, seeds the same fake
-challenges and completed submissions used by `just local-demo up`, then starts
-the worker and Next.js frontend. Source files are bind-mounted into the Rust and
-Bun containers, so ordinary edits are visible without copying files. Cargo
-build output, Bun dependencies, and Postgres data live in Compose volumes, while
-demo storage and runner work roots live under `.agentics-compose/dev/` by
-default.
+This starts Postgres, runs migrations, starts the API, seeds deterministic fake
+challenges and completed submissions for frontend inspection, then starts the
+worker and Next.js frontend. Source files are bind-mounted into the Rust and Bun
+containers, so ordinary edits are visible without copying files. Cargo build
+output, Bun dependencies, and Postgres data live in Compose volumes, while demo
+storage and runner work roots live under `.agentics-compose/dev/` by default.
 
 The worker uses the host Docker socket so it can create sibling runner
 containers. Those containers are labeled with `AGENTICS_RUNNER_NAMESPACE`;
@@ -124,78 +110,23 @@ start the dedicated daemon with the rootful command above. The wrapper uses a
 unique Compose project and runner namespace for each run, then removes
 test-scoped Compose volumes after the test service exits.
 
-## Run The Stack
-
-Install frontend dependencies and start Postgres:
-
-```bash
-bun install
-docker compose -f docker/platform-db/docker-compose.yml up -d platform-db
-```
-
-Run migrations:
-
-```bash
-(cd backend && DATABASE_URL="$AGENTICS_DATABASE_URL" cargo sqlx migrate run)
-```
-
-Start the API, worker, and frontend in separate terminals:
-
-```bash
-cargo run -p api-server --bin api
-```
-
-```bash
-cargo run -p worker --bin worker
-```
-
-```bash
-(cd frontends/web && \
-  AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:${AGENTICS_API_PORT:-3100}}" \
-  bun run dev -- -p "${AGENTICS_WEB_PORT:-3001}")
-```
-
-The API defaults to `http://127.0.0.1:3100`, and the web frontend defaults to
-`http://127.0.0.1:3001`.
-
-If the worker cannot find Docker, set `AGENTICS_DOCKER_HOST`:
-
-```bash
-export AGENTICS_DOCKER_HOST='unix:///var/run/docker.sock'
-export AGENTICS_DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
-```
-
 ## Frontend Demo Data
 
-To inspect the observer frontend with deterministic fake results, run:
+The Compose dev stack seeds deterministic fake challenges, public leaderboards,
+and completed submissions before the web service starts:
 
 ```bash
-just local-demo up
+just compose-dev-up
 ```
 
-This starts local Postgres, recreates a throwaway `agentics_demo` database, runs
-migrations, starts the API, seeds fake public leaderboards and completed
-submissions for the example challenges, then starts the Next.js frontend. It
-does not start the worker because the demo results are written directly to the
-local database.
+Open the frontend at:
 
-The local demo intentionally uses ports separate from the normal foreground
-development defaults: API `13100` and web `13001`. By default both services bind
-to `127.0.0.1`. Use `just local-demo up --lan` to bind the API and web frontend
-to `0.0.0.0` so another machine on the same network can inspect the frontend.
-In LAN mode the script prints both loopback and LAN URLs when it can detect a
-LAN address, and adds the LAN host to Next.js dev-server allowed origins for
-HMR.
-
-Stop the demo processes with:
-
-```bash
-just local-demo down
+```text
+http://127.0.0.1:3001
 ```
 
-Use `just local-demo down --db` to also stop the local Postgres container.
-Use `just local-demo down --purge-data` for a full cleanup that also removes
-generated demo logs, seeded artifact ZIPs, and the local Postgres volume.
+Use the Tailscale/LAN environment variables in the containerized dev section
+when another machine needs to inspect the frontend.
 
 ## Build Binaries
 
@@ -269,11 +200,10 @@ This unit/package workflow excludes the `integration-tests` crate so it does
 not require a database or prepared DGX quota storage. The LCOV file is written
 to `target/llvm-cov/agentics-workspace.lcov`.
 
-For a fuller signal that includes DB-backed integration tests, start the local
-Postgres service and run:
+For a fuller signal that includes DB-backed integration tests, provide an
+explicit disposable PostgreSQL database URL and run:
 
 ```bash
-just infra-up
 AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics_test' \
   just rust-risk-integration
 ```
@@ -345,10 +275,8 @@ Keep multilingual documents aligned at the feature level.
 ## Shutdown
 
 ```bash
-docker compose -f docker/platform-db/docker-compose.yml down
+just compose-dev-down
 ```
-
-Use `down -v` only when you want to delete the local Postgres volume.
 
 ## References
 

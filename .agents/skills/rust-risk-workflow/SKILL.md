@@ -21,12 +21,11 @@ integration workflow, including tests marked `#[ignore]`.
 
    The LCOV output is `target/llvm-cov/agentics-workspace.lcov`.
 
-3. For the better signal that includes DB-backed integration coverage, ensure a
-   local Postgres test database is available, then run the full integration
+3. For the better signal that includes DB-backed integration coverage, provide
+   an explicit disposable PostgreSQL database URL, then run the full integration
    workflow, including ignored hardware tests:
 
    ```bash
-   just infra-up
    AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics_test' \
      just rust-risk-integration
    ```
@@ -98,6 +97,6 @@ that failure directly instead of dropping `--include-ignored`.
 - If `cargo llvm-cov` or `cargo crap` is missing, report that the cargo
   subcommand is not installed and stop unless the user asks you to install it.
 - If integration coverage fails because `DATABASE_URL` is missing, ask the user
-  for the intended database URL or use the documented local URL only after
-  confirming the local platform DB is running.
+  for the intended disposable test database URL. Do not resurrect the removed
+  legacy platform database helper.
 - `target/llvm-cov/` is build output and should remain untracked.

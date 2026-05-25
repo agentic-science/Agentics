@@ -11,13 +11,13 @@ Hosted platform deployment 支持：
 - `linux-arm64-cpu`
 - `linux-arm64-cuda`
 
-Platform development 还支持 `macos-arm64-cpu`，仅用于 local process rehearsal。
+Platform development 还支持 `macos-arm64-cpu`，仅用于 local Compose rehearsal。
 Solution submission 和 challenge creation targets 必须与 hosted deployment
 allowlist 对齐。`linux-amd64-cpu` 和 `linux-amd64-cuda` 是 post-MVP targets。
 
 ## Configuration Sources
 
-- Local foreground development：`deploy/local/agentics.env.example`。
+- Local Compose development：`deploy/compose/env/dev.env.example`。
 - DGX Spark hosted profile：`deploy/dgx-spark/agentics.env.example`。
 - Ports、filesystem paths 和 target policy：`docs/ports-and-paths/zh.md`。
 
@@ -25,24 +25,23 @@ Local defaults 使用：
 
 - API：`127.0.0.1:3100`
 - Web：`127.0.0.1:3001`
-- Postgres host port：`5432`
+- Postgres host port：`55432`
 - Challenge root：`examples/challenges`
-- Storage root：`storage`
+- Storage root：`.agentics-compose/dev/storage`
 
 DGX profile 使用 `/etc/agentics`、`/opt/agentics/current`、`/srv/agentics`，以及
 Agentics-owned Docker socket `/run/agentics/docker.sock`。
 
 ## Startup Order
 
-Local foreground operation：
+Local Compose operation：
 
-1. Source `deploy/local/agentics.env.example`。
-2. 使用 `docker compose -f docker/platform-db/docker-compose.yml up -d platform-db` 启动 Postgres。
-3. 在 `backend/` 下运行 database migrations。
-4. 启动 `api-server`。
-5. 启动 `worker`。
-6. 启动 Next.js web frontend。
-7. 运行 `agentics-check-local-mvp`。
+1. 使用 `just compose-dev-up` 启动 Postgres、migrations、API、worker、web 和
+   fake seed data。
+2. 使用 `just compose-dev-logs` 查看 logs。
+3. 如果需要 web 和 admin checks，设置 `AGENTICS_WEB_BASE_URL` 和 admin
+   credentials 后运行 `agentics-check-local-mvp`。
+4. 使用 `just compose-dev-down` 停止 stack。
 
 DGX Spark 使用 [DGX Spark operations](../dgx-spark/zh.md)。`deploy/dgx-spark/`
 下的 systemd units 仅适用于 Linux，并使用 release symlink `/opt/agentics/current`。

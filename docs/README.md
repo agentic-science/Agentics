@@ -23,7 +23,7 @@ This index points to the current documentation set. Use the current docs below a
   crate boundaries, service ownership, and runner-backend direction.
 - [Targets](targets/en.md): targets, Docker platform,
   accelerator policy, target-specific submissions, validation, and leaderboards.
-- [Deployment baseline](deployment/en.md): Mac-local deployment rehearsal,
+- [Deployment baseline](deployment/en.md): local Compose deployment rehearsal,
   startup order, storage, rollback, and DGX hosted profile handoff.
 - [DGX Spark operations](dgx-spark/en.md): hosted DGX profile, host inventory
   summary, storage quota model, systemd startup, checks, and smoke evidence.

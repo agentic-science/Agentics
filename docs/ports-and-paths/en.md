@@ -7,25 +7,16 @@ and MVP target support.
 
 | Surface | Env var | Default | Scope |
 | --- | --- | --- | --- |
-| Postgres host port | `AGENTICS_POSTGRES_PORT` | `5432` | Local Docker Compose and DGX rehearsal database access |
-| API listen port | `AGENTICS_API_PORT` | `3100` | API process on loopback |
-| Web listen port | `AGENTICS_WEB_PORT` | `3001` | Next.js web process on loopback |
+| Compose dev Postgres host port | `AGENTICS_POSTGRES_PORT` | `55432` in `deploy/compose/env/dev.env.example` | Local Compose development |
+| API listen port | `AGENTICS_API_PORT` | `3100` | API service on loopback by default |
+| Web listen port | `AGENTICS_WEB_PORT` | `3001` | Next.js web service on loopback by default |
 | RustFS S3 test port | `AGENTICS_RUSTFS_PORT` | `9000` | Local Docker RustFS test service |
 | RustFS console test port | `AGENTICS_RUSTFS_CONSOLE_PORT` | `9001` | Local Docker RustFS console |
 | Public HTTPS | reverse proxy config | `443` | Hosted ingress only |
 
-Source `deploy/local/agentics.env.example` for foreground development. Copy
+Local Compose development reads `deploy/compose/env/dev.env.example`. Copy
 `deploy/dgx-spark/agentics.env.example` to `/etc/agentics/agentics.env` for the
 DGX hosted profile.
-
-The `just local-demo` frontend-inspection harness intentionally uses separate
-demo defaults so it can run alongside normal foreground development: API
-`13100`, web `13001`, and listen host `127.0.0.1` for both services. Run
-`just local-demo up --lan` to bind both services to `0.0.0.0` for same-network
-inspection. Override defaults with `AGENTICS_DEMO_API_HOST`,
-`AGENTICS_DEMO_WEB_HOST`, `AGENTICS_DEMO_API_PORT`, and
-`AGENTICS_DEMO_WEB_PORT`. In LAN mode, the demo also sets
-`AGENTICS_WEB_ALLOWED_DEV_ORIGINS` for Next.js HMR when a LAN host is detected.
 
 ## DGX Paths
 
@@ -103,7 +94,7 @@ remap them. If you switch to bind mounts, the RustFS container runs as UID
 `10001`, so the host directory must be writable by that UID.
 
 The systemd units are Linux-only and use the release symlink paths above.
-macOS development uses foreground `cargo` and `bun` commands instead.
+Local development uses the Compose dev stack.
 
 ## Base Image Source Paths
 
@@ -126,7 +117,7 @@ Platform development for the MVP supports:
 
 - `linux-arm64-cpu`
 - `linux-arm64-cuda`
-- `macos-arm64-cpu` for local process rehearsal only.
+- `macos-arm64-cpu` for local Compose rehearsal only.
 
 Solution submission and challenge creation targets must align with the platform
 deployment allowlist. `linux-amd64-cpu` and `linux-amd64-cuda` are reserved for

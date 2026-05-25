@@ -18,20 +18,10 @@ human-authored `challenge_name` as challenge metadata.
 
 ## Development
 
-Run from the repository root first:
+Start the full containerized dev stack from the repository root:
 
 ```bash
-set -a
-source deploy/local/agentics.env.example
-set +a
-bun install
-```
-
-Then start the frontend from this directory:
-
-```bash
-AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:${AGENTICS_API_PORT:-3100}}" \
-bun run dev -- -p "${AGENTICS_WEB_PORT:-3001}"
+just compose-dev-up
 ```
 
 Open:
@@ -40,9 +30,10 @@ Open:
 http://127.0.0.1:3001
 ```
 
-The API and worker must be running for live challenge, submission, creator, and
-admin data. See [contribute code](../../docs/contribute-code/en.md) for the full
-local stack.
+The Compose dev stack starts the API, worker, Postgres, and Next.js service, and
+seeds deterministic fake challenge and submission data. Follow logs with
+`just compose-dev-logs`. See [contribute code](../../docs/contribute-code/en.md)
+for Tailscale/LAN access and integration-test setup.
 
 ## Configuration
 

@@ -196,7 +196,7 @@ default `64`, `256`, `1024`, and `4096` MiB slots allow `16384`, `65536`,
 configured slot class that can satisfy the effective phase `disk_limit_mb`;
 operators should align resource profiles to slot classes when they need an
 exact hard phase limit. Strict deployment probes are controlled by
-`AGENTICS_HOST_PROBE_MODE=off|warn|require`; Mac-local development can skip
+`AGENTICS_HOST_PROBE_MODE=off|warn|require`; local Compose development can skip
 them, while hosted workers should require them before accepting jobs.
 
 Before evaluator and run containers receive read-only bind mounts, the worker
