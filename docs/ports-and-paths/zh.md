@@ -63,7 +63,8 @@ slots，并使用 Docker `storage_opt.size` 约束 container-layer writes。Slot
 keys 映射到 `AGENTICS_STORAGE_ROOT` 下。S3 mode 会把同样的 keys 存入
 `AGENTICS_S3_BUCKET` 和可选 `AGENTICS_S3_PREFIX`；credentials 来自 AWS SDK
 provider chain。`AGENTICS_STORAGE_WORK_ROOT` 是 host-local scratch，用于 bundle
-archives、unpacked bundles 和 S3 downloads。
+archives、unpacked bundles 和 S3 downloads。Stale `_tmp/` durable objects 会在
+`AGENTICS_STORAGE_TMP_OBJECT_GRACE_HOURS` 后由 Agentics cleanup 清理，默认是 24 小时。
 
 当前 object-key prefixes：
 
@@ -88,9 +89,12 @@ just rustfs-down
 
 RustFS container 使用官方 `rustfs/rustfs` image 和 Docker named volume。`just
 rustfs-up` helper 默认使用 `--network host`，因为部分 DGX Docker bridge profiles
-会被有意关闭；设置 `AGENTICS_RUSTFS_DOCKER_NETWORK=bridge` 可改用显式 port
-publishing。如果改用 bind mounts，RustFS container 以 UID `10001` 运行，因此 host
-directory 必须允许该 UID 写入。
+会被有意关闭。如果 `AGENTICS_RUSTFS_PORT` 或
+`AGENTICS_RUSTFS_CONSOLE_PORT` 被设置为非默认端口，且
+`AGENTICS_RUSTFS_DOCKER_NETWORK` 未设置，helper 会切换到 bridge mode 并 publish 指定
+ports。如果显式设置 `AGENTICS_RUSTFS_DOCKER_NETWORK=host`，custom ports 会被拒绝，因为
+host networking 不能 remap ports。如果改用 bind mounts，RustFS container 以 UID
+`10001` 运行，因此 host directory 必须允许该 UID 写入。
 
 Systemd units 仅适用于 Linux，并使用上述 release symlink paths。macOS
 development 使用前台 `cargo` 和 `bun` commands。

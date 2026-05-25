@@ -156,8 +156,11 @@ For hosted or public MVP operation:
 - Keep published private runtime bundles and public-only bundles immutable.
 - Use stale draft cleanup for unpublished private assets, not manual object
   deletion.
-- Configure S3 lifecycle cleanup for stale `_tmp/` objects; they are temporary
-  promotion keys and should not be retained as durable records.
+- Run challenge draft cleanup for stale unpublished private assets and stale
+  Agentics `_tmp/` objects. `AGENTICS_STORAGE_TMP_OBJECT_GRACE_HOURS` defaults
+  to 24 hours. Configure S3 lifecycle cleanup for stale `_tmp/` objects as a
+  second line of defense; they are temporary promotion keys and should not be
+  retained as durable records.
 
 ## Hosted Runner Disk Isolation Decision
 

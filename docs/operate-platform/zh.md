@@ -135,8 +135,8 @@ startup 会 fail closed，并且 CPU-only workers 不能领取 GPU jobs。
 ## Logs 和 Backups
 
 Process logs 输出到 stdout 和 stderr。Worker evaluation logs 存储在 durable object
-storage 的 `eval-artifacts/<job-id>/runner.log`；local mode 下该 path 位于
-`AGENTICS_STORAGE_ROOT`。
+storage 的 `eval-artifacts/<job-id>/attempt-<attempt>/runner.log`；local mode 下该 path
+位于 `AGENTICS_STORAGE_ROOT`。
 
 需要一起备份：
 

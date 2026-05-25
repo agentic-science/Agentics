@@ -43,6 +43,7 @@ gating remains the authoritative access control.
 | API port | `${AGENTICS_API_PORT:-3100}` |
 | Web port | `${AGENTICS_WEB_PORT:-3001}` |
 | Storage root | `/srv/agentics/storage` |
+| Storage work root | `/srv/agentics/storage-work` |
 | Challenge checkout root | `/srv/agentics/challenges` |
 | Runtime root | `/srv/agentics/runtime` |
 | Agentics Docker socket | `unix:///run/agentics/docker.sock` |

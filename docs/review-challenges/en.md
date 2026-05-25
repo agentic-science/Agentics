@@ -87,21 +87,22 @@ rejection, abandonment, and private asset uploads; a stale validation record is
 failed and cleared before a new validation or upload proceeds. Private assets use
 a repairable lifecycle:
 `pending` while bytes are being written and promoted, `active` after the
-durable object exists, and `failed` after write or promotion failure. Draft
+durable object exists, `failed` after write or promotion failure, and
+`purging` while stale cleanup has claimed the row and is deleting its objects. Draft
 responses and publish use only active assets. Exact retries repair stale
 pending uploads that left unreferenced durable objects behind before the row
 became active. Reviewers can inspect all private asset lifecycle rows, including
-pending and failed rows, through the admin private asset endpoint.
+pending, failed, and purging rows, through the admin private asset endpoint.
 
 Publishing claims an approved draft by moving it to `publishing` with a
-publish-claim ID before any filesystem work starts. Only that claim can fail or
-complete the publish attempt. The private runtime bundle is assembled in a
-unique temporary directory under managed storage, validated there, then
-atomically renamed into a publish-claim-scoped final bundle path. Publish also
-stores a public-only bundle without private overlays. Validation jobs use the
-public-only bundle, while official jobs use the private runtime bundle. If the
-database publish step fails, cleanup removes only the final bundle paths created
-by that publish claim. A stale `publishing` claim can be reset to `approved`
+publish-claim ID before any bundle work starts. Only that claim can fail or
+complete the publish attempt. Agentics assembles the private runtime bundle in a
+unique directory under `AGENTICS_STORAGE_WORK_ROOT`, validates it there, packs
+immutable private and public-only tar archives, and promotes those archives to
+durable storage keys. Validation jobs use the public-only bundle key, while
+official jobs use the private runtime bundle key. If publish fails, cleanup
+removes the temporary work directories and any durable keys created by that
+publish claim. A stale `publishing` claim can be reset to `approved`
 after the configured publish timeout so reviewers can retry.
 
 Admin endpoints for draft review are:

@@ -147,10 +147,10 @@ Archive request：
 ## Private Assets
 
 Private benchmark material 以 ZIP overlays 上传到 Agentics，并绑定到 draft。
-Publish 时，Agentics 会把 review 通过的 public bundle 复制到 managed storage
-两份：一份是不含 private overlays 的 public-only bundle，用于 validation 和 public
-inspection；另一份是应用 approved private overlays 后的 private runtime bundle，用于
-official evaluation。
+Publish 时，Agentics 会把 review 通过的 public bundle 复制到 temporary work directory，
+在 private runtime copy 中应用 approved private overlays，然后打包为 immutable public-only
+和 private tar archives，并按 durable storage key 保存。Validation 使用 public-only
+bundle key，official evaluation 使用 private runtime bundle key。
 
 支持的 private asset kinds：
 

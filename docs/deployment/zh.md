@@ -149,8 +149,10 @@ Hosted 或 public MVP operation：
 - 同步备份 Postgres 和 durable object storage。
 - 保持 published private runtime bundles 和 public-only bundles 不可变。
 - 使用 stale draft cleanup 清理 unpublished private assets，不要手动删除 objects。
-- 为 stale `_tmp/` objects 配置 S3 lifecycle cleanup；它们只是 promotion temporary
-  keys，不应作为 durable records 长期保留。
+- 使用 challenge draft cleanup 清理 stale unpublished private assets 和 stale Agentics
+  `_tmp` objects。`AGENTICS_STORAGE_TMP_OBJECT_GRACE_HOURS` 默认是 24 小时。S3
+  lifecycle cleanup 应作为 stale `_tmp/` objects 的第二道防线；它们只是 promotion
+  temporary keys，不应作为 durable records 长期保留。
 
 ## Hosted Runner Disk Isolation 决策
 

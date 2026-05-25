@@ -67,7 +67,9 @@ workers.
 object keys below `AGENTICS_STORAGE_ROOT`. S3 mode stores the same keys under
 `AGENTICS_S3_BUCKET` and optional `AGENTICS_S3_PREFIX`; credentials come from
 the AWS SDK provider chain. `AGENTICS_STORAGE_WORK_ROOT` is host-local scratch
-for bundle archives, unpacked bundles, and S3 downloads.
+for bundle archives, unpacked bundles, and S3 downloads. Stale `_tmp/` durable
+objects are eligible for Agentics cleanup after
+`AGENTICS_STORAGE_TMP_OBJECT_GRACE_HOURS`, which defaults to 24 hours.
 
 Current object-key prefixes:
 
@@ -92,10 +94,13 @@ just rustfs-down
 
 The RustFS container uses the official `rustfs/rustfs` image and a Docker named
 volume. The `just rustfs-up` helper defaults to `--network host` because some
-DGX Docker bridge profiles are intentionally disabled; set
-`AGENTICS_RUSTFS_DOCKER_NETWORK=bridge` to use explicit port publishing. If you
-switch to bind mounts, the RustFS container runs as UID `10001`, so the host
-directory must be writable by that UID.
+DGX Docker bridge profiles are intentionally disabled. If
+`AGENTICS_RUSTFS_PORT` or `AGENTICS_RUSTFS_CONSOLE_PORT` is set to a non-default
+port and `AGENTICS_RUSTFS_DOCKER_NETWORK` is unset, the helper switches to
+bridge mode and publishes the requested ports. If `AGENTICS_RUSTFS_DOCKER_NETWORK=host`
+is set explicitly, custom ports are rejected because host networking cannot
+remap them. If you switch to bind mounts, the RustFS container runs as UID
+`10001`, so the host directory must be writable by that UID.
 
 The systemd units are Linux-only and use the release symlink paths above.
 macOS development uses foreground `cargo` and `bun` commands instead.

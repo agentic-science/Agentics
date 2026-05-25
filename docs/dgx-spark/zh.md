@@ -110,7 +110,9 @@ Phase mount root 为以下每类 writable runner class 准备一个 loopback XFS
 Durable object storage 可以继续使用 `/srv/agentics/storage` 下的 local mode，也可以通过
 `AGENTICS_STORAGE_BACKEND=s3` 使用 S3/RustFS-compatible bucket。Storage work root
 是 bundle packing、unpacking 和 S3 downloads 的本地 scratch；runner quota slots
-仍位于 `/srv/agentics/phase-mounts`。
+仍位于 `/srv/agentics/phase-mounts`。Challenge draft cleanup 也会在
+`AGENTICS_STORAGE_TMP_OBJECT_GRACE_HOURS` 后清理 stale `_tmp/` durable objects，默认是
+24 小时。
 
 ## Required Environment
 

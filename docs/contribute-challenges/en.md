@@ -156,10 +156,11 @@ Archive request:
 ## Private Assets
 
 Private benchmark material is uploaded to Agentics as ZIP overlays bound to a
-draft. During publish, Agentics copies the reviewed public bundle into managed
-storage twice: one public-only bundle for validation and public inspection, and
-one private runtime bundle with the approved private overlays applied for
-official evaluation.
+draft. During publish, Agentics copies the reviewed public bundle into a
+temporary work directory, applies approved private overlays to the private
+runtime copy, packs immutable public-only and private tar archives, and stores
+those archives by durable storage key. Validation uses the public-only bundle
+key. Official evaluation uses the private runtime bundle key.
 
 Supported private asset kinds are:
 

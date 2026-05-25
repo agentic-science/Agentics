@@ -141,8 +141,8 @@ jobs.
 ## Logs And Backups
 
 Process logs are emitted to stdout and stderr. Worker evaluation logs are stored
-in durable object storage at `eval-artifacts/<job-id>/runner.log`; in local mode
-that path is under `AGENTICS_STORAGE_ROOT`.
+in durable object storage at `eval-artifacts/<job-id>/attempt-<attempt>/runner.log`;
+in local mode that path is under `AGENTICS_STORAGE_ROOT`.
 
 Back up together:
 

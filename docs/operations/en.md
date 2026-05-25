@@ -227,8 +227,8 @@ those slots belong to the hosted worker service user.
 Current logging is process stdout/stderr. For hosted rehearsal, run each service
 under a supervisor that captures logs, for example `systemd`, `tmux` with file
 logging, or a container runtime. Worker evaluation logs are written to durable
-object storage at `eval-artifacts/<job-id>/runner.log`; in local storage mode
-that maps under `AGENTICS_STORAGE_ROOT`. Runner scratch trees for source
+object storage at `eval-artifacts/<job-id>/attempt-<attempt>/runner.log`; in
+local storage mode that maps under `AGENTICS_STORAGE_ROOT`. Runner scratch trees for source
 extraction, build workspaces, prepared data, solution run I/O, and evaluator
 output are temporary per-job workspaces and should not persist in durable
 storage.
@@ -323,11 +323,12 @@ S3 tooling. Agentics object keys include `solution-submissions/`,
 `challenge-bundles/`, `challenge-public-bundles/`, `challenge-statements/`,
 and `challenge-shortlists/`.
 
-Use challenge draft cleanup for stale unpublished private assets. Published
-private runtime bundle archives, published public-only bundle archives,
-statements, and completed solution artifacts are durable MVP records. Configure
-S3 lifecycle cleanup for stale `_tmp/` keys; they are temporary write/promote
-objects and should not be retained as records.
+Use challenge draft cleanup for stale unpublished private assets and stale
+Agentics `_tmp/` objects. Published private runtime bundle archives, published
+public-only bundle archives, statements, and completed solution artifacts are
+durable MVP records. `AGENTICS_STORAGE_TMP_OBJECT_GRACE_HOURS` defaults to 24
+hours; keep S3 lifecycle cleanup for stale `_tmp/` keys as a second line of
+defense.
 
 ### Public Abuse Spike
 
