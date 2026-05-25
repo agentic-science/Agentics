@@ -70,9 +70,9 @@ The worker owns those through the host Docker API.
 
 ### Same Docker Socket For Now
 
-Production will use the same host Docker socket for now. A dedicated
-Agentics-owned Docker daemon/socket can be revisited later if operational
-isolation becomes worth the extra host-level setup.
+Production will use the same host Docker socket for now. A dedicated runner
+Docker daemon/socket can be revisited later if operational isolation becomes
+worth the extra host-level setup.
 
 Only the services that need Docker should mount the socket:
 

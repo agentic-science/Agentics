@@ -91,9 +91,9 @@ permissive. `production` fails closed unless bounded runner storage, Docker
 writable-layer quota, required host probes, and digest-pinned images are all
 enabled. In `warn` or `require` host-probe mode, worker startup runs
 `agentics-check-dgx-spark-profile`; in `require` mode it fails closed if
-the script fails or cannot run. The probe verifies Docker
-writable-layer quota enforcement on the Agentics-owned Docker daemon and verifies
-that runner-owned writable mounts are backed by bounded per-phase XFS
+the script fails or cannot run. The probe verifies Docker writable-layer quota
+enforcement on the configured Docker daemon and verifies that runner-owned
+writable mounts are backed by bounded per-phase XFS
 project-quota slots. The DGX profile should set
 `AGENTICS_RUNNER_SECURITY_PROFILE=production`,
 `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`,
@@ -136,7 +136,7 @@ disk-boundary requirement.
 
 Production runner paths must also be private host directories. The worker
 requires `AGENTICS_RUNNER_RUNTIME_ROOT` and `AGENTICS_RUNNER_PHASE_MOUNT_ROOT`
-to exist, be owned by the worker service user, and be mode `0700` or stricter.
+to exist, be owned by the Compose runtime UID/GID, and be mode `0700` or stricter.
 The worker creates transient `agentics-eval-artifacts` attempt directories with
 mode `0700` before broadening child permissions for Docker bind compatibility,
 so official private bundles are not exposed through a traversable host scratch
@@ -173,20 +173,24 @@ access the intended Docker daemon. The Rust checker uses Docker API access
 directly, so configure the target daemon through the Docker socket environment
 such as `DOCKER_HOST` rather than a Docker CLI wrapper.
 
-For the DGX deployment profile, run:
+For the DGX host profile, run:
 
 ```bash
+AGENTICS_DOCKER_HOST=unix:///var/run/docker.sock \
+AGENTICS_DOCKER_SOCKET_PATH=/var/run/docker.sock \
 AGENTICS_RUNNER_SECURITY_PROFILE=production \
   AGENTICS_HOST_PROBE_MODE=warn \
   agentics-check-dgx-spark-profile
 ```
 
-After the Agentics-owned Docker daemon and loopback XFS mounts are configured,
-preload the probe image, then run the strict check as the service user:
+After the configured Docker daemon and loopback XFS mounts are ready, preload
+the probe image, then run the strict check:
 
 ```bash
-docker --host unix:///run/agentics/docker.sock pull busybox:1.36
-sudo -u agentics env \
+docker pull busybox:1.36
+env \
+  AGENTICS_DOCKER_HOST=unix:///var/run/docker.sock \
+  AGENTICS_DOCKER_SOCKET_PATH=/var/run/docker.sock \
   AGENTICS_HOST_PROBE_MODE=require \
   AGENTICS_RUNNER_SECURITY_PROFILE=production \
   AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
@@ -234,10 +238,9 @@ Postgres, and RustFS do not mount it.
 
 ## Logs
 
-Current logging is process stdout/stderr. For hosted rehearsal, run each service
-under a supervisor that captures logs, for example `systemd`, `tmux` with file
-logging, or a container runtime. Worker evaluation logs are written to durable
-object storage at `eval-artifacts/<job-id>/attempt-<attempt>/runner.log`; in
+Current service logs are Compose container stdout/stderr. Worker evaluation logs
+are written to durable object storage at
+`eval-artifacts/<job-id>/attempt-<attempt>/runner.log`; in
 local storage mode that maps under `AGENTICS_STORAGE_ROOT`. Runner scratch trees for source
 extraction, build workspaces, prepared data, solution run I/O, and evaluator
 output are temporary per-job workspaces and should not persist in durable

@@ -1,9 +1,9 @@
 # Deployment Baseline
 
 本文档定义 MVP 的本地 Compose 部署演练，以及第一版单机 production Compose
-stack。Hosted MVP profile 运行在 NVIDIA DGX Spark 上，并单独记录在
+stack。Hosted MVP target 运行在 NVIDIA DGX Spark 上，并单独记录在
 `docs/dgx-spark/zh.md`。本文件用于 containerized local 和 production operation；
-Linux host preparation 应使用 DGX profile 文档。
+Linux host setup 应使用 DGX host-preparation 文档。
 
 ## 当前目标
 
@@ -24,11 +24,8 @@ Production Compose 目标是名为 `agentics-prod` 的单机 project：
   因此 public ingress 和 TLS 保持在 Compose 外部。
 - 只有 worker 和 check services 挂载 host Docker socket。
 
-Local Compose rehearsal 验证 service wiring 和平台行为。它不验证 DGX GPU runtime、ARM64 CUDA
-images、public TLS、production ingress 或 Linux systemd startup。
-
-`deploy/dgx-spark/` 下的 systemd units 是仅适用于 Linux 的 DGX hosted artifacts，
-并使用 `/opt/agentics/current` release paths。
+Local Compose rehearsal 验证 service wiring 和平台行为。它不验证 DGX GPU runtime、
+ARM64 CUDA images、public TLS 或 production ingress。
 
 Local Compose defaults 位于 `deploy/compose/env/dev.env.example`。Production
 Compose defaults 和 placeholders 位于 `deploy/compose/env/prod.env.example`。
@@ -227,10 +224,9 @@ Hosted 或 public MVP operation：
 
 Hosted MVP 在接受 public evaluation jobs 前使用 Linux-only storage profile：
 
-- 运行 Agentics-owned Docker daemon，而不是 operator 的 default Docker daemon。
-- 将该 daemon 的 Docker data root 放在启用 project quotas 的 loopback XFS
-  image 上。这样不需要重新分区或格式化 DGX Spark 的主硬盘，同时仍然可以验证
-  Docker `storage_opt.size`。
+- 使用 `AGENTICS_DOCKER_SOCKET_PATH` 背后的 configured host Docker daemon。
+- 如果需要 Docker writable-layer quotas，确保该 daemon 的 data root 和 storage
+  driver 支持 Docker `storage_opt.size`。
 - 使用 Docker writable-layer quotas 约束写入 container layer 的内容。
 - 为 writable mounts 使用独立的 per-phase loopback filesystem images，并在每个
   phase mount 下使用 root-prepared XFS project-quota slots。该策略覆盖
@@ -295,9 +291,9 @@ just compose-prod-check
 
 ## DGX Spark Hosted Profile
 
-DGX Spark hosted deployment 单独验证，因为它加入了 ARM64、Docker GPU device
-access、Linux systemd startup 和 DGX OS lifecycle
-assumptions。见 `docs/milestones/zh.md` 中的 DGX Spark 里程碑。
+DGX Spark host preparation 单独验证，因为它加入了 ARM64、Docker GPU device
+access、XFS quota setup 和 DGX OS lifecycle assumptions。见
+`docs/milestones/zh.md` 中的 DGX Spark 里程碑。
 
 第一轮 host inventory 已汇总在 `docs/dgx-spark/zh.md`。
 可重复检查命令为：
@@ -308,12 +304,11 @@ agentics-check-dgx-spark-host
 
 该检查带 Linux gate，会报告 Docker/NVIDIA GPU blockers，且不会修改 host
 state。当前 inventory 已确认 OS、GPU、NVIDIA toolkit、storage、XFS tooling、
-loopback tooling、default Docker GPU smoke 行为，以及 Agentics-owned Docker
-daemon profile。
+loopback tooling、default Docker GPU smoke 行为，以及 configured host Docker
+socket。
 
-DGX Spark deployment profile 和 smoke evidence 记录在 `docs/dgx-spark/zh.md`，
-deploy artifacts 位于 `deploy/dgx-spark/`，Linux-gated storage/profile scripts
-位于 `agentics-ops`。
+DGX Spark host preparation 和 smoke evidence 记录在 `docs/dgx-spark/zh.md`，
+Linux-gated storage/profile binaries 位于 `agentics-ops`。
 
 DGX Spark 运维应以 NVIDIA 官方文档为准：
 

@@ -70,11 +70,6 @@ rustfs-private-backup-logs:
 test-storage-s3:
     AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}}" AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}}" AGENTICS_S3_TEST_ENDPOINT="${AGENTICS_S3_TEST_ENDPOINT:-http://127.0.0.1:${AGENTICS_RUSTFS_PORT:-9000}}" AGENTICS_S3_TEST_BUCKET="${AGENTICS_S3_TEST_BUCKET:-agentics-test}" AGENTICS_S3_FORCE_PATH_STYLE="${AGENTICS_S3_FORCE_PATH_STYLE:-true}" cargo test -p agentics-storage rustfs_s3_storage_round_trips_when_configured -- --nocapture
 
-# Manage the Linux-only DGX Spark systemd deployment profile
-dgx-profile *args:
-    cargo build -p agentics-ops --bin agentics-manage-dgx-spark-profile
-    sudo -E target/debug/agentics-manage-dgx-spark-profile {{args}}
-
 # Start the containerized development stack with seeded fake data
 compose-dev-up:
     @root="${AGENTICS_DEV_ROOT:-$PWD/.agentics-compose/dev}"; \

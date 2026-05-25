@@ -20,8 +20,8 @@ For your information:
 - `docs/operate-platform/en.md` and `docs/operate-platform/zh.md` are the role-facing guides for platform operators.
 - `docs/solution-protocol/en.md` and `docs/solution-protocol/zh.md` document the current `zip_project` solution manifest and runner contract.
 - `docs/targets/en.md` and `docs/targets/zh.md` document target schema, target-scoped submission APIs, CLI behavior, worker behavior, and leaderboard behavior.
-- `docs/deployment/en.md` and `docs/deployment/zh.md` document the MVP local Compose deployment rehearsal, startup order, storage, backup, rollback, and DGX hosted profile handoff.
-- `docs/dgx-spark/en.md` and `docs/dgx-spark/zh.md` document the DGX Spark hosted profile, host inventory summary, storage quotas, systemd startup, checks, and smoke evidence.
+- `docs/deployment/en.md` and `docs/deployment/zh.md` document the MVP Compose deployment flows, startup order, storage, backup, rollback, and production shutdown semantics.
+- `docs/dgx-spark/en.md` and `docs/dgx-spark/zh.md` document DGX Spark host preparation, inventory, storage quotas, profile checks, and smoke evidence for the production Compose worker.
 - `docs/operations/en.md` and `docs/operations/zh.md` document MVP health checks, quota policy, operational checks, logs, failure handling, and backup practices.
 - `docs/ports-and-paths/en.md` and `docs/ports-and-paths/zh.md` document runtime ports, filesystem paths, and MVP target support.
 - `docs/visual-identity-system/en.md` and `docs/visual-identity-system/zh.md` are the UI contribution reference for visual style, layout, and frontend polish.

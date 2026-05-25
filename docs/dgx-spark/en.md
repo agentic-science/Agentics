@@ -1,22 +1,22 @@
-# DGX Spark Operations
+# DGX Spark Host Preparation
 
-This document is the current operator reference for running Agentics on a single
-NVIDIA DGX Spark host. It replaces the older split inventory, deployment, and
-smoke-evidence notes.
+This document is the DGX Spark operator reference for the production Compose
+model. Agentics services are started by Docker Compose. DGX-specific work is
+limited to host inventory, Docker/GPU readiness, runner quota storage
+preparation, and strict profile checks for the Compose worker.
 
 ## Scope
 
-The DGX Spark profile is Linux-only. The systemd units and storage scripts under
-`deploy/dgx-spark/` must not be used as macOS startup definitions. macOS
-rehearsal uses the local Compose flow in [deployment](../deployment/en.md).
-
-MVP hosted deployment targets are:
+The DGX Spark hosted target is Linux-only and supports the MVP hosted targets:
 
 - `linux-arm64-cpu`
 - `linux-arm64-cuda`
 
 `linux-amd64-cpu` and `linux-amd64-cuda` remain post-MVP targets until AMD64
 Linux deployment capacity exists.
+
+The production service graph lives in `deploy/compose/compose.prod.yml` and is
+operated through `agentics-compose-prod` or the `compose-prod-*` just recipes.
 
 ## Host Inventory
 
@@ -31,7 +31,7 @@ The first inventory was captured on `MapleSpark` on May 12-13, 2026.
 | NVIDIA driver | `580.142` |
 | Driver-reported CUDA | `13.0` |
 | NVIDIA container toolkit | `nvidia-container-toolkit 1.19.0-1`, `libnvidia-container1 1.19.0-1` |
-| Agentics Docker daemon | `unix:///run/agentics/docker.sock`, `overlay2` on XFS, data root `/srv/agentics/docker-data-root`, Docker GPU device requests enabled |
+| Production Docker socket | `${AGENTICS_DOCKER_SOCKET_PATH:-/var/run/docker.sock}` |
 | Runner quota slots | 64 MiB, 256 MiB, 1 GiB, and 4 GiB XFS project-quota slots for each runner phase, 100 slots per class, with 256 inodes per MiB |
 
 Run the repeatable Linux-gated inventory check on the DGX host:
@@ -51,52 +51,49 @@ agentics-check-dgx-spark-host
 ```
 
 The Rust checker uses the Docker API directly. Configure Docker access through
-the intended daemon socket, for example by setting `DOCKER_HOST`, rather than a
-Docker CLI wrapper.
+`AGENTICS_DOCKER_HOST` or the standard Docker socket environment; do not wrap it
+in a Docker CLI script.
 
-Do not run public Agentics jobs on the operator's default Docker daemon. The
-Agentics-owned Docker daemon and root-prepared quota slots are the hosted
-storage boundary for public jobs.
+## Production Compose Configuration
 
-## Deployment Artifacts
+Create the production env file from the Compose template:
 
-Deployment artifacts live in `deploy/dgx-spark/`:
+```bash
+cp deploy/compose/env/prod.env.example deploy/compose/env/prod.env
+```
 
-| File | Purpose |
-| --- | --- |
-| `agentics.env.example` | `/etc/agentics/agentics.env` template |
-| `dockerd-agentics.json` | Agentics-owned Docker daemon config |
-| `agentics-docker.service` | Root-owned Docker daemon service |
-| `agentics-api.service` | API server systemd unit |
-| `agentics-worker.service` | Worker systemd unit; the worker enforces the configured host probe mode |
-| `agentics-web.service` | Web frontend systemd unit |
+DGX production should keep these values aligned:
 
-Linux-gated operational binaries live in the `agentics-ops` package. Packaged
-deployments install them under `/opt/agentics/current/bin`; from a source
-checkout, use `cargo run -p agentics-ops --bin <binary> -- ...`.
+```bash
+AGENTICS_COMPOSE_PROD_PROJECT=agentics-prod
+AGENTICS_DOCKER_SOCKET_PATH=/var/run/docker.sock
+AGENTICS_RUNTIME_UID=10001
+AGENTICS_RUNTIME_GID=10001
+AGENTICS_DOCKER_SOCKET_GID=<host-docker-socket-group-gid>
+AGENTICS_WORKER_ACCELERATORS=gpu
+AGENTICS_WORKER_GPU_PROBE_IMAGE=ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.2.5@sha256:8e3da4a65e297e3b1e9800da001fa2bbac9ed48453a6972117a0c3ad1d1eef13
+AGENTICS_RUNNER_SECURITY_PROFILE=production
+AGENTICS_HOST_PROBE_MODE=require
+AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true
+AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
+AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime
+AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts
+AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
+AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true
+```
 
-| Binary | Purpose |
-| --- | --- |
-| `agentics-manage-dgx-spark-profile` | Installs, starts, stops, and uninstalls the DGX systemd profile |
-| `agentics-prepare-dgx-spark-storage` | Creates loopback XFS images, mounts them with project quotas, and prepares runner quota slots |
-| `agentics-prepare-dgx-spark-test-storage` | Creates a separate `/srv/agentics-test` quota root owned by the invoking test user |
-| `agentics-check-dgx-spark-profile` | Checks runtime profile, Docker runtime-root visibility, Docker quota behavior, phase mounts, and quota-slot probes |
+Change `AGENTICS_ADMIN_PASSWORD` and all storage, database, OAuth, and RustFS
+secrets before exposing the stack. Public ingress and TLS stay outside Compose.
 
 ## Persistent Layout
 
 | Purpose | Path |
 | --- | --- |
-| Config root | `/etc/agentics` |
-| Environment file | `/etc/agentics/agentics.env` |
-| Release symlink | `/opt/agentics/current` |
-| Release versions | `/opt/agentics/releases/<release-id>` |
 | State root | `/srv/agentics` |
-| Local storage root | `/srv/agentics/storage` |
 | Storage work root | `/srv/agentics/storage-work` |
-| Challenge checkout root | `/srv/agentics/challenges` |
 | Runtime root | `/srv/agentics/runtime` |
-| Agentics Docker socket | `/run/agentics/docker.sock` |
-| Agentics Docker data root | `/srv/agentics/docker-data-root` |
+| Host Docker socket | `/var/run/docker.sock` by default |
+| Docker data root prepared for quota-capable hosts | `/srv/agentics/docker-data-root` |
 | Loop image root | `/srv/agentics/loop-images` |
 | Phase mount root | `/srv/agentics/phase-mounts` |
 | Runner quota slots | `/srv/agentics/phase-mounts/<phase>/slots/<size>mb/slot-NNN` |
@@ -109,56 +106,9 @@ The phase mount root has one loopback XFS mount for each writable runner class:
 - `evaluator-setup`
 - `evaluator-score`
 
-Durable object storage may remain local under `/srv/agentics/storage` or use
-`AGENTICS_STORAGE_BACKEND=s3` with an S3/RustFS-compatible bucket. Storage work
-root is local scratch for bundle packing, unpacking, and S3 downloads; runner
-quota slots remain under `/srv/agentics/phase-mounts`. Challenge draft cleanup
-also removes stale `_tmp/` durable objects after
-`AGENTICS_STORAGE_TMP_OBJECT_GRACE_HOURS`, defaulting to 24 hours.
-
-## Required Environment
-
-Copy `deploy/dgx-spark/agentics.env.example` to
-`/etc/agentics/agentics.env` and replace all placeholders.
-
-Required hosted profile values:
-
-```bash
-AGENTICS_API_HOST=127.0.0.1
-AGENTICS_API_PORT=3100
-AGENTICS_WEB_PORT=3001
-AGENTICS_API_BASE_URL=https://<public-hostname>
-AGENTICS_WEB_BASE_URL=https://<public-hostname>
-AGENTICS_CORS_ALLOWED_ORIGINS=https://<public-hostname>
-AGENTICS_WEB_SESSION_COOKIE_SECURE=true
-AGENTICS_DOCKER_HOST=unix:///run/agentics/docker.sock
-AGENTICS_WORKER_ACCELERATORS=gpu
-AGENTICS_WORKER_GPU_PROBE_IMAGE=ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.2.5@sha256:8e3da4a65e297e3b1e9800da001fa2bbac9ed48453a6972117a0c3ad1d1eef13
-AGENTICS_RUNNER_SECURITY_PROFILE=production
-AGENTICS_HOST_PROBE_MODE=require
-AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true
-AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
-AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime
-AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts
-AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
-AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true
-AGENTICS_RUNNER_MAX_OUTPUT_FILES=8192
-AGENTICS_RUNNER_MAX_OUTPUT_DIRS=1024
-AGENTICS_RUNNER_MAX_OUTPUT_DEPTH=32
-AGENTICS_RUNNER_MAX_RUNS=100
-AGENTICS_RUNNER_MAX_RESULT_JSON_BYTES=4194304
-AGENTICS_RUNNER_MAX_PUBLIC_RESULTS=1024
-AGENTICS_RUNNER_MAX_RESULT_LOG_BYTES=262144
-AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION=16777216
-AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS=2
-```
-
-Use a non-default `AGENTICS_ADMIN_PASSWORD` before exposing the hosted profile.
-Prepare GitHub OAuth credentials before creator routes are exposed.
-The storage/profile setup keeps `/srv/agentics/runtime` and
-`/srv/agentics/phase-mounts` owned by the `agentics` service user and mode
-`0700`; the worker and DGX profile check fail closed if those roots are
-group/world traversable.
+Production Compose uses RustFS/S3 for durable object storage. `AGENTICS_STORAGE_WORK_ROOT`
+is local scratch for bundle packing, unpacking, and S3 downloads; runner quota
+slots remain under `AGENTICS_RUNNER_PHASE_MOUNT_ROOT`.
 
 ## Storage Preparation
 
@@ -166,6 +116,8 @@ Run only on Linux and only with operator privileges:
 
 ```bash
 AGENTICS_DGX_CONFIRM=prepare-storage \
+AGENTICS_RUNTIME_UID=10001 \
+AGENTICS_RUNTIME_GID=10001 \
 AGENTICS_DGX_PERSIST_FSTAB=1 \
 AGENTICS_DGX_PHASE_SLOT_CLASSES_MB='64 256 1024 4096' \
 AGENTICS_DGX_PHASE_SLOTS_PER_CLASS=100 \
@@ -174,99 +126,77 @@ agentics-prepare-dgx-spark-storage
 ```
 
 The storage preparer refuses to run unless
-`AGENTICS_DGX_CONFIRM=prepare-storage` is set.
-It creates the persistent directory layout, formats missing loopback XFS images,
-mounts them with `prjquota`, and prepares quota slots under each phase mount.
+`AGENTICS_DGX_CONFIRM=prepare-storage` is set. It creates the persistent
+directory layout, formats missing loopback XFS images, mounts them with
+`prjquota`, prepares quota slots under each phase mount, and chowns
+Compose-visible writable roots to `AGENTICS_RUNTIME_UID:AGENTICS_RUNTIME_GID`.
 Set `AGENTICS_DGX_PERSIST_FSTAB=1` to append idempotent `/etc/fstab` entries.
 
-On `MapleSpark`, the DGX-2 run mounted:
+Production Compose uses the host Docker socket. If Docker writable-layer quotas
+are required, the host Docker daemon behind that socket must use a storage
+driver and data root that support `storage_opt.size`; Agentics no longer ships a
+project-owned Docker daemon service for production.
 
-- `/srv/agentics/docker-data-root`, 200 GiB loopback XFS with `prjquota`.
-- Five phase mounts, 20 GiB each, for solution setup/build/run and evaluator
-  prepare/score.
-- 100 quota slots per class and phase for 64 MiB, 256 MiB, 1024 MiB, and
-  4096 MiB limits. With the default `256` inodes per MiB, those slots have
-  inode hard limits of 16384, 65536, 262144, and 1048576.
-
-The worker chooses the smallest configured slot class that is at least the
-effective phase `disk_limit_mb`. Align challenge resource profiles to slot
-classes when an exact hard phase limit is required. The separate evaluator-visible
-run tree cap defaults to 8192 files, 1024 directories, and depth 32; setup/build
-dependency installs are governed by the XFS byte and inode quota instead. Each
-evaluation may run at most 100 solution invocations. Persisted runner logs are
-capped at one MiB per concrete run, `result.json` is capped at 4 MiB before
-parsing, public evaluator feedback is capped at 1024 entries, and embedded evaluator
-result logs are capped at 256 KiB. `piped_stdio` interaction traffic is capped
-at 16 MiB in each direction.
-
-## Service Startup
-
-Install profile files and prepare storage:
-
-```bash
-just dgx-profile install
-```
-
-Replace placeholders in `/etc/agentics/agentics.env`, then start:
-
-```bash
-just dgx-profile start
-```
-
-Stop or uninstall the profile with:
-
-```bash
-just dgx-profile stop
-just dgx-profile uninstall
-just dgx-profile uninstall --purge-data
-```
-
-The worker process runs `agentics-check-dgx-spark-profile` during startup
-when `AGENTICS_HOST_PROBE_MODE=warn` or `require`. With
-`AGENTICS_RUNNER_SECURITY_PROFILE=production` and
-`AGENTICS_HOST_PROBE_MODE=require`, the worker fails closed if the Linux host
-profile is not proven, the probe binary cannot run, or bounded runner storage
-and Docker writable-layer quota are not enabled.
-Packaged workers use `bin/agentics-check-dgx-spark-profile` by default; set
-`AGENTICS_HOST_PROBE_COMMAND` only when a deployment intentionally installs the
-probe binary somewhere else.
-With `AGENTICS_WORKER_ACCELERATORS=gpu`, startup also fails closed unless
-Docker GPU device requests work with `AGENTICS_WORKER_GPU_PROBE_IMAGE` and at
-least one GPU is visible.
-
-Plain `uninstall` removes services and quota storage while preserving config,
-release files, and durable state. `uninstall --purge-data` also removes
-`/etc/agentics`, `/opt/agentics/current`, `/srv/agentics`,
-`/srv/agentics-test`, and the `agentics` service identity.
-
-## Verification
+## Profile Check
 
 Run the non-mutating profile check first:
 
 ```bash
+AGENTICS_DOCKER_HOST=unix:///var/run/docker.sock \
+AGENTICS_DOCKER_SOCKET_PATH=/var/run/docker.sock \
 AGENTICS_HOST_PROBE_MODE=warn \
 AGENTICS_RUNNER_SECURITY_PROFILE=production \
 agentics-check-dgx-spark-profile
 ```
 
-After the Agentics-owned Docker daemon and phase mounts are configured, run the
-strict check with mutating probes:
+After the phase mounts and Docker quota behavior are configured, run the strict
+check with mutating probes:
 
 ```bash
-docker --host unix:///run/agentics/docker.sock pull busybox:1.36
-sudo -u agentics env \
-  AGENTICS_HOST_PROBE_MODE=require \
-  AGENTICS_RUNNER_SECURITY_PROFILE=production \
-  AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
-  AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime \
-  AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
-  AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
-  AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
-  AGENTICS_DGX_DOCKER_PULL_POLICY=never \
-  agentics-check-dgx-spark-profile
+docker pull busybox:1.36
+AGENTICS_DOCKER_HOST=unix:///var/run/docker.sock \
+AGENTICS_DOCKER_SOCKET_PATH=/var/run/docker.sock \
+AGENTICS_HOST_PROBE_MODE=require \
+AGENTICS_RUNNER_SECURITY_PROFILE=production \
+AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
+AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime \
+AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
+AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
+AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
+AGENTICS_DGX_DOCKER_PULL_POLICY=never \
+agentics-check-dgx-spark-profile
 ```
 
-Run the CUDA image GPU smokes with Docker GPU device requests:
+The worker runs the same profile checker during startup when
+`AGENTICS_HOST_PROBE_MODE=warn` or `require`. With production security and
+require mode, the worker fails closed if bounded runner storage, Docker quota
+behavior, digest-pinned images, or GPU probing are not proven.
+
+## Production Startup
+
+Start the services through Compose:
+
+```bash
+just compose-prod-build
+just compose-prod-up
+just compose-prod-check
+```
+
+Stop the stack with an explicit runner policy:
+
+```bash
+just compose-prod-down --runner keep --dry-run
+just compose-prod-down --runner keep
+just compose-prod-down --runner clean --dry-run
+just compose-prod-down --runner clean
+```
+
+`--runner clean` removes only matching production runner containers with exact
+Agentics labels. It does not mutate database job state.
+
+## CUDA And Integration Smokes
+
+Run CUDA image GPU smokes with Docker GPU device requests:
 
 ```bash
 for image in \
@@ -279,18 +209,6 @@ do
     "$image" /opt/agentics/smoke.sh
 done
 ```
-
-Run the end-to-end worker CUDA smoke on DGX with the local integration
-database:
-
-```bash
-DATABASE_URL=postgres://agentics:agentics@127.0.0.1:5432/agentics_test \
-  cargo test -p integration-tests --test cuda_smoke -- --ignored --nocapture
-```
-
-This ignored test publishes a temporary CUDA challenge with distinct public and
-private bundle paths, queues validation and official GPU jobs, runs the worker
-with `AGENTICS_WORKER_ACCELERATORS=gpu`, and verifies the public leaderboard.
 
 For developer-run integration tests on the DGX host, prepare a separate
 test-owned quota root instead of reusing production runner slots:
@@ -313,64 +231,31 @@ On Linux, quota-sensitive integration tests fail fast when these variables are
 missing, malformed, or do not point at the prepared `/srv/agentics-test` quota
 root.
 
-The `/srv/agentics-test` root is intentionally separate from `/srv/agentics` so
-local test permissions do not mutate hosted worker slot ownership.
-
-Then run:
-
-```bash
-AGENTICS_ADMIN_PASSWORD='<admin-password>' \
-AGENTICS_WEB_BASE_URL='https://<public-hostname>' \
-agentics-check-local-mvp
-```
-
-Finally, run the CLI submitter flow from the root `README.md` against the hosted
-endpoint and inspect the submitter-private status with `agentics submissions
-status`.
-
 ## Smoke Evidence
 
 Strict DGX-2 profile verification and DGX-3 hosted application smoke passed on
-`MapleSpark` on May 13, 2026.
-CUDA image publication and DGX GPU worker smoke passed on `MapleSpark` on
-May 22, 2026.
+`MapleSpark` on May 13, 2026. CUDA image publication and DGX GPU worker smoke
+passed on `MapleSpark` on May 22, 2026.
 
-The smoke covered:
-
-- local MVP health checks,
-- strict DGX profile checks,
-- hosted CLI onboarding,
-- matrix validation and official submission on `linux-arm64-cpu`,
-- no-egress runner enforcement,
-- storage-quota escape failure,
-- capacity and worker heartbeat inspection.
-
-The CUDA smoke covered:
-
-- published `v0.2.5` `cu126`, `cu130`, and `cu132` GHCR image digests,
-- toolchain smoke for each CUDA image,
-- GPU runtime smoke for each CUDA image using Docker `--gpus 1`,
-- the ignored `cuda_smoke` integration test, covering validation, official
-  evaluation, result persistence, and leaderboard update on `linux-arm64-cuda`.
-
-The storage escape run failed as expected with the worker error
-`phase exceeded disk limit: 100663583 > 67108864 bytes`. The failure was
-contained to the job disk limit and did not exhaust host storage.
+The smoke covered local MVP health checks, strict DGX profile checks, hosted CLI
+onboarding, matrix validation and official submission on `linux-arm64-cpu`,
+no-egress runner enforcement, storage-quota escape failure, capacity, worker
+heartbeat inspection, CUDA image GPU runtime, and the ignored `cuda_smoke`
+integration path on `linux-arm64-cuda`.
 
 ## Launch Cutover
 
 Remaining cutover work before public traffic:
 
-- keep `/opt/agentics/current` and `/etc/agentics/agentics.env` aligned with
-  each promoted build,
-- configure public ingress, DNS, and TLS,
-- keep `/admin` and `/admin-api` operator-restricted unless public admin access
-  is intentionally allowed,
-- use Cloudflare edge controls for TLS, routing, and unauthenticated route
-  rate limits. Application-level pioneer-code registration gating remains the
-  primary registration control.
+- configure public ingress, DNS, and TLS outside Compose;
+- keep `/admin` and admin API paths operator-restricted unless public admin
+  access is intentionally allowed;
+- use Cloudflare edge controls for TLS, routing, and unauthenticated route rate
+  limits;
+- use `just compose-prod-down --runner clean --dry-run` before destructive
+  runner cleanup.
 
-Use NVIDIA's DGX Spark documentation as the operational source of truth:
+Use NVIDIA's DGX Spark documentation as the host and GPU operational reference:
 
 - [NVIDIA DGX Spark product page](https://marketplace.nvidia.com/en-us/enterprise/personal-ai-supercomputers/dgx-spark/)
 - [NVIDIA DGX Spark documentation](https://docs.nvidia.com/dgx/dgx-spark/)

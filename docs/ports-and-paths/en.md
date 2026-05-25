@@ -20,27 +20,19 @@ and MVP target support.
 
 Local Compose development reads `deploy/compose/env/dev.env.example`.
 Production Compose uses `deploy/compose/env/prod.env`, copied from
-`deploy/compose/env/prod.env.example`. Copy
-`deploy/dgx-spark/agentics.env.example` to `/etc/agentics/agentics.env` for the
-DGX hosted profile.
+`deploy/compose/env/prod.env.example`. DGX-specific host settings live in the
+same production Compose env file.
 
 ## DGX Paths
 
 | Purpose | Path |
 | --- | --- |
-| Config root | `/etc/agentics` |
-| Environment file | `/etc/agentics/agentics.env` |
-| Release symlink | `/opt/agentics/current` |
-| Release versions | `/opt/agentics/releases/<release-id>` |
 | Persistent state root | `/srv/agentics` |
-| Challenge root | `/srv/agentics/challenges` |
-| Storage root | `/srv/agentics/storage` |
 | Storage work root | `/srv/agentics/storage-work` |
 | Runner runtime root | `/srv/agentics/runtime` |
 | Production Compose storage work root | `/srv/agentics/storage-work` |
 | Production host Docker socket | `/var/run/docker.sock` by default |
-| Agentics Docker socket | `/run/agentics/docker.sock` |
-| Agentics Docker data root | `/srv/agentics/docker-data-root` |
+| Docker data root prepared for quota-capable hosts | `/srv/agentics/docker-data-root` |
 | Loop image root | `/srv/agentics/loop-images` |
 | Phase mount root | `/srv/agentics/phase-mounts` |
 | Runner quota slots | `/srv/agentics/phase-mounts/<phase>/slots/<size>mb/slot-NNN` |
@@ -116,8 +108,8 @@ under `AGENTICS_RUSTFS_BACKUP_DATA_DIR`, and stops without deleting data through
 storage bucket used by a production rehearsal when you want to reuse backed-up
 private challenge bundles.
 
-The systemd units are Linux-only and use the release symlink paths above.
-Local development uses the Compose dev stack.
+Production deployment uses the Compose prod stack. Local development uses the
+Compose dev stack.
 
 ## Base Image Source Paths
 

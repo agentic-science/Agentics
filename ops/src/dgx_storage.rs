@@ -20,11 +20,11 @@ use nix::unistd::Uid;
 use crate::dgx::{
     self, DEFAULT_STATE_ROOT, DEFAULT_TEST_DOCKER_LOOP_SIZE, DEFAULT_TEST_PHASE_LOOP_SIZE,
     DEFAULT_TEST_STATE_ROOT, DgxStorageConfig, ENV_DGX_CONFIRM, ENV_DGX_PRODUCTION_STATE_ROOT,
-    ENV_DGX_TEST_CONFIRM, ENV_DGX_TEST_DOCKER_LOOP_SIZE, ENV_DGX_TEST_GROUP,
-    ENV_DGX_TEST_PERSIST_FSTAB, ENV_DGX_TEST_PHASE_LOOP_SIZE, ENV_DGX_TEST_PHASE_SLOT_CLASSES_MB,
+    ENV_DGX_TEST_CONFIRM, ENV_DGX_TEST_DOCKER_LOOP_SIZE, ENV_DGX_TEST_PERSIST_FSTAB,
+    ENV_DGX_TEST_PHASE_LOOP_SIZE, ENV_DGX_TEST_PHASE_SLOT_CLASSES_MB,
     ENV_DGX_TEST_PHASE_SLOT_INODES_PER_MB, ENV_DGX_TEST_PHASE_SLOTS_PER_CLASS,
-    ENV_DGX_TEST_STATE_ROOT, ENV_DGX_TEST_USER, STORAGE_CONFIRMATION, SlotMetadata,
-    TEST_STORAGE_CONFIRMATION, phase_slot_path, slot_name,
+    ENV_DGX_TEST_STATE_ROOT, STORAGE_CONFIRMATION, SlotMetadata, TEST_STORAGE_CONFIRMATION,
+    phase_slot_path, slot_name,
 };
 use crate::support::{
     DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, env_non_empty, parse_boolish,
@@ -156,11 +156,6 @@ pub async fn prepare_storage_config(
 }
 
 fn test_storage_config() -> Result<DgxStorageConfig, StorageError> {
-    let invoking_user = env_non_empty(ENV_DGX_TEST_USER)
-        .or_else(|| env_non_empty("SUDO_USER"))
-        .or_else(|| env_non_empty("USER"))
-        .unwrap_or_else(|| "root".to_string());
-    let invoking_group = env_non_empty(ENV_DGX_TEST_GROUP).unwrap_or_else(|| invoking_user.clone());
     let test_state_root = dgx::env_path(ENV_DGX_TEST_STATE_ROOT, DEFAULT_TEST_STATE_ROOT);
     let production_state_root = dgx::env_path(ENV_DGX_PRODUCTION_STATE_ROOT, DEFAULT_STATE_ROOT);
     if test_state_root == production_state_root {
@@ -195,9 +190,15 @@ fn test_storage_config() -> Result<DgxStorageConfig, StorageError> {
         .map(|value| parse_boolish(ENV_DGX_TEST_PERSIST_FSTAB, value))
         .transpose()?
         .unwrap_or(false);
-    config.service_user = invoking_user;
-    config.service_group = invoking_group;
+    config.runtime_uid = optional_sudo_owner_id("SUDO_UID").unwrap_or(config.runtime_uid);
+    config.runtime_gid = optional_sudo_owner_id("SUDO_GID").unwrap_or(config.runtime_gid);
     Ok(config)
+}
+
+fn optional_sudo_owner_id(name: &'static str) -> Option<u32> {
+    env_non_empty(name)
+        .and_then(|value| value.parse::<u32>().ok())
+        .filter(|value| *value > 0)
 }
 
 fn require_linux_and_root(dry_run: bool) -> Result<(), StorageError> {
@@ -595,7 +596,7 @@ async fn write_slot_metadata(
 }
 
 async fn chown_owned_paths(config: &DgxStorageConfig) -> Result<String, StorageError> {
-    let user_group = format!("{}:{}", config.service_user, config.service_group);
+    let user_group = format!("{}:{}", config.runtime_uid, config.runtime_gid);
     for path in [
         config.state_root.join("storage"),
         config.storage_work_root.clone(),

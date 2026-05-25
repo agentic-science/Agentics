@@ -47,7 +47,7 @@ const DOCKER_PROBE_TIMEOUT_SECS: u64 = 120;
 #[derive(Debug, Parser)]
 #[command(
     about = "Checks the DGX Spark hosted runner profile.",
-    long_about = "Checks the Agentics-owned Docker daemon, XFS project quota mounts, root-prepared writable slots, runtime-root visibility, and optional quota canaries for the DGX Spark hosted profile."
+    long_about = "Checks the configured Docker daemon, XFS project quota mounts, root-prepared writable slots, runtime-root visibility, and optional quota canaries for the DGX Spark hosted profile."
 )]
 pub struct Cli {
     /// Override AGENTICS_HOST_PROBE_MODE for this invocation.

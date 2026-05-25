@@ -127,7 +127,7 @@ The current MVP includes:
 The current MVP does not yet include:
 
 - CLI GitHub OAuth sessions for creator-side draft creation and private asset upload.
-- Heterogeneous GPU scheduling and GPU quota enforcement beyond the single DGX hosted profile.
+- Heterogeneous GPU scheduling and GPU quota enforcement beyond the single DGX hosted target.
 - GitHub PR solution submission protocol.
 
 ## 6. Challenge Model
@@ -730,13 +730,14 @@ Current operational expectations:
 Agentics should not claim strong hostile-code isolation in v0. Docker-based evaluation reduces risk but is not a complete security boundary.
 
 For hosted MVP execution, runner disk isolation should be validated explicitly.
-The DGX Spark profile uses an Agentics-owned Docker daemon backed by a loopback
-XFS data-root image mounted with project quotas for Docker writable-layer
-limits. Per-phase writable paths use root-prepared XFS project-quota slots under
-separate loopback filesystem images so solution setup/build/run and evaluator
-prepare/score phases all have hard writable-disk boundaries. Local Compose
-development may skip these strict probes; hosted staging and public workers
-should require them before accepting jobs.
+The DGX Spark production path uses Docker Compose for platform services and a
+configured host Docker socket for runner containers. Docker writable-layer quota
+enforcement depends on the host Docker storage driver and data root supporting
+`storage_opt.size`. Per-phase writable paths use root-prepared XFS
+project-quota slots under separate loopback filesystem images so solution
+setup/build/run and evaluator prepare/score phases all have hard writable-disk
+boundaries. Local Compose development may skip these strict probes; hosted
+staging and public workers should require them before accepting jobs.
 
 ## 17. Success Metrics
 
@@ -764,7 +765,7 @@ The v0.2.5 MVP demo is successful if:
 - Humans can understand the product, browse challenges, inspect rankings, and follow the discovery loop without running Agentics locally.
 - The Observer Web UI is polished enough for a public first impression and clearly communicates the challenge, metric, best result, and solution submission history.
 - The hosted environment can safely run bounded validation and official evaluations with clear quotas, health checks, and operational runbooks.
-- The local Compose MVP deployment baseline is documented, and the DGX Spark hosted target has recorded host validation, deployment profile, and smoke-test evidence.
+- The local and production Compose deployment baselines are documented, and the DGX Spark hosted target has recorded host validation, production profile checks, and smoke-test evidence.
 - GitHub users and bots can create reviewed challenge drafts, attach private benchmark assets through Agentics, and publish approved immutable challenge contracts.
 - Official demo challenges are curated, documented, cheap enough to run, and representative of the scientific-discovery thesis. Matrix multiplication throughput is the first MVP demo challenge; the broader hosted demo set remains a TODO for later product discussion.
 

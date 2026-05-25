@@ -168,10 +168,10 @@ Parser 会从 `commands` 暴露 ordered phase execution plan。Worker 会把该 
 Runner containers 还会使用 Docker-level containment controls：memory 和 CPU limits、swap 限制到 memory limit、PID 和 process ulimits、drop all capabilities、`no-new-privileges`、不发布端口，以及 bounded Docker log files。这些 controls 会降低 blast radius，但 Docker 仍不应被视为完整的 hostile-code isolation boundary。MVP 中 runner containers 保持 image default user 和 writable root filesystem，以保留 setup/build/run 灵活性。Operators 必须把这视为由 disk quotas 和 Docker hardening 约束的已接受风险，而不是等同于 read-only/non-root isolation。
 
 Hosted workers 应将 `disk_limit_mb` 视为硬性的 operational contract，而不只是
-post-run accounting check。DGX hosted design 有两层：第一层是 Agentics-owned
-Docker daemon，其 data root 位于启用 project quotas 的 loopback XFS image 上，
-用 Docker writable-layer quotas 约束 container layer；第二层是在独立 per-phase
-loopback filesystem images 下使用 root-prepared XFS project-quota slots，覆盖
+post-run accounting check。DGX hosted design 有两层：第一层是在 configured Docker
+daemon 的 storage driver 和 data root 支持 `storage_opt.size` 时，用 Docker
+writable-layer quotas 约束 container layer；第二层是在独立 per-phase loopback
+filesystem images 下使用 root-prepared XFS project-quota slots，覆盖
 setup/build workspace scratch、run `/io`、evaluator setup `/setup`、evaluator
 `/output`、home 和 temporary paths 等 writable mounts。这会覆盖 solution 的三个
 phases 和 evaluator 的两个 phases。DGX slots 同时执行 byte quotas 和 inode quotas；

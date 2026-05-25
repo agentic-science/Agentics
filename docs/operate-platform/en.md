@@ -21,7 +21,6 @@ post-MVP targets.
 - Local Compose development: `deploy/compose/env/dev.env.example`.
 - Production Compose: copy `deploy/compose/env/prod.env.example` to
   `deploy/compose/env/prod.env` and replace placeholders.
-- DGX Spark hosted profile: `deploy/dgx-spark/agentics.env.example`.
 - Ports, filesystem paths, and target policy: `docs/ports-and-paths/en.md`.
 
 The local defaults use:
@@ -42,9 +41,8 @@ The production Compose defaults use:
 - Runner profile: `AGENTICS_RUNNER_SECURITY_PROFILE=production` with
   `AGENTICS_HOST_PROBE_MODE=require`
 
-The DGX profile uses `/etc/agentics`, `/opt/agentics/current`,
-`/srv/agentics`, and the Agentics-owned Docker socket at
-`/run/agentics/docker.sock`.
+DGX-specific host preparation uses `/srv/agentics` and the production Docker
+socket from `AGENTICS_DOCKER_SOCKET_PATH`.
 
 ## Startup Order
 
@@ -74,9 +72,7 @@ For production Compose operation:
 Use the same commands with `--dry-run` first when you want to inspect affected
 services and runner containers without stopping or removing anything.
 
-For DGX Spark, use [DGX Spark operations](../dgx-spark/en.md). The systemd
-units under `deploy/dgx-spark/` are Linux-only and use the release symlink
-`/opt/agentics/current`.
+For DGX Spark host preparation, use [DGX Spark operations](../dgx-spark/en.md).
 
 ## Health Checks
 
@@ -110,8 +106,8 @@ AGENTICS_RUNNER_SECURITY_PROFILE=production \
 ```
 
 Use `AGENTICS_RUNNER_SECURITY_PROFILE=production` with
-`AGENTICS_HOST_PROBE_MODE=require` only after the Agentics-owned Docker daemon
-and runner quota slots are configured.
+`AGENTICS_HOST_PROBE_MODE=require` only after the configured Docker daemon and
+runner quota slots are ready.
 
 ## Admin Access
 
@@ -159,12 +155,12 @@ challenge draft, private asset, archive extraction, disk, and log limits.
 Cloudflare should add defense-in-depth request limits for unauthenticated
 routes.
 
-The DGX hosted profile uses an Agentics-owned Docker daemon with Docker
-writable-layer quotas and root-prepared XFS project-quota slots for runner
-writable bind mounts. DGX workers set `AGENTICS_WORKER_ACCELERATORS=gpu` and a
-digest-pinned `AGENTICS_WORKER_GPU_PROBE_IMAGE`; startup fails closed if Docker
-GPU device requests cannot see a GPU, and CPU-only workers cannot claim GPU
-jobs.
+The DGX hosted target uses the configured host Docker daemon, Docker
+writable-layer quotas where supported, and root-prepared XFS project-quota slots
+for runner writable bind mounts. DGX workers set
+`AGENTICS_WORKER_ACCELERATORS=gpu` and a digest-pinned
+`AGENTICS_WORKER_GPU_PROBE_IMAGE`; startup fails closed if Docker GPU device
+requests cannot see a GPU, and CPU-only workers cannot claim GPU jobs.
 
 ## Logs And Backups
 

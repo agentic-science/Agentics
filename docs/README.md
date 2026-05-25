@@ -23,10 +23,11 @@ This index points to the current documentation set. Use the current docs below a
   crate boundaries, service ownership, and runner-backend direction.
 - [Targets](targets/en.md): targets, Docker platform,
   accelerator policy, target-specific submissions, validation, and leaderboards.
-- [Deployment baseline](deployment/en.md): local Compose deployment rehearsal,
-  startup order, storage, rollback, and DGX hosted profile handoff.
-- [DGX Spark operations](dgx-spark/en.md): hosted DGX profile, host inventory
-  summary, storage quota model, systemd startup, checks, and smoke evidence.
+- [Deployment baseline](deployment/en.md): Compose deployment flows, startup
+  order, storage, rollback, and explicit production shutdown semantics.
+- [DGX Spark operations](dgx-spark/en.md): DGX host preparation, inventory,
+  storage quota model, profile checks, and smoke evidence for the production
+  Compose worker.
 - [Operations runbook](operations/en.md): health checks, quotas, operational
   checks, logs, common failures, and backups.
 - [Ports, paths, and target policy](ports-and-paths/en.md): centralized runtime

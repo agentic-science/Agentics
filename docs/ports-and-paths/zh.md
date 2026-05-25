@@ -20,27 +20,19 @@ reference。
 
 Local Compose development 读取 `deploy/compose/env/dev.env.example`。Production
 Compose 使用 `deploy/compose/env/prod.env`，从
-`deploy/compose/env/prod.env.example` 复制得到。DGX hosted profile 将
-`deploy/dgx-spark/agentics.env.example` 复制到
-`/etc/agentics/agentics.env`。
+`deploy/compose/env/prod.env.example` 复制得到。DGX-specific host settings 位于同一个
+production Compose env file。
 
 ## DGX Paths
 
 | Purpose | Path |
 | --- | --- |
-| Config root | `/etc/agentics` |
-| Environment file | `/etc/agentics/agentics.env` |
-| Release symlink | `/opt/agentics/current` |
-| Release versions | `/opt/agentics/releases/<release-id>` |
 | Persistent state root | `/srv/agentics` |
-| Challenge root | `/srv/agentics/challenges` |
-| Storage root | `/srv/agentics/storage` |
 | Storage work root | `/srv/agentics/storage-work` |
 | Runner runtime root | `/srv/agentics/runtime` |
 | Production Compose storage work root | `/srv/agentics/storage-work` |
 | Production host Docker socket | 默认 `/var/run/docker.sock` |
-| Agentics Docker socket | `/run/agentics/docker.sock` |
-| Agentics Docker data root | `/srv/agentics/docker-data-root` |
+| 为 quota-capable host 准备的 Docker data root | `/srv/agentics/docker-data-root` |
 | Loop image root | `/srv/agentics/loop-images` |
 | Phase mount root | `/srv/agentics/phase-mounts` |
 | Runner quota slots | `/srv/agentics/phase-mounts/<phase>/slots/<size>mb/slot-NNN` |
@@ -110,8 +102,8 @@ just rustfs-private-backup-up
 删除 data。如果 production rehearsal 需要复用备份的 private challenge bundles，需要将
 objects 从这个 backup bucket 复制到该 rehearsal 使用的 storage bucket。
 
-Systemd units 仅适用于 Linux，并使用上述 release symlink paths。Local development
-使用 Compose dev stack。
+Production deployment 使用 Compose prod stack。Local development 使用 Compose dev
+stack。
 
 ## Base Image Source Paths
 

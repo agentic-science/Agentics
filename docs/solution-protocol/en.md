@@ -184,11 +184,11 @@ read-only/non-root isolation.
 
 Hosted workers treat `disk_limit_mb` as a hard operational contract, not only a
 post-run accounting check. The DGX hosted design has two layers: Docker
-writable-layer quotas from an Agentics-owned Docker daemon whose data root lives
-on a loopback XFS image mounted with project quotas, and root-prepared XFS
-project-quota slots under separate per-phase loopback filesystem images for
-writable mounts such as setup/build workspace scratch, run `/io`, evaluator setup
-`/setup`, evaluator `/output`, home, and temporary paths. This covers all three
+writable-layer quotas from the configured Docker daemon when its storage driver
+and data root support `storage_opt.size`, and root-prepared XFS project-quota
+slots under separate per-phase loopback filesystem images for writable mounts
+such as setup/build workspace scratch, run `/io`, evaluator setup `/setup`,
+evaluator `/output`, home, and temporary paths. This covers all three
 solution phases and both evaluator phases. The DGX slots enforce both byte quotas
 and inode quotas; the default inode policy is `256` inodes per MiB, so the
 default `64`, `256`, `1024`, and `4096` MiB slots allow `16384`, `65536`,

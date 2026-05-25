@@ -90,8 +90,7 @@ Hosted DGX profile 会在 public workers 接受 jobs 前添加 strict storage pr
 host probes 和 digest-pinned images 全部启用。在 `warn` 或 `require` mode 下，
 worker startup 会运行 `agentics-check-dgx-spark-profile`；在 `require` mode
 下，如果 script 失败或无法运行，worker 会 fail closed。该 probe 会验证
-Agentics-owned Docker daemon 上的
-Docker writable-layer quota enforcement，并验证 runner-owned writable mounts 由有界的
+configured Docker daemon 上的 Docker writable-layer quota enforcement，并验证 runner-owned writable mounts 由有界的
 per-phase XFS project-quota slots 支撑。DGX profile 应设置
 `AGENTICS_RUNNER_SECURITY_PROFILE=production`、
 `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`、
@@ -133,7 +132,7 @@ non-root run phases 或 read-only root filesystems，但不能弱化当前 disk-
 
 Production runner paths 也必须是 host 上的私有目录。Worker 要求
 `AGENTICS_RUNNER_RUNTIME_ROOT` 和 `AGENTICS_RUNNER_PHASE_MOUNT_ROOT` 已存在、由
-worker service user 拥有，并且权限为 `0700` 或更严格。Worker 会用 `0700`
+Compose runtime UID/GID 拥有，并且权限为 `0700` 或更严格。Worker 会用 `0700`
 创建 transient `agentics-eval-artifacts` attempt directories，然后才为了 Docker
 bind compatibility 放宽子路径权限，因此 official private bundles 不会因为可遍历的
 host scratch parent 暴露。
@@ -169,20 +168,24 @@ agentics-check-dgx-spark-host
 因此请通过 `DOCKER_HOST` 这类 Docker socket environment 指向目标 daemon，
 不要使用 Docker CLI wrapper。
 
-DGX deployment profile 使用以下检查：
+DGX host profile 使用以下检查：
 
 ```bash
+AGENTICS_DOCKER_HOST=unix:///var/run/docker.sock \
+AGENTICS_DOCKER_SOCKET_PATH=/var/run/docker.sock \
 AGENTICS_RUNNER_SECURITY_PROFILE=production \
   AGENTICS_HOST_PROBE_MODE=warn \
   agentics-check-dgx-spark-profile
 ```
 
-配置好 Agentics-owned Docker daemon 和 loopback XFS mounts 后，先 preload probe
-image，然后以 service user 运行 strict check：
+配置好 Docker daemon 和 loopback XFS mounts 后，先 preload probe image，然后运行
+strict check：
 
 ```bash
-docker --host unix:///run/agentics/docker.sock pull busybox:1.36
-sudo -u agentics env \
+docker pull busybox:1.36
+env \
+  AGENTICS_DOCKER_HOST=unix:///var/run/docker.sock \
+  AGENTICS_DOCKER_SOCKET_PATH=/var/run/docker.sock \
   AGENTICS_HOST_PROBE_MODE=require \
   AGENTICS_RUNNER_SECURITY_PROFILE=production \
   AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
@@ -228,8 +231,7 @@ Check service 会有意挂载 host Docker socket。API、web、Postgres 和 Rust
 
 ## Logs
 
-当前日志输出到进程 stdout/stderr。Hosted rehearsal 应使用 supervisor 捕获每个服务的日志，例如
-`systemd`、带文件日志的 `tmux`，或 container runtime。Worker evaluation logs 会写入
+当前 service logs 是 Compose container stdout/stderr。Worker evaluation logs 会写入
 durable object storage 的 `eval-artifacts/<job-id>/attempt-<attempt>/runner.log`；local
 storage mode 下它映射到 `AGENTICS_STORAGE_ROOT`。Source extraction、build workspaces、prepared
 data、solution run I/O 和 evaluator output 等 runner scratch trees 是 per-job

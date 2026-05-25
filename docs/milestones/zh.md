@@ -529,13 +529,13 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 
 - **M0.2.5-DGX-1：盘点 DGX Spark host 和 container runtime**
   - Commit target：`ops: document dgx spark host inventory`
-  - Scope：在把 MVP 迁移到 DGX Spark 前，记录 OS image、architecture、Docker version、Docker storage driver、loopback XFS 和 project-quota support、NVIDIA driver、CUDA visibility、NVIDIA container runtime、persistent storage mount、ingress path 和 operator access model。确定 Agentics-owned Docker daemon socket 和 data-root location。
+  - Scope：在把 MVP 迁移到 DGX Spark 前，记录 OS image、architecture、Docker version、Docker storage driver、loopback XFS 和 project-quota support、NVIDIA driver、CUDA visibility、NVIDIA container runtime、persistent storage mount、ingress path、operator access model、configured Docker socket，以及 Docker data root 是否能强制 writable-layer quotas。
   - Test spec：在 DGX Spark host 上采集 `uname -a`、`docker info`、loopback XFS image 的 `findmnt` 或等价 mount evidence、`nvidia-smi` 和 NVIDIA container runtime Docker smoke command 的输出，并将结果附到 deployment checklist。
 
-- **M0.2.5-DGX-2：添加 DGX Spark deployment profile**
-  - Commit target：`deploy: add dgx spark mvp profile`
-  - Scope：定义 DGX-specific environment values、persistent storage layout、reverse proxy 和 TLS assumptions、Docker settings、service supervision、backup locations 和 release artifact paths。包括一个由 loopback XFS data-root image 和 project quotas 支撑的 Agentics-owned Docker daemon、`AGENTICS_RUNNER_SECURITY_PROFILE=production`、`AGENTICS_HOST_PROBE_MODE=require`、`AGENTICS_WORKER_ACCELERATORS=gpu`、`AGENTICS_WORKER_GPU_PROBE_IMAGE`、Docker writable-layer quota probes，以及位于 per-phase loopback filesystem images 下、由 root 预先准备的 XFS project-quota slots，用于所有 solution setup/build/run writable mounts 和 evaluator prepare/score writable mounts。
-  - Test spec：在 DGX Spark 上使用 persistent storage 和非默认 admin credentials dry-run migrations、API startup、worker startup、web startup、health checks、Docker writable-layer quota probe、per-phase loop-image writable-mount probe，以及 per-phase quota-slot exhaustion probe。
+- **M0.2.5-DGX-2：添加 DGX Spark host preparation 和 profile checks**
+  - Commit target：`ops: add dgx spark host preparation`
+  - Scope：定义 DGX-specific environment values、persistent storage layout、external reverse proxy 和 TLS assumptions、Docker socket 和 data-root settings、backup locations，以及 production Compose expectations。包括 `AGENTICS_RUNNER_SECURITY_PROFILE=production`、`AGENTICS_HOST_PROBE_MODE=require`、`AGENTICS_WORKER_ACCELERATORS=gpu`、`AGENTICS_WORKER_GPU_PROBE_IMAGE`、configured Docker daemon 支持时的 Docker writable-layer quota probes，以及位于 per-phase loopback filesystem images 下、由 root 预先准备的 XFS project-quota slots，用于所有 solution setup/build/run writable mounts 和 evaluator prepare/score writable mounts。
+  - Test spec：在 DGX Spark 上使用 persistent storage 和非默认 admin credentials dry-run storage preparation、production Compose startup、health checks、configured Docker daemon 支持时的 Docker writable-layer quota probe、per-phase loop-image writable-mount probe，以及 per-phase quota-slot exhaustion probe。
 
 - **M0.2.5-DGX-3：运行 DGX Spark end-to-end smoke 和 benchmark calibration**
   - Commit target：`ops: add dgx spark smoke checklist`
@@ -595,11 +595,11 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-CREATE-6：添加 stale draft cleanup 和 challenge creation quotas` | 已实现 | 已实现 active draft limits、private asset byte limits、validation-frequency limits、stale draft abandonment 和 unpublished asset purge。 |
 | `M0.2.5-DEMO-1：确定 official demo challenge set` | 已实现 | Matrix multiplication throughput 是第一个 MVP demo challenge；更完整的 hosted demo set 仍是 TODO。 |
 | `M0.2.5-DEMO-2：打包 official demo challenges` | 已实现 | Matrix demo 位于 challenge repository，使用 private seed/config 和 setup-generated official data，并已通过 local GitHub draft/publish/submit smoke path。 |
-| `M0.2.5-DEPLOY-1：添加 hosted deployment baseline` | 已实现 | 已文档化 Local Compose MVP deployment rehearsal；DGX Spark hosted profile 现在由 DGX-1 和 DGX-2 单独覆盖。 |
+| `M0.2.5-DEPLOY-1：添加 hosted deployment baseline` | 已实现 | 已文档化 Local Compose MVP deployment rehearsal；DGX Spark host preparation 现在由 DGX-1 和 DGX-2 单独覆盖。 |
 | `M0.2.5-OPS-1：添加 public quota 和 abuse limits` | 已实现 | 已记录 backend-enforced quotas、pioneer-code gated registration、推荐 local Compose MVP 数值和 Cloudflare edge controls。 |
 | `M0.2.5-OPS-2：添加 health checks、observability 和 runbook` | 已实现 | Operations runbook 和 `agentics-check-local-mvp` 覆盖 health、capacity、heartbeat、logs、failures 和 backups。 |
 | `M0.2.5-DGX-1：盘点 DGX Spark host 和 container runtime` | 已实现 | Linux host、GPU、NVIDIA toolkit、storage、XFS tooling、loopback tooling、default Docker server/storage driver 和 NVIDIA Docker smoke evidence 已在 `docs/dgx-spark/zh.md` 中汇总。 |
-| `M0.2.5-DGX-2：添加 DGX Spark deployment profile` | 已实现 | Profile docs、env template、systemd units、Agentics-owned Docker config、Linux-gated storage/profile scripts、loopback XFS mounts 和 `/etc/fstab` entries、root-prepared runner quota slots、已启用的 Agentics-owned Docker daemon 和 strict profile verification 已就绪。 |
+| `M0.2.5-DGX-2：添加 DGX Spark host preparation 和 profile checks` | 已实现 | Host-preparation docs、production Compose env template、Linux-gated storage/profile checks、loopback XFS mounts 和 optional `/etc/fstab` entries、root-prepared runner quota slots、configured host Docker socket 和 strict profile verification 已就绪。 |
 | `M0.2.5-DGX-3：运行 DGX Spark end-to-end smoke 和 benchmark calibration` | 已实现 | DGX smoke evidence 已在 `docs/dgx-spark/zh.md` 中汇总，包括 hosted CLI onboarding、`linux-arm64-cpu` 上的 matrix validation 和 official submission、no-egress runner smoke、storage-quota escape smoke、capacity、heartbeats 和 MVP target decision。 |
 | `M0.2.5-CLI-1：验证 hosted CLI onboarding` | 已实现 | 已记录 registration、challenge inspection、workspace initialization、validation、official submission 和 polling 的 hosted CLI smoke path。 |
 | `M0.2.5-CLI-2：添加 challenge draft reviewer commands` | 已实现 | CLI 覆盖 admin validation、review、publish、abandon 和 cleanup helpers；creator-side GitHub OAuth CLI support 已推迟，当前使用 `/creator` web flow。 |

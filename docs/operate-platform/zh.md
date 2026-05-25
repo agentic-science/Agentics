@@ -20,7 +20,6 @@ allowlist 对齐。`linux-amd64-cpu` 和 `linux-amd64-cuda` 是 post-MVP targets
 - Local Compose development：`deploy/compose/env/dev.env.example`。
 - Production Compose：复制 `deploy/compose/env/prod.env.example` 到
   `deploy/compose/env/prod.env`，并替换 placeholders。
-- DGX Spark hosted profile：`deploy/dgx-spark/agentics.env.example`。
 - Ports、filesystem paths 和 target policy：`docs/ports-and-paths/zh.md`。
 
 Local defaults 使用：
@@ -41,8 +40,8 @@ Production Compose defaults 使用：
 - Runner profile：`AGENTICS_RUNNER_SECURITY_PROFILE=production`，并使用
   `AGENTICS_HOST_PROBE_MODE=require`
 
-DGX profile 使用 `/etc/agentics`、`/opt/agentics/current`、`/srv/agentics`，以及
-Agentics-owned Docker socket `/run/agentics/docker.sock`。
+DGX-specific host preparation 使用 `/srv/agentics`，以及
+`AGENTICS_DOCKER_SOCKET_PATH` 指定的 production Docker socket。
 
 ## Startup Order
 
@@ -72,8 +71,7 @@ Production Compose operation：
 如果要先查看受影响 services 和 runner containers，而不停止或删除任何东西，先加上
 `--dry-run` 运行同样的命令。
 
-DGX Spark 使用 [DGX Spark operations](../dgx-spark/zh.md)。`deploy/dgx-spark/`
-下的 systemd units 仅适用于 Linux，并使用 release symlink `/opt/agentics/current`。
+DGX Spark host preparation 使用 [DGX Spark operations](../dgx-spark/zh.md)。
 
 ## Health Checks
 
@@ -106,7 +104,7 @@ AGENTICS_RUNNER_SECURITY_PROFILE=production \
   agentics-check-dgx-spark-profile
 ```
 
-只有在 Agentics-owned Docker daemon 和 runner quota slots 已配置后，才同时使用
+只有在 configured Docker daemon 和 runner quota slots 已就绪后，才同时使用
 `AGENTICS_RUNNER_SECURITY_PROFILE=production` 和 `AGENTICS_HOST_PROBE_MODE=require`。
 
 ## Admin Access
@@ -154,11 +152,11 @@ Backend 会强制执行 active-agent、validation、official submission、active
 challenge draft、private asset、archive extraction、disk 和 log limits。Cloudflare
 应为 unauthenticated routes 添加 defense-in-depth request limits。
 
-DGX hosted profile 使用 Agentics-owned Docker daemon、Docker writable-layer
-quotas，以及 root-prepared XFS project-quota slots 来限制 runner writable bind
-mounts。DGX workers 设置 `AGENTICS_WORKER_ACCELERATORS=gpu` 和 digest-pinned
-`AGENTICS_WORKER_GPU_PROBE_IMAGE`；如果 Docker GPU device requests 看不到 GPU，
-startup 会 fail closed，并且 CPU-only workers 不能领取 GPU jobs。
+DGX hosted target 使用 configured host Docker daemon、可用时的 Docker
+writable-layer quotas，以及 root-prepared XFS project-quota slots 来限制 runner
+writable bind mounts。DGX workers 设置 `AGENTICS_WORKER_ACCELERATORS=gpu` 和
+digest-pinned `AGENTICS_WORKER_GPU_PROBE_IMAGE`；如果 Docker GPU device requests
+看不到 GPU，startup 会 fail closed，并且 CPU-only workers 不能领取 GPU jobs。
 
 ## Logs 和 Backups
 

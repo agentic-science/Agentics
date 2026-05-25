@@ -15,14 +15,8 @@ use thiserror::Error;
 
 use crate::support::{self, SupportError};
 
-pub const ENV_DGX_SERVICE_USER: &str = "AGENTICS_DGX_SERVICE_USER";
-pub const ENV_DGX_SERVICE_GROUP: &str = "AGENTICS_DGX_SERVICE_GROUP";
-pub const ENV_DGX_CONFIG_ROOT: &str = "AGENTICS_DGX_CONFIG_ROOT";
-pub const ENV_DGX_RELEASE_ROOT: &str = "AGENTICS_DGX_RELEASE_ROOT";
-pub const ENV_DGX_SOURCE_ROOT: &str = "AGENTICS_DGX_SOURCE_ROOT";
 pub const ENV_DGX_STATE_ROOT: &str = "AGENTICS_DGX_STATE_ROOT";
 pub const ENV_DGX_TEST_STATE_ROOT: &str = "AGENTICS_DGX_TEST_STATE_ROOT";
-pub const ENV_DGX_SYSTEMD_ROOT: &str = "AGENTICS_DGX_SYSTEMD_ROOT";
 pub const ENV_DGX_LOOP_IMAGE_ROOT: &str = "AGENTICS_DGX_LOOP_IMAGE_ROOT";
 pub const ENV_DGX_DOCKER_DATA_ROOT: &str = "AGENTICS_DGX_DOCKER_DATA_ROOT";
 pub const ENV_DGX_DOCKER_LOOP_IMAGE: &str = "AGENTICS_DGX_DOCKER_LOOP_IMAGE";
@@ -37,11 +31,8 @@ pub const ENV_DGX_PHASE_PROJECT_ID_BASE: &str = "AGENTICS_DGX_PHASE_PROJECT_ID_B
 pub const ENV_DGX_PHASE_SLOT_INODES_PER_MB: &str = "AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB";
 pub const ENV_DGX_PERSIST_FSTAB: &str = "AGENTICS_DGX_PERSIST_FSTAB";
 pub const ENV_DGX_CONFIRM: &str = "AGENTICS_DGX_CONFIRM";
-pub const ENV_DGX_PROFILE_CONFIRM: &str = "AGENTICS_DGX_PROFILE_CONFIRM";
 pub const ENV_DGX_TEST_CONFIRM: &str = "AGENTICS_DGX_TEST_CONFIRM";
 pub const ENV_DGX_PRODUCTION_STATE_ROOT: &str = "AGENTICS_DGX_PRODUCTION_STATE_ROOT";
-pub const ENV_DGX_TEST_USER: &str = "AGENTICS_DGX_TEST_USER";
-pub const ENV_DGX_TEST_GROUP: &str = "AGENTICS_DGX_TEST_GROUP";
 pub const ENV_DGX_TEST_DOCKER_LOOP_SIZE: &str = "AGENTICS_DGX_TEST_DOCKER_LOOP_SIZE";
 pub const ENV_DGX_TEST_PHASE_LOOP_SIZE: &str = "AGENTICS_DGX_TEST_PHASE_LOOP_SIZE";
 pub const ENV_DGX_TEST_PHASE_SLOT_CLASSES_MB: &str = "AGENTICS_DGX_TEST_PHASE_SLOT_CLASSES_MB";
@@ -63,14 +54,11 @@ pub const ENV_RUNNER_WRITABLE_STORAGE_MODE: &str = "AGENTICS_RUNNER_WRITABLE_STO
 pub const ENV_RUNNER_DOCKER_LAYER_QUOTA: &str = "AGENTICS_RUNNER_DOCKER_LAYER_QUOTA";
 pub const ENV_RUNNER_SECURITY_PROFILE: &str = "AGENTICS_RUNNER_SECURITY_PROFILE";
 pub const ENV_HOST_PROBE_MODE: &str = "AGENTICS_HOST_PROBE_MODE";
+pub const ENV_RUNTIME_UID: &str = "AGENTICS_RUNTIME_UID";
+pub const ENV_RUNTIME_GID: &str = "AGENTICS_RUNTIME_GID";
 
-pub const DEFAULT_SERVICE_USER: &str = "agentics";
-pub const DEFAULT_SERVICE_GROUP: &str = "agentics";
-pub const DEFAULT_CONFIG_ROOT: &str = "/etc/agentics";
-pub const DEFAULT_RELEASE_ROOT: &str = "/opt/agentics/current";
 pub const DEFAULT_STATE_ROOT: &str = "/srv/agentics";
 pub const DEFAULT_TEST_STATE_ROOT: &str = "/srv/agentics-test";
-pub const DEFAULT_SYSTEMD_ROOT: &str = "/etc/systemd/system";
 pub const DEFAULT_DOCKER_LOOP_SIZE: &str = "200G";
 pub const DEFAULT_PHASE_LOOP_SIZE: &str = "20G";
 pub const DEFAULT_TEST_DOCKER_LOOP_SIZE: &str = "32G";
@@ -79,11 +67,12 @@ pub const DEFAULT_SLOT_CLASSES: &[u64] = &[64, 256, 1024, 4096];
 pub const DEFAULT_PHASE_SLOTS_PER_CLASS: u64 = 100;
 pub const DEFAULT_PHASE_PROJECT_ID_BASE: u64 = 100_000;
 pub const DEFAULT_PHASE_SLOT_INODES_PER_MB: u64 = 256;
-pub const DEFAULT_DOCKER_HOST_URI: &str = "unix:///run/agentics/docker.sock";
+pub const DEFAULT_RUNTIME_UID: u32 = 10001;
+pub const DEFAULT_RUNTIME_GID: u32 = 10001;
+pub const DEFAULT_DOCKER_HOST_URI: &str = "unix:///var/run/docker.sock";
 pub const DEFAULT_PROBE_IMAGE: &str = "busybox:1.36";
 pub const DEFAULT_CUDA_IMAGE: &str = "nvidia/cuda:13.0.1-base-ubuntu24.04";
 pub const STORAGE_CONFIRMATION: &str = "prepare-storage";
-pub const PROFILE_PURGE_CONFIRMATION: &str = "uninstall-purge";
 pub const TEST_STORAGE_CONFIRMATION: &str = "prepare-test-storage";
 
 /// Runner phase with a prepared writable slot class.
@@ -211,8 +200,8 @@ pub struct DgxStorageConfig {
     pub storage_work_root: PathBuf,
     pub docker_loop_size: String,
     pub phase_loop_size: String,
-    pub service_user: String,
-    pub service_group: String,
+    pub runtime_uid: u32,
+    pub runtime_gid: u32,
     pub phases: Vec<DgxPhase>,
     pub slot_classes_mb: Vec<u64>,
     pub slots_per_class: u64,
@@ -262,10 +251,8 @@ impl DgxStorageConfig {
                 .unwrap_or_else(|| DEFAULT_DOCKER_LOOP_SIZE.to_string()),
             phase_loop_size: support::env_non_empty(ENV_DGX_PHASE_LOOP_SIZE)
                 .unwrap_or_else(|| DEFAULT_PHASE_LOOP_SIZE.to_string()),
-            service_user: support::env_non_empty(ENV_DGX_SERVICE_USER)
-                .unwrap_or_else(|| DEFAULT_SERVICE_USER.to_string()),
-            service_group: support::env_non_empty(ENV_DGX_SERVICE_GROUP)
-                .unwrap_or_else(|| DEFAULT_SERVICE_GROUP.to_string()),
+            runtime_uid: support::parse_positive_env(ENV_RUNTIME_UID, DEFAULT_RUNTIME_UID)?,
+            runtime_gid: support::parse_positive_env(ENV_RUNTIME_GID, DEFAULT_RUNTIME_GID)?,
             phases: parse_phases_env(ENV_DGX_PHASES)?,
             slot_classes_mb: parse_slot_classes_env(
                 ENV_DGX_PHASE_SLOT_CLASSES_MB,
@@ -391,50 +378,6 @@ pub fn expected_profile_docker_host_uri(socket_path: Option<&str>) -> String {
 /// Convert a Unix Docker socket path into the URI format accepted by Bollard.
 pub fn docker_host_uri_for_socket_path(socket_path: &str) -> String {
     format!("unix://{socket_path}")
-}
-
-/// DGX systemd profile configuration.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DgxProfileConfig {
-    pub service_user: String,
-    pub service_group: String,
-    pub config_root: PathBuf,
-    pub release_root: PathBuf,
-    pub source_root: PathBuf,
-    pub state_root: PathBuf,
-    pub test_state_root: PathBuf,
-    pub systemd_root: PathBuf,
-    pub docker_host_uri: String,
-}
-
-impl DgxProfileConfig {
-    /// Resolve profile management config from environment.
-    pub fn from_env() -> Self {
-        let release_root = env_path(ENV_DGX_RELEASE_ROOT, DEFAULT_RELEASE_ROOT);
-        let cargo_repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| release_root.clone());
-        let default_source_root = if cargo_repo_root.join("deploy/dgx-spark").is_dir() {
-            cargo_repo_root
-        } else {
-            release_root.clone()
-        };
-        Self {
-            service_user: support::env_non_empty(ENV_DGX_SERVICE_USER)
-                .unwrap_or_else(|| DEFAULT_SERVICE_USER.to_string()),
-            service_group: support::env_non_empty(ENV_DGX_SERVICE_GROUP)
-                .unwrap_or_else(|| DEFAULT_SERVICE_GROUP.to_string()),
-            config_root: env_path(ENV_DGX_CONFIG_ROOT, DEFAULT_CONFIG_ROOT),
-            release_root,
-            source_root: env_path_or_default(ENV_DGX_SOURCE_ROOT, default_source_root),
-            state_root: env_path(ENV_DGX_STATE_ROOT, DEFAULT_STATE_ROOT),
-            test_state_root: env_path(ENV_DGX_TEST_STATE_ROOT, DEFAULT_TEST_STATE_ROOT),
-            systemd_root: env_path(ENV_DGX_SYSTEMD_ROOT, DEFAULT_SYSTEMD_ROOT),
-            docker_host_uri: support::env_non_empty(ENV_DOCKER_HOST)
-                .unwrap_or_else(|| DEFAULT_DOCKER_HOST_URI.to_string()),
-        }
-    }
 }
 
 pub fn default_phases() -> Vec<DgxPhase> {
@@ -666,8 +609,8 @@ mod tests {
             "unix:///var/run/docker.sock"
         );
         assert_eq!(
-            docker_host_uri_for_socket_path("/run/agentics/docker.sock"),
-            DEFAULT_DOCKER_HOST_URI
+            docker_host_uri_for_socket_path("/tmp/agentics-docker.sock"),
+            "unix:///tmp/agentics-docker.sock"
         );
     }
 

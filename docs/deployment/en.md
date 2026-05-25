@@ -1,10 +1,10 @@
 # Deployment Baseline
 
 This document defines the local Compose deployment rehearsal and first
-single-host production Compose stack for the MVP. The hosted MVP profile runs
-on NVIDIA DGX Spark and is documented separately in `docs/dgx-spark/en.md`.
-Use this document for containerized local and production operation, and the DGX
-profile docs for Linux host preparation.
+single-host production Compose stack for the MVP. The hosted MVP target runs on
+NVIDIA DGX Spark and is documented separately in `docs/dgx-spark/en.md`. Use
+this document for containerized local and production operation, and the DGX
+host-preparation docs for Linux host setup.
 
 ## Current Target
 
@@ -25,12 +25,9 @@ The production Compose target is a single-machine project named `agentics-prod`:
   `127.0.0.1`, so public ingress and TLS remain outside Compose.
 - Only worker and check services mount the host Docker socket.
 
-The local Compose rehearsal validates service wiring and platform behavior. It does
-not validate DGX GPU runtime, ARM64 CUDA images, public TLS, production ingress,
-or Linux systemd startup.
-
-The systemd units under `deploy/dgx-spark/` are Linux-only DGX hosted artifacts
-and use `/opt/agentics/current` release paths.
+The local Compose rehearsal validates service wiring and platform behavior. It
+does not validate DGX GPU runtime, ARM64 CUDA images, public TLS, or production
+ingress.
 
 Local Compose defaults live in `deploy/compose/env/dev.env.example`.
 Production Compose defaults and placeholders live in
@@ -241,11 +238,9 @@ For hosted or public MVP operation:
 The hosted MVP uses a Linux-only storage profile before accepting public
 evaluation jobs:
 
-- Run an Agentics-owned Docker daemon instead of the operator's default Docker
-  daemon.
-- Put that daemon's Docker data root on a loopback XFS image mounted with
-  project quotas. This avoids repartitioning or formatting the DGX Spark's
-  primary drive while still enabling Docker `storage_opt.size` probes.
+- Use the configured host Docker daemon behind `AGENTICS_DOCKER_SOCKET_PATH`.
+- If Docker writable-layer quotas are required, ensure that daemon's data root
+  and storage driver support Docker `storage_opt.size`.
 - Use Docker writable-layer quotas for writes that land in the container layer.
 - Use separate per-phase loopback filesystem images for writable mounts, with
   root-prepared XFS project-quota slots under each phase mount. This applies to
@@ -312,9 +307,9 @@ Then perform a CLI smoke path using the root `README.md` submitter flow or
 
 ## DGX Spark Hosted Profile
 
-The DGX Spark hosted deployment is verified separately because it adds ARM64,
-Docker GPU device access, Linux systemd startup, and DGX OS
-lifecycle assumptions. See the DGX Spark milestones in `docs/milestones/en.md`.
+DGX Spark host preparation is verified separately because it adds ARM64, Docker
+GPU device access, XFS quota setup, and DGX OS lifecycle assumptions. See the
+DGX Spark milestones in `docs/milestones/en.md`.
 
 The first host inventory is summarized in `docs/dgx-spark/en.md`. The
 repeatable check is:
@@ -326,11 +321,11 @@ agentics-check-dgx-spark-host
 This check is Linux-gated and reports Docker/NVIDIA GPU blockers without
 mutating host state. The current inventory confirms OS, GPU, NVIDIA toolkit,
 storage, XFS tooling, loopback tooling, default Docker GPU smoke behavior, and
-the Agentics-owned Docker daemon profile.
+the configured host Docker socket.
 
-The DGX Spark deployment profile and smoke evidence are recorded in
-`docs/dgx-spark/en.md`, with deploy artifacts under `deploy/dgx-spark/` and
-Linux-gated storage/profile binaries in `agentics-ops`.
+DGX Spark host preparation and smoke evidence are recorded in
+`docs/dgx-spark/en.md`, with Linux-gated storage/profile binaries in
+`agentics-ops`.
 
 Use NVIDIA's DGX Spark documentation as the operational source of truth:
 

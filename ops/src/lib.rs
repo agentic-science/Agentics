@@ -21,7 +21,6 @@ pub mod check_dgx_spark_profile;
 pub mod check_local_mvp;
 pub mod compose_prod;
 pub mod dgx;
-pub mod dgx_profile;
 pub mod dgx_storage;
 pub mod human_agent_docs;
 pub mod large_files;
