@@ -191,10 +191,12 @@ describe("AdminConsole", () => {
         password: "secret",
       }),
     );
-    expect(adminFetchJsonMock).toHaveBeenCalledWith(
-      "/admin/challenges",
-      expect.anything(),
-      "csrf-token",
+    await waitFor(() =>
+      expect(adminFetchJsonMock).toHaveBeenCalledWith(
+        "/admin/challenges",
+        expect.anything(),
+        "csrf-token",
+      ),
     );
     expect(adminFetchJsonMock).toHaveBeenCalledWith(
       "/admin/capacity",

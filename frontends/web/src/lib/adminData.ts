@@ -70,7 +70,9 @@ export function useAdminDashboard(csrfToken: string) {
 
 /** Refreshes the admin dashboard cache after a mutation. */
 export function mutateAdminDashboard(csrfToken: string) {
-  return mutate(adminDashboardKey(csrfToken));
+  return mutate(adminDashboardKey(csrfToken), fetchAdminDashboardData(csrfToken), {
+    revalidate: false,
+  });
 }
 
 /** Clears the admin dashboard cache after logout. */
