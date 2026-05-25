@@ -785,7 +785,7 @@ async fn execute_local_validation_targets(
     output_format: cli::OutputFormat,
 ) -> Result<Vec<output::LocalValidationTargetReport>> {
     let docker = agentics_runner::connect_docker(&context.config)?;
-    agentics_runner::remove_stale_local_validation_containers(&docker).await?;
+    agentics_runner::remove_stale_local_validation_containers(&docker, &context.config).await?;
     let storage = LocalStorage::new(&context.storage_root);
     let mut target_reports = Vec::with_capacity(context.targets.len());
     for target in &context.targets {

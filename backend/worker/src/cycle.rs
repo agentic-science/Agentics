@@ -40,9 +40,13 @@ impl Worker {
         let db = create_pool(&config, 2).await?;
         let docker = connect_docker(&config)?;
         enforce_worker_gpu_probe(&config, &docker).await?;
-        let cleanup =
-            reconcile_worker_containers(&docker, &db, config.worker_stale_job_minutes.max(1))
-                .await?;
+        let cleanup = reconcile_worker_containers(
+            &docker,
+            &db,
+            config.worker_stale_job_minutes.max(1),
+            &config,
+        )
+        .await?;
         if cleanup.total_removed() > 0 {
             info!(
                 removed_stopped = cleanup.removed_stopped,

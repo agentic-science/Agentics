@@ -1,0 +1,30 @@
+services:
+  tests:
+    image: rust:1-bookworm
+    working_dir: /workspace/Agentics
+    env_file:
+      - ./env/test.env.example
+    environment:
+      DATABASE_URL: postgres://agentics:agentics@postgres:5432/agentics_test
+      AGENTICS_DATABASE_URL: postgres://agentics:agentics@postgres:5432/agentics_test
+      AGENTICS_RUNNER_NAMESPACE: ${AGENTICS_RUNNER_NAMESPACE:-agentics-test}
+      AGENTICS_TEST_RUNNER_RUNTIME_ROOT: ${AGENTICS_TEST_RUNNER_RUNTIME_ROOT:?set AGENTICS_TEST_RUNNER_RUNTIME_ROOT}
+      AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT: ${AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT:?set AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT}
+      TMPDIR: ${AGENTICS_TEST_TMPDIR:?set AGENTICS_TEST_TMPDIR}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics:ro
+      - ${AGENTICS_TEST_ROOT:?set AGENTICS_TEST_ROOT}:${AGENTICS_TEST_ROOT:?set AGENTICS_TEST_ROOT}
+      - /var/run/docker.sock:/var/run/docker.sock
+      - cargo_registry:/usr/local/cargo/registry
+      - cargo_git:/usr/local/cargo/git
+      - cargo_target:/workspace/Agentics/target
+    command:
+      - cargo
+      - test
+      - -p
+      - integration-tests
+      - --
+      - --include-ignored

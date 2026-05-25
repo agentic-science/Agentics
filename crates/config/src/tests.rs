@@ -71,12 +71,19 @@ fn mode_config_values_deserialize_through_typed_parsers() {
         super::RunnerWritableStorageMode::XfsProjectQuotaSlots.as_str(),
         "xfs-project-quota-slots"
     );
+    assert_eq!(
+        serde_json::from_value::<super::RunnerNamespace>(serde_json::json!("compose-dev_1"))
+            .unwrap()
+            .as_str(),
+        "compose-dev_1"
+    );
     assert!(
         serde_json::from_value::<super::RunnerWritableStorageMode>(serde_json::json!(
             "xfs_project_quota_slots"
         ))
         .is_err()
     );
+    assert!(super::RunnerNamespace::try_new("../prod").is_err());
 }
 
 /// Verifies that default admin credentials are rejected on wildcard bind.
@@ -516,10 +523,12 @@ fn gpu_worker_requires_probe_image_and_linux_host() {
 /// Verifies worker accelerator capability matching stays explicit.
 #[test]
 fn worker_accelerator_capabilities_are_explicit() {
-    assert!(super::WorkerAccelerators::None.supports(super::TargetAccelerator::None));
-    assert!(!super::WorkerAccelerators::None.supports(super::TargetAccelerator::Gpu));
-    assert!(super::WorkerAccelerators::Gpu.supports(super::TargetAccelerator::None));
-    assert!(super::WorkerAccelerators::Gpu.supports(super::TargetAccelerator::Gpu));
+    use agentics_domain::models::challenge::TargetAccelerator;
+
+    assert!(super::WorkerAccelerators::None.supports(TargetAccelerator::None));
+    assert!(!super::WorkerAccelerators::None.supports(TargetAccelerator::Gpu));
+    assert!(super::WorkerAccelerators::Gpu.supports(TargetAccelerator::None));
+    assert!(super::WorkerAccelerators::Gpu.supports(TargetAccelerator::Gpu));
     assert_eq!(
         super::WorkerAccelerators::Gpu.heartbeat_values(),
         vec!["none".to_string(), "gpu".to_string()]
@@ -584,6 +593,7 @@ fn test_config() -> Config {
         runner_security_profile: super::default_runner_security_profile(),
         require_digest_pinned_images: false,
         runner_writable_storage_mode: super::default_runner_writable_storage_mode(),
+        runner_namespace: super::default_runner_namespace(),
         runner_runtime_root: None,
         runner_phase_mount_root: None,
         runner_writable_slot_classes_mb: super::default_runner_writable_slot_classes_mb(),

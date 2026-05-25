@@ -180,9 +180,13 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         runner_security_profile: agentics_config::RunnerSecurityProfile::Development,
         require_digest_pinned_images: false,
         runner_writable_storage_mode: RunnerWritableStorageMode::Unbounded,
-        runner_runtime_root: None,
-        runner_phase_mount_root: None,
-        runner_writable_slot_classes_mb: "64,256,1024,4096".to_string(),
+        runner_namespace: test_runner_namespace(),
+        runner_runtime_root: std::env::var("AGENTICS_TEST_RUNNER_RUNTIME_ROOT").ok(),
+        runner_phase_mount_root: std::env::var("AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT").ok(),
+        runner_writable_slot_classes_mb: std::env::var(
+            "AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB",
+        )
+        .unwrap_or_else(|_| "64,256,1024,4096".to_string()),
         runner_docker_layer_quota: false,
         runner_max_output_files: 8192,
         runner_max_output_dirs: 1024,
@@ -194,6 +198,18 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         runner_max_interaction_bytes_per_direction: 16 * 1024 * 1024,
         runner_interaction_shutdown_grace_secs: 2,
         log_level: "error".to_string(),
+    }
+}
+
+fn test_runner_namespace() -> agentics_config::RunnerNamespace {
+    match std::env::var("AGENTICS_RUNNER_NAMESPACE") {
+        Ok(value) => agentics_config::RunnerNamespace::try_new(value)
+            .expect("AGENTICS_RUNNER_NAMESPACE should be valid"),
+        Err(std::env::VarError::NotPresent) => {
+            agentics_config::RunnerNamespace::try_new("integration-tests")
+                .expect("test runner namespace should be valid")
+        }
+        Err(error) => panic!("AGENTICS_RUNNER_NAMESPACE should be valid UTF-8: {error}"),
     }
 }
 

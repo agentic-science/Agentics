@@ -207,6 +207,7 @@ impl<'a> EvaluationWorkerService<'a> {
             self.docker,
             self.db,
             self.config.worker_stale_job_minutes.max(1),
+            self.config,
         )
         .await?;
         if cleanup.total_removed() > 0 {
@@ -398,8 +399,9 @@ pub async fn reconcile_worker_containers(
     docker: &Docker,
     db: &sqlx::PgPool,
     stale_minutes: i32,
+    config: &Config,
 ) -> Result<RunnerContainerCleanupSummary> {
-    reconcile_runner_containers(docker, db, stale_minutes).await
+    reconcile_runner_containers(docker, db, stale_minutes, config).await
 }
 
 /// Promote a staged evaluation job into the queued worker lifecycle.

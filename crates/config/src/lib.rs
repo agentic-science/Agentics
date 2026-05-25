@@ -3,20 +3,23 @@
 use anyhow::Context as _;
 use figment::{Figment, providers::Env};
 use secrecy::{ExposeSecret, SecretString};
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 
-use agentics_domain::models::challenge::TargetAccelerator;
 use agentics_domain::models::names::MoltbookSubmoltName;
 use agentics_domain::models::urls::{
     GithubApiUserUrl, GithubOauthAuthorizeUrl, GithubOauthRedirectUrl, GithubOauthTokenUrl,
     MoltbookSubmoltUrl,
 };
 pub use local_urls::{default_local_api_base_url, default_local_web_base_url};
+pub use runtime_modes::{
+    AgentRegistrationMode, HostProbeMode, RunnerNamespace, RunnerSecurityProfile,
+    RunnerWritableStorageMode, WorkerAccelerators,
+};
 pub use storage_config::StorageBackend;
 
 mod local_urls;
+mod runtime_modes;
 mod storage_config;
 
 #[cfg(test)]
@@ -37,6 +40,8 @@ pub const ENV_AGENTICS_ADMIN_USERNAME: &str = "AGENTICS_ADMIN_USERNAME";
 pub const ENV_AGENTICS_ADMIN_PASSWORD: &str = "AGENTICS_ADMIN_PASSWORD";
 /// Environment variable that overrides the hosted runner profile probe command.
 pub const ENV_AGENTICS_HOST_PROBE_COMMAND: &str = "AGENTICS_HOST_PROBE_COMMAND";
+/// Environment variable that separates runner containers sharing one Docker daemon.
+pub const ENV_AGENTICS_RUNNER_NAMESPACE: &str = "AGENTICS_RUNNER_NAMESPACE";
 /// Environment variable that configures the shared Moltbook Submolt name.
 pub const ENV_AGENTICS_MOLTBOOK_SUBMOLT_NAME: &str = "AGENTICS_MOLTBOOK_SUBMOLT_NAME";
 /// Environment variable that configures the shared Moltbook Submolt URL.
@@ -63,6 +68,7 @@ const DEFAULT_MOLTBOOK_SUBMOLT_URL: &str = "https://www.moltbook.com/m/agentics-
 const DEFAULT_RUNNER_SECURITY_PROFILE: RunnerSecurityProfile = RunnerSecurityProfile::Development;
 const DEFAULT_RUNNER_WRITABLE_STORAGE_MODE: RunnerWritableStorageMode =
     RunnerWritableStorageMode::Unbounded;
+const DEFAULT_RUNNER_NAMESPACE: &str = "default";
 const DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB: &str = "64,256,1024,4096";
 const DEFAULT_RUNNER_MAX_OUTPUT_FILES: u64 = 8192;
 const DEFAULT_RUNNER_MAX_OUTPUT_DIRS: u64 = 1024;
@@ -187,6 +193,8 @@ pub struct Config {
     pub require_digest_pinned_images: bool,
     #[serde(default = "default_runner_writable_storage_mode")]
     pub runner_writable_storage_mode: RunnerWritableStorageMode,
+    #[serde(default = "default_runner_namespace")]
+    pub runner_namespace: RunnerNamespace,
     #[serde(default)]
     pub runner_runtime_root: Option<String>,
     #[serde(default)]
@@ -215,175 +223,6 @@ pub struct Config {
     pub runner_interaction_shutdown_grace_secs: u64,
     #[serde(default = "default_log_level")]
     pub log_level: String,
-}
-
-/// Runner strategy for Docker bind-mounted writable paths.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RunnerWritableStorageMode {
-    /// Keep writable paths under `AGENTICS_STORAGE_ROOT`.
-    Unbounded,
-    /// Lease root-prepared XFS project-quota slots for writable container paths.
-    XfsProjectQuotaSlots,
-}
-
-/// Policy for unauthenticated agent-account registration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AgentRegistrationMode {
-    /// Require a valid pioneer code for every new agent account.
-    PioneerCode,
-    /// Allow code-free registration for local testing and development only.
-    Public,
-}
-
-/// Worker startup host-profile probe policy.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum HostProbeMode {
-    /// Do not run hosted profile checks.
-    Off,
-    /// Run hosted profile checks and log failures without blocking startup.
-    Warn,
-    /// Run hosted profile checks and fail worker startup if they fail or are skipped.
-    Require,
-}
-
-/// Worker runner safety profile.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RunnerSecurityProfile {
-    /// Local development and test profile. Host isolation checks are opt-in.
-    Development,
-    /// Production profile. Runner storage, Docker layers, and host probes fail closed.
-    Production,
-}
-
-/// Worker accelerator capability advertised to the scheduler.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum WorkerAccelerators {
-    /// Worker accepts only jobs that require no accelerator.
-    None,
-    /// Worker accepts no-accelerator jobs and GPU jobs.
-    Gpu,
-}
-
-impl HostProbeMode {
-    /// Stable environment string for this policy.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Off => "off",
-            Self::Warn => "warn",
-            Self::Require => "require",
-        }
-    }
-}
-
-impl RunnerSecurityProfile {
-    /// Stable environment string for this policy.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Development => "development",
-            Self::Production => "production",
-        }
-    }
-}
-
-impl WorkerAccelerators {
-    /// Stable environment string for this capability set.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::None => "none",
-            Self::Gpu => "gpu",
-        }
-    }
-
-    /// Return whether this worker can claim a job requiring the given accelerator.
-    pub fn supports(self, accelerator: TargetAccelerator) -> bool {
-        match (self, accelerator) {
-            (_, TargetAccelerator::None) | (Self::Gpu, TargetAccelerator::Gpu) => true,
-            (Self::None, TargetAccelerator::Gpu) => false,
-        }
-    }
-
-    /// Return heartbeat-friendly accelerator capability labels.
-    pub fn heartbeat_values(self) -> Vec<String> {
-        match self {
-            Self::None => vec!["none".to_string()],
-            Self::Gpu => vec!["none".to_string(), "gpu".to_string()],
-        }
-    }
-}
-
-impl AgentRegistrationMode {
-    /// Stable environment string for this registration policy.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::PioneerCode => "pioneer_code",
-            Self::Public => "public",
-        }
-    }
-}
-
-impl FromStr for AgentRegistrationMode {
-    type Err = anyhow::Error;
-
-    /// Parse the configured agent-registration mode.
-    fn from_str(value: &str) -> anyhow::Result<Self> {
-        match value.trim() {
-            "pioneer_code" => Ok(Self::PioneerCode),
-            "public" => Ok(Self::Public),
-            other => anyhow::bail!(
-                "AGENTICS_AGENT_REGISTRATION_MODE must be `pioneer_code` or `public`, got `{other}`"
-            ),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for AgentRegistrationMode {
-    /// Deserialize one agent-registration mode through the canonical parser.
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::from_str(&value).map_err(serde::de::Error::custom)
-    }
-}
-
-impl RunnerWritableStorageMode {
-    /// Stable environment string for this runner writable-storage strategy.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Unbounded => "unbounded",
-            Self::XfsProjectQuotaSlots => "xfs-project-quota-slots",
-        }
-    }
-}
-
-impl FromStr for RunnerWritableStorageMode {
-    type Err = anyhow::Error;
-
-    /// Handles from str for this module.
-    fn from_str(value: &str) -> anyhow::Result<Self> {
-        match value.trim() {
-            "unbounded" => Ok(Self::Unbounded),
-            "xfs-project-quota-slots" => Ok(Self::XfsProjectQuotaSlots),
-            other => anyhow::bail!(
-                "AGENTICS_RUNNER_WRITABLE_STORAGE_MODE must be `unbounded` or `xfs-project-quota-slots`, got `{other}`"
-            ),
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for RunnerWritableStorageMode {
-    /// Deserialize one runner writable-storage mode through the canonical parser.
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::from_str(&value).map_err(serde::de::Error::custom)
-    }
 }
 
 /// Build the default local database URL without exposing it through Debug output.
@@ -612,6 +451,16 @@ fn default_log_level() -> String {
 /// Handles default runner writable storage mode for this module.
 fn default_runner_writable_storage_mode() -> RunnerWritableStorageMode {
     DEFAULT_RUNNER_WRITABLE_STORAGE_MODE
+}
+
+#[allow(
+    clippy::expect_used,
+    reason = "hard-coded default runner namespace must satisfy the domain parser"
+)]
+/// Default runner namespace for non-containerized local development.
+fn default_runner_namespace() -> RunnerNamespace {
+    RunnerNamespace::try_new(DEFAULT_RUNNER_NAMESPACE)
+        .expect("default runner namespace must be valid")
 }
 
 /// Default runner security profile for local development.

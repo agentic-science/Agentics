@@ -13,7 +13,7 @@ use futures::StreamExt;
 use sqlx::PgPool;
 use tokio::time::timeout;
 
-use agentics_config::Config;
+use agentics_config::{Config, RunnerNamespace};
 use agentics_contracts::zip_project::{DockerNetworkMode, ZipProjectPhaseLimits};
 use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{DockerPlatform, TargetAccelerator};
@@ -305,9 +305,14 @@ pub(crate) async fn reconcile_runner_containers(
     docker: &Docker,
     pool: &PgPool,
     stale_minutes: i32,
+    runner_namespace: &RunnerNamespace,
 ) -> Result<RunnerContainerCleanupSummary> {
-    let containers =
-        list_agentics_runner_containers(docker, super::RUNNER_SCOPE_HOSTED_WORKER).await?;
+    let containers = list_agentics_runner_containers(
+        docker,
+        super::RUNNER_SCOPE_HOSTED_WORKER,
+        runner_namespace,
+    )
+    .await?;
     let now_secs = current_unix_timestamp_secs();
     let mut summary = RunnerContainerCleanupSummary::default();
     for container in containers {
@@ -356,18 +361,30 @@ pub(crate) async fn reconcile_runner_containers(
 }
 
 /// Remove old stopped Agentics runner containers left by earlier worker attempts.
-pub(crate) async fn remove_stopped_runner_containers(docker: &Docker) -> Result<u64> {
-    let containers =
-        list_agentics_runner_containers(docker, super::RUNNER_SCOPE_HOSTED_WORKER).await?;
+pub(crate) async fn remove_stopped_runner_containers(
+    docker: &Docker,
+    runner_namespace: &RunnerNamespace,
+) -> Result<u64> {
+    let containers = list_agentics_runner_containers(
+        docker,
+        super::RUNNER_SCOPE_HOSTED_WORKER,
+        runner_namespace,
+    )
+    .await?;
     remove_stopped_runner_containers_from_list(docker, containers).await
 }
 
 /// Remove stale local-validation containers left by interrupted CLI runs.
 pub(crate) async fn remove_stale_local_validation_containers(
     docker: &Docker,
+    runner_namespace: &RunnerNamespace,
 ) -> Result<RunnerContainerCleanupSummary> {
-    let containers =
-        list_agentics_runner_containers(docker, super::RUNNER_SCOPE_LOCAL_VALIDATION).await?;
+    let containers = list_agentics_runner_containers(
+        docker,
+        super::RUNNER_SCOPE_LOCAL_VALIDATION,
+        runner_namespace,
+    )
+    .await?;
     let now_secs = current_unix_timestamp_secs();
     let mut summary = RunnerContainerCleanupSummary::default();
     for container in containers {
@@ -400,6 +417,7 @@ pub(crate) async fn remove_stale_local_validation_containers(
 async fn list_agentics_runner_containers(
     docker: &Docker,
     scope: &str,
+    runner_namespace: &RunnerNamespace,
 ) -> Result<Vec<bollard::models::ContainerSummary>> {
     let mut filters = HashMap::new();
     filters.insert(
@@ -409,6 +427,11 @@ async fn list_agentics_runner_containers(
                 "{}={}",
                 super::RUNNER_KIND_LABEL,
                 super::RUNNER_KIND_ZIP_PROJECT
+            ),
+            format!(
+                "{}={}",
+                super::RUNNER_NAMESPACE_LABEL,
+                runner_namespace.as_str()
             ),
             format!("{}={}", super::RUNNER_SCOPE_LABEL, scope),
         ],
@@ -423,7 +446,10 @@ async fn list_agentics_runner_containers(
         .map_err(|e| ServiceError::Docker(format!("list runner containers failed: {e}")))?;
     Ok(containers
         .into_iter()
-        .filter(|container| container_has_runner_scope(container, scope))
+        .filter(|container| {
+            container_has_runner_scope(container, scope)
+                && container_has_runner_namespace(container, runner_namespace)
+        })
         .collect())
 }
 
@@ -434,6 +460,18 @@ fn container_has_runner_scope(container: &bollard::models::ContainerSummary, sco
         .as_ref()
         .and_then(|labels| labels.get(super::RUNNER_SCOPE_LABEL))
         .is_some_and(|value| value == scope)
+}
+
+/// Return true only for containers owned by the requested runner namespace.
+fn container_has_runner_namespace(
+    container: &bollard::models::ContainerSummary,
+    runner_namespace: &RunnerNamespace,
+) -> bool {
+    container
+        .labels
+        .as_ref()
+        .and_then(|labels| labels.get(super::RUNNER_NAMESPACE_LABEL))
+        .is_some_and(|value| value == runner_namespace.as_str())
 }
 
 /// Remove stale stopped containers from a pre-fetched Docker container list.

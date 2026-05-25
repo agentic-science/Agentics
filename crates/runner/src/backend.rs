@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use bollard::Docker;
 use sqlx::PgPool;
 
+use agentics_config::RunnerNamespace;
+
 use super::docker::{
     self, ContainerOutcome, ContainerRequest, InteractiveSessionOutcome,
     RunnerContainerCleanupSummary,
@@ -40,11 +42,15 @@ pub(super) trait RunnerBackend: Sync {
 /// Docker-backed runner backend used for MVP execution.
 pub(super) struct DockerRunnerBackend<'a> {
     docker: &'a Docker,
+    runner_namespace: &'a RunnerNamespace,
 }
 
 impl<'a> DockerRunnerBackend<'a> {
-    pub(super) const fn new(docker: &'a Docker) -> Self {
-        Self { docker }
+    pub(super) const fn new(docker: &'a Docker, runner_namespace: &'a RunnerNamespace) -> Self {
+        Self {
+            docker,
+            runner_namespace,
+        }
     }
 }
 
@@ -80,16 +86,17 @@ impl RunnerBackend for DockerRunnerBackend<'_> {
         pool: &PgPool,
         stale_minutes: i32,
     ) -> Result<RunnerContainerCleanupSummary> {
-        docker::reconcile_runner_containers(self.docker, pool, stale_minutes).await
+        docker::reconcile_runner_containers(self.docker, pool, stale_minutes, self.runner_namespace)
+            .await
     }
 
     async fn remove_stopped_runner_containers(&self) -> Result<u64> {
-        docker::remove_stopped_runner_containers(self.docker).await
+        docker::remove_stopped_runner_containers(self.docker, self.runner_namespace).await
     }
 
     async fn remove_stale_local_validation_containers(
         &self,
     ) -> Result<RunnerContainerCleanupSummary> {
-        docker::remove_stale_local_validation_containers(self.docker).await
+        docker::remove_stale_local_validation_containers(self.docker, self.runner_namespace).await
     }
 }

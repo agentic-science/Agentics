@@ -168,6 +168,8 @@ pub enum LocalDemoCommand {
         #[arg(long)]
         purge_data: bool,
     },
+    /// Run migrations against the configured demo database.
+    Migrate,
     /// Re-run demo seeding against an existing database.
     Seed,
     /// Print API/web/process state.
@@ -199,6 +201,7 @@ async fn run(cli: Cli) -> Result<Vec<ReportLine>, LocalDemoError> {
         LocalDemoCommand::Down { db, purge_data } => {
             down(&config, db || purge_data, purge_data).await
         }
+        LocalDemoCommand::Migrate => migrate_only(&config).await,
         LocalDemoCommand::Seed => seed_only(&config).await,
         LocalDemoCommand::Status => status(&config).await,
         LocalDemoCommand::Logs => logs(&config).await,
@@ -284,7 +287,17 @@ async fn down(
 
 async fn seed_only(config: &LocalDemoConfig) -> Result<Vec<ReportLine>, LocalDemoError> {
     wait_for_database(config).await?;
+    wait_for_http("API", &config.health_url()?).await?;
     seed_database(config).await
+}
+
+async fn migrate_only(config: &LocalDemoConfig) -> Result<Vec<ReportLine>, LocalDemoError> {
+    wait_for_database(config).await?;
+    run_migrations(config).await?;
+    Ok(vec![ReportLine::pass(
+        "migrate",
+        "applied database migrations",
+    )])
 }
 
 async fn status(config: &LocalDemoConfig) -> Result<Vec<ReportLine>, LocalDemoError> {

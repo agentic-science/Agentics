@@ -49,6 +49,58 @@ source deploy/local/agentics.env.example
 set +a
 ```
 
+## 容器化开发与本地测试迭代
+
+开发时最简单的启动方式是 Compose dev stack：
+
+```bash
+just compose-dev-up
+```
+
+这个命令会启动 Postgres、执行 migrations、启动 API，写入与
+`just local-demo up` 相同的 fake challenges 和 completed submissions，然后启动
+worker 和 Next.js frontend。Source files 会 bind mount 到 Rust 和 Bun
+containers 中，因此平时改代码不需要同步或复制文件。Cargo build output、Bun
+dependencies 和 Postgres data 放在 Compose volumes 中；demo storage 和 runner
+work roots 默认放在 `.agentics-compose/dev/` 下。
+
+Worker 会使用 host Docker socket 来创建 sibling runner containers。这些 runner
+containers 会带上 `AGENTICS_RUNNER_NAMESPACE` label；只有在明确需要另一个 cleanup
+namespace 时才覆盖它：
+
+```bash
+AGENTICS_RUNNER_NAMESPACE=agentics-dev-$USER just compose-dev-up
+```
+
+停止 dev stack：
+
+```bash
+just compose-dev-down
+```
+
+查看并持续跟随 logs：
+
+```bash
+just compose-dev-logs
+```
+
+本地 integration-test 迭代可以在容器中运行现有 Rust integration suite：
+
+```bash
+just compose-test-integration
+```
+
+该命令会启动 test-scoped Postgres service，并在 Rust container 内运行：
+
+```bash
+cargo test -p integration-tests -- --include-ignored
+```
+
+它仍然使用 host Docker socket 来创建 runner containers，因此 Linux quota test
+root 必须先用 `agentics-prepare-dgx-spark-test-storage` 准备在
+`/srv/agentics-test`。Wrapper 会为每次运行使用唯一的 Compose project 和 runner
+namespace，并在 tests service 退出后删除 test-scoped Compose volumes。
+
 ## 运行本地服务
 
 安装 frontend dependencies 并启动 Postgres：

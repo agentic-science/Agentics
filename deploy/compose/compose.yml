@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${AGENTICS_POSTGRES_USER:-agentics}
+      POSTGRES_PASSWORD: ${AGENTICS_POSTGRES_PASSWORD:-agentics}
+      POSTGRES_DB: ${AGENTICS_POSTGRES_DB:-agentics}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+  cargo_registry:
+  cargo_git:
+  cargo_target:
+  web_node_modules:
+  web_next:

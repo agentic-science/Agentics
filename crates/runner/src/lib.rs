@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
 use bollard::Docker;
 use sqlx::PgPool;
 
-use agentics_config::Config;
+use agentics_config::{Config, RunnerNamespace};
 use agentics_contracts::zip_project::{
     ZIP_PROJECT_MANIFEST_FILE, ZipProjectManifest, ZipProjectPhaseLimits, ZipProjectPhaseName,
     ZipProjectResolvedPhase,
@@ -79,6 +79,7 @@ use storage::{RunnerStorage, WritableMountLease, WritablePhase};
 
 const RUNNER_KIND_LABEL: &str = "agentics.runner";
 const RUNNER_KIND_ZIP_PROJECT: &str = "zip_project";
+const RUNNER_NAMESPACE_LABEL: &str = "agentics.runner_namespace";
 const RUNNER_SCOPE_LABEL: &str = "agentics.runner_scope";
 const RUNNER_SCOPE_HOSTED_WORKER: &str = "hosted-worker";
 const RUNNER_SCOPE_LOCAL_VALIDATION: &str = "local-validation";
@@ -98,6 +99,7 @@ struct RunnerContext<'a> {
     docker: &'a Docker,
     backend: &'a dyn RunnerBackend,
     storage: &'a RunnerStorage,
+    runner_namespace: &'a RunnerNamespace,
     job_id: &'a str,
     attempt: &'a RunnerAttempt,
     container_scope: RunnerContainerScope,
@@ -124,15 +126,16 @@ pub async fn reconcile_runner_containers(
     docker: &Docker,
     pool: &PgPool,
     stale_minutes: i32,
+    config: &Config,
 ) -> Result<RunnerContainerCleanupSummary> {
-    DockerRunnerBackend::new(docker)
+    DockerRunnerBackend::new(docker, &config.runner_namespace)
         .reconcile_containers(pool, stale_minutes)
         .await
 }
 
 /// Remove stopped Agentics runner containers.
-pub async fn remove_stopped_runner_containers(docker: &Docker) -> Result<u64> {
-    DockerRunnerBackend::new(docker)
+pub async fn remove_stopped_runner_containers(docker: &Docker, config: &Config) -> Result<u64> {
+    DockerRunnerBackend::new(docker, &config.runner_namespace)
         .remove_stopped_runner_containers()
         .await
 }
@@ -140,8 +143,9 @@ pub async fn remove_stopped_runner_containers(docker: &Docker) -> Result<u64> {
 /// Remove stale local-validation containers.
 pub async fn remove_stale_local_validation_containers(
     docker: &Docker,
+    config: &Config,
 ) -> Result<RunnerContainerCleanupSummary> {
-    DockerRunnerBackend::new(docker)
+    DockerRunnerBackend::new(docker, &config.runner_namespace)
         .remove_stale_local_validation_containers()
         .await
 }
@@ -162,6 +166,10 @@ impl RunnerContext<'_> {
             (
                 "agentics.attempt_count".to_string(),
                 self.attempt.attempt_count.to_string(),
+            ),
+            (
+                RUNNER_NAMESPACE_LABEL.to_string(),
+                self.runner_namespace.as_str().to_string(),
             ),
             (
                 RUNNER_SCOPE_LABEL.to_string(),

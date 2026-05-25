@@ -1,0 +1,134 @@
+x-rust-dev: &rust-dev
+  image: rust:1-bookworm
+  working_dir: /workspace/Agentics
+  env_file:
+    - ./env/dev.env.example
+  environment: &dev-env
+    AGENTICS_DEMO_ENV_FILE: /workspace/Agentics/deploy/compose/env/dev.env.example
+    AGENTICS_DATABASE_URL: postgres://agentics:agentics@postgres:5432/agentics_demo
+    AGENTICS_DEMO_DATABASE_URL: postgres://agentics:agentics@postgres:5432/agentics_demo
+    AGENTICS_DEMO_DATABASE_URL_CONFIRM: non-loopback-demo-db
+    AGENTICS_STORAGE_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/storage
+    AGENTICS_STORAGE_WORK_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/storage-work
+    AGENTICS_RUNNER_RUNTIME_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/runtime
+    AGENTICS_RUNNER_PHASE_MOUNT_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/phase-mounts
+    AGENTICS_RUNNER_NAMESPACE: ${AGENTICS_RUNNER_NAMESPACE:-agentics-dev}
+    TMPDIR: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/tmp
+  volumes:
+    - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics
+    - ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}:${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}
+    - cargo_registry:/usr/local/cargo/registry
+    - cargo_git:/usr/local/cargo/git
+    - cargo_target:/workspace/Agentics/target
+
+x-web-dev: &web-dev
+  image: oven/bun:1
+  working_dir: /workspace/Agentics/frontends/web
+  env_file:
+    - ./env/dev.env.example
+  environment:
+    AGENTICS_API_BASE_URL: http://api:3100
+    NEXT_PUBLIC_AGENTICS_API_BASE_URL: ""
+  volumes:
+    - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics
+    - web_node_modules:/workspace/Agentics/frontends/web/node_modules
+    - web_next:/workspace/Agentics/frontends/web/.next
+
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:${AGENTICS_POSTGRES_PORT:-5432}:5432"
+
+  migrate:
+    <<: *rust-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - cargo
+      - run
+      - -p
+      - agentics-ops
+      - --bin
+      - agentics-local-demo
+      - --
+      - migrate
+    restart: "no"
+
+  api:
+    <<: *rust-dev
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${AGENTICS_API_PORT:-3100}:3100"
+    command:
+      - cargo
+      - run
+      - -p
+      - api-server
+      - --bin
+      - api
+
+  seed:
+    <<: *rust-dev
+    depends_on:
+      api:
+        condition: service_started
+    command:
+      - cargo
+      - run
+      - -p
+      - agentics-ops
+      - --bin
+      - agentics-local-demo
+      - --
+      - seed
+    restart: "no"
+
+  worker:
+    <<: *rust-dev
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics
+      - ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}:${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}
+      - /var/run/docker.sock:/var/run/docker.sock
+      - cargo_registry:/usr/local/cargo/registry
+      - cargo_git:/usr/local/cargo/git
+      - cargo_target:/workspace/Agentics/target
+    command:
+      - cargo
+      - run
+      - -p
+      - worker
+      - --bin
+      - worker
+
+  web-deps:
+    <<: *web-dev
+    command:
+      - bun
+      - install
+      - --frozen-lockfile
+    restart: "no"
+
+  web:
+    <<: *web-dev
+    depends_on:
+      web-deps:
+        condition: service_completed_successfully
+      seed:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${AGENTICS_WEB_PORT:-3001}:3001"
+    command:
+      - bun
+      - run
+      - dev
+      - --
+      - -H
+      - 0.0.0.0
+      - -p
+      - "3001"

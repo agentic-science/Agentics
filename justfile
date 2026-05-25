@@ -1,6 +1,8 @@
 set fallback := true
 
 platform_db_compose := "docker compose -f docker/platform-db/docker-compose.yml"
+compose_dev := "docker compose --env-file deploy/compose/env/dev.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.dev.yml"
+compose_test := "docker compose --env-file deploy/compose/env/test.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.test.yml"
 crap_lcov_unit := "target/llvm-cov/agentics-workspace.lcov"
 crap_lcov_integration := "target/llvm-cov/agentics-workspace-with-integration.lcov"
 rustfs_container := "agentics-rustfs-test"
@@ -63,6 +65,47 @@ dgx-profile *args:
 # Start a local demo stack with seeded fake frontend results
 local-demo *args:
     cargo run -p agentics-ops --bin agentics-local-demo -- {{args}}
+
+# Start the containerized development stack with seeded fake data
+compose-dev-up:
+    @root="${AGENTICS_DEV_ROOT:-$PWD/.agentics-compose/dev}"; \
+      project="${AGENTICS_COMPOSE_DEV_PROJECT:-agentics-dev-${USER:-local}}"; \
+      namespace="${AGENTICS_RUNNER_NAMESPACE:-$project}"; \
+      mkdir -p "$root/runtime" "$root/phase-mounts" "$root/storage" "$root/storage-work" "$root/tmp"; \
+      AGENTICS_REPO_ROOT="$PWD" AGENTICS_DEV_ROOT="$root" AGENTICS_RUNNER_NAMESPACE="$namespace" {{compose_dev}} -p "$project" up --remove-orphans
+
+# Stop the containerized development stack
+compose-dev-down:
+    @root="${AGENTICS_DEV_ROOT:-$PWD/.agentics-compose/dev}"; \
+      project="${AGENTICS_COMPOSE_DEV_PROJECT:-agentics-dev-${USER:-local}}"; \
+      namespace="${AGENTICS_RUNNER_NAMESPACE:-$project}"; \
+      AGENTICS_REPO_ROOT="$PWD" AGENTICS_DEV_ROOT="$root" AGENTICS_RUNNER_NAMESPACE="$namespace" {{compose_dev}} -p "$project" down --remove-orphans
+
+# Follow logs from the containerized development stack
+compose-dev-logs:
+    @root="${AGENTICS_DEV_ROOT:-$PWD/.agentics-compose/dev}"; \
+      project="${AGENTICS_COMPOSE_DEV_PROJECT:-agentics-dev-${USER:-local}}"; \
+      namespace="${AGENTICS_RUNNER_NAMESPACE:-$project}"; \
+      AGENTICS_REPO_ROOT="$PWD" AGENTICS_DEV_ROOT="$root" AGENTICS_RUNNER_NAMESPACE="$namespace" {{compose_dev}} -p "$project" logs -f
+
+# Run the existing ignored integration suite in a containerized test harness
+compose-test-integration:
+    @set -eu; \
+      run_id="${AGENTICS_COMPOSE_TEST_RUN_ID:-$(date +%Y%m%d%H%M%S)-$$}"; \
+      project="${AGENTICS_COMPOSE_TEST_PROJECT:-agentics-test-$run_id}"; \
+      root="${AGENTICS_TEST_ROOT:-/srv/agentics-test}"; \
+      runtime_root="${AGENTICS_TEST_RUNNER_RUNTIME_ROOT:-$root/runtime/$run_id}"; \
+      phase_root="${AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT:-$root/phase-mounts}"; \
+      tmpdir="${AGENTICS_TEST_TMPDIR:-$root/tmp/$run_id}"; \
+      if [ ! -d "$root/runtime" ] || [ ! -d "$phase_root" ]; then \
+        printf 'Prepared test root is required at %s. Run agentics-prepare-dgx-spark-test-storage as root before compose-test-integration.\n' "$root" >&2; \
+        exit 2; \
+      fi; \
+      mkdir -p "$runtime_root" "$tmpdir"; \
+      status=0; \
+      AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_RUNNER_NAMESPACE="$project" {{compose_test}} -p "$project" up --abort-on-container-exit --exit-code-from tests || status=$?; \
+      AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_RUNNER_NAMESPACE="$project" {{compose_test}} -p "$project" down -v --remove-orphans; \
+      exit "$status"
 
 # Run database migrations
 migrate:

@@ -198,11 +198,18 @@ fn runner_container_labels_reject_malformed_identity() {
 /// Verifies scope filtering separates hosted workers from local validation.
 #[test]
 fn runner_container_scope_filter_matches_requested_scope() {
+    let namespace = test_namespace("compose-dev");
     let container = bollard::models::ContainerSummary {
-        labels: Some(HashMap::from([(
-            crate::RUNNER_SCOPE_LABEL.to_string(),
-            crate::RUNNER_SCOPE_LOCAL_VALIDATION.to_string(),
-        )])),
+        labels: Some(HashMap::from([
+            (
+                crate::RUNNER_NAMESPACE_LABEL.to_string(),
+                namespace.as_str().to_string(),
+            ),
+            (
+                crate::RUNNER_SCOPE_LABEL.to_string(),
+                crate::RUNNER_SCOPE_LOCAL_VALIDATION.to_string(),
+            ),
+        ])),
         ..Default::default()
     };
 
@@ -210,9 +217,14 @@ fn runner_container_scope_filter_matches_requested_scope() {
         &container,
         crate::RUNNER_SCOPE_LOCAL_VALIDATION,
     ));
+    assert!(container_has_runner_namespace(&container, &namespace));
     assert!(!container_has_runner_scope(
         &container,
         crate::RUNNER_SCOPE_HOSTED_WORKER,
+    ));
+    assert!(!container_has_runner_namespace(
+        &container,
+        &test_namespace("compose-test"),
     ));
 }
 
@@ -223,4 +235,8 @@ fn runner_labels(worker_id: &str, attempt_count: i32) -> RunnerContainerLabels {
         worker_id: worker_id.to_string(),
         attempt_count,
     }
+}
+
+fn test_namespace(value: &str) -> agentics_config::RunnerNamespace {
+    agentics_config::RunnerNamespace::try_new(value).expect("test namespace should be valid")
 }

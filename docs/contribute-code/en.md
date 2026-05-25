@@ -49,6 +49,61 @@ source deploy/local/agentics.env.example
 set +a
 ```
 
+## Containerized Dev And Test Iteration
+
+The easiest way to run the platform for development is the Compose dev stack:
+
+```bash
+just compose-dev-up
+```
+
+This starts Postgres, runs migrations, starts the API, seeds the same fake
+challenges and completed submissions used by `just local-demo up`, then starts
+the worker and Next.js frontend. Source files are bind-mounted into the Rust and
+Bun containers, so ordinary edits are visible without copying files. Cargo
+build output, Bun dependencies, and Postgres data live in Compose volumes, while
+demo storage and runner work roots live under `.agentics-compose/dev/` by
+default.
+
+The worker uses the host Docker socket so it can create sibling runner
+containers. Those containers are labeled with `AGENTICS_RUNNER_NAMESPACE`;
+override it only when you intentionally want a different cleanup namespace:
+
+```bash
+AGENTICS_RUNNER_NAMESPACE=agentics-dev-$USER just compose-dev-up
+```
+
+Stop the dev stack with:
+
+```bash
+just compose-dev-down
+```
+
+Follow logs with:
+
+```bash
+just compose-dev-logs
+```
+
+For local integration-test iteration, run the existing Rust integration suite in
+a container:
+
+```bash
+just compose-test-integration
+```
+
+This starts a test-scoped Postgres service and runs:
+
+```bash
+cargo test -p integration-tests -- --include-ignored
+```
+
+inside a Rust container. It still uses the host Docker socket for runner
+containers, so the Linux quota test root must be prepared at `/srv/agentics-test`
+first with `agentics-prepare-dgx-spark-test-storage`. The wrapper uses a unique
+Compose project and runner namespace for each run, then removes test-scoped
+Compose volumes after the test service exits.
+
 ## Run The Stack
 
 Install frontend dependencies and start Postgres:

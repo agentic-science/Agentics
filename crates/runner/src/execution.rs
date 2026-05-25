@@ -64,7 +64,7 @@ pub async fn execute_evaluation_job(
         .checked_mul(limits.max_runs)
         .ok_or_else(|| ServiceError::Runner("evaluation log limit overflow".to_string()))?;
     let mut logs = EvaluationLogs::new(max_log_bytes);
-    let docker_backend = super::DockerRunnerBackend::new(docker);
+    let docker_backend = super::DockerRunnerBackend::new(docker, &config.runner_namespace);
     let runner_storage = RunnerStorage::from_config(config)?;
     let output_limits = OutputTreeLimits {
         max_files: config.runner_max_output_files,
@@ -75,6 +75,7 @@ pub async fn execute_evaluation_job(
         docker,
         backend: &docker_backend,
         storage: &runner_storage,
+        runner_namespace: &config.runner_namespace,
         job_id,
         attempt: &attempt,
         container_scope,
