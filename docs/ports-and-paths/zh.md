@@ -31,6 +31,7 @@ production Compose env file。
 | Storage work root | `/srv/agentics/storage-work` |
 | Runner runtime root | `/srv/agentics/runtime` |
 | Production Compose storage work root | `/srv/agentics/storage-work` |
+| API container 内的 production challenge review checkout | `/srv/agentics/review-checkouts/agentics-challenges` |
 | Production host Docker socket | 默认 `/var/run/docker.sock` |
 | 为 quota-capable host 准备的 Docker data root | `/srv/agentics/docker-data-root` |
 | Loop image root | `/srv/agentics/loop-images` |
@@ -49,6 +50,12 @@ slots，并使用 Docker `storage_opt.size` 约束 container-layer writes。Slot
 
 `/srv/agentics-test` 用于开发者运行 quota-sensitive integration tests。它必须用
 `agentics-prepare-dgx-spark-test-storage` 单独准备，且 hosted workers 不应使用。
+
+Production Compose 会把 standalone `agentics-challenges` checkout 从
+`AGENTICS_CHALLENGE_REVIEW_REPOSITORY_HOST_ROOT` bind-mount 到
+`AGENTICS_CHALLENGE_REVIEW_REPOSITORY_CONTAINER_ROOT`。Challenge draft validation 和
+publishing 的 admin `repository_path` 应使用这个 container path。Host checkout 必须
+clean、位于 reviewed commit，并且 production API runtime user 可读。
 
 ## Durable Object Storage
 
@@ -101,7 +108,14 @@ just rustfs-private-backup-up
 它使用 `deploy/compose/compose.rustfs-private-backup.yml`，将 object data 保存在
 `AGENTICS_RUSTFS_BACKUP_DATA_DIR` 下，并且 `just rustfs-private-backup-down` 停止时不会
 删除 data。如果 production rehearsal 需要复用备份的 private challenge bundles，需要将
-objects 从这个 backup bucket 复制到该 rehearsal 使用的 storage bucket。
+objects 从这个 backup bucket 复制到该 rehearsal 使用的 storage bucket：
+
+```bash
+just compose-prod-restore-private-bundles
+```
+
+restore service 会写入 production bucket 中配置的 `AGENTICS_S3_PREFIX` 下，并使用
+`private-bundle-backups/` logical prefix。
 
 Production deployment 使用 Compose prod stack。Local development 使用 Compose dev
 stack。

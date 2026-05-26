@@ -5,6 +5,7 @@ x-app-image: &app-image
   build:
     context: ../..
     dockerfile: deploy/service-images/app/Dockerfile
+    network: host
 
 x-app-env: &app-env
   env_file:
@@ -16,9 +17,10 @@ x-app-env: &app-env
     AGENTICS_S3_REGION: ${AGENTICS_S3_REGION:-us-east-1}
     AGENTICS_S3_ENDPOINT_URL: ${AGENTICS_S3_ENDPOINT_URL:-http://rustfs:9000}
     AGENTICS_S3_FORCE_PATH_STYLE: ${AGENTICS_S3_FORCE_PATH_STYLE:-true}
+    AGENTICS_CHALLENGES_ROOT: ${AGENTICS_CHALLENGES_ROOT:-/app/no-seeded-challenges}
     AWS_ACCESS_KEY_ID: ${AGENTICS_RUSTFS_ACCESS_KEY:?set AGENTICS_RUSTFS_ACCESS_KEY}
     AWS_SECRET_ACCESS_KEY: ${AGENTICS_RUSTFS_SECRET_KEY:?set AGENTICS_RUSTFS_SECRET_KEY}
-    AGENTICS_DOCKER_HOST: unix:///var/run/docker.sock
+    AGENTICS_DOCKER_HOST: ${AGENTICS_DOCKER_HOST:-unix:///var/run/docker.sock}
 
 x-app-user: &app-user
   user: "${AGENTICS_RUNTIME_UID:-10001}:${AGENTICS_RUNTIME_GID:-10001}"
@@ -28,10 +30,22 @@ x-storage-work-mount: &storage-work-mount
   source: ${AGENTICS_STORAGE_WORK_ROOT:?set AGENTICS_STORAGE_WORK_ROOT}
   target: ${AGENTICS_STORAGE_WORK_ROOT:?set AGENTICS_STORAGE_WORK_ROOT}
 
+x-dgx-docker-data-root-mount: &dgx-docker-data-root-mount
+  type: bind
+  source: ${AGENTICS_DGX_DOCKER_DATA_ROOT:-/srv/agentics/docker-data-root}
+  target: ${AGENTICS_DGX_DOCKER_DATA_ROOT:-/srv/agentics/docker-data-root}
+  read_only: true
+
+x-challenge-review-repository-mount: &challenge-review-repository-mount
+  type: bind
+  source: ${AGENTICS_CHALLENGE_REVIEW_REPOSITORY_HOST_ROOT:-/srv/agentics/review-checkouts/agentics-challenges}
+  target: ${AGENTICS_CHALLENGE_REVIEW_REPOSITORY_CONTAINER_ROOT:-/srv/agentics/review-checkouts/agentics-challenges}
+
 x-worker-mounts: &worker-mounts
   - type: bind
     source: ${AGENTICS_DOCKER_SOCKET_PATH:-/var/run/docker.sock}
-    target: /var/run/docker.sock
+    target: ${AGENTICS_DOCKER_SOCKET_PATH:-/var/run/docker.sock}
+  - *dgx-docker-data-root-mount
   - type: bind
     source: ${AGENTICS_RUNNER_RUNTIME_ROOT:?set AGENTICS_RUNNER_RUNTIME_ROOT}
     target: ${AGENTICS_RUNNER_RUNTIME_ROOT:?set AGENTICS_RUNNER_RUNTIME_ROOT}
@@ -113,10 +127,16 @@ services:
       <<: *app-environment
       AGENTICS_API_HOST: 0.0.0.0
       AGENTICS_DOCKER_HOST: ""
+      AGENTICS_CHALLENGE_REVIEW_REPOSITORY_CONTAINER_ROOT: ${AGENTICS_CHALLENGE_REVIEW_REPOSITORY_CONTAINER_ROOT:-/srv/agentics/review-checkouts/agentics-challenges}
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: "*"
+      GIT_OPTIONAL_LOCKS: "0"
     ports:
       - "${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:${AGENTICS_API_PORT:-3100}:3100"
     volumes:
       - *storage-work-mount
+      - *challenge-review-repository-mount
     command: ["/usr/local/bin/api"]
     restart: unless-stopped
 
@@ -131,6 +151,7 @@ services:
     environment:
       <<: *app-environment
       AGENTICS_WORKER_ACCELERATORS: none
+      DOCKER_HOST: ${AGENTICS_DOCKER_HOST:-unix:///var/run/docker.sock}
     volumes: *worker-mounts
     command: ["/usr/local/bin/worker"]
     restart: unless-stopped
@@ -147,6 +168,7 @@ services:
     environment:
       <<: *app-environment
       AGENTICS_WORKER_ACCELERATORS: gpu
+      DOCKER_HOST: ${AGENTICS_DOCKER_HOST:-unix:///var/run/docker.sock}
     volumes: *worker-mounts
     command: ["/usr/local/bin/worker"]
     restart: unless-stopped
@@ -156,6 +178,7 @@ services:
     build:
       context: ../..
       dockerfile: deploy/service-images/web/Dockerfile
+      network: host
     env_file:
       - ${AGENTICS_COMPOSE_PROD_SERVICE_ENV_FILE:-./env/prod.env.example}
     depends_on:
@@ -181,12 +204,36 @@ services:
       <<: *app-environment
       AGENTICS_API_BASE_URL: http://api:3100
       AGENTICS_WEB_BASE_URL: http://web:3001
-      AGENTICS_DOCKER_HOST: unix:///var/run/docker.sock
+      AGENTICS_DOCKER_HOST: ${AGENTICS_DOCKER_HOST:-unix:///var/run/docker.sock}
+      AGENTICS_DOCKER_SOCKET_PATH: ${AGENTICS_DOCKER_SOCKET_PATH:-/var/run/docker.sock}
+      DOCKER_HOST: ${AGENTICS_DOCKER_HOST:-unix:///var/run/docker.sock}
     volumes:
       - type: bind
         source: ${AGENTICS_DOCKER_SOCKET_PATH:-/var/run/docker.sock}
-        target: /var/run/docker.sock
+        target: ${AGENTICS_DOCKER_SOCKET_PATH:-/var/run/docker.sock}
+      - *dgx-docker-data-root-mount
     command: ["/usr/local/bin/agentics-check-local-mvp"]
+    restart: "no"
+
+  private-bundle-restore:
+    <<: [*app-image, *app-user]
+    profiles: ["restore-private-bundles"]
+    depends_on:
+      rustfs-bucket-init:
+        condition: service_completed_successfully
+    env_file:
+      - ${AGENTICS_COMPOSE_PROD_SERVICE_ENV_FILE:-./env/prod.env.example}
+      - ./env/rustfs-private-backup.env
+    environment:
+      <<: *app-environment
+      AGENTICS_RUSTFS_BACKUP_ENDPOINT_URL: http://agentics-rustfs-private-backup:9000
+      AGENTICS_DOCKER_HOST: ""
+    volumes:
+      - *storage-work-mount
+    command:
+      - /usr/local/bin/agentics-copy-private-bundle-backups
+      - --work-dir
+      - ${AGENTICS_STORAGE_WORK_ROOT:?set AGENTICS_STORAGE_WORK_ROOT}/private-bundle-backup-copy
     restart: "no"
 
 volumes:

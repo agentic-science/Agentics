@@ -316,8 +316,9 @@ async fn check_slot(
         Ok(expected_inode_limit) => expected_inode_limit,
         Err(message) => return ReportLine::fail("quota slot metadata", message),
     };
-    let quota =
-        verify_slot_project_quota(config, phase, metadata.project_id, expected_inode_limit).await;
+    let quota = verify_slot_project_quota(config, phase, metadata.project_id, expected_inode_limit)
+        .await
+        .map(|_| ());
     match quota {
         Ok(()) if writable_probe(slot_path) => {
             ReportLine::pass("quota slot", format!("{} ready", slot_path.display()))
@@ -367,7 +368,7 @@ async fn verify_slot_project_quota(
     phase: DgxPhase,
     project_id: u64,
     expected_inode_limit: u64,
-) -> Result<(), ProfileCheckError> {
+) -> Result<QuotaInspection, ProfileCheckError> {
     check_project_inode_quota(
         &config.runner_phase_mount_root.join(phase.as_str()),
         project_id,
@@ -380,7 +381,7 @@ async fn check_project_inode_quota(
     mount_path: &Path,
     project_id: u64,
     expected_inode_limit: u64,
-) -> Result<(), ProfileCheckError> {
+) -> Result<QuotaInspection, ProfileCheckError> {
     let output = run_process(
         "xfs_quota",
         vec![
@@ -396,13 +397,13 @@ async fn check_project_inode_quota(
     if !output.success() {
         return Err(ProfileCheckError::Probe(output.combined()));
     }
-    if xfs_quota_report_requires_privilege(&output) {
-        return Ok(());
+    if xfs_quota_report_is_inconclusive(&output) {
+        return Ok(QuotaInspection::Inconclusive);
     }
     let hard = parse_project_inode_hard_limit(&output.stdout, project_id)
         .ok_or_else(|| ProfileCheckError::Probe("missing project quota row".to_string()))?;
     if hard == expected_inode_limit {
-        Ok(())
+        Ok(QuotaInspection::Verified)
     } else {
         Err(ProfileCheckError::Probe(format!(
             "inode hard limit is {hard}; expected {expected_inode_limit}"
@@ -410,11 +411,43 @@ async fn check_project_inode_quota(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum QuotaInspection {
+    Verified,
+    Inconclusive,
+}
+
+fn xfs_quota_report_is_inconclusive(output: &CommandOutput) -> bool {
+    xfs_quota_report_requires_privilege(output)
+        || xfs_quota_report_container_mount_unavailable(output, running_inside_container())
+}
+
 fn xfs_quota_report_requires_privilege(output: &CommandOutput) -> bool {
     !Uid::effective().is_root()
         && output.stdout.trim().is_empty()
         && output.stderr.contains("XFS_GETQUOTA")
         && output.stderr.contains("Operation not permitted")
+}
+
+fn xfs_quota_report_container_mount_unavailable(
+    output: &CommandOutput,
+    running_inside_container: bool,
+) -> bool {
+    running_inside_container
+        && output.stdout.trim().is_empty()
+        && output.stderr.contains("cannot setup path for mount")
+        && output.stderr.contains("No such device or address")
+}
+
+fn running_inside_container() -> bool {
+    Path::new("/.dockerenv").exists()
+        || std::fs::read_to_string("/proc/1/cgroup")
+            .map(|text| {
+                text.contains("/docker/")
+                    || text.contains("/kubepods/")
+                    || text.contains("/containerd/")
+            })
+            .unwrap_or(false)
 }
 
 async fn check_docker_daemon(config: &DgxProfileCheckConfig) -> Vec<ReportLine> {
@@ -881,7 +914,7 @@ mod tests {
     use super::{
         ProfileCheckError, finish_probe_result, parse_mountinfo_line,
         parse_project_inode_hard_limit, validate_slot_metadata,
-        xfs_quota_report_requires_privilege,
+        xfs_quota_report_container_mount_unavailable, xfs_quota_report_requires_privilege,
     };
     use crate::dgx::{DgxPhase, SlotMetadata};
     use crate::support::CommandOutput;
@@ -917,6 +950,21 @@ mod tests {
             xfs_quota_report_requires_privilege(&output),
             !nix::unistd::Uid::effective().is_root(),
         );
+    }
+
+    /// Verifies container mount namespace quota reports can be treated as inconclusive.
+    #[test]
+    fn detects_container_quota_report_unavailable() {
+        let output = CommandOutput {
+            status: Some(0),
+            stdout: String::new(),
+            stderr: "xfs_quota: cannot setup path for mount /srv/agentics/phase-mounts/solution-setup: No such device or address".to_string(),
+            truncated: false,
+        };
+        assert!(xfs_quota_report_container_mount_unavailable(&output, true));
+        assert!(!xfs_quota_report_container_mount_unavailable(
+            &output, false
+        ));
     }
 
     /// Verifies slot metadata validation enforces the prepared quota contract.

@@ -20,6 +20,7 @@ use std::sync::Arc;
 use agentics_config::Config;
 use agentics_persistence::{Repositories, pool::create_pool};
 use agentics_storage::build_storage;
+use anyhow::Context;
 use api_server::admin_auth_throttle::AdminAuthThrottle;
 use api_server::router;
 use api_server::state::AppState;
@@ -38,15 +39,20 @@ async fn main() -> anyhow::Result<()> {
         config.api_host, config.api_port
     );
 
-    let db = create_pool(&config, 10).await?;
-    let storage = build_storage(&config).await?;
+    let db = create_pool(&config, 10)
+        .await
+        .context("create database pool")?;
+    let storage = build_storage(&config)
+        .await
+        .context("build storage backend")?;
 
     // Seed challenges from challenges_root
     if tokio::fs::metadata(&config.challenges_root).await.is_ok() {
         Repositories::new(&db)
             .maintenance()
             .ensure_challenges_seeded_from_root(&config, storage.as_ref(), &config.challenges_root)
-            .await?;
+            .await
+            .context("seed challenges from configured root")?;
     }
 
     let state = AppState {
@@ -58,7 +64,14 @@ async fn main() -> anyhow::Result<()> {
 
     let app = router::router(&config).with_state(state);
 
-    let listener = TcpListener::bind(format!("{}:{}", config.api_host, config.api_port)).await?;
+    let listener = TcpListener::bind(format!("{}:{}", config.api_host, config.api_port))
+        .await
+        .with_context(|| {
+            format!(
+                "bind API listener on {}:{}",
+                config.api_host, config.api_port
+            )
+        })?;
     info!("api server listening on {}", listener.local_addr()?);
 
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;

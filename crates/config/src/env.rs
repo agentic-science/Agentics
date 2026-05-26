@@ -118,6 +118,7 @@ pub struct RawStorageEnv {
     pub s3_region: Option<String>,
     pub s3_endpoint_url: Option<String>,
     pub s3_force_path_style: Option<bool>,
+    pub challenges_root: Option<String>,
     pub storage_max_bundle_archive_bytes: Option<u64>,
     pub storage_max_statement_bytes: Option<u64>,
     pub storage_max_json_artifact_bytes: Option<u64>,
@@ -287,6 +288,9 @@ fn apply_storage_env(config: &mut Config, raw: RawStorageEnv) -> anyhow::Result<
     config.s3_force_path_style = raw
         .s3_force_path_style
         .unwrap_or(DEFAULT_S3_FORCE_PATH_STYLE);
+    if let Some(value) = raw.challenges_root {
+        config.challenges_root = required_trimmed_string("AGENTICS_CHALLENGES_ROOT", value)?;
+    }
     config.storage_max_bundle_archive_bytes = raw
         .storage_max_bundle_archive_bytes
         .unwrap_or(storage_config::DEFAULT_STORAGE_MAX_BUNDLE_ARCHIVE_BYTES);

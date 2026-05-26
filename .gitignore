@@ -35,6 +35,7 @@ venv/
 env/
 !deploy/compose/env/
 !deploy/compose/env/*.env.example
+deploy/compose/env/prod.env
 
 # Python test and type-check artifacts
 .pytest_cache/

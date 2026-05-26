@@ -42,6 +42,7 @@ const PREFIX: &str = "agentics-compose-prod";
 const ENV_PREFIX: &str = "AGENTICS_";
 const DEFAULT_PROJECT: &str = "agentics-prod";
 const DEFAULT_ENV_FILE: &str = "deploy/compose/env/prod.env";
+const DEFAULT_PRIVATE_BUNDLE_BACKUP_CONTAINER: &str = "agentics-rustfs-private-backup";
 const WORKER_SERVICES: &[&str] = &["worker-cpu", "worker-gpu"];
 const PROD_SERVICES: &[&str] = &[
     "postgres",
@@ -93,6 +94,8 @@ pub enum ProdCommand {
     Ps,
     /// Run the production check service.
     Check,
+    /// Copy backed-up migrated challenge private bundles into production storage.
+    RestorePrivateBundles,
     /// Clean matching production runner containers.
     CleanRunners {
         /// Override the runner namespace. Defaults to AGENTICS_RUNNER_NAMESPACE or the Compose project.
@@ -131,6 +134,7 @@ struct RawComposeProdEnv {
     database_url: Option<String>,
     docker_host: Option<String>,
     docker_socket_path: Option<String>,
+    rustfs_backup_container: Option<String>,
 }
 
 impl RawComposeProdEnv {
@@ -190,6 +194,7 @@ async fn run(cli: Cli) -> Result<ExitCode, ComposeProdError> {
                 .run_compose_passthrough(["run", "--rm", "check"])
                 .await
         }
+        ProdCommand::RestorePrivateBundles => restore_private_bundles(&context).await,
         ProdCommand::CleanRunners {
             namespace,
             scope,
@@ -200,6 +205,119 @@ async fn run(cli: Cli) -> Result<ExitCode, ComposeProdError> {
             Ok(print_reports(PREFIX, &reports))
         }
     }
+}
+
+async fn restore_private_bundles(context: &ComposeContext) -> Result<ExitCode, ComposeProdError> {
+    let network_name = context.default_network_name();
+    let backup_container = context.private_bundle_backup_container();
+    let joined_network =
+        ensure_container_network(context, &backup_container, &network_name).await?;
+    let restore_result = context
+        .run_compose_passthrough(["run", "--rm", "private-bundle-restore"])
+        .await;
+    if joined_network
+        && let Err(error) =
+            disconnect_container_network(context, &backup_container, &network_name).await
+    {
+        eprintln!(
+            "[{PREFIX}] WARN: failed to disconnect backup container `{backup_container}` from network `{network_name}`: {error}"
+        );
+    }
+    restore_result
+}
+
+async fn ensure_container_network(
+    context: &ComposeContext,
+    container: &str,
+    network: &str,
+) -> Result<bool, ComposeProdError> {
+    if container_is_on_network(context, container, network).await? {
+        return Ok(false);
+    }
+    let output = docker_output(
+        context,
+        [
+            "network", "connect", "--alias", container, network, container,
+        ],
+        Duration::from_secs(30),
+    )
+    .await?;
+    if output.success() {
+        return Ok(true);
+    }
+    let combined = output.combined();
+    if combined.contains("already exists") || combined.contains("already connected") {
+        return Ok(false);
+    }
+    Err(ComposeProdError::Process(format!(
+        "failed to connect backup container `{container}` to `{network}`: {combined}"
+    )))
+}
+
+async fn disconnect_container_network(
+    context: &ComposeContext,
+    container: &str,
+    network: &str,
+) -> Result<(), ComposeProdError> {
+    let output = docker_output(
+        context,
+        ["network", "disconnect", network, container],
+        Duration::from_secs(30),
+    )
+    .await?;
+    if output.success() {
+        return Ok(());
+    }
+    Err(ComposeProdError::Process(format!(
+        "docker network disconnect failed: {}",
+        output.combined()
+    )))
+}
+
+async fn container_is_on_network(
+    context: &ComposeContext,
+    container: &str,
+    network: &str,
+) -> Result<bool, ComposeProdError> {
+    let output = docker_output(
+        context,
+        [
+            "inspect",
+            container,
+            "--format",
+            "{{json .NetworkSettings.Networks}}",
+        ],
+        Duration::from_secs(30),
+    )
+    .await?;
+    if !output.success() {
+        return Err(ComposeProdError::Process(format!(
+            "failed to inspect backup container `{container}`: {}",
+            output.combined()
+        )));
+    }
+    let networks = serde_json::from_str::<serde_json::Value>(output.stdout.trim())
+        .map_err(|error| ComposeProdError::InvalidConfig(error.to_string()))?;
+    Ok(networks.get(network).is_some())
+}
+
+async fn docker_output<I, S>(
+    context: &ComposeContext,
+    args: I,
+    timeout: Duration,
+) -> Result<crate::support::CommandOutput, ComposeProdError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let mut command = Command::new("docker");
+    command
+        .args(args)
+        .current_dir(&context.repo_root)
+        .stdin(Stdio::null());
+    run_command(command, "docker", Some(timeout), DEFAULT_OUTPUT_LIMIT_BYTES)
+        .await
+        .map_err(ComposeProdError::from)
 }
 
 async fn down(
@@ -503,6 +621,18 @@ impl ComposeContext {
             self.process_env.docker_socket_path.as_ref(),
             self.file_env.docker_socket_path.as_ref(),
         )
+    }
+
+    fn default_network_name(&self) -> String {
+        format!("{}_default", self.project)
+    }
+
+    fn private_bundle_backup_container(&self) -> String {
+        env_value(
+            self.process_env.rustfs_backup_container.as_ref(),
+            self.file_env.rustfs_backup_container.as_ref(),
+        )
+        .unwrap_or_else(|| DEFAULT_PRIVATE_BUNDLE_BACKUP_CONTAINER.to_string())
     }
 }
 

@@ -123,6 +123,7 @@ Production Compose：
    sudo install -d -m 0700 -o <runtime-uid> -g <runtime-gid> /srv/agentics/runtime
    sudo install -d -m 0700 -o <runtime-uid> -g <runtime-gid> /srv/agentics/phase-mounts
    sudo install -d -m 0700 -o <runtime-uid> -g <runtime-gid> /srv/agentics/storage-work
+   sudo install -d -m 0755 /srv/agentics/review-checkouts
    ```
 
 2. 创建并编辑 production env file：
@@ -130,6 +131,16 @@ Production Compose：
    ```bash
    cp deploy/compose/env/prod.env.example deploy/compose/env/prod.env
    ```
+
+   Production Compose 默认把 `AGENTICS_CHALLENGES_ROOT` 设为
+   `/app/no-seeded-challenges`，因此 API 不会发布 image 内置 sample
+   challenges。只有在受控 seeded-catalog deployment 中才显式设置它。
+
+   Challenge draft validation 和 publishing 在 API container 内运行。请在
+   `AGENTICS_CHALLENGE_REVIEW_REPOSITORY_HOST_ROOT` 保留一个 clean、standalone、runtime-readable
+   的 `agentics-challenges` checkout，并在 validate 或 publish draft 时把
+   `AGENTICS_CHALLENGE_REVIEW_REPOSITORY_CONTAINER_ROOT` 作为 admin
+   `repository_path` 传入。
 
 3. 构建并启动：
 
@@ -217,8 +228,19 @@ just rustfs-private-backup-up
 `migrated-challenge-private-bundles` bucket。这个 backup store 不是 Agentics
 durable storage backend。当 production rehearsal 启动自己的 RustFS 或 S3 bucket
 后，需要先把所需 private bundle objects 从这个 backup store 复制到 rehearsal
-storage，再复用已经 migrated 的 challenge metadata。`just
-rustfs-private-backup-down` 会停止 backup container，但不会删除 objects。
+storage，再复用已经 migrated 的 challenge metadata：
+
+```bash
+just compose-prod-restore-private-bundles
+```
+
+restore command 会临时把 backup RustFS container 加入 production Compose
+network，然后运行一个一次性的 production Compose service；该 service 可以访问两个
+private RustFS endpoints。它会把 objects 复制到 production bucket 的
+`AGENTICS_S3_PREFIX` 下，并放在逻辑
+`private-bundle-backups/` prefix 中；已存在且 byte-identical 的 objects 会被跳过，
+每次 upload 后都会用 SHA-256 验证。`just rustfs-private-backup-down` 会停止 backup
+container，但不会删除 objects。
 
 Credentials 只通过 AWS SDK provider chain 获取，例如环境变量或 instance profile。
 不要把 S3 credentials 写入 Agentics DB rows 或 challenge specs。Agentics 仍会在
@@ -251,13 +273,15 @@ Hosted MVP 在接受 public evaluation jobs 前使用 Linux-only storage profile
 - 使用 `AGENTICS_RUNNER_SECURITY_PROFILE=production`、
   `AGENTICS_WORKER_ACCELERATORS=gpu`、
   `AGENTICS_WORKER_GPU_PROBE_IMAGE`、
+  `AGENTICS_DGX_DOCKER_DATA_ROOT`、
   `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`、
   `AGENTICS_RUNNER_RUNTIME_ROOT`、`AGENTICS_RUNNER_PHASE_MOUNT_ROOT`、
   `AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB` 和
   `AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true` 配置 worker。
 - 用 `AGENTICS_HOST_PROBE_MODE=off|warn|require` 控制 strict probes，不要使用
   generic `CI` variable。Production runner security 还要求
-  `AGENTICS_HOST_PROBE_MODE=require` 和 digest-pinned images。
+  `AGENTICS_HOST_PROBE_MODE=require`、`AGENTICS_DGX_RUN_MUTATING_PROBES=true`
+  和 digest-pinned images。
 - Local Compose development 保持宽松；strict storage probe 属于 hosted Linux
   staging 和 DGX-hosted workers。
 

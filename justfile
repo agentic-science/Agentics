@@ -123,6 +123,10 @@ compose-prod-ps:
 compose-prod-check:
     {{compose_prod}} check
 
+# Copy backed-up migrated challenge private bundles into production RustFS
+compose-prod-restore-private-bundles:
+    {{compose_prod}} restore-private-bundles
+
 # Clean production runner containers by exact namespace labels
 compose-prod-clean-runners *args:
     {{compose_prod}} clean-runners {{args}}

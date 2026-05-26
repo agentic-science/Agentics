@@ -173,7 +173,10 @@ agentics-check-dgx-spark-profile
 当 `AGENTICS_HOST_PROBE_MODE=warn` 或 `require` 时，worker 会在 startup
 期间运行同一个 profile checker。在 production security 和 require mode 下，如果
 bounded runner storage、Docker quota behavior、digest-pinned images 或 GPU probing
-无法证明，worker 会 fail closed。
+无法证明，worker 会 fail closed。在 worker container 内，`xfs_quota` 可能无法读取
+bind-mounted loop devices 的 host project quota rows；遇到这种情况时，checker 会把
+row inspection 视为 inconclusive，并依赖 slot metadata 和 required mutating
+quota-exhaustion probes。
 
 ## Production Startup
 

@@ -61,6 +61,10 @@ fn raw_app_env_deserializes_prefixed_values() {
             "AGENTICS_ADMIN_PASSWORD".to_string(),
             "changed-password".to_string(),
         ),
+        (
+            "AGENTICS_CHALLENGES_ROOT".to_string(),
+            "/tmp/agentics-challenges".to_string(),
+        ),
         ("AGENTICS_POSTGRES_PORT".to_string(), "6543".to_string()),
     ])
     .expect("raw env should deserialize");
@@ -74,6 +78,7 @@ fn raw_app_env_deserializes_prefixed_values() {
             .expose_secret()
             .contains(":6543/agentics")
     );
+    assert_eq!(config.challenges_root, "/tmp/agentics-challenges");
     assert!(config.admin_password_matches("changed-password"));
 }
 

@@ -27,4 +27,5 @@ pub mod large_files;
 pub mod local_demo;
 pub mod migrate;
 pub mod pre_commit;
+pub mod private_bundle_backups;
 pub mod support;

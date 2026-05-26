@@ -31,6 +31,7 @@ same production Compose env file.
 | Storage work root | `/srv/agentics/storage-work` |
 | Runner runtime root | `/srv/agentics/runtime` |
 | Production Compose storage work root | `/srv/agentics/storage-work` |
+| Production challenge review checkout inside API container | `/srv/agentics/review-checkouts/agentics-challenges` |
 | Production host Docker socket | `/var/run/docker.sock` by default |
 | Docker data root prepared for quota-capable hosts | `/srv/agentics/docker-data-root` |
 | Loop image root | `/srv/agentics/loop-images` |
@@ -52,6 +53,13 @@ The `/srv/agentics-test` root is for developer-run quota-sensitive integration
 tests. It must be prepared separately with
 `agentics-prepare-dgx-spark-test-storage` and must not be used by hosted
 workers.
+
+Production Compose bind-mounts a standalone `agentics-challenges` checkout from
+`AGENTICS_CHALLENGE_REVIEW_REPOSITORY_HOST_ROOT` to
+`AGENTICS_CHALLENGE_REVIEW_REPOSITORY_CONTAINER_ROOT`. Use the container path as
+the admin `repository_path` for challenge draft validation and publishing. The
+host checkout must be clean at the reviewed commit and readable by the
+production API runtime user.
 
 ## Durable Object Storage
 
@@ -107,7 +115,14 @@ It uses `deploy/compose/compose.rustfs-private-backup.yml`, keeps object data
 under `AGENTICS_RUSTFS_BACKUP_DATA_DIR`, and stops without deleting data through
 `just rustfs-private-backup-down`. Copy objects from this backup bucket into the
 storage bucket used by a production rehearsal when you want to reuse backed-up
-private challenge bundles.
+private challenge bundles:
+
+```bash
+just compose-prod-restore-private-bundles
+```
+
+The restore service writes into the production bucket under the configured
+`AGENTICS_S3_PREFIX` and `private-bundle-backups/` logical prefix.
 
 Production deployment uses the Compose prod stack. Local development uses the
 Compose dev stack.

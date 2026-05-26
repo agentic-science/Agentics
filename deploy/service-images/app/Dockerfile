@@ -10,11 +10,12 @@ RUN cargo build --release \
     -p agentics-ops --bin agentics-check-local-mvp \
     -p agentics-ops --bin agentics-check-dgx-spark-profile \
     -p agentics-ops --bin agentics-migrate \
-    -p agentics-ops --bin agentics-compose-prod
+    -p agentics-ops --bin agentics-compose-prod \
+    -p agentics-ops --bin agentics-copy-private-bundle-backups
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates xfsprogs \
+    && apt-get install -y --no-install-recommends ca-certificates git xfsprogs \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -24,6 +25,7 @@ COPY --from=builder /workspace/Agentics/target/release/agentics-check-local-mvp 
 COPY --from=builder /workspace/Agentics/target/release/agentics-check-dgx-spark-profile /usr/local/bin/agentics-check-dgx-spark-profile
 COPY --from=builder /workspace/Agentics/target/release/agentics-migrate /usr/local/bin/agentics-migrate
 COPY --from=builder /workspace/Agentics/target/release/agentics-compose-prod /usr/local/bin/agentics-compose-prod
+COPY --from=builder /workspace/Agentics/target/release/agentics-copy-private-bundle-backups /usr/local/bin/agentics-copy-private-bundle-backups
 COPY --from=builder /workspace/Agentics/examples /app/examples
 
 ENV AGENTICS_CHALLENGES_ROOT=/app/examples/challenges

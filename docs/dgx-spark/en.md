@@ -177,6 +177,10 @@ The worker runs the same profile checker during startup when
 `AGENTICS_HOST_PROBE_MODE=warn` or `require`. With production security and
 require mode, the worker fails closed if bounded runner storage, Docker quota
 behavior, digest-pinned images, or GPU probing are not proven.
+Inside the worker container, `xfs_quota` may be unable to read host project
+quota rows for bind-mounted loop devices; in that case the checker treats row
+inspection as inconclusive and relies on slot metadata plus the required
+mutating quota-exhaustion probes.
 
 ## Production Startup
 

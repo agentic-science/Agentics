@@ -129,6 +129,7 @@ For production Compose:
    sudo install -d -m 0700 -o <runtime-uid> -g <runtime-gid> /srv/agentics/runtime
    sudo install -d -m 0700 -o <runtime-uid> -g <runtime-gid> /srv/agentics/phase-mounts
    sudo install -d -m 0700 -o <runtime-uid> -g <runtime-gid> /srv/agentics/storage-work
+   sudo install -d -m 0755 /srv/agentics/review-checkouts
    ```
 
 2. Create and edit the production env file:
@@ -136,6 +137,17 @@ For production Compose:
    ```bash
    cp deploy/compose/env/prod.env.example deploy/compose/env/prod.env
    ```
+
+   Production Compose defaults `AGENTICS_CHALLENGES_ROOT` to
+   `/app/no-seeded-challenges` so the API does not publish image-bundled sample
+   challenges. Set it explicitly only for a controlled seeded-catalog
+   deployment.
+
+   Challenge draft validation and publishing run inside the API container. Keep
+   a clean, standalone, runtime-readable `agentics-challenges` checkout at
+   `AGENTICS_CHALLENGE_REVIEW_REPOSITORY_HOST_ROOT`, then pass
+   `AGENTICS_CHALLENGE_REVIEW_REPOSITORY_CONTAINER_ROOT` as the admin
+   `repository_path` when validating or publishing drafts.
 
 3. Build and start:
 
@@ -228,8 +240,19 @@ creates the `migrated-challenge-private-bundles` bucket. This backup store is
 not the Agentics durable storage backend. When a production rehearsal starts
 with its own RustFS or S3 bucket, copy the needed private bundle objects from
 this backup store into the rehearsal storage before reusing previously migrated
-challenge metadata. `just rustfs-private-backup-down` stops the backup
-container without deleting objects.
+challenge metadata:
+
+```bash
+just compose-prod-restore-private-bundles
+```
+
+The restore command temporarily joins the backup RustFS container to the
+production Compose network, then runs a one-shot production Compose service
+with access to both private RustFS endpoints. It copies objects into the
+production bucket under `AGENTICS_S3_PREFIX` and the logical
+`private-bundle-backups/` prefix, skips existing byte-identical objects, and
+verifies SHA-256 after each upload. `just rustfs-private-backup-down` stops the
+backup container without deleting objects.
 
 Credentials come only from the AWS SDK provider chain, for example environment
 variables or an instance profile. Do not store S3 credentials in Agentics DB
@@ -269,13 +292,15 @@ evaluation jobs:
   `AGENTICS_RUNNER_SECURITY_PROFILE=production`,
   `AGENTICS_WORKER_ACCELERATORS=gpu`,
   `AGENTICS_WORKER_GPU_PROBE_IMAGE`,
+  `AGENTICS_DGX_DOCKER_DATA_ROOT`,
   `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`,
   `AGENTICS_RUNNER_RUNTIME_ROOT`, `AGENTICS_RUNNER_PHASE_MOUNT_ROOT`,
   `AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB`, and
   `AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`.
 - Gate strict probes with `AGENTICS_HOST_PROBE_MODE=off|warn|require`, not the
   generic `CI` variable. Production runner security also requires
-  `AGENTICS_HOST_PROBE_MODE=require` and digest-pinned images.
+  `AGENTICS_HOST_PROBE_MODE=require`, `AGENTICS_DGX_RUN_MUTATING_PROBES=true`,
+  and digest-pinned images.
 - Keep local Compose development permissive. The strict storage probe belongs to
   hosted Linux staging and DGX-hosted workers.
 
