@@ -75,7 +75,7 @@ Cover these project-agnostic lanes when the user asks for a complete review:
      `secrecy` wrappers and require any `ExposeSecret` call to be located at the
      exact transmission or comparison boundary.
    - Check whether code can be simplified with current Rust language features
-     and standard-library APIs documented in `docs/new-rust-features-apis/en.md`.
+     and standard-library APIs documented in `references/rust-modernization.md`.
      Prefer these updates when they remove real nesting, repeated allocation,
      lossy error handling, platform-specific duplication, or manual time/path
      logic.
@@ -198,14 +198,14 @@ Always inspect these platform-specific risks:
   adapters and database row adapters are acceptable only when they immediately
   delegate to the domain type and do not encode domain rules themselves.
 - Rust review passes should include a modernization check against
-  `docs/new-rust-features-apis/en.md`, especially for `LazyLock`, let chains,
+  `references/rust-modernization.md`, especially for `LazyLock`, let chains,
   `std::fs::exists`, `cfg_select!`, collection helpers, duration constructors,
   and newer path/string APIs.
 
 ## Subagent Instructions
 
 When spawning a subagent for Rust backend, worker, or CLI review, explicitly ask
-that subagent to read `docs/new-rust-features-apis/en.md` before reviewing code.
+that subagent to read `references/rust-modernization.md` before reviewing code.
 The subagent should report places where newer Rust features or APIs simplify
 Agentics code without causing churn for its own sake.
 

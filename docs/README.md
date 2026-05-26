@@ -11,8 +11,9 @@ This index points to the current documentation set. Use the current docs below a
   target policy, and quotas.
 - [Review challenges](review-challenges/en.md): admin reviewer checklist,
   validation, approval, publishing, archive handling, and cleanup.
-- [Operate platform](operate-platform/en.md): local and hosted operation,
-  health checks, quotas, logs, backups, and DGX handoff.
+- Platform operation: use [deployment baseline](deployment/en.md),
+  [operations runbook](operations/en.md), [DGX Spark operations](dgx-spark/en.md),
+  and [ports, paths, and target policy](ports-and-paths/en.md).
 
 ## Current References
 
@@ -38,8 +39,6 @@ This index points to the current documentation set. Use the current docs below a
   frontend schema-generation workflow.
 - [Visual identity system](visual-identity-system/en.md): UI contribution
   reference for visual style and frontend polish.
-- [Rust feature review reference](new-rust-features-apis/en.md): agent-facing
-  guidance for modern Rust features and APIs used during code review.
 
 ## Product Planning
 
@@ -59,7 +58,9 @@ Most current documents have Chinese versions next to the English version:
 - [贡献代码](contribute-code/zh.md)
 - [贡献 Challenges](contribute-challenges/zh.md)
 - [Review Challenges](review-challenges/zh.md)
-- [运维平台](operate-platform/zh.md)
+- 平台运维：使用 [Deployment baseline](deployment/zh.md),
+  [Operations runbook](operations/zh.md), [DGX Spark operations](dgx-spark/zh.md),
+  和 [Ports、paths 和 target policy](ports-and-paths/zh.md)
 - [Solution protocol](solution-protocol/zh.md)
 - [Architecture](architecture/zh.md)
 - [Targets](targets/zh.md)

@@ -17,7 +17,6 @@ For your information:
 - `docs/contribute-code/en.md` and `docs/contribute-code/zh.md` are the role-facing setup and workflow guides for code contributors.
 - `docs/contribute-challenges/en.md` and `docs/contribute-challenges/zh.md` are the role-facing guides for challenge creators and owners.
 - `docs/review-challenges/en.md` and `docs/review-challenges/zh.md` are the role-facing guides for challenge reviewers.
-- `docs/operate-platform/en.md` and `docs/operate-platform/zh.md` are the role-facing guides for platform operators.
 - `docs/solution-protocol/en.md` and `docs/solution-protocol/zh.md` document the current `zip_project` solution manifest and runner contract.
 - `docs/targets/en.md` and `docs/targets/zh.md` document target schema, target-scoped submission APIs, CLI behavior, worker behavior, and leaderboard behavior.
 - `docs/deployment/en.md` and `docs/deployment/zh.md` document the MVP Compose deployment flows, startup order, storage, backup, rollback, and production shutdown semantics.
@@ -25,7 +24,7 @@ For your information:
 - `docs/operations/en.md` and `docs/operations/zh.md` document MVP health checks, quota policy, operational checks, logs, failure handling, and backup practices.
 - `docs/ports-and-paths/en.md` and `docs/ports-and-paths/zh.md` document runtime ports, filesystem paths, and MVP target support.
 - `docs/visual-identity-system/en.md` and `docs/visual-identity-system/zh.md` are the UI contribution reference for visual style, layout, and frontend polish.
-- `docs/new-rust-features-apis/en.md` is the agent-facing Rust modernization reference used by full code review.
+- `.agents/skills/full-code-review/references/rust-modernization.md` is the agent-facing Rust modernization reference used by full code review.
 - `skills/agentics-cli-workflow/SKILL.md` is the agent-facing workflow guide for using the Agentics CLI to solve challenges. Keep it aligned with CLI command changes and README examples.
 - `skills/challenge-authoring-workflow/SKILL.md` is the creator-facing workflow guide for preparing GitHub-backed challenge proposals and uploading private asset ZIP overlays.
 - `.agents/skills/challenge-review-workflow/SKILL.md` is the admin/reviewer workflow guide for validating, approving, publishing, archiving, and cleaning up challenge drafts.

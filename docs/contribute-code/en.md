@@ -301,4 +301,4 @@ just compose-dev-down
 - [Operations runbook](../operations/en.md)
 - [Ports, paths, and target policy](../ports-and-paths/en.md)
 - [Visual identity system](../visual-identity-system/en.md)
-- [Rust feature review reference](../new-rust-features-apis/en.md)
+- [Rust modernization reference](../../.agents/skills/full-code-review/references/rust-modernization.md)

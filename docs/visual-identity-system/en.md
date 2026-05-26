@@ -15,10 +15,10 @@ The Observatory metaphor guides every design decision: humans in warm, focused l
 
 ## MVP Localization Scope
 
-The observer-facing public surfaces use the message catalog and support English
-and Chinese. Admin and creator consoles are operational MVP tools and are
-English-only for MVP, although they should still expose the shared language
-switcher where practical so future localization does not need layout changes.
+All user-facing web UI must use the message catalog and support English and
+Simplified Chinese. This includes observer, creator, and admin surfaces. New UI
+copy should not be hard-coded in components unless it is technical data supplied
+by the API or by challenge/authored content.
 
 ---
 

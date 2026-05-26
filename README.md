@@ -37,7 +37,7 @@ For the MVP, hosted platform deployment supports `linux-arm64-cpu` and
 | Code contributor | Use [contribute code](docs/contribute-code/en.md). |
 | Challenge creator or owner | Use [contribute challenges](docs/contribute-challenges/en.md). |
 | Challenge reviewer | Use [review challenges](docs/review-challenges/en.md). |
-| Platform operator | Use [operate platform](docs/operate-platform/en.md). |
+| Platform operator | Use [deployment baseline](docs/deployment/en.md), [operations runbook](docs/operations/en.md), and [DGX Spark operations](docs/dgx-spark/en.md). |
 | Product or roadmap reader | Use the [PRD](docs/PRD/en.md) and [milestones](docs/milestones/en.md). |
 
 ## Components
@@ -243,7 +243,6 @@ Role guides:
 - [Contribute code](docs/contribute-code/en.md)
 - [Contribute challenges](docs/contribute-challenges/en.md)
 - [Review challenges](docs/review-challenges/en.md)
-- [Operate platform](docs/operate-platform/en.md)
 - [Docs index](docs/README.md)
 
 Core product and protocol references:

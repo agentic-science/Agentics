@@ -290,4 +290,4 @@ just compose-dev-down
 - [Operations runbook](../operations/zh.md)
 - [Ports、paths 和 target policy](../ports-and-paths/zh.md)
 - [Visual identity system](../visual-identity-system/zh.md)
-- [Rust feature review reference](../new-rust-features-apis/en.md)
+- [Rust modernization reference](../../.agents/skills/full-code-review/references/rust-modernization.md)

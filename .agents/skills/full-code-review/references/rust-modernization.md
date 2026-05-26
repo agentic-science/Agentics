@@ -1,8 +1,8 @@
-# New Rust Features and APIs for Agentics
+# Rust Modernization Reference
 
 This guide summarizes Rust 1.80.0 through Rust 1.95.0 features that should
-change how future Agentics code is written. It is written for coding agents
-working in this repository, not as a complete Rust release changelog.
+shape future Agentics code. It is a full-code-review skill reference for agents
+working in this repository, not a complete Rust release changelog.
 
 The Agentics workspace currently uses Rust 2024:
 
