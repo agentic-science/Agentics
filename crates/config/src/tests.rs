@@ -13,7 +13,7 @@
 )]
 
 use super::Config;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
@@ -43,12 +43,102 @@ fn config_debug_redacts_secrets() {
 #[test]
 fn local_base_url_helpers_use_explicit_inputs() {
     assert_eq!(
-        super::default_local_api_base_url(super::DEFAULT_API_HOST, super::DEFAULT_API_PORT),
+        super::local_api_base_url(super::DEFAULT_API_HOST, super::DEFAULT_API_PORT),
         "http://127.0.0.1:3100"
     );
     assert_eq!(
-        super::default_local_web_base_url(super::DEFAULT_API_HOST, super::DEFAULT_WEB_PORT),
+        super::local_web_base_url(super::DEFAULT_API_HOST, super::DEFAULT_WEB_PORT),
         "http://127.0.0.1:3001"
+    );
+}
+
+/// Verifies prefixed env values deserialize into grouped raw env structs.
+#[test]
+fn raw_app_env_deserializes_prefixed_values() {
+    let raw = super::RawAppEnv::from_env_iter([
+        ("AGENTICS_API_PORT".to_string(), "3222".to_string()),
+        (
+            "AGENTICS_ADMIN_PASSWORD".to_string(),
+            "changed-password".to_string(),
+        ),
+        ("AGENTICS_POSTGRES_PORT".to_string(), "6543".to_string()),
+    ])
+    .expect("raw env should deserialize");
+
+    let config = Config::try_from(raw).expect("raw env should convert");
+
+    assert_eq!(config.api_port, 3222);
+    assert!(
+        config
+            .database_url
+            .expose_secret()
+            .contains(":6543/agentics")
+    );
+    assert!(config.admin_password_matches("changed-password"));
+}
+
+/// Verifies malformed derived-default ports fail instead of falling back silently.
+#[test]
+fn invalid_derived_default_ports_are_rejected() {
+    for (name, value) in [
+        ("AGENTICS_POSTGRES_PORT", "not-a-port"),
+        ("AGENTICS_WEB_PORT", "bad-web-port"),
+        ("AGENTICS_API_PORT", "bad-api-port"),
+    ] {
+        let error = super::RawAppEnv::from_env_iter([(name.to_string(), value.to_string())])
+            .expect_err("invalid port should fail during raw env parsing");
+        assert!(
+            error
+                .to_string()
+                .contains(name.trim_start_matches("AGENTICS_"))
+        );
+    }
+}
+
+/// Verifies generic bool env parsing does not keep legacy bool-ish aliases.
+#[test]
+fn bool_env_values_use_generic_deserialization() {
+    let raw = super::RawAppEnv::from_env_iter([(
+        "AGENTICS_S3_FORCE_PATH_STYLE".to_string(),
+        "false".to_string(),
+    )])
+    .expect("standard bool literal should deserialize");
+    let config = Config::try_from(raw).expect("raw env should convert");
+    assert!(!config.s3_force_path_style);
+
+    let error = super::RawAppEnv::from_env_iter([(
+        "AGENTICS_S3_FORCE_PATH_STYLE".to_string(),
+        "1".to_string(),
+    )])
+    .expect_err("legacy bool-ish alias should fail during raw env parsing");
+    assert!(error.to_string().contains("S3_FORCE_PATH_STYLE"));
+}
+
+/// Verifies secret and hosted-probe env values fail closed when blank.
+#[test]
+fn blank_admin_and_probe_env_values_are_rejected() {
+    let admin_error = Config::try_from(super::RawAppEnv {
+        auth: super::RawAuthEnv {
+            admin_password: Some("   ".to_string()),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .expect_err("blank admin password should fail");
+    assert!(admin_error.to_string().contains("AGENTICS_ADMIN_PASSWORD"));
+
+    let probe_error = Config::try_from(super::RawAppEnv {
+        runner: super::RawRunnerEnv {
+            host_probe_command: Some(" ".to_string()),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
+    .expect_err("blank host probe command should fail");
+    assert!(
+        probe_error
+            .to_string()
+            .contains("AGENTICS_HOST_PROBE_COMMAND")
     );
 }
 
@@ -109,7 +199,7 @@ fn storage_defaults_use_rustfs_s3() {
 
 /// Verifies that default admin credentials are rejected on wildcard bind.
 #[test]
-fn default_admin_credentials_are_rejected_on_wildcard_bind() {
+fn rejects_default_admin_credentials_on_wildcard_bind() {
     let mut config = test_config();
     config.api_host = "0.0.0.0".to_string();
 
@@ -578,76 +668,7 @@ fn worker_accelerator_capabilities_are_explicit() {
 fn test_config() -> Config {
     Config {
         database_url: SecretString::from(""),
-        api_host: super::default_api_host(),
-        api_port: super::default_api_port(),
-        storage_root: super::storage_config::default_storage_root(),
-        storage_backend: super::default_storage_backend(),
-        storage_work_root: None,
-        s3_bucket: super::storage_config::default_s3_bucket(),
-        s3_prefix: None,
-        s3_region: super::default_s3_region(),
-        s3_endpoint_url: super::storage_config::default_s3_endpoint_url(),
-        s3_force_path_style: super::storage_config::default_s3_force_path_style(),
-        storage_max_bundle_archive_bytes: super::default_storage_max_bundle_archive_bytes(),
-        storage_max_statement_bytes: super::default_storage_max_statement_bytes(),
-        storage_max_json_artifact_bytes: super::default_storage_max_json_artifact_bytes(),
-        storage_tmp_object_grace_hours:
-            super::storage_config::default_storage_tmp_object_grace_hours(),
         challenges_root: String::new(),
-        admin_username: super::default_admin_username(),
-        admin_password: super::default_admin_password(),
-        allow_insecure_default_admin_credentials: false,
-        cors_allowed_origins: super::default_cors_allowed_origins(),
-        moltbook_submolt_name: super::default_moltbook_submolt_name(),
-        moltbook_submolt_url: super::default_moltbook_submolt_url(),
-        worker_poll_interval_ms: 3000,
-        worker_stale_job_minutes: 1,
-        worker_accelerators: super::default_worker_accelerators(),
-        worker_gpu_probe_image: None,
-        validation_runs_per_agent_challenge_day: 20,
-        official_runs_per_agent_challenge_day: 5,
-        max_active_official_jobs: 20,
-        max_active_agents: 1_000,
-        max_active_challenge_drafts_per_agent: 10,
-        challenge_private_asset_bytes_per_draft: 250 * 1024 * 1024,
-        challenge_draft_validations_per_day: 10,
-        challenge_draft_validation_timeout_minutes: 30,
-        challenge_private_asset_pending_timeout_minutes: 30,
-        challenge_draft_publish_timeout_minutes: 30,
-        challenge_draft_ttl_days: 14,
-        unpublished_challenge_asset_grace_days: 7,
-        github_oauth_client_id: None,
-        github_oauth_client_secret: None,
-        github_oauth_redirect_url: None,
-        github_oauth_authorize_url: super::default_github_oauth_authorize_url(),
-        github_oauth_token_url: super::default_github_oauth_token_url(),
-        github_api_user_url: super::default_github_api_user_url(),
-        web_session_cookie_name: super::default_web_session_cookie_name(),
-        web_csrf_cookie_name: super::default_web_csrf_cookie_name(),
-        web_session_ttl_hours: super::default_web_session_ttl_hours(),
-        web_session_cookie_secure: false,
-        agent_registration_mode: super::default_agent_registration_mode(),
-        docker_host: None,
-        host_probe_mode: super::default_host_probe_mode(),
-        runner_security_profile: super::default_runner_security_profile(),
-        require_digest_pinned_images: false,
-        runner_writable_storage_mode: super::default_runner_writable_storage_mode(),
-        runner_namespace: super::default_runner_namespace(),
-        runner_runtime_root: None,
-        runner_phase_mount_root: None,
-        runner_writable_slot_classes_mb: super::default_runner_writable_slot_classes_mb(),
-        runner_docker_layer_quota: false,
-        runner_max_output_files: super::default_runner_max_output_files(),
-        runner_max_output_dirs: super::default_runner_max_output_dirs(),
-        runner_max_output_depth: super::default_runner_max_output_depth(),
-        runner_max_runs: super::default_runner_max_runs(),
-        runner_max_result_json_bytes: super::default_runner_max_result_json_bytes(),
-        runner_max_public_results: super::default_runner_max_public_results(),
-        runner_max_result_log_bytes: super::default_runner_max_result_log_bytes(),
-        runner_max_interaction_bytes_per_direction:
-            super::default_runner_max_interaction_bytes_per_direction(),
-        runner_interaction_shutdown_grace_secs:
-            super::default_runner_interaction_shutdown_grace_secs(),
-        log_level: "info".to_string(),
+        ..Default::default()
     }
 }

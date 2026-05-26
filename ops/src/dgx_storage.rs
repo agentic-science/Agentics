@@ -16,23 +16,45 @@ use std::time::Duration;
 
 use clap::Parser;
 use nix::unistd::Uid;
+use serde::Deserialize;
 
 use crate::dgx::{
-    self, DEFAULT_STATE_ROOT, DEFAULT_TEST_DOCKER_LOOP_SIZE, DEFAULT_TEST_PHASE_LOOP_SIZE,
-    DEFAULT_TEST_STATE_ROOT, DgxStorageConfig, ENV_DGX_CONFIRM, ENV_DGX_PRODUCTION_STATE_ROOT,
-    ENV_DGX_TEST_CONFIRM, ENV_DGX_TEST_DOCKER_LOOP_SIZE, ENV_DGX_TEST_PERSIST_FSTAB,
-    ENV_DGX_TEST_PHASE_LOOP_SIZE, ENV_DGX_TEST_PHASE_SLOT_CLASSES_MB,
-    ENV_DGX_TEST_PHASE_SLOT_INODES_PER_MB, ENV_DGX_TEST_PHASE_SLOTS_PER_CLASS,
-    ENV_DGX_TEST_STATE_ROOT, STORAGE_CONFIRMATION, SlotMetadata, TEST_STORAGE_CONFIRMATION,
-    phase_slot_path, slot_name,
+    self, DEFAULT_DGX_TEST_PERSIST_FSTAB, DEFAULT_STATE_ROOT, DEFAULT_TEST_DOCKER_LOOP_SIZE,
+    DEFAULT_TEST_PHASE_LOOP_SIZE, DEFAULT_TEST_STATE_ROOT, DgxStorageConfig,
+    ENV_DGX_TEST_PHASE_SLOT_CLASSES_MB, ENV_DGX_TEST_PHASE_SLOT_INODES_PER_MB,
+    ENV_DGX_TEST_PHASE_SLOTS_PER_CLASS, STORAGE_CONFIRMATION, SlotMetadata,
+    TEST_STORAGE_CONFIRMATION, phase_slot_path, slot_name,
 };
 use crate::support::{
-    DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, env_non_empty, parse_boolish,
-    print_reports, require_safe_destructive_path, run_process,
+    DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, env_non_empty, print_reports,
+    require_safe_destructive_path, run_process,
 };
 
 const PREFIX: &str = "agentics-dgx-storage";
+const ENV_PREFIX: &str = "AGENTICS_";
 const COMMAND_TIMEOUT: Duration = Duration::from_secs(120);
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct RawDgxStorageCommandEnv {
+    dgx_confirm: Option<String>,
+    dgx_test_confirm: Option<String>,
+    dgx_test_state_root: Option<String>,
+    dgx_production_state_root: Option<String>,
+    dgx_test_docker_loop_size: Option<String>,
+    dgx_test_phase_loop_size: Option<String>,
+    dgx_test_phase_slot_classes_mb: Option<String>,
+    dgx_test_phase_slots_per_class: Option<u64>,
+    dgx_test_phase_slot_inodes_per_mb: Option<u64>,
+    dgx_test_persist_fstab: Option<bool>,
+}
+
+impl RawDgxStorageCommandEnv {
+    fn from_process() -> Result<Self, StorageError> {
+        envy::prefixed(ENV_PREFIX)
+            .from_env::<Self>()
+            .map_err(|error| StorageError::InvalidConfig(error.to_string()))
+    }
+}
 
 /// CLI for DGX storage preparation.
 #[derive(Debug, Parser)]
@@ -61,7 +83,14 @@ pub struct PrepareTestStorageCli {
 /// Entrypoint for production storage binary.
 pub async fn run_prepare_from_process() -> ExitCode {
     let cli = PrepareStorageCli::parse();
-    match prepare_storage(false, env_non_empty(ENV_DGX_CONFIRM), cli.dry_run).await {
+    let raw_env = match RawDgxStorageCommandEnv::from_process() {
+        Ok(raw_env) => raw_env,
+        Err(error) => {
+            eprintln!("[{PREFIX}] ERROR: {error}");
+            return ExitCode::from(2);
+        }
+    };
+    match prepare_storage(false, non_empty(raw_env.dgx_confirm), cli.dry_run).await {
         Ok(reports) => print_reports(PREFIX, &reports),
         Err(StorageError::Interrupted) => {
             eprintln!("[{PREFIX}] interrupted by Ctrl-C");
@@ -77,7 +106,14 @@ pub async fn run_prepare_from_process() -> ExitCode {
 /// Entrypoint for test storage binary.
 pub async fn run_prepare_test_from_process() -> ExitCode {
     let cli = PrepareTestStorageCli::parse();
-    match prepare_storage(true, env_non_empty(ENV_DGX_TEST_CONFIRM), cli.dry_run).await {
+    let raw_env = match RawDgxStorageCommandEnv::from_process() {
+        Ok(raw_env) => raw_env,
+        Err(error) => {
+            eprintln!("[{PREFIX}] ERROR: {error}");
+            return ExitCode::from(2);
+        }
+    };
+    match prepare_storage(true, non_empty(raw_env.dgx_test_confirm), cli.dry_run).await {
         Ok(reports) => print_reports(PREFIX, &reports),
         Err(StorageError::Interrupted) => {
             eprintln!("[{PREFIX}] interrupted by Ctrl-C");
@@ -156,8 +192,10 @@ pub async fn prepare_storage_config(
 }
 
 fn test_storage_config() -> Result<DgxStorageConfig, StorageError> {
-    let test_state_root = dgx::env_path(ENV_DGX_TEST_STATE_ROOT, DEFAULT_TEST_STATE_ROOT);
-    let production_state_root = dgx::env_path(ENV_DGX_PRODUCTION_STATE_ROOT, DEFAULT_STATE_ROOT);
+    let raw_env = RawDgxStorageCommandEnv::from_process()?;
+    let test_state_root = path_or_default(raw_env.dgx_test_state_root, DEFAULT_TEST_STATE_ROOT);
+    let production_state_root =
+        path_or_default(raw_env.dgx_production_state_root, DEFAULT_STATE_ROOT);
     if test_state_root == production_state_root {
         return Err(StorageError::Unsafe(
             "refusing to use production state root for test storage".to_string(),
@@ -171,25 +209,27 @@ fn test_storage_config() -> Result<DgxStorageConfig, StorageError> {
     config.docker_loop_image = config.loop_image_root.join("docker-data-root.xfs");
     config.phase_mount_root = test_state_root.join("phase-mounts");
     config.storage_work_root = test_state_root.join("storage-work");
-    config.docker_loop_size = env_non_empty(ENV_DGX_TEST_DOCKER_LOOP_SIZE)
+    config.docker_loop_size = non_empty(raw_env.dgx_test_docker_loop_size)
         .unwrap_or_else(|| DEFAULT_TEST_DOCKER_LOOP_SIZE.to_string());
-    config.phase_loop_size = env_non_empty(ENV_DGX_TEST_PHASE_LOOP_SIZE)
+    config.phase_loop_size = non_empty(raw_env.dgx_test_phase_loop_size)
         .unwrap_or_else(|| DEFAULT_TEST_PHASE_LOOP_SIZE.to_string());
-    if let Some(value) = env_non_empty(ENV_DGX_TEST_PHASE_SLOT_CLASSES_MB) {
+    if let Some(value) = non_empty(raw_env.dgx_test_phase_slot_classes_mb) {
         config.slot_classes_mb =
             dgx::parse_slot_classes(ENV_DGX_TEST_PHASE_SLOT_CLASSES_MB, &value)?;
     }
-    config.slots_per_class =
-        crate::support::parse_optional_positive_env(ENV_DGX_TEST_PHASE_SLOTS_PER_CLASS)?
-            .unwrap_or(config.slots_per_class);
-    config.slot_inodes_per_mb =
-        crate::support::parse_optional_positive_env(ENV_DGX_TEST_PHASE_SLOT_INODES_PER_MB)?
-            .unwrap_or(config.slot_inodes_per_mb);
-    config.persist_fstab = env_non_empty(ENV_DGX_TEST_PERSIST_FSTAB)
-        .as_deref()
-        .map(|value| parse_boolish(ENV_DGX_TEST_PERSIST_FSTAB, value))
-        .transpose()?
-        .unwrap_or(false);
+    config.slots_per_class = optional_positive_value(
+        ENV_DGX_TEST_PHASE_SLOTS_PER_CLASS,
+        raw_env.dgx_test_phase_slots_per_class,
+    )?
+    .unwrap_or(config.slots_per_class);
+    config.slot_inodes_per_mb = optional_positive_value(
+        ENV_DGX_TEST_PHASE_SLOT_INODES_PER_MB,
+        raw_env.dgx_test_phase_slot_inodes_per_mb,
+    )?
+    .unwrap_or(config.slot_inodes_per_mb);
+    config.persist_fstab = raw_env
+        .dgx_test_persist_fstab
+        .unwrap_or(DEFAULT_DGX_TEST_PERSIST_FSTAB);
     config.runtime_uid = optional_sudo_owner_id("SUDO_UID").unwrap_or(config.runtime_uid);
     config.runtime_gid = optional_sudo_owner_id("SUDO_GID").unwrap_or(config.runtime_gid);
     Ok(config)
@@ -199,6 +239,34 @@ fn optional_sudo_owner_id(name: &'static str) -> Option<u32> {
     env_non_empty(name)
         .and_then(|value| value.parse::<u32>().ok())
         .filter(|value| *value > 0)
+}
+
+fn non_empty(value: Option<String>) -> Option<String> {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn path_or_default(value: Option<String>, default: &str) -> PathBuf {
+    PathBuf::from(non_empty(value).unwrap_or_else(|| default.to_string()))
+}
+
+fn optional_positive_value<T>(
+    field: &'static str,
+    value: Option<T>,
+) -> Result<Option<T>, StorageError>
+where
+    T: PartialOrd + From<u8> + Copy,
+{
+    let Some(parsed) = value else {
+        return Ok(None);
+    };
+    if parsed <= T::from(0) {
+        return Err(StorageError::InvalidConfig(format!(
+            "{field} must be greater than zero"
+        )));
+    }
+    Ok(Some(parsed))
 }
 
 fn require_linux_and_root(dry_run: bool) -> Result<(), StorageError> {
@@ -307,13 +375,9 @@ impl StoragePlan {
                     mount: mount.clone(),
                 });
             }
-            for class_mb in &config.slot_classes_mb {
+            for (class_offset, class_mb) in config.slot_classes_mb.iter().enumerate() {
                 for slot_index in 1..=config.slots_per_class {
-                    let class_offset = config
-                        .slot_classes_mb
-                        .iter()
-                        .position(|value| value == class_mb)
-                        .unwrap_or(0) as u64;
+                    let class_offset = class_offset as u64;
                     let project_id = config
                         .project_id_base
                         .saturating_add(class_offset.saturating_mul(config.slots_per_class))
@@ -749,6 +813,8 @@ pub enum StorageError {
     Json(#[from] serde_json::Error),
     #[error("unsafe operation: {0}")]
     Unsafe(String),
+    #[error("invalid storage preparation config: {0}")]
+    InvalidConfig(String),
     #[error("interrupted by Ctrl-C")]
     Interrupted,
     #[error("{0}")]

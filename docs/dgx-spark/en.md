@@ -44,7 +44,7 @@ To include the NVIDIA Docker smoke check, use an operator account that can
 access the intended Docker daemon:
 
 ```bash
-AGENTICS_DGX_RUN_DOCKER_SMOKE=1 \
+AGENTICS_DGX_RUN_DOCKER_SMOKE=true \
 AGENTICS_DGX_DOCKER_PULL_POLICY=never \
 AGENTICS_DGX_CUDA_IMAGE=nvidia/cuda:13.0.1-base-ubuntu24.04 \
 agentics-check-dgx-spark-host
@@ -118,7 +118,7 @@ Run only on Linux and only with operator privileges:
 AGENTICS_DGX_CONFIRM=prepare-storage \
 AGENTICS_RUNTIME_UID=10001 \
 AGENTICS_RUNTIME_GID=10001 \
-AGENTICS_DGX_PERSIST_FSTAB=1 \
+AGENTICS_DGX_PERSIST_FSTAB=true \
 AGENTICS_DGX_PHASE_SLOT_CLASSES_MB='64 256 1024 4096' \
 AGENTICS_DGX_PHASE_SLOTS_PER_CLASS=100 \
 AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB=256 \
@@ -130,7 +130,7 @@ The storage preparer refuses to run unless
 directory layout, formats missing loopback XFS images, mounts them with
 `prjquota`, prepares quota slots under each phase mount, and chowns
 Compose-visible writable roots to `AGENTICS_RUNTIME_UID:AGENTICS_RUNTIME_GID`.
-Set `AGENTICS_DGX_PERSIST_FSTAB=1` to append idempotent `/etc/fstab` entries.
+Set `AGENTICS_DGX_PERSIST_FSTAB=true` to append idempotent `/etc/fstab` entries.
 
 Production Compose uses the host Docker socket. If Docker writable-layer quotas
 are required, the host Docker daemon behind that socket must use a storage
@@ -168,7 +168,7 @@ AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
 AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime \
 AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
 AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
-AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
+AGENTICS_DGX_RUN_MUTATING_PROBES=true \
 AGENTICS_DGX_DOCKER_PULL_POLICY=never \
 agentics-check-dgx-spark-profile
 ```

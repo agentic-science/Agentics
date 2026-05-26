@@ -1,9 +1,7 @@
 //! Environment-backed runtime configuration.
 
 use anyhow::Context as _;
-use figment::{Figment, providers::Env};
 use secrecy::{ExposeSecret, SecretString};
-use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
 use agentics_domain::models::names::MoltbookSubmoltName;
@@ -11,7 +9,7 @@ use agentics_domain::models::urls::{
     GithubApiUserUrl, GithubOauthAuthorizeUrl, GithubOauthRedirectUrl, GithubOauthTokenUrl,
     MoltbookSubmoltUrl,
 };
-pub use local_urls::{default_local_api_base_url, default_local_web_base_url};
+pub use local_urls::{local_api_base_url, local_web_base_url};
 pub use runtime_modes::{
     AgentRegistrationMode, HostProbeMode, RunnerNamespace, RunnerSecurityProfile,
     RunnerWritableStorageMode, WorkerAccelerators,
@@ -24,14 +22,13 @@ pub use storage_config::{
     ENV_AGENTICS_STORAGE_WORK_ROOT, StorageBackend,
 };
 
+mod env;
 mod local_urls;
 mod runtime_modes;
 mod storage_config;
-
-#[cfg(test)]
-use storage_config::{
-    default_s3_region, default_storage_backend, default_storage_max_bundle_archive_bytes,
-    default_storage_max_json_artifact_bytes, default_storage_max_statement_bytes,
+pub use env::{
+    RawApiWebEnv, RawAppEnv, RawAuthEnv, RawDatabaseEnv, RawGithubOauthEnv, RawLoggingEnv,
+    RawMoltbookEnv, RawQuotaEnv, RawRunnerEnv, RawStorageEnv, RawWorkerEnv,
 };
 
 /// Environment variable that configures the API listen port.
@@ -46,6 +43,10 @@ pub const ENV_AGENTICS_ADMIN_USERNAME: &str = "AGENTICS_ADMIN_USERNAME";
 pub const ENV_AGENTICS_ADMIN_PASSWORD: &str = "AGENTICS_ADMIN_PASSWORD";
 /// Environment variable that overrides the hosted runner profile probe command.
 pub const ENV_AGENTICS_HOST_PROBE_COMMAND: &str = "AGENTICS_HOST_PROBE_COMMAND";
+/// Environment variable used to derive the default local Postgres URL.
+pub const ENV_AGENTICS_POSTGRES_PORT: &str = "AGENTICS_POSTGRES_PORT";
+/// Environment variable used to derive the default local CORS origins.
+pub const ENV_AGENTICS_WEB_PORT: &str = "AGENTICS_WEB_PORT";
 /// Environment variable that separates runner containers sharing one Docker daemon.
 pub const ENV_AGENTICS_RUNNER_NAMESPACE: &str = "AGENTICS_RUNNER_NAMESPACE";
 /// Environment variable that configures the shared Moltbook Submolt name.
@@ -53,7 +54,6 @@ pub const ENV_AGENTICS_MOLTBOOK_SUBMOLT_NAME: &str = "AGENTICS_MOLTBOOK_SUBMOLT_
 /// Environment variable that configures the shared Moltbook Submolt URL.
 pub const ENV_AGENTICS_MOLTBOOK_SUBMOLT_URL: &str = "AGENTICS_MOLTBOOK_SUBMOLT_URL";
 
-const CONFIG_ENV_PREFIX: &str = "AGENTICS_";
 /// Default API listen host for local development.
 pub const DEFAULT_API_HOST: &str = "127.0.0.1";
 /// Default API listen port for local development.
@@ -66,13 +66,64 @@ pub const DEFAULT_ADMIN_USERNAME: &str = "admin";
 pub const INSECURE_DEFAULT_ADMIN_PASSWORD: &str = "agentics-admin";
 /// Default hosted runner profile probe command in packaged deployments.
 pub const DEFAULT_HOST_PROBE_COMMAND: &str = "bin/agentics-check-dgx-spark-profile";
-const DEFAULT_POSTGRES_PORT: u16 = 5432;
-const DEFAULT_AGENT_REGISTRATION_MODE: AgentRegistrationMode = AgentRegistrationMode::PioneerCode;
-const DEFAULT_WORKER_ACCELERATORS: WorkerAccelerators = WorkerAccelerators::None;
+/// Default local Postgres port used to derive the local database URL.
+pub const DEFAULT_POSTGRES_PORT: u16 = 5432;
+/// Default challenge bundle root for local development.
+pub const DEFAULT_CHALLENGES_ROOT: &str = "examples/challenges";
+/// Default web session cookie name.
+pub const DEFAULT_WEB_SESSION_COOKIE_NAME: &str = "agentics_session";
+/// Default web CSRF cookie name.
+pub const DEFAULT_WEB_CSRF_COOKIE_NAME: &str = "agentics_csrf";
+/// Default web session lifetime in hours.
+pub const DEFAULT_WEB_SESSION_TTL_HOURS: i64 = 24;
+/// Default secure-cookie requirement for local development.
+pub const DEFAULT_WEB_SESSION_COOKIE_SECURE: bool = false;
+/// Default opt-in flag for allowing local insecure admin credentials.
+pub const DEFAULT_ALLOW_INSECURE_DEFAULT_ADMIN_CREDENTIALS: bool = false;
+/// Default unauthenticated agent registration policy.
+pub const DEFAULT_AGENT_REGISTRATION_MODE: AgentRegistrationMode =
+    AgentRegistrationMode::PioneerCode;
+/// Default worker poll interval in milliseconds.
+pub const DEFAULT_WORKER_POLL_INTERVAL_MS: u64 = 3000;
+/// Default stale job lease threshold in minutes.
+pub const DEFAULT_WORKER_STALE_JOB_MINUTES: i32 = 1;
+/// Default worker accelerator capability.
+pub const DEFAULT_WORKER_ACCELERATORS: WorkerAccelerators = WorkerAccelerators::None;
+/// Default validation runs allowed per agent, challenge, and day.
+pub const DEFAULT_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY: u32 = 20;
+/// Default official runs allowed per agent, challenge, and day.
+pub const DEFAULT_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY: u32 = 5;
+/// Default global active official job limit.
+pub const DEFAULT_MAX_ACTIVE_OFFICIAL_JOBS: u32 = 20;
+/// Default active agent limit.
+pub const DEFAULT_MAX_ACTIVE_AGENTS: u32 = 1_000;
+/// Default active challenge draft limit per agent.
+pub const DEFAULT_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT: u32 = 10;
+/// Default private asset byte budget per challenge draft.
+pub const DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT: u64 = 250 * 1024 * 1024;
+/// Default challenge draft validation count per day.
+pub const DEFAULT_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY: u32 = 10;
+/// Default challenge draft validation timeout in minutes.
+pub const DEFAULT_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES: i32 = 30;
+/// Default pending private asset timeout in minutes.
+pub const DEFAULT_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES: i32 = 30;
+/// Default draft publish timeout in minutes.
+pub const DEFAULT_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES: i32 = 30;
+/// Default unpublished challenge draft TTL in days.
+pub const DEFAULT_CHALLENGE_DRAFT_TTL_DAYS: i64 = 14;
+/// Default grace period for unpublished challenge assets in days.
+pub const DEFAULT_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS: i64 = 7;
+/// Default worker host-probe mode.
+pub const DEFAULT_HOST_PROBE_MODE: HostProbeMode = HostProbeMode::Off;
+/// Default requirement for digest-pinned runner images.
+pub const DEFAULT_REQUIRE_DIGEST_PINNED_IMAGES: bool = false;
 const DEFAULT_MOLTBOOK_SUBMOLT_NAME: &str = "agentics-platform";
 const DEFAULT_MOLTBOOK_SUBMOLT_URL: &str = "https://www.moltbook.com/m/agentics-platform";
-const DEFAULT_RUNNER_SECURITY_PROFILE: RunnerSecurityProfile = RunnerSecurityProfile::Development;
-const DEFAULT_RUNNER_WRITABLE_STORAGE_MODE: RunnerWritableStorageMode =
+/// Default runner security profile.
+pub const DEFAULT_RUNNER_SECURITY_PROFILE: RunnerSecurityProfile =
+    RunnerSecurityProfile::Development;
+/// Default runner writable-storage mode.
+pub const DEFAULT_RUNNER_WRITABLE_STORAGE_MODE: RunnerWritableStorageMode =
     RunnerWritableStorageMode::Unbounded;
 const DEFAULT_RUNNER_NAMESPACE: &str = "default";
 const DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB: &str = "64,256,1024,4096";
@@ -86,156 +137,178 @@ const DEFAULT_RUNNER_MAX_PUBLIC_RESULTS: u64 = 1024;
 const DEFAULT_RUNNER_MAX_RESULT_LOG_BYTES: u64 = 256 * 1024;
 const DEFAULT_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION: u64 = 16 * 1024 * 1024;
 const DEFAULT_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS: u64 = 2;
+/// Default runner Docker writable-layer quota enforcement flag.
+pub const DEFAULT_RUNNER_DOCKER_LAYER_QUOTA: bool = false;
+/// Default runtime log level.
+pub const DEFAULT_LOG_LEVEL: &str = "info";
 
-/// Application configuration loaded from `AGENTICS_*` environment variables.
-#[derive(Debug, Clone, Deserialize)]
+/// Application configuration loaded from validated `AGENTICS_*` environment values.
+#[derive(Debug, Clone)]
 pub struct Config {
-    #[serde(default = "default_database_url")]
     pub database_url: SecretString,
-    #[serde(default = "default_api_host")]
     pub api_host: String,
-    #[serde(default = "default_api_port")]
     pub api_port: u16,
-    #[serde(default = "storage_config::default_storage_root")]
     pub storage_root: String,
-    #[serde(default = "storage_config::default_storage_backend")]
     pub storage_backend: StorageBackend,
-    #[serde(default)]
     pub storage_work_root: Option<String>,
-    #[serde(default = "storage_config::default_s3_bucket")]
     pub s3_bucket: Option<String>,
-    #[serde(default)]
     pub s3_prefix: Option<String>,
-    #[serde(default = "storage_config::default_s3_region")]
     pub s3_region: String,
-    #[serde(default = "storage_config::default_s3_endpoint_url")]
     pub s3_endpoint_url: Option<url::Url>,
-    #[serde(default = "storage_config::default_s3_force_path_style")]
     pub s3_force_path_style: bool,
-    #[serde(default = "storage_config::default_storage_max_bundle_archive_bytes")]
     pub storage_max_bundle_archive_bytes: u64,
-    #[serde(default = "storage_config::default_storage_max_statement_bytes")]
     pub storage_max_statement_bytes: u64,
-    #[serde(default = "storage_config::default_storage_max_json_artifact_bytes")]
     pub storage_max_json_artifact_bytes: u64,
-    #[serde(default = "storage_config::default_storage_tmp_object_grace_hours")]
     pub storage_tmp_object_grace_hours: u64,
-    #[serde(default = "default_challenges_root")]
     pub challenges_root: String,
-    #[serde(default = "default_admin_username")]
     pub admin_username: String,
-    #[serde(default = "default_admin_password")]
     pub admin_password: SecretString,
-    #[serde(default)]
     pub allow_insecure_default_admin_credentials: bool,
-    #[serde(default = "default_cors_allowed_origins")]
     pub cors_allowed_origins: String,
-    #[serde(default = "default_moltbook_submolt_name")]
     pub moltbook_submolt_name: MoltbookSubmoltName,
-    #[serde(default = "default_moltbook_submolt_url")]
     pub moltbook_submolt_url: MoltbookSubmoltUrl,
-    #[serde(default = "default_worker_poll_interval_ms")]
     pub worker_poll_interval_ms: u64,
-    #[serde(default = "default_worker_stale_job_minutes")]
     pub worker_stale_job_minutes: i32,
-    #[serde(default = "default_worker_accelerators")]
     pub worker_accelerators: WorkerAccelerators,
-    #[serde(default)]
     pub worker_gpu_probe_image: Option<String>,
-    #[serde(default = "default_validation_runs_per_agent_challenge_day")]
     pub validation_runs_per_agent_challenge_day: u32,
-    #[serde(default = "default_official_runs_per_agent_challenge_day")]
     pub official_runs_per_agent_challenge_day: u32,
-    #[serde(default = "default_max_active_official_jobs")]
     pub max_active_official_jobs: u32,
-    #[serde(default = "default_max_active_agents")]
     pub max_active_agents: u32,
-    #[serde(default = "default_max_active_challenge_drafts_per_agent")]
     pub max_active_challenge_drafts_per_agent: u32,
-    #[serde(default = "default_challenge_private_asset_bytes_per_draft")]
     pub challenge_private_asset_bytes_per_draft: u64,
-    #[serde(default = "default_challenge_draft_validations_per_day")]
     pub challenge_draft_validations_per_day: u32,
-    #[serde(default = "default_challenge_draft_validation_timeout_minutes")]
     pub challenge_draft_validation_timeout_minutes: i32,
-    #[serde(default = "default_challenge_private_asset_pending_timeout_minutes")]
     pub challenge_private_asset_pending_timeout_minutes: i32,
-    #[serde(default = "default_challenge_draft_publish_timeout_minutes")]
     pub challenge_draft_publish_timeout_minutes: i32,
-    #[serde(default = "default_challenge_draft_ttl_days")]
     pub challenge_draft_ttl_days: i64,
-    #[serde(default = "default_unpublished_challenge_asset_grace_days")]
     pub unpublished_challenge_asset_grace_days: i64,
-    #[serde(default)]
     pub github_oauth_client_id: Option<String>,
-    #[serde(default)]
     pub github_oauth_client_secret: Option<SecretString>,
-    #[serde(default)]
     pub github_oauth_redirect_url: Option<GithubOauthRedirectUrl>,
-    #[serde(default = "default_github_oauth_authorize_url")]
     pub github_oauth_authorize_url: GithubOauthAuthorizeUrl,
-    #[serde(default = "default_github_oauth_token_url")]
     pub github_oauth_token_url: GithubOauthTokenUrl,
-    #[serde(default = "default_github_api_user_url")]
     pub github_api_user_url: GithubApiUserUrl,
-    #[serde(default = "default_web_session_cookie_name")]
     pub web_session_cookie_name: String,
-    #[serde(default = "default_web_csrf_cookie_name")]
     pub web_csrf_cookie_name: String,
-    #[serde(default = "default_web_session_ttl_hours")]
     pub web_session_ttl_hours: i64,
-    #[serde(default)]
     pub web_session_cookie_secure: bool,
-    #[serde(default = "default_agent_registration_mode")]
     pub agent_registration_mode: AgentRegistrationMode,
     /// Optional Docker host URI used by CI or remote Docker setups.
-    #[serde(default)]
     pub docker_host: Option<String>,
-    #[serde(default = "default_host_probe_mode")]
     pub host_probe_mode: HostProbeMode,
-    #[serde(default = "default_runner_security_profile")]
+    pub host_probe_command: String,
     pub runner_security_profile: RunnerSecurityProfile,
-    #[serde(default)]
     pub require_digest_pinned_images: bool,
-    #[serde(default = "default_runner_writable_storage_mode")]
     pub runner_writable_storage_mode: RunnerWritableStorageMode,
-    #[serde(default = "default_runner_namespace")]
     pub runner_namespace: RunnerNamespace,
-    #[serde(default)]
     pub runner_runtime_root: Option<String>,
-    #[serde(default)]
     pub runner_phase_mount_root: Option<String>,
-    #[serde(default = "default_runner_writable_slot_classes_mb")]
     pub runner_writable_slot_classes_mb: String,
-    #[serde(default)]
     pub runner_docker_layer_quota: bool,
-    #[serde(default = "default_runner_max_output_files")]
     pub runner_max_output_files: u64,
-    #[serde(default = "default_runner_max_output_dirs")]
     pub runner_max_output_dirs: u64,
-    #[serde(default = "default_runner_max_output_depth")]
     pub runner_max_output_depth: u64,
-    #[serde(default = "default_runner_max_runs")]
     pub runner_max_runs: u64,
-    #[serde(default = "default_runner_max_result_json_bytes")]
     pub runner_max_result_json_bytes: u64,
-    #[serde(default = "default_runner_max_public_results")]
     pub runner_max_public_results: u64,
-    #[serde(default = "default_runner_max_result_log_bytes")]
     pub runner_max_result_log_bytes: u64,
-    #[serde(default = "default_runner_max_interaction_bytes_per_direction")]
     pub runner_max_interaction_bytes_per_direction: u64,
-    #[serde(default = "default_runner_interaction_shutdown_grace_secs")]
     pub runner_interaction_shutdown_grace_secs: u64,
-    #[serde(default = "default_log_level")]
     pub log_level: String,
 }
 
-/// Build the default local database URL without exposing it through Debug output.
-fn default_database_url() -> SecretString {
+impl Default for Config {
+    /// Build local-development configuration used when env/config fields are absent.
+    fn default() -> Self {
+        Self {
+            database_url: local_database_url(DEFAULT_POSTGRES_PORT),
+            api_host: DEFAULT_API_HOST.to_string(),
+            api_port: DEFAULT_API_PORT,
+            storage_root: DEFAULT_STORAGE_ROOT.to_string(),
+            storage_backend: DEFAULT_STORAGE_BACKEND,
+            storage_work_root: None,
+            s3_bucket: Some(DEFAULT_S3_BUCKET.to_string()),
+            s3_prefix: None,
+            s3_region: DEFAULT_S3_REGION.to_string(),
+            s3_endpoint_url: Some(builtin_s3_endpoint_url()),
+            s3_force_path_style: DEFAULT_S3_FORCE_PATH_STYLE,
+            storage_max_bundle_archive_bytes:
+                storage_config::DEFAULT_STORAGE_MAX_BUNDLE_ARCHIVE_BYTES,
+            storage_max_statement_bytes: storage_config::DEFAULT_STORAGE_MAX_STATEMENT_BYTES,
+            storage_max_json_artifact_bytes:
+                storage_config::DEFAULT_STORAGE_MAX_JSON_ARTIFACT_BYTES,
+            storage_tmp_object_grace_hours: storage_config::DEFAULT_STORAGE_TMP_OBJECT_GRACE_HOURS,
+            challenges_root: DEFAULT_CHALLENGES_ROOT.to_string(),
+            admin_username: DEFAULT_ADMIN_USERNAME.to_string(),
+            admin_password: SecretString::from(INSECURE_DEFAULT_ADMIN_PASSWORD),
+            allow_insecure_default_admin_credentials:
+                DEFAULT_ALLOW_INSECURE_DEFAULT_ADMIN_CREDENTIALS,
+            cors_allowed_origins: local_cors_allowed_origins(DEFAULT_WEB_PORT),
+            moltbook_submolt_name: builtin_moltbook_submolt_name(),
+            moltbook_submolt_url: builtin_moltbook_submolt_url(),
+            worker_poll_interval_ms: DEFAULT_WORKER_POLL_INTERVAL_MS,
+            worker_stale_job_minutes: DEFAULT_WORKER_STALE_JOB_MINUTES,
+            worker_accelerators: DEFAULT_WORKER_ACCELERATORS,
+            worker_gpu_probe_image: None,
+            validation_runs_per_agent_challenge_day:
+                DEFAULT_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY,
+            official_runs_per_agent_challenge_day: DEFAULT_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY,
+            max_active_official_jobs: DEFAULT_MAX_ACTIVE_OFFICIAL_JOBS,
+            max_active_agents: DEFAULT_MAX_ACTIVE_AGENTS,
+            max_active_challenge_drafts_per_agent: DEFAULT_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT,
+            challenge_private_asset_bytes_per_draft:
+                DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT,
+            challenge_draft_validations_per_day: DEFAULT_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY,
+            challenge_draft_validation_timeout_minutes:
+                DEFAULT_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES,
+            challenge_private_asset_pending_timeout_minutes:
+                DEFAULT_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES,
+            challenge_draft_publish_timeout_minutes:
+                DEFAULT_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES,
+            challenge_draft_ttl_days: DEFAULT_CHALLENGE_DRAFT_TTL_DAYS,
+            unpublished_challenge_asset_grace_days: DEFAULT_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS,
+            github_oauth_client_id: None,
+            github_oauth_client_secret: None,
+            github_oauth_redirect_url: None,
+            github_oauth_authorize_url: builtin_github_oauth_authorize_url(),
+            github_oauth_token_url: builtin_github_oauth_token_url(),
+            github_api_user_url: builtin_github_api_user_url(),
+            web_session_cookie_name: DEFAULT_WEB_SESSION_COOKIE_NAME.to_string(),
+            web_csrf_cookie_name: DEFAULT_WEB_CSRF_COOKIE_NAME.to_string(),
+            web_session_ttl_hours: DEFAULT_WEB_SESSION_TTL_HOURS,
+            web_session_cookie_secure: DEFAULT_WEB_SESSION_COOKIE_SECURE,
+            agent_registration_mode: DEFAULT_AGENT_REGISTRATION_MODE,
+            docker_host: None,
+            host_probe_mode: DEFAULT_HOST_PROBE_MODE,
+            host_probe_command: DEFAULT_HOST_PROBE_COMMAND.to_string(),
+            runner_security_profile: DEFAULT_RUNNER_SECURITY_PROFILE,
+            require_digest_pinned_images: DEFAULT_REQUIRE_DIGEST_PINNED_IMAGES,
+            runner_writable_storage_mode: DEFAULT_RUNNER_WRITABLE_STORAGE_MODE,
+            runner_namespace: builtin_runner_namespace(),
+            runner_runtime_root: None,
+            runner_phase_mount_root: None,
+            runner_writable_slot_classes_mb: DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB.to_string(),
+            runner_docker_layer_quota: DEFAULT_RUNNER_DOCKER_LAYER_QUOTA,
+            runner_max_output_files: DEFAULT_RUNNER_MAX_OUTPUT_FILES,
+            runner_max_output_dirs: DEFAULT_RUNNER_MAX_OUTPUT_DIRS,
+            runner_max_output_depth: DEFAULT_RUNNER_MAX_OUTPUT_DEPTH,
+            runner_max_runs: DEFAULT_RUNNER_MAX_RUNS,
+            runner_max_result_json_bytes: DEFAULT_RUNNER_MAX_RESULT_JSON_BYTES,
+            runner_max_public_results: DEFAULT_RUNNER_MAX_PUBLIC_RESULTS,
+            runner_max_result_log_bytes: DEFAULT_RUNNER_MAX_RESULT_LOG_BYTES,
+            runner_max_interaction_bytes_per_direction:
+                DEFAULT_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION,
+            runner_interaction_shutdown_grace_secs: DEFAULT_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS,
+            log_level: DEFAULT_LOG_LEVEL.to_string(),
+        }
+    }
+}
+
+/// Build the local database URL without exposing it through Debug output.
+fn local_database_url(postgres_port: u16) -> SecretString {
     SecretString::from(format!(
-        "postgres://agentics:agentics@127.0.0.1:{}/agentics",
-        env_port("AGENTICS_POSTGRES_PORT", DEFAULT_POSTGRES_PORT)
+        "postgres://agentics:agentics@127.0.0.1:{postgres_port}/agentics"
     ))
 }
 
@@ -260,282 +333,97 @@ fn validate_cors_origin(origin: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Handles default api host for this module.
-fn default_api_host() -> String {
-    DEFAULT_API_HOST.to_string()
-}
-
-/// Handles default api port for this module.
-fn default_api_port() -> u16 {
-    DEFAULT_API_PORT
-}
-
-/// Handles default challenges root for this module.
-fn default_challenges_root() -> String {
-    "examples/challenges".to_string()
-}
-
-/// Handles default admin username for this module.
-fn default_admin_username() -> String {
-    DEFAULT_ADMIN_USERNAME.to_string()
-}
-
-/// Handles default admin password for this module.
-fn default_admin_password() -> SecretString {
-    SecretString::from(INSECURE_DEFAULT_ADMIN_PASSWORD)
-}
-
-/// Handles default cors allowed origins for this module.
-fn default_cors_allowed_origins() -> String {
-    let web_port = env_port("AGENTICS_WEB_PORT", DEFAULT_WEB_PORT);
+/// Build local CORS origins from the configured local web port.
+fn local_cors_allowed_origins(web_port: u16) -> String {
     format!("http://127.0.0.1:{web_port},http://localhost:{web_port}")
 }
 
-/// Handles env port for this module.
-fn env_port(name: &str, default: u16) -> u16 {
-    std::env::var(name)
-        .ok()
-        .and_then(|value| value.parse::<u16>().ok())
-        .unwrap_or(default)
-}
-
-/// Handles default worker poll interval ms for this module.
-fn default_worker_poll_interval_ms() -> u64 {
-    3000
-}
-
-/// Handles default worker stale job minutes for this module.
-fn default_worker_stale_job_minutes() -> i32 {
-    1
-}
-
-/// Default worker accelerator capability.
-fn default_worker_accelerators() -> WorkerAccelerators {
-    DEFAULT_WORKER_ACCELERATORS
+#[allow(
+    clippy::expect_used,
+    reason = "hard-coded S3 endpoint is validated at compile-time by tests and has no runtime fallback"
+)]
+/// Built-in local RustFS endpoint for non-Compose S3-backed development.
+fn builtin_s3_endpoint_url() -> url::Url {
+    DEFAULT_S3_ENDPOINT_URL
+        .parse()
+        .expect("built-in S3 endpoint URL must be valid")
 }
 
 #[allow(
     clippy::expect_used,
-    reason = "hard-coded default Moltbook Submolt name must satisfy the domain parser"
+    reason = "hard-coded Moltbook Submolt name must satisfy the domain parser"
 )]
-/// Default shared Moltbook Submolt name.
-fn default_moltbook_submolt_name() -> MoltbookSubmoltName {
+/// Built-in shared Moltbook Submolt name.
+fn builtin_moltbook_submolt_name() -> MoltbookSubmoltName {
     MoltbookSubmoltName::try_new(DEFAULT_MOLTBOOK_SUBMOLT_NAME.to_string())
-        .expect("default Moltbook Submolt name must be valid")
+        .expect("built-in Moltbook Submolt name must be valid")
 }
 
 #[allow(
     clippy::expect_used,
-    reason = "hard-coded default Moltbook Submolt URL must satisfy the domain parser"
+    reason = "hard-coded Moltbook Submolt URL must satisfy the domain parser"
 )]
-/// Default shared Moltbook Submolt URL.
-fn default_moltbook_submolt_url() -> MoltbookSubmoltUrl {
+/// Built-in shared Moltbook Submolt URL.
+fn builtin_moltbook_submolt_url() -> MoltbookSubmoltUrl {
     MoltbookSubmoltUrl::try_new(DEFAULT_MOLTBOOK_SUBMOLT_URL)
-        .expect("default Moltbook Submolt URL must be valid")
-}
-
-/// Handles default validation runs per agent challenge day for this module.
-fn default_validation_runs_per_agent_challenge_day() -> u32 {
-    20
-}
-
-/// Handles default official runs per agent challenge day for this module.
-fn default_official_runs_per_agent_challenge_day() -> u32 {
-    5
-}
-
-/// Handles default max active official jobs for this module.
-fn default_max_active_official_jobs() -> u32 {
-    20
-}
-
-/// Handles default max active agents for this module.
-fn default_max_active_agents() -> u32 {
-    1_000
-}
-
-/// Handles default max active challenge drafts per agent for this module.
-fn default_max_active_challenge_drafts_per_agent() -> u32 {
-    10
-}
-
-/// Handles default challenge private asset bytes per draft for this module.
-fn default_challenge_private_asset_bytes_per_draft() -> u64 {
-    250 * 1024 * 1024
-}
-
-/// Handles default challenge draft validations per day for this module.
-fn default_challenge_draft_validations_per_day() -> u32 {
-    10
-}
-
-/// Handles default challenge draft validation timeout minutes for this module.
-fn default_challenge_draft_validation_timeout_minutes() -> i32 {
-    30
-}
-
-/// Handles default private asset pending timeout minutes for this module.
-fn default_challenge_private_asset_pending_timeout_minutes() -> i32 {
-    30
-}
-
-/// Handles default challenge draft publish timeout minutes for this module.
-fn default_challenge_draft_publish_timeout_minutes() -> i32 {
-    30
-}
-
-/// Handles default challenge draft ttl days for this module.
-fn default_challenge_draft_ttl_days() -> i64 {
-    14
-}
-
-/// Handles default unpublished challenge asset grace days for this module.
-fn default_unpublished_challenge_asset_grace_days() -> i64 {
-    7
+        .expect("built-in Moltbook Submolt URL must be valid")
 }
 
 #[allow(
     clippy::expect_used,
-    reason = "static default URLs are validated by type constructors and have no runtime fallback"
+    reason = "static URLs are validated by type constructors and have no runtime fallback"
 )]
-/// Handles default github oauth authorize url for this module.
-fn default_github_oauth_authorize_url() -> GithubOauthAuthorizeUrl {
+/// Built-in GitHub OAuth authorize URL.
+fn builtin_github_oauth_authorize_url() -> GithubOauthAuthorizeUrl {
     GithubOauthAuthorizeUrl::try_new("https://github.com/login/oauth/authorize")
-        .expect("default GitHub OAuth authorize URL must be valid")
+        .expect("built-in GitHub OAuth authorize URL must be valid")
 }
 
 #[allow(
     clippy::expect_used,
-    reason = "static default URLs are validated by type constructors and have no runtime fallback"
+    reason = "static URLs are validated by type constructors and have no runtime fallback"
 )]
-/// Handles default github oauth token url for this module.
-fn default_github_oauth_token_url() -> GithubOauthTokenUrl {
+/// Built-in GitHub OAuth token URL.
+fn builtin_github_oauth_token_url() -> GithubOauthTokenUrl {
     GithubOauthTokenUrl::try_new("https://github.com/login/oauth/access_token")
-        .expect("default GitHub OAuth token URL must be valid")
+        .expect("built-in GitHub OAuth token URL must be valid")
 }
 
 #[allow(
     clippy::expect_used,
-    reason = "static default URLs are validated by type constructors and have no runtime fallback"
+    reason = "static URLs are validated by type constructors and have no runtime fallback"
 )]
-/// Handles default github api user url for this module.
-fn default_github_api_user_url() -> GithubApiUserUrl {
+/// Built-in GitHub API user URL.
+fn builtin_github_api_user_url() -> GithubApiUserUrl {
     GithubApiUserUrl::try_new("https://api.github.com/user")
-        .expect("default GitHub API user URL must be valid")
-}
-
-/// Handles default web session cookie name for this module.
-fn default_web_session_cookie_name() -> String {
-    "agentics_session".to_string()
-}
-
-/// Handles default web csrf cookie name for this module.
-fn default_web_csrf_cookie_name() -> String {
-    "agentics_csrf".to_string()
-}
-
-/// Handles default web session ttl hours for this module.
-fn default_web_session_ttl_hours() -> i64 {
-    24
-}
-
-/// Default MVP registration mode that requires pioneer codes.
-fn default_agent_registration_mode() -> AgentRegistrationMode {
-    DEFAULT_AGENT_REGISTRATION_MODE
-}
-
-/// Handles default log level for this module.
-fn default_log_level() -> String {
-    "info".to_string()
-}
-
-/// Handles default runner writable storage mode for this module.
-fn default_runner_writable_storage_mode() -> RunnerWritableStorageMode {
-    DEFAULT_RUNNER_WRITABLE_STORAGE_MODE
+        .expect("built-in GitHub API user URL must be valid")
 }
 
 #[allow(
     clippy::expect_used,
-    reason = "hard-coded default runner namespace must satisfy the domain parser"
+    reason = "hard-coded runner namespace must satisfy the domain parser"
 )]
-/// Default runner namespace for non-containerized local development.
-fn default_runner_namespace() -> RunnerNamespace {
+/// Built-in runner namespace for non-containerized local development.
+fn builtin_runner_namespace() -> RunnerNamespace {
     RunnerNamespace::try_new(DEFAULT_RUNNER_NAMESPACE)
-        .expect("default runner namespace must be valid")
-}
-
-/// Default runner security profile for local development.
-fn default_runner_security_profile() -> RunnerSecurityProfile {
-    DEFAULT_RUNNER_SECURITY_PROFILE
-}
-
-/// Handles default runner writable slot classes mb for this module.
-fn default_runner_writable_slot_classes_mb() -> String {
-    DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB.to_string()
-}
-
-/// Default maximum regular files accepted in one evaluator-visible run tree.
-fn default_runner_max_output_files() -> u64 {
-    DEFAULT_RUNNER_MAX_OUTPUT_FILES
-}
-
-/// Default maximum directories accepted in one evaluator-visible run tree.
-fn default_runner_max_output_dirs() -> u64 {
-    DEFAULT_RUNNER_MAX_OUTPUT_DIRS
-}
-
-/// Default maximum path depth accepted in one evaluator-visible run tree.
-fn default_runner_max_output_depth() -> u64 {
-    DEFAULT_RUNNER_MAX_OUTPUT_DEPTH
-}
-
-/// Default maximum solution invocations accepted in one evaluation.
-fn default_runner_max_runs() -> u64 {
-    DEFAULT_RUNNER_MAX_RUNS
-}
-
-/// Default maximum raw evaluator result JSON bytes accepted before parsing.
-fn default_runner_max_result_json_bytes() -> u64 {
-    DEFAULT_RUNNER_MAX_RESULT_JSON_BYTES
-}
-
-/// Default maximum public case result entries accepted in evaluator output.
-fn default_runner_max_public_results() -> u64 {
-    DEFAULT_RUNNER_MAX_PUBLIC_RESULTS
-}
-
-/// Default maximum embedded evaluator log bytes accepted in evaluator output.
-fn default_runner_max_result_log_bytes() -> u64 {
-    DEFAULT_RUNNER_MAX_RESULT_LOG_BYTES
-}
-
-/// Default maximum bytes relayed in each direction during a piped-stdio interaction.
-fn default_runner_max_interaction_bytes_per_direction() -> u64 {
-    DEFAULT_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION
-}
-
-/// Default grace period for attached stdio pumps after interactive containers exit.
-fn default_runner_interaction_shutdown_grace_secs() -> u64 {
-    DEFAULT_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS
-}
-
-/// Default hosted profile probe mode for local development.
-fn default_host_probe_mode() -> HostProbeMode {
-    HostProbeMode::Off
+        .expect("built-in runner namespace must be valid")
 }
 
 impl Config {
     /// Load configuration from `AGENTICS_*` environment variables with defaults.
     pub fn from_env() -> anyhow::Result<Self> {
-        let config: Config = Figment::new()
-            .merge(Env::prefixed(CONFIG_ENV_PREFIX))
-            .extract()?;
-        Ok(config)
+        let raw = RawAppEnv::from_env().context("failed to load AGENTICS_* environment")?;
+        Self::try_from(raw)
     }
 
     /// Reject settings that are acceptable for local development but dangerous
     /// when the API is reachable from another machine.
     pub fn validate_api_security(&self) -> anyhow::Result<()> {
+        validate_required_trimmed(Some(&self.admin_username), ENV_AGENTICS_ADMIN_USERNAME)?;
+        validate_required_trimmed(
+            Some(self.admin_password.expose_secret()),
+            ENV_AGENTICS_ADMIN_PASSWORD,
+        )?;
         if self.uses_default_admin_credentials()
             && !self.allow_insecure_default_admin_credentials
             && !local_urls::is_loopback_host(&self.api_host)
@@ -744,6 +632,10 @@ impl Config {
             );
         }
         if self.host_probe_mode != HostProbeMode::Off {
+            validate_required_trimmed(
+                Some(&self.host_probe_command),
+                ENV_AGENTICS_HOST_PROBE_COMMAND,
+            )?;
             self.validate_required_runner_runtime_root("AGENTICS_HOST_PROBE_MODE is enabled")?;
         }
         if let Some(runtime_root) = self

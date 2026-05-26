@@ -3,10 +3,7 @@
 use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 
-use agentics_config::{
-    Config, DEFAULT_HOST_PROBE_COMMAND, ENV_AGENTICS_HOST_PROBE_COMMAND, HostProbeMode,
-    WorkerAccelerators,
-};
+use agentics_config::{Config, HostProbeMode, WorkerAccelerators};
 use agentics_contracts::zip_project::DockerNetworkMode;
 use bollard::Docker;
 use bollard::container::LogOutput;
@@ -32,9 +29,8 @@ pub(crate) async fn enforce_host_probe(config: &Config) -> anyhow::Result<()> {
         HostProbeMode::Off => Ok(()),
         HostProbeMode::Warn | HostProbeMode::Require => {
             let mode = config.host_probe_mode;
-            let command = std::env::var(ENV_AGENTICS_HOST_PROBE_COMMAND)
-                .unwrap_or_else(|_| DEFAULT_HOST_PROBE_COMMAND.to_string());
-            let output = run_host_probe_command(&command, mode).await;
+            let command = config.host_probe_command.as_str();
+            let output = run_host_probe_command(command, mode).await;
             match output {
                 Ok(output)
                     if output.status.success() && !output_contains_failure(&output.stdout) =>

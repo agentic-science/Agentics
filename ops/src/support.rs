@@ -1,10 +1,9 @@
 //! Shared operational support primitives.
 //!
 //! These helpers keep operational binaries consistent without merging unrelated
-//! tasks into one executable. They provide typed environment parsing,
-//! deterministic check output, bounded external process calls at true OS
-//! boundaries, cancellation-aware command execution, and small filesystem
-//! safety utilities.
+//! tasks into one executable. They provide deterministic check output, bounded
+//! external process calls at true OS boundaries, cancellation-aware command
+//! execution, and small filesystem safety utilities.
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -36,98 +35,6 @@ pub fn env_non_empty(name: &str) -> Option<String> {
         .ok()
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
-}
-
-/// Parse a non-empty environment variable with a domain parser.
-pub fn parse_env<T>(name: &str) -> Result<Option<T>, SupportError>
-where
-    T: std::str::FromStr,
-    T::Err: std::fmt::Display,
-{
-    env_non_empty(name)
-        .map(|value| {
-            value
-                .parse::<T>()
-                .map_err(|error| SupportError::InvalidEnv {
-                    name: name.to_string(),
-                    value,
-                    message: error.to_string(),
-                })
-        })
-        .transpose()
-}
-
-/// Parse an optional boolean environment variable.
-pub fn parse_bool_env(name: &str, default: bool) -> Result<bool, SupportError> {
-    let Some(value) = env_non_empty(name) else {
-        return Ok(default);
-    };
-    parse_boolish(name, &value)
-}
-
-/// Parse a boolean-like value used by legacy operational env flags.
-pub fn parse_boolish(name: &str, value: &str) -> Result<bool, SupportError> {
-    match value.trim() {
-        "1" | "true" | "TRUE" | "yes" | "YES" => Ok(true),
-        "0" | "false" | "FALSE" | "no" | "NO" => Ok(false),
-        other => Err(SupportError::InvalidEnv {
-            name: name.to_string(),
-            value: other.to_string(),
-            message: "expected true/false or 1/0".to_string(),
-        }),
-    }
-}
-
-/// Parse a positive integer environment variable.
-pub fn parse_positive_env<T>(name: &str, default: T) -> Result<T, SupportError>
-where
-    T: std::str::FromStr + PartialOrd + From<u8> + Copy,
-    T::Err: std::fmt::Display,
-{
-    let Some(value) = env_non_empty(name) else {
-        return Ok(default);
-    };
-    let parsed = value
-        .parse::<T>()
-        .map_err(|error| SupportError::InvalidEnv {
-            name: name.to_string(),
-            value: value.clone(),
-            message: error.to_string(),
-        })?;
-    if parsed <= T::from(0) {
-        return Err(SupportError::InvalidEnv {
-            name: name.to_string(),
-            value,
-            message: "must be greater than zero".to_string(),
-        });
-    }
-    Ok(parsed)
-}
-
-/// Parse an optional positive integer environment variable.
-pub fn parse_optional_positive_env<T>(name: &str) -> Result<Option<T>, SupportError>
-where
-    T: std::str::FromStr + PartialOrd + From<u8> + Copy,
-    T::Err: std::fmt::Display,
-{
-    let Some(value) = env_non_empty(name) else {
-        return Ok(None);
-    };
-    let parsed = value
-        .parse::<T>()
-        .map_err(|error| SupportError::InvalidEnv {
-            name: name.to_string(),
-            value: value.clone(),
-            message: error.to_string(),
-        })?;
-    if parsed <= T::from(0) {
-        return Err(SupportError::InvalidEnv {
-            name: name.to_string(),
-            value,
-            message: "must be greater than zero".to_string(),
-        });
-    }
-    Ok(Some(parsed))
 }
 
 /// A displayable operational check result.
@@ -481,12 +388,6 @@ fn normalize_existing_path(path: &Path, label: &str) -> Result<PathBuf, SupportE
 /// Errors from shared ops support helpers.
 #[derive(Debug, Error)]
 pub enum SupportError {
-    #[error("invalid environment variable {name}={value:?}: {message}")]
-    InvalidEnv {
-        name: String,
-        value: String,
-        message: String,
-    },
     #[error("failed to start {program}: {message}")]
     ProcessStart { program: String, message: String },
     #[error("failed while waiting for {program}: {message}")]
@@ -504,8 +405,8 @@ pub enum SupportError {
 #[cfg(test)]
 mod tests {
     use super::{
-        SupportError, append_bounded_bytes, bounded_utf8, parse_boolish,
-        require_safe_destructive_path, run_command,
+        SupportError, append_bounded_bytes, bounded_utf8, require_safe_destructive_path,
+        run_command,
     };
     use std::path::{Path, PathBuf};
     use std::process::Stdio;
@@ -518,14 +419,6 @@ mod tests {
         let (text, truncated) = bounded_utf8(b"abcdef", 3);
         assert_eq!(text, "abc");
         assert!(truncated);
-    }
-
-    /// Verifies legacy boolean values stay explicit.
-    #[test]
-    fn parse_boolish_accepts_only_known_values() {
-        assert!(parse_boolish("X", "1").unwrap());
-        assert!(!parse_boolish("X", "false").unwrap());
-        assert!(parse_boolish("X", "maybe").is_err());
     }
 
     /// Verifies destructive path safety is rooted.

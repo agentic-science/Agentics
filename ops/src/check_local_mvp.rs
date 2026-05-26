@@ -21,9 +21,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agentics_config::{
-    DEFAULT_ADMIN_USERNAME, DEFAULT_API_HOST, DEFAULT_API_PORT, ENV_AGENTICS_ADMIN_PASSWORD,
-    ENV_AGENTICS_ADMIN_USERNAME, ENV_AGENTICS_API_BASE_URL, ENV_AGENTICS_API_PORT,
-    ENV_AGENTICS_WEB_BASE_URL, default_local_api_base_url,
+    DEFAULT_ADMIN_USERNAME, DEFAULT_API_HOST, DEFAULT_API_PORT, local_api_base_url,
 };
 use agentics_domain::models::HealthResponse;
 use agentics_domain::models::challenge::ChallengeListResponse;
@@ -32,6 +30,7 @@ use bollard::Docker;
 use clap::Parser;
 use reqwest::{Client, StatusCode};
 use secrecy::{ExposeSecret, SecretString};
+use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use thiserror::Error;
 use url::Url;
@@ -73,24 +72,40 @@ pub struct Cli {
 #[derive(Debug, Clone, Default)]
 pub struct CheckEnv {
     pub api_base_url: Option<String>,
-    pub api_port: Option<String>,
+    pub api_port: Option<u16>,
     pub web_base_url: Option<String>,
     pub admin_username: Option<String>,
     pub admin_password: Option<SecretString>,
-    pub timeout_seconds: Option<String>,
+    pub timeout_seconds: Option<u64>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct RawCheckEnv {
+    api_base_url: Option<String>,
+    api_port: Option<u16>,
+    web_base_url: Option<String>,
+    admin_username: Option<String>,
+    admin_password: Option<String>,
+    check_timeout_seconds: Option<u64>,
 }
 
 impl CheckEnv {
     /// Read relevant environment variables from the current process.
-    pub fn from_process() -> Self {
-        Self {
-            api_base_url: read_non_empty_env(ENV_AGENTICS_API_BASE_URL),
-            api_port: read_non_empty_env(ENV_AGENTICS_API_PORT),
-            web_base_url: read_non_empty_env(ENV_AGENTICS_WEB_BASE_URL),
-            admin_username: read_non_empty_env(ENV_AGENTICS_ADMIN_USERNAME),
-            admin_password: read_non_empty_env(ENV_AGENTICS_ADMIN_PASSWORD).map(SecretString::from),
-            timeout_seconds: read_non_empty_env("AGENTICS_CHECK_TIMEOUT_SECONDS"),
-        }
+    pub fn from_process() -> Result<Self, CheckError> {
+        let raw = envy::prefixed("AGENTICS_")
+            .from_env::<RawCheckEnv>()
+            .map_err(|error| CheckError::InvalidConfig {
+                field: "environment",
+                message: error.to_string(),
+            })?;
+        Ok(Self {
+            api_base_url: non_empty_owned(raw.api_base_url),
+            api_port: raw.api_port,
+            web_base_url: non_empty_owned(raw.web_base_url),
+            admin_username: non_empty_owned(raw.admin_username),
+            admin_password: non_empty_owned(raw.admin_password).map(SecretString::from),
+            timeout_seconds: raw.check_timeout_seconds,
+        })
     }
 }
 
@@ -174,7 +189,13 @@ pub async fn run_from_process() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let env = CheckEnv::from_process();
+    let env = match CheckEnv::from_process() {
+        Ok(env) => env,
+        Err(error) => {
+            eprintln!("[agentics-check] ERROR: {error}");
+            return ExitCode::from(2);
+        }
+    };
     let config = match resolve_config(&cli, &env, stdin_password) {
         Ok(config) => config,
         Err(error) => {
@@ -183,7 +204,7 @@ pub async fn run_from_process() -> ExitCode {
         }
     };
 
-    let run = run_checks(config, default_docker_probe());
+    let run = run_checks(config, docker_daemon_probe());
     tokio::select! {
         reports = run => {
             print_reports(&reports);
@@ -209,13 +230,13 @@ pub fn resolve_config(
     env: &CheckEnv,
     stdin_password: Option<SecretString>,
 ) -> Result<CheckConfig, CheckError> {
-    let api_port = resolve_api_port(cli.api_port, env.api_port.as_deref())?;
+    let api_port = resolve_api_port(cli.api_port, env.api_port);
     let api_base_url =
         match first_non_empty(cli.api_base_url.as_deref(), env.api_base_url.as_deref()) {
             Some(value) => parse_base_url("API base URL", value)?,
             None => parse_base_url(
                 "API base URL",
-                &default_local_api_base_url(DEFAULT_API_HOST, api_port),
+                &local_api_base_url(DEFAULT_API_HOST, api_port),
             )?,
         };
 
@@ -229,8 +250,7 @@ pub fn resolve_config(
             .to_string();
 
     let admin_password = stdin_password.or_else(|| env.admin_password.clone());
-    let timeout_seconds =
-        resolve_timeout_seconds(cli.timeout_seconds, env.timeout_seconds.as_deref())?;
+    let timeout_seconds = resolve_timeout_seconds(cli.timeout_seconds, env.timeout_seconds)?;
 
     Ok(CheckConfig {
         api_base_url,
@@ -347,9 +367,8 @@ fn read_stdin_password(enabled: bool) -> Result<Option<SecretString>, CheckError
     Ok(Some(SecretString::from(trimmed.to_string())))
 }
 
-fn read_non_empty_env(name: &str) -> Option<String> {
-    std::env::var(name)
-        .ok()
+fn non_empty_owned(value: Option<String>) -> Option<String> {
+    value
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
 }
@@ -361,34 +380,12 @@ fn first_non_empty<'a>(primary: Option<&'a str>, fallback: Option<&'a str>) -> O
         .or_else(|| fallback.map(str::trim).filter(|value| !value.is_empty()))
 }
 
-fn resolve_api_port(flag: Option<u16>, env_value: Option<&str>) -> Result<u16, CheckError> {
-    match flag {
-        Some(port) => Ok(port),
-        None => match env_value {
-            Some(value) => value
-                .parse::<u16>()
-                .map_err(|error| CheckError::InvalidConfig {
-                    field: ENV_AGENTICS_API_PORT,
-                    message: error.to_string(),
-                }),
-            None => Ok(DEFAULT_API_PORT),
-        },
-    }
+fn resolve_api_port(flag: Option<u16>, env_value: Option<u16>) -> u16 {
+    flag.or(env_value).unwrap_or(DEFAULT_API_PORT)
 }
 
-fn resolve_timeout_seconds(flag: Option<u64>, env_value: Option<&str>) -> Result<u64, CheckError> {
-    let timeout = match flag {
-        Some(value) => value,
-        None => match env_value {
-            Some(value) => value
-                .parse::<u64>()
-                .map_err(|error| CheckError::InvalidConfig {
-                    field: "AGENTICS_CHECK_TIMEOUT_SECONDS",
-                    message: error.to_string(),
-                })?,
-            None => DEFAULT_TIMEOUT_SECONDS,
-        },
-    };
+fn resolve_timeout_seconds(flag: Option<u64>, env_value: Option<u64>) -> Result<u64, CheckError> {
+    let timeout = flag.or(env_value).unwrap_or(DEFAULT_TIMEOUT_SECONDS);
     if timeout == 0 {
         return Err(CheckError::InvalidConfig {
             field: "timeout seconds",
@@ -427,7 +424,7 @@ fn parse_base_url(field: &'static str, value: &str) -> Result<Url, CheckError> {
     Ok(url)
 }
 
-fn default_docker_probe() -> DockerProbe {
+fn docker_daemon_probe() -> DockerProbe {
     Arc::new(|| {
         Box::pin(async {
             let docker = Docker::connect_with_defaults()
@@ -693,11 +690,11 @@ mod tests {
         args.timeout_seconds = Some(9);
         let env = CheckEnv {
             api_base_url: Some("http://env.example".to_string()),
-            api_port: Some("9999".to_string()),
+            api_port: Some(9999),
             web_base_url: Some("http://env-web.example".to_string()),
             admin_username: Some("env-admin".to_string()),
             admin_password: Some(SecretString::from("env-secret")),
-            timeout_seconds: Some("30".to_string()),
+            timeout_seconds: Some(30),
         };
 
         let config = resolve_config(&args, &env, Some(SecretString::from("stdin-secret")))
@@ -722,13 +719,36 @@ mod tests {
     #[test]
     fn resolves_api_port_fallback() {
         let env = CheckEnv {
-            api_port: Some("4123".to_string()),
+            api_port: Some(4123),
             ..CheckEnv::default()
         };
 
         let config = resolve_config(&cli(), &env, None).expect("config should resolve");
 
         assert_eq!(config.api_base_url.as_str(), "http://127.0.0.1:4123/");
+    }
+
+    #[test]
+    fn raw_env_uses_typed_numeric_deserialization() {
+        let raw = envy::prefixed("AGENTICS_")
+            .from_iter::<_, RawCheckEnv>([
+                ("AGENTICS_API_PORT".to_string(), "4123".to_string()),
+                (
+                    "AGENTICS_CHECK_TIMEOUT_SECONDS".to_string(),
+                    "30".to_string(),
+                ),
+            ])
+            .expect("numeric env values should deserialize");
+        assert_eq!(raw.api_port, Some(4123));
+        assert_eq!(raw.check_timeout_seconds, Some(30));
+
+        let error = envy::prefixed("AGENTICS_")
+            .from_iter::<_, RawCheckEnv>([(
+                "AGENTICS_CHECK_TIMEOUT_SECONDS".to_string(),
+                "bad".to_string(),
+            )])
+            .expect_err("invalid timeout should fail during raw env parsing");
+        assert!(error.to_string().contains("CHECK_TIMEOUT_SECONDS"));
     }
 
     #[test]

@@ -183,6 +183,7 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
         agent_registration_mode: AgentRegistrationMode::Public,
         docker_host: std::env::var("AGENTICS_TEST_DOCKER_HOST").ok(),
         host_probe_mode: agentics_config::HostProbeMode::Off,
+        host_probe_command: agentics_config::DEFAULT_HOST_PROBE_COMMAND.to_string(),
         runner_security_profile: agentics_config::RunnerSecurityProfile::Development,
         require_digest_pinned_images: false,
         runner_writable_storage_mode: RunnerWritableStorageMode::Unbounded,

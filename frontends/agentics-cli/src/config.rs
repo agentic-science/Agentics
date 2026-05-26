@@ -4,10 +4,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use agentics_config::{
-    DEFAULT_API_HOST, DEFAULT_API_PORT, ENV_AGENTICS_ADMIN_PASSWORD, ENV_AGENTICS_API_BASE_URL,
-    ENV_AGENTICS_API_PORT, default_local_api_base_url,
-};
+use agentics_config::{DEFAULT_API_HOST, DEFAULT_API_PORT, local_api_base_url};
 use anyhow::{Context, Result, anyhow, bail};
 use reqwest::Url;
 use secrecy::{ExposeSecret, SecretString};
@@ -32,10 +29,21 @@ impl fmt::Debug for CliConfig {
     }
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+/// Raw CLI environment values.
+struct RawCliEnv {
+    api_base_url: Option<String>,
+    api_port: Option<u16>,
+    token: Option<String>,
+    pioneer_code: Option<String>,
+    admin_password: Option<String>,
+}
+
 #[derive(Debug, Clone, Default)]
 /// Carries environment data across this module boundary.
 pub(crate) struct Environment {
     pub api_base_url: Option<String>,
+    pub api_port: Option<u16>,
     pub token: Option<SecretString>,
     pub pioneer_code: Option<SecretString>,
     pub admin_password: Option<SecretString>,
@@ -43,13 +51,17 @@ pub(crate) struct Environment {
 
 impl Environment {
     /// Handles from process for this module.
-    pub(crate) fn from_process() -> Self {
-        Self {
-            api_base_url: read_non_empty_env(ENV_AGENTICS_API_BASE_URL),
-            token: read_non_empty_env("AGENTICS_TOKEN").map(SecretString::from),
-            pioneer_code: read_non_empty_env("AGENTICS_PIONEER_CODE").map(SecretString::from),
-            admin_password: read_non_empty_env(ENV_AGENTICS_ADMIN_PASSWORD).map(SecretString::from),
-        }
+    pub(crate) fn from_process() -> Result<Self> {
+        let raw = envy::prefixed("AGENTICS_")
+            .from_env::<RawCliEnv>()
+            .context("failed to load AGENTICS_* CLI environment")?;
+        Ok(Self {
+            api_base_url: non_empty_owned(raw.api_base_url),
+            api_port: raw.api_port,
+            token: non_empty_owned(raw.token).map(SecretString::from),
+            pioneer_code: non_empty_owned(raw.pioneer_code).map(SecretString::from),
+            admin_password: non_empty_owned(raw.admin_password).map(SecretString::from),
+        })
     }
 }
 
@@ -98,12 +110,12 @@ impl ResolvedSettings {
         file: &CliConfig,
         config_path: PathBuf,
     ) -> Result<Self> {
-        let default_api_base_url = default_api_base_url();
+        let fallback_api_base_url = local_api_base_url_from_env(env.api_port);
         let (api_base_url, api_base_url_source) = first_value_with_default(
             flag_api_base_url,
             env.api_base_url.as_deref(),
             file.api_base_url.as_deref(),
-            default_api_base_url.as_str(),
+            fallback_api_base_url.as_str(),
         );
         let (token, token_source) = first_optional_value(
             flag_token,
@@ -172,13 +184,9 @@ impl fmt::Display for ApiBaseUrl {
     }
 }
 
-/// Handles default api base url for this module.
-fn default_api_base_url() -> String {
-    let api_port = std::env::var(ENV_AGENTICS_API_PORT)
-        .ok()
-        .and_then(|value| value.parse::<u16>().ok())
-        .unwrap_or(DEFAULT_API_PORT);
-    default_local_api_base_url(DEFAULT_API_HOST, api_port)
+/// Build the local API URL used when CLI configuration is absent.
+fn local_api_base_url_from_env(env_api_port: Option<u16>) -> String {
+    local_api_base_url(DEFAULT_API_HOST, env_api_port.unwrap_or(DEFAULT_API_PORT))
 }
 
 #[derive(Debug, Clone)]
@@ -193,8 +201,8 @@ impl ConfigStore {
         Self { path }
     }
 
-    /// Handles default path for this module.
-    pub(crate) fn default_path() -> Result<PathBuf> {
+    /// Return the standard per-user CLI config path.
+    pub(crate) fn standard_path() -> Result<PathBuf> {
         let config_dir = dirs::config_dir()
             .ok_or_else(|| anyhow!("could not determine a user config directory"))?;
         Ok(config_dir.join("agentics").join("config.toml"))
@@ -233,10 +241,8 @@ impl ConfigStore {
     }
 }
 
-/// Reads non empty env from disk or storage.
-fn read_non_empty_env(name: &str) -> Option<String> {
-    std::env::var(name)
-        .ok()
+fn non_empty_owned(value: Option<String>) -> Option<String> {
+    value
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
 }
@@ -363,6 +369,7 @@ mod tests {
         };
         let env = Environment {
             api_base_url: Some("http://env.example".to_string()),
+            api_port: None,
             token: Some(SecretString::from("env-token")),
             pioneer_code: None,
             admin_password: None,
@@ -458,5 +465,17 @@ mod tests {
     fn rejects_invalid_api_base_url() {
         let error = ApiBaseUrl::try_new("file:///tmp/api").expect_err("must reject file URL");
         assert!(error.to_string().contains("http or https"));
+    }
+
+    /// Verifies malformed API port env fails instead of falling back.
+    #[test]
+    fn rejects_invalid_env_api_port_for_default_url() {
+        let error = envy::prefixed("AGENTICS_")
+            .from_iter::<_, RawCliEnv>([(
+                "AGENTICS_API_PORT".to_string(),
+                "not-a-port".to_string(),
+            )])
+            .expect_err("invalid env port should fail");
+        assert!(error.to_string().contains("invalid digit"));
     }
 }

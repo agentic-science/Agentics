@@ -27,6 +27,11 @@ Challenge payload scripts、sample solution scripts 和 image-local smoke script
   types、DTOs、validation helpers 和 domain newtypes。
 - 不要重复定义 default values、environment variable names、ports、paths 或其他
   constants。应将 shared defaults 提升到合适的 common module，然后 import 使用。
+- 在 process boundary 通过 grouped raw env structs 加载 environment variables，
+  对 numbers、booleans 和 enums 等 basic scalar values 使用普通反序列化；只有
+  lists、paths、URLs、secrets 和 domain-specific validation 才使用 custom parsing。
+  然后尽早把 raw strings 转成 typed config、domain newtypes、URLs、paths、modes
+  和 secrets，再向内传递。Operational logic 中避免分散的 `std::env::var` 调用。
 - 将 external process execution 视为 typed boundary。普通 command execution 不使用
   `sh -c`。
 - Command documentation 应靠近 implementation；行为变化时同步更新对应的 operator

@@ -1,10 +1,10 @@
-/// Build the local API base URL from explicit host and port defaults.
-pub fn default_local_api_base_url(api_host: &str, api_port: u16) -> String {
+/// Build the local API base URL from an explicit host and port.
+pub fn local_api_base_url(api_host: &str, api_port: u16) -> String {
     format!("http://{api_host}:{api_port}")
 }
 
-/// Build the local web base URL from explicit host and port defaults.
-pub fn default_local_web_base_url(web_host: &str, web_port: u16) -> String {
+/// Build the local web base URL from an explicit host and port.
+pub fn local_web_base_url(web_host: &str, web_port: u16) -> String {
     format!("http://{web_host}:{web_port}")
 }
 

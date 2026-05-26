@@ -38,7 +38,7 @@ use crate::config::{ConfigStore, Environment, ResolvedSettings};
 /// Handles run from env for this module.
 pub async fn run_from_env() -> Result<()> {
     let cli = Cli::parse();
-    let env = Environment::from_process();
+    let env = Environment::from_process()?;
     let output = execute(cli, env).await?;
     if !output.is_empty() {
         println!("{output}");
@@ -330,7 +330,7 @@ async fn dispatch_metrics(
 fn config_path(cli: &Cli) -> Result<std::path::PathBuf> {
     match &cli.config {
         Some(path) => Ok(path.clone()),
-        None => ConfigStore::default_path(),
+        None => ConfigStore::standard_path(),
     }
 }
 

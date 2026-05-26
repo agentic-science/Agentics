@@ -8,7 +8,7 @@
 //!
 //! Cancellation: `run_from_process` races the whole check set against Ctrl-C.
 //! Read-only checks are idempotent. Mutating canary probes run only when
-//! `AGENTICS_DGX_RUN_MUTATING_PROBES=1`; they create temporary paths and
+//! `AGENTICS_DGX_RUN_MUTATING_PROBES=true`; they create temporary paths and
 //! containers, then clean them up best-effort. There is no dry-run because this
 //! is a checker; rootful mutation belongs to the storage/profile commands.
 
@@ -32,8 +32,8 @@ use nix::unistd::Uid;
 use uuid::Uuid;
 
 use crate::dgx::{
-    DgxPhase, DgxProfileCheckConfig, DockerPullPolicy, ENV_DGX_RUN_MUTATING_PROBES, SlotMetadata,
-    phase_slot_path,
+    DgxPhase, DgxProfileCheckConfig, DockerPullPolicy, ENV_DGX_RUN_MUTATING_PROBES,
+    ENV_HOST_PROBE_MODE, SlotMetadata, phase_slot_path,
 };
 use crate::support::{
     CommandOutput, DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, append_bounded_bytes,
@@ -66,7 +66,13 @@ impl std::str::FromStr for HostProbeModeArg {
     type Err = crate::dgx::DgxConfigError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        crate::dgx::parse_host_probe_mode(value).map(Self)
+        value.parse::<HostProbeMode>().map(Self).map_err(|error| {
+            crate::dgx::DgxConfigError::InvalidValue {
+                field: ENV_HOST_PROBE_MODE,
+                value: value.to_string(),
+                message: error.to_string(),
+            }
+        })
     }
 }
 

@@ -1,13 +1,70 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use agentics_config::StorageBackend;
+use serde::Deserialize;
 use url::Url;
 
 use super::{
     ENV_DATABASE_URL, ENV_DEMO_DATABASE_NAME, ENV_DEMO_DATABASE_URL, ENV_DEMO_DATABASE_URL_CONFIRM,
     LocalDemoError, NON_LOOPBACK_DATABASE_CONFIRMATION,
 };
-use crate::support::env_non_empty;
+
+const ENV_PREFIX: &str = "AGENTICS_";
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub(super) struct RawLocalDemoEnv {
+    pub(super) demo_env_file: Option<String>,
+    pub(super) demo_database_name: Option<String>,
+    pub(super) demo_database_url: Option<String>,
+    pub(super) demo_database_url_confirm: Option<String>,
+    pub(super) api_base_url: Option<String>,
+    pub(super) storage_root: Option<String>,
+    pub(super) storage_backend: Option<StorageBackend>,
+    pub(super) storage_work_root: Option<String>,
+    pub(super) s3_bucket: Option<String>,
+    pub(super) s3_prefix: Option<String>,
+    pub(super) s3_region: Option<String>,
+    pub(super) s3_endpoint_url: Option<String>,
+    pub(super) s3_force_path_style: Option<bool>,
+}
+
+impl RawLocalDemoEnv {
+    pub(super) fn from_process() -> Result<Self, LocalDemoError> {
+        envy::prefixed(ENV_PREFIX)
+            .from_env::<Self>()
+            .map_err(|error| LocalDemoError::InvalidConfig(error.to_string()))
+    }
+
+    pub(super) fn from_map(values: &HashMap<String, String>) -> Result<Self, LocalDemoError> {
+        envy::prefixed(ENV_PREFIX)
+            .from_iter(values.clone())
+            .map_err(|error| LocalDemoError::InvalidConfig(error.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RawLocalDemoEnv;
+
+    /// Verifies local demo bool envs use normal env deserialization.
+    #[test]
+    fn bool_env_values_use_generic_deserialization() {
+        let values = [(
+            "AGENTICS_S3_FORCE_PATH_STYLE".to_string(),
+            "false".to_string(),
+        )]
+        .into_iter()
+        .collect();
+        let env = RawLocalDemoEnv::from_map(&values).expect("bool literal should parse");
+        assert_eq!(env.s3_force_path_style, Some(false));
+
+        let values = [("AGENTICS_S3_FORCE_PATH_STYLE".to_string(), "1".to_string())]
+            .into_iter()
+            .collect();
+        assert!(RawLocalDemoEnv::from_map(&values).is_err());
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct DemoDatabaseName(String);
@@ -47,13 +104,15 @@ pub(super) fn load_dotenv_file(path: &Path) -> Result<HashMap<String, String>, L
     Ok(values)
 }
 
-pub(super) fn env_value(name: &str, file_env: &HashMap<String, String>) -> Option<String> {
-    env_non_empty(name).or_else(|| file_env_non_empty(name, file_env))
+pub(super) fn env_value(
+    process_value: Option<&String>,
+    file_value: Option<&String>,
+) -> Option<String> {
+    non_empty_value(process_value).or_else(|| non_empty_value(file_value))
 }
 
-pub(super) fn file_env_non_empty(name: &str, file_env: &HashMap<String, String>) -> Option<String> {
-    file_env
-        .get(name)
+pub(super) fn non_empty_value(value: Option<&String>) -> Option<String> {
+    value
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
 }

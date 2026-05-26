@@ -72,12 +72,43 @@ impl HostProbeMode {
     }
 }
 
+impl FromStr for HostProbeMode {
+    type Err = anyhow::Error;
+
+    /// Parse the configured host-probe mode.
+    fn from_str(value: &str) -> anyhow::Result<Self> {
+        match value.trim() {
+            "off" => Ok(Self::Off),
+            "warn" => Ok(Self::Warn),
+            "require" => Ok(Self::Require),
+            other => anyhow::bail!(
+                "AGENTICS_HOST_PROBE_MODE must be `off`, `warn`, or `require`, got `{other}`"
+            ),
+        }
+    }
+}
+
 impl RunnerSecurityProfile {
     /// Stable environment string for this policy.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Development => "development",
             Self::Production => "production",
+        }
+    }
+}
+
+impl FromStr for RunnerSecurityProfile {
+    type Err = anyhow::Error;
+
+    /// Parse the configured runner security profile.
+    fn from_str(value: &str) -> anyhow::Result<Self> {
+        match value.trim() {
+            "development" => Ok(Self::Development),
+            "production" => Ok(Self::Production),
+            other => anyhow::bail!(
+                "AGENTICS_RUNNER_SECURITY_PROFILE must be `development` or `production`, got `{other}`"
+            ),
         }
     }
 }
@@ -104,6 +135,21 @@ impl WorkerAccelerators {
         match self {
             Self::None => vec!["none".to_string()],
             Self::Gpu => vec!["none".to_string(), "gpu".to_string()],
+        }
+    }
+}
+
+impl FromStr for WorkerAccelerators {
+    type Err = anyhow::Error;
+
+    /// Parse the configured worker accelerator capability.
+    fn from_str(value: &str) -> anyhow::Result<Self> {
+        match value.trim() {
+            "none" => Ok(Self::None),
+            "gpu" => Ok(Self::Gpu),
+            other => {
+                anyhow::bail!("AGENTICS_WORKER_ACCELERATORS must be `none` or `gpu`, got `{other}`")
+            }
         }
     }
 }

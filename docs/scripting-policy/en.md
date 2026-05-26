@@ -33,6 +33,12 @@ specific task says otherwise.
 - Do not duplicate default values, environment variable names, ports, paths, or
   other constants. Promote shared defaults to an appropriate common module and
   import them instead.
+- Load environment variables at process boundaries through grouped raw env
+  structs. Use normal deserialization for basic scalar values such as numbers,
+  booleans, and enums; reserve custom parsing for lists, paths, URLs, secrets,
+  and domain-specific validation. Convert raw strings into typed config, domain
+  newtypes, URLs, paths, modes, and secrets before passing values inward. Avoid
+  scattered `std::env::var` calls in operational logic.
 - Treat external process execution as a typed boundary. Do not use `sh -c` for
   ordinary command execution.
 - Keep command documentation close to the implementation and update matching

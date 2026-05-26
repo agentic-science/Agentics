@@ -9,11 +9,14 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
-use agentics_config::{HostProbeMode, RunnerSecurityProfile, RunnerWritableStorageMode};
+use agentics_config::{
+    DEFAULT_HOST_PROBE_MODE, DEFAULT_RUNNER_DOCKER_LAYER_QUOTA, DEFAULT_RUNNER_SECURITY_PROFILE,
+    DEFAULT_RUNNER_WRITABLE_STORAGE_MODE, HostProbeMode, RunnerSecurityProfile,
+    RunnerWritableStorageMode,
+};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-
-use crate::support::{self, SupportError};
 
 pub const ENV_DGX_STATE_ROOT: &str = "AGENTICS_DGX_STATE_ROOT";
 pub const ENV_DGX_TEST_STATE_ROOT: &str = "AGENTICS_DGX_TEST_STATE_ROOT";
@@ -72,8 +75,21 @@ pub const DEFAULT_RUNTIME_GID: u32 = 10001;
 pub const DEFAULT_DOCKER_HOST_URI: &str = "unix:///var/run/docker.sock";
 pub const DEFAULT_PROBE_IMAGE: &str = "busybox:1.36";
 pub const DEFAULT_CUDA_IMAGE: &str = "nvidia/cuda:13.0.1-base-ubuntu24.04";
+pub const DEFAULT_DGX_PERSIST_FSTAB: bool = false;
+pub const DEFAULT_DGX_RUN_MUTATING_PROBES: bool = false;
+pub const DEFAULT_DGX_RUN_DOCKER_SMOKE: bool = false;
+pub const DEFAULT_DGX_DOCKER_PULL_POLICY: DockerPullPolicy = DockerPullPolicy::Never;
+pub const DEFAULT_DGX_PROBE_SLOT_CLASS_MB: u64 = 64;
+pub const DEFAULT_DGX_TEST_PERSIST_FSTAB: bool = DEFAULT_DGX_PERSIST_FSTAB;
 pub const STORAGE_CONFIRMATION: &str = "prepare-storage";
 pub const TEST_STORAGE_CONFIRMATION: &str = "prepare-test-storage";
+pub const ALL_DGX_PHASES: &[DgxPhase] = &[
+    DgxPhase::SolutionSetup,
+    DgxPhase::SolutionBuild,
+    DgxPhase::SolutionRun,
+    DgxPhase::EvaluatorSetup,
+    DgxPhase::EvaluatorScore,
+];
 
 /// Runner phase with a prepared writable slot class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -124,7 +140,8 @@ impl FromStr for DgxPhase {
 }
 
 /// Docker pull behavior for DGX probes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum DockerPullPolicy {
     Never,
     Missing,
@@ -189,6 +206,51 @@ impl SlotMetadata {
     }
 }
 
+#[derive(Debug, Clone, Default, Deserialize)]
+struct RawDgxStorageEnv {
+    dgx_state_root: Option<String>,
+    dgx_loop_image_root: Option<String>,
+    dgx_docker_data_root: Option<String>,
+    dgx_docker_loop_image: Option<String>,
+    dgx_phase_mount_root: Option<String>,
+    storage_work_root: Option<String>,
+    dgx_docker_loop_size: Option<String>,
+    dgx_phase_loop_size: Option<String>,
+    runtime_uid: Option<u32>,
+    runtime_gid: Option<u32>,
+    dgx_phases: Option<String>,
+    dgx_phase_slot_classes_mb: Option<String>,
+    runner_writable_slot_classes_mb: Option<String>,
+    dgx_phase_slots_per_class: Option<u64>,
+    dgx_phase_project_id_base: Option<u64>,
+    dgx_phase_slot_inodes_per_mb: Option<u64>,
+    dgx_persist_fstab: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct RawDgxProfileEnv {
+    dgx_state_root: Option<String>,
+    dgx_docker_data_root: Option<String>,
+    dgx_phase_mount_root: Option<String>,
+    runner_runtime_root: Option<String>,
+    storage_work_root: Option<String>,
+    runner_security_profile: Option<RunnerSecurityProfile>,
+    runner_writable_storage_mode: Option<RunnerWritableStorageMode>,
+    runner_phase_mount_root: Option<String>,
+    runner_writable_slot_classes_mb: Option<String>,
+    runner_docker_layer_quota: Option<bool>,
+    dgx_phase_slot_inodes_per_mb: Option<u64>,
+    dgx_phase_slots_per_class: Option<u64>,
+    docker_host: Option<String>,
+    docker_socket_path: Option<String>,
+    dgx_probe_image: Option<String>,
+    dgx_docker_pull_policy: Option<DockerPullPolicy>,
+    dgx_phases: Option<String>,
+    dgx_probe_slot_class_mb: Option<u64>,
+    dgx_run_mutating_probes: Option<bool>,
+    host_probe_mode: Option<HostProbeMode>,
+}
+
 /// Common DGX storage layout.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DgxStorageConfig {
@@ -213,29 +275,30 @@ pub struct DgxStorageConfig {
 impl DgxStorageConfig {
     /// Resolve production DGX storage configuration from environment.
     pub fn from_env() -> Result<Self, DgxConfigError> {
-        let state_root = env_path(ENV_DGX_STATE_ROOT, DEFAULT_STATE_ROOT);
-        let loop_image_root = env_path_or_join(
-            ENV_DGX_LOOP_IMAGE_ROOT,
+        let raw = load_agentics_env::<RawDgxStorageEnv>()?;
+        let state_root = path_or_default(raw.dgx_state_root, DEFAULT_STATE_ROOT);
+        let loop_image_root = path_or_join(
+            raw.dgx_loop_image_root,
             &state_root,
             Path::new("loop-images"),
         );
-        let docker_data_root = env_path_or_join(
-            ENV_DGX_DOCKER_DATA_ROOT,
+        let docker_data_root = path_or_join(
+            raw.dgx_docker_data_root,
             &state_root,
             Path::new("docker-data-root"),
         );
-        let docker_loop_image = env_path_or_join(
-            ENV_DGX_DOCKER_LOOP_IMAGE,
+        let docker_loop_image = path_or_join(
+            raw.dgx_docker_loop_image,
             &loop_image_root,
             Path::new("docker-data-root.xfs"),
         );
-        let phase_mount_root = env_path_or_join(
-            ENV_DGX_PHASE_MOUNT_ROOT,
+        let phase_mount_root = path_or_join(
+            raw.dgx_phase_mount_root,
             &state_root,
             Path::new("phase-mounts"),
         );
-        let storage_work_root = env_path_or_join(
-            ENV_STORAGE_WORK_ROOT,
+        let storage_work_root = path_or_join(
+            raw.storage_work_root,
             &state_root,
             Path::new("storage-work"),
         );
@@ -247,30 +310,40 @@ impl DgxStorageConfig {
             docker_loop_image,
             phase_mount_root,
             storage_work_root,
-            docker_loop_size: support::env_non_empty(ENV_DGX_DOCKER_LOOP_SIZE)
-                .unwrap_or_else(|| DEFAULT_DOCKER_LOOP_SIZE.to_string()),
-            phase_loop_size: support::env_non_empty(ENV_DGX_PHASE_LOOP_SIZE)
-                .unwrap_or_else(|| DEFAULT_PHASE_LOOP_SIZE.to_string()),
-            runtime_uid: support::parse_positive_env(ENV_RUNTIME_UID, DEFAULT_RUNTIME_UID)?,
-            runtime_gid: support::parse_positive_env(ENV_RUNTIME_GID, DEFAULT_RUNTIME_GID)?,
-            phases: parse_phases_env(ENV_DGX_PHASES)?,
-            slot_classes_mb: parse_slot_classes_env(
-                ENV_DGX_PHASE_SLOT_CLASSES_MB,
-                support::env_non_empty(ENV_RUNNER_WRITABLE_SLOT_CLASSES_MB).as_deref(),
+            docker_loop_size: string_or_default(raw.dgx_docker_loop_size, DEFAULT_DOCKER_LOOP_SIZE),
+            phase_loop_size: string_or_default(raw.dgx_phase_loop_size, DEFAULT_PHASE_LOOP_SIZE),
+            runtime_uid: positive_or_default(
+                ENV_RUNTIME_UID,
+                raw.runtime_uid,
+                DEFAULT_RUNTIME_UID,
             )?,
-            slots_per_class: support::parse_positive_env(
+            runtime_gid: positive_or_default(
+                ENV_RUNTIME_GID,
+                raw.runtime_gid,
+                DEFAULT_RUNTIME_GID,
+            )?,
+            phases: parse_optional_phases(raw.dgx_phases)?,
+            slot_classes_mb: parse_slot_classes_optional(
+                ENV_DGX_PHASE_SLOT_CLASSES_MB,
+                raw.dgx_phase_slot_classes_mb.as_deref(),
+                raw.runner_writable_slot_classes_mb.as_deref(),
+            )?,
+            slots_per_class: positive_or_default(
                 ENV_DGX_PHASE_SLOTS_PER_CLASS,
+                raw.dgx_phase_slots_per_class,
                 DEFAULT_PHASE_SLOTS_PER_CLASS,
             )?,
-            project_id_base: support::parse_positive_env(
+            project_id_base: positive_or_default(
                 ENV_DGX_PHASE_PROJECT_ID_BASE,
+                raw.dgx_phase_project_id_base,
                 DEFAULT_PHASE_PROJECT_ID_BASE,
             )?,
-            slot_inodes_per_mb: support::parse_positive_env(
+            slot_inodes_per_mb: positive_or_default(
                 ENV_DGX_PHASE_SLOT_INODES_PER_MB,
+                raw.dgx_phase_slot_inodes_per_mb,
                 DEFAULT_PHASE_SLOT_INODES_PER_MB,
             )?,
-            persist_fstab: support::parse_bool_env(ENV_DGX_PERSIST_FSTAB, false)?,
+            persist_fstab: raw.dgx_persist_fstab.unwrap_or(DEFAULT_DGX_PERSIST_FSTAB),
         })
     }
 }
@@ -303,65 +376,78 @@ pub struct DgxProfileCheckConfig {
 impl DgxProfileCheckConfig {
     /// Resolve profile check config from environment.
     pub fn from_env() -> Result<Self, DgxConfigError> {
-        let state_root = env_path(ENV_DGX_STATE_ROOT, DEFAULT_STATE_ROOT);
-        let phase_mount_root = env_path_or_join(
-            ENV_DGX_PHASE_MOUNT_ROOT,
+        let raw = load_agentics_env::<RawDgxProfileEnv>()?;
+        let state_root = path_or_default(raw.dgx_state_root, DEFAULT_STATE_ROOT);
+        let phase_mount_root = path_or_join(
+            raw.dgx_phase_mount_root,
             &state_root,
             Path::new("phase-mounts"),
         );
+        let host_probe_mode = raw.host_probe_mode.unwrap_or(DEFAULT_HOST_PROBE_MODE);
+        let runner_security_profile = raw
+            .runner_security_profile
+            .unwrap_or(DEFAULT_RUNNER_SECURITY_PROFILE);
+        let runner_storage_mode = raw
+            .runner_writable_storage_mode
+            .unwrap_or(DEFAULT_RUNNER_WRITABLE_STORAGE_MODE);
         Ok(Self {
-            host_probe_mode: parse_host_probe_mode_env()?,
-            docker_data_root: env_path_or_join(
-                ENV_DGX_DOCKER_DATA_ROOT,
+            host_probe_mode,
+            docker_data_root: path_or_join(
+                raw.dgx_docker_data_root,
                 &state_root,
                 Path::new("docker-data-root"),
             ),
-            runner_runtime_root: env_path_or_join(
-                ENV_RUNNER_RUNTIME_ROOT,
+            runner_runtime_root: path_or_join(
+                raw.runner_runtime_root,
                 &state_root,
                 Path::new("runtime"),
             ),
-            storage_work_root: env_path_or_join(
-                ENV_STORAGE_WORK_ROOT,
+            storage_work_root: path_or_join(
+                raw.storage_work_root,
                 &state_root,
                 Path::new("storage-work"),
             ),
-            runner_security_profile: parse_runner_security_profile_env()?,
-            runner_storage_mode: parse_runner_storage_mode_env()?,
-            runner_phase_mount_root: env_path_or_default(
-                ENV_RUNNER_PHASE_MOUNT_ROOT,
-                phase_mount_root.clone(),
-            ),
-            runner_slot_classes_mb: parse_slot_classes_env(
+            runner_security_profile,
+            runner_storage_mode,
+            runner_phase_mount_root: raw
+                .runner_phase_mount_root
+                .map(PathBuf::from)
+                .unwrap_or_else(|| phase_mount_root.clone()),
+            runner_slot_classes_mb: parse_slot_classes_optional(
                 ENV_RUNNER_WRITABLE_SLOT_CLASSES_MB,
+                raw.runner_writable_slot_classes_mb.as_deref(),
                 None,
             )?,
-            runner_docker_layer_quota: support::parse_bool_env(
-                ENV_RUNNER_DOCKER_LAYER_QUOTA,
-                false,
-            )?,
-            phase_slot_inodes_per_mb: support::parse_positive_env(
+            runner_docker_layer_quota: raw
+                .runner_docker_layer_quota
+                .unwrap_or(DEFAULT_RUNNER_DOCKER_LAYER_QUOTA),
+            phase_slot_inodes_per_mb: positive_or_default(
                 ENV_DGX_PHASE_SLOT_INODES_PER_MB,
+                raw.dgx_phase_slot_inodes_per_mb,
                 DEFAULT_PHASE_SLOT_INODES_PER_MB,
             )?,
-            phase_slots_per_class: support::parse_positive_env(
+            phase_slots_per_class: positive_or_default(
                 ENV_DGX_PHASE_SLOTS_PER_CLASS,
+                raw.dgx_phase_slots_per_class,
                 DEFAULT_PHASE_SLOTS_PER_CLASS,
             )?,
-            docker_host_uri: support::env_non_empty(ENV_DOCKER_HOST)
-                .unwrap_or_else(|| DEFAULT_DOCKER_HOST_URI.to_string()),
+            docker_host_uri: string_or_default(raw.docker_host, DEFAULT_DOCKER_HOST_URI),
             expected_docker_host_uri: expected_profile_docker_host_uri(
-                support::env_non_empty(ENV_DOCKER_SOCKET_PATH).as_deref(),
+                raw.docker_socket_path.as_deref(),
             ),
-            probe_image: support::env_non_empty(ENV_DGX_PROBE_IMAGE)
-                .unwrap_or_else(|| DEFAULT_PROBE_IMAGE.to_string()),
-            pull_policy: support::env_non_empty(ENV_DGX_DOCKER_PULL_POLICY)
-                .as_deref()
-                .unwrap_or(DockerPullPolicy::Never.as_str())
-                .parse()?,
-            phases: parse_phases_env(ENV_DGX_PHASES)?,
-            slot_probe_class_mb: support::parse_positive_env(ENV_DGX_PROBE_SLOT_CLASS_MB, 64)?,
-            run_mutating_probes: support::parse_bool_env(ENV_DGX_RUN_MUTATING_PROBES, false)?,
+            probe_image: string_or_default(raw.dgx_probe_image, DEFAULT_PROBE_IMAGE),
+            pull_policy: raw
+                .dgx_docker_pull_policy
+                .unwrap_or(DEFAULT_DGX_DOCKER_PULL_POLICY),
+            phases: parse_optional_phases(raw.dgx_phases)?,
+            slot_probe_class_mb: positive_or_default(
+                ENV_DGX_PROBE_SLOT_CLASS_MB,
+                raw.dgx_probe_slot_class_mb,
+                DEFAULT_DGX_PROBE_SLOT_CLASS_MB,
+            )?,
+            run_mutating_probes: raw
+                .dgx_run_mutating_probes
+                .unwrap_or(DEFAULT_DGX_RUN_MUTATING_PROBES),
             phase_mount_root,
             state_root,
         })
@@ -380,21 +466,80 @@ pub fn docker_host_uri_for_socket_path(socket_path: &str) -> String {
     format!("unix://{socket_path}")
 }
 
-pub fn default_phases() -> Vec<DgxPhase> {
-    vec![
-        DgxPhase::SolutionSetup,
-        DgxPhase::SolutionBuild,
-        DgxPhase::SolutionRun,
-        DgxPhase::EvaluatorSetup,
-        DgxPhase::EvaluatorScore,
-    ]
+fn load_agentics_env<T>() -> Result<T, DgxConfigError>
+where
+    T: DeserializeOwned,
+{
+    envy::prefixed("AGENTICS_")
+        .from_env::<T>()
+        .map_err(|error| DgxConfigError::InvalidValue {
+            field: "AGENTICS_*",
+            value: "process environment".to_string(),
+            message: error.to_string(),
+        })
 }
 
-pub fn parse_phases_env(name: &str) -> Result<Vec<DgxPhase>, DgxConfigError> {
-    let Some(value) = support::env_non_empty(name) else {
-        return Ok(default_phases());
+fn string_or_default(value: Option<String>, default: &str) -> String {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| default.to_string())
+}
+
+fn path_or_default(value: Option<String>, default: &str) -> PathBuf {
+    PathBuf::from(string_or_default(value, default))
+}
+
+fn path_or_join(value: Option<String>, root: &Path, child: &Path) -> PathBuf {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join(child))
+}
+
+fn parse_optional_phases(value: Option<String>) -> Result<Vec<DgxPhase>, DgxConfigError> {
+    match value {
+        Some(value) if !value.trim().is_empty() => parse_phases(&value),
+        Some(value) => Err(DgxConfigError::InvalidValue {
+            field: ENV_DGX_PHASES,
+            value,
+            message: "must contain at least one phase".to_string(),
+        }),
+        None => Ok(ALL_DGX_PHASES.to_vec()),
+    }
+}
+
+fn parse_slot_classes_optional(
+    field: &'static str,
+    value: Option<&str>,
+    fallback: Option<&str>,
+) -> Result<Vec<u64>, DgxConfigError> {
+    match value.or(fallback) {
+        Some(value) => parse_slot_classes(field, value),
+        None => Ok(DEFAULT_SLOT_CLASSES.to_vec()),
+    }
+}
+
+fn positive_or_default<T>(
+    field: &'static str,
+    value: Option<T>,
+    default: T,
+) -> Result<T, DgxConfigError>
+where
+    T: PartialOrd + From<u8> + Copy + fmt::Display,
+{
+    let Some(value) = value else {
+        return Ok(default);
     };
-    parse_phases(&value)
+    if value <= T::from(0) {
+        return Err(DgxConfigError::InvalidValue {
+            field,
+            value: value.to_string(),
+            message: "must be greater than zero".to_string(),
+        });
+    }
+    Ok(value)
 }
 
 pub fn parse_phases(value: &str) -> Result<Vec<DgxPhase>, DgxConfigError> {
@@ -417,16 +562,6 @@ pub fn parse_phases(value: &str) -> Result<Vec<DgxPhase>, DgxConfigError> {
         });
     }
     Ok(phases)
-}
-
-pub fn parse_slot_classes_env(
-    name: &'static str,
-    fallback: Option<&str>,
-) -> Result<Vec<u64>, DgxConfigError> {
-    match support::env_non_empty(name).or_else(|| fallback.map(ToOwned::to_owned)) {
-        Some(value) => parse_slot_classes(name, &value),
-        None => Ok(DEFAULT_SLOT_CLASSES.to_vec()),
-    }
 }
 
 pub fn parse_slot_classes(field: &'static str, value: &str) -> Result<Vec<u64>, DgxConfigError> {
@@ -485,66 +620,6 @@ pub fn phase_slot_path(
         .join(slot_name(slot_index))
 }
 
-pub fn parse_host_probe_mode_env() -> Result<HostProbeMode, DgxConfigError> {
-    let value = support::env_non_empty(ENV_HOST_PROBE_MODE).unwrap_or_else(|| "off".to_string());
-    parse_host_probe_mode(&value)
-}
-
-pub fn parse_host_probe_mode(value: &str) -> Result<HostProbeMode, DgxConfigError> {
-    match value.trim() {
-        "off" => Ok(HostProbeMode::Off),
-        "warn" => Ok(HostProbeMode::Warn),
-        "require" => Ok(HostProbeMode::Require),
-        other => Err(DgxConfigError::InvalidValue {
-            field: ENV_HOST_PROBE_MODE,
-            value: other.to_string(),
-            message: "expected off, warn, or require".to_string(),
-        }),
-    }
-}
-
-pub fn parse_runner_security_profile_env() -> Result<RunnerSecurityProfile, DgxConfigError> {
-    let value = support::env_non_empty(ENV_RUNNER_SECURITY_PROFILE)
-        .unwrap_or_else(|| "development".to_string());
-    match value.trim() {
-        "development" => Ok(RunnerSecurityProfile::Development),
-        "production" => Ok(RunnerSecurityProfile::Production),
-        other => Err(DgxConfigError::InvalidValue {
-            field: ENV_RUNNER_SECURITY_PROFILE,
-            value: other.to_string(),
-            message: "expected development or production".to_string(),
-        }),
-    }
-}
-
-pub fn parse_runner_storage_mode_env() -> Result<RunnerWritableStorageMode, DgxConfigError> {
-    let value = support::env_non_empty(ENV_RUNNER_WRITABLE_STORAGE_MODE)
-        .unwrap_or_else(|| "unbounded".to_string());
-    value
-        .parse::<RunnerWritableStorageMode>()
-        .map_err(|error| DgxConfigError::InvalidValue {
-            field: ENV_RUNNER_WRITABLE_STORAGE_MODE,
-            value,
-            message: error.to_string(),
-        })
-}
-
-pub fn env_path(name: &str, default: &str) -> PathBuf {
-    PathBuf::from(support::env_non_empty(name).unwrap_or_else(|| default.to_string()))
-}
-
-pub fn env_path_or_default(name: &str, default: PathBuf) -> PathBuf {
-    support::env_non_empty(name)
-        .map(PathBuf::from)
-        .unwrap_or(default)
-}
-
-pub fn env_path_or_join(name: &str, root: &Path, child: &Path) -> PathBuf {
-    support::env_non_empty(name)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| root.join(child))
-}
-
 /// Error while resolving typed DGX config.
 #[derive(Debug, Error)]
 pub enum DgxConfigError {
@@ -554,17 +629,16 @@ pub enum DgxConfigError {
         value: String,
         message: String,
     },
-    #[error(transparent)]
-    Support(#[from] SupportError),
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_DOCKER_HOST_URI, DgxPhase, DockerPullPolicy, SlotMetadata,
+        DEFAULT_DOCKER_HOST_URI, DgxPhase, DockerPullPolicy, RawDgxProfileEnv, SlotMetadata,
         docker_host_uri_for_socket_path, expected_profile_docker_host_uri, parse_phases,
         parse_slot_classes, slot_name,
     };
+    use agentics_config::{HostProbeMode, RunnerSecurityProfile};
 
     /// Verifies phase parsing is typed and deduplicated.
     #[test]
@@ -595,6 +669,51 @@ mod tests {
             DockerPullPolicy::Never
         );
         assert!("sometimes".parse::<DockerPullPolicy>().is_err());
+    }
+
+    /// Verifies DGX env loading uses typed scalar deserialization.
+    #[test]
+    fn profile_env_uses_typed_scalar_deserialization() {
+        let raw = envy::prefixed("AGENTICS_")
+            .from_iter::<_, RawDgxProfileEnv>([
+                (
+                    "AGENTICS_DGX_RUN_MUTATING_PROBES".to_string(),
+                    "false".to_string(),
+                ),
+                (
+                    "AGENTICS_RUNNER_DOCKER_LAYER_QUOTA".to_string(),
+                    "true".to_string(),
+                ),
+                (
+                    "AGENTICS_RUNNER_SECURITY_PROFILE".to_string(),
+                    "production".to_string(),
+                ),
+                (
+                    "AGENTICS_DGX_DOCKER_PULL_POLICY".to_string(),
+                    "missing".to_string(),
+                ),
+                (
+                    "AGENTICS_HOST_PROBE_MODE".to_string(),
+                    "require".to_string(),
+                ),
+            ])
+            .expect("typed env values should deserialize");
+        assert_eq!(raw.dgx_run_mutating_probes, Some(false));
+        assert_eq!(raw.runner_docker_layer_quota, Some(true));
+        assert_eq!(
+            raw.runner_security_profile,
+            Some(RunnerSecurityProfile::Production)
+        );
+        assert_eq!(raw.dgx_docker_pull_policy, Some(DockerPullPolicy::Missing));
+        assert_eq!(raw.host_probe_mode, Some(HostProbeMode::Require));
+
+        let error = envy::prefixed("AGENTICS_")
+            .from_iter::<_, RawDgxProfileEnv>([(
+                "AGENTICS_DGX_RUN_MUTATING_PROBES".to_string(),
+                "1".to_string(),
+            )])
+            .expect_err("legacy bool-ish alias should fail during raw env parsing");
+        assert!(error.to_string().contains("DGX_RUN_MUTATING_PROBES"));
     }
 
     /// Verifies the profile checker can expect the production Compose host socket.

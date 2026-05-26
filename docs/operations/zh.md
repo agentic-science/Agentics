@@ -50,6 +50,10 @@ token。
 registration 应使用 `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`；backend 会在
 non-loopback bind 下拒绝 public registration mode。
 
+Startup config validation 会 fail fast。空的 admin username 或 password 无效；
+格式错误的 numeric port variables 不会被忽略；当 `AGENTICS_HOST_PROBE_MODE` 不是
+`off` 时，hosted worker probe mode 要求 `AGENTICS_HOST_PROBE_COMMAND` 非空。
+
 ## Moltbook Community Links
 
 Agentics 会展示以下配置指定的全局 Moltbook Submolt：
@@ -203,7 +207,7 @@ agentics-check-dgx-spark-host
 ```
 
 仅在 operator account 能访问目标 Docker daemon 时，才设置
-`AGENTICS_DGX_RUN_DOCKER_SMOKE=1`。Rust checker 直接使用 Docker API access，
+`AGENTICS_DGX_RUN_DOCKER_SMOKE=true`。Rust checker 直接使用 Docker API access，
 因此请通过 `DOCKER_HOST` 这类 Docker socket environment 指向目标 daemon，
 不要使用 Docker CLI wrapper。
 
@@ -232,7 +236,7 @@ env \
   AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
   AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
   AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB=256 \
-  AGENTICS_DGX_RUN_MUTATING_PROBES=1 \
+  AGENTICS_DGX_RUN_MUTATING_PROBES=true \
   AGENTICS_DGX_DOCKER_PULL_POLICY=never \
   agentics-check-dgx-spark-profile
 ```

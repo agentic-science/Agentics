@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 use std::process::{ExitCode, Stdio};
 use std::time::Duration;
 
-use agentics_config::{ENV_AGENTICS_RUNNER_NAMESPACE, RunnerNamespace};
+use agentics_config::RunnerNamespace;
 use agentics_domain::models::ids::EvaluationJobId;
 use agentics_runner::{
     RUNNER_ATTEMPT_COUNT_LABEL, RUNNER_JOB_ID_LABEL, RUNNER_KIND_LABEL, RUNNER_KIND_ZIP_PROJECT,
@@ -29,21 +29,19 @@ use agentics_runner::{
 use bollard::Docker;
 use bollard::query_parameters::{ListContainersOptionsBuilder, RemoveContainerOptionsBuilder};
 use clap::{Parser, Subcommand, ValueEnum};
+use serde::Deserialize;
 use sqlx::Row;
 use tokio::process::Command;
 
 use crate::support::{
-    DEFAULT_DOCKER_SOCKET_PATH, DEFAULT_OUTPUT_LIMIT_BYTES, ENV_DOCKER_HOST,
-    ENV_DOCKER_SOCKET_PATH, ReportLine, SupportError, env_non_empty, print_reports, run_command,
-    run_with_ctrl_c,
+    DEFAULT_DOCKER_SOCKET_PATH, DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError,
+    print_reports, run_command, run_with_ctrl_c,
 };
 
 const PREFIX: &str = "agentics-compose-prod";
+const ENV_PREFIX: &str = "AGENTICS_";
 const DEFAULT_PROJECT: &str = "agentics-prod";
 const DEFAULT_ENV_FILE: &str = "deploy/compose/env/prod.env";
-const ENV_COMPOSE_PROD_PROJECT: &str = "AGENTICS_COMPOSE_PROD_PROJECT";
-const ENV_COMPOSE_PROD_ENV_FILE: &str = "AGENTICS_COMPOSE_PROD_ENV_FILE";
-const ENV_DATABASE_URL: &str = "AGENTICS_DATABASE_URL";
 const WORKER_SERVICES: &[&str] = &["worker-cpu", "worker-gpu"];
 const PROD_SERVICES: &[&str] = &[
     "postgres",
@@ -123,6 +121,30 @@ pub enum RunnerDownPolicy {
 pub enum RunnerCleanupScope {
     /// Hosted worker runner containers.
     HostedWorker,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct RawComposeProdEnv {
+    compose_prod_project: Option<String>,
+    compose_prod_env_file: Option<String>,
+    runner_namespace: Option<String>,
+    database_url: Option<String>,
+    docker_host: Option<String>,
+    docker_socket_path: Option<String>,
+}
+
+impl RawComposeProdEnv {
+    fn from_process() -> Result<Self, ComposeProdError> {
+        envy::prefixed(ENV_PREFIX)
+            .from_env::<Self>()
+            .map_err(|error| ComposeProdError::InvalidConfig(error.to_string()))
+    }
+
+    fn from_map(values: &HashMap<String, String>) -> Result<Self, ComposeProdError> {
+        envy::prefixed(ENV_PREFIX)
+            .from_iter(values.clone())
+            .map_err(|error| ComposeProdError::InvalidConfig(error.to_string()))
+    }
 }
 
 impl RunnerCleanupScope {
@@ -258,7 +280,7 @@ async fn clean_runners(
     scope: RunnerCleanupScope,
     dry_run: bool,
 ) -> Result<Vec<ReportLine>, ComposeProdError> {
-    let docker = connect_docker()?;
+    let docker = connect_docker(context)?;
     let mut runners = list_runner_containers(&docker, namespace, scope).await?;
     runners.sort_by(|left, right| left.sort_key().cmp(&right.sort_key()));
 
@@ -325,11 +347,11 @@ async fn list_runner_containers(
         .collect())
 }
 
-fn connect_docker() -> Result<Docker, ComposeProdError> {
-    if let Some(host) = env_non_empty(ENV_DOCKER_HOST) {
+fn connect_docker(context: &ComposeContext) -> Result<Docker, ComposeProdError> {
+    if let Some(host) = context.docker_host() {
         return Docker::connect_with_host(&host).map_err(ComposeProdError::Docker);
     }
-    if let Some(socket_path) = env_non_empty(ENV_DOCKER_SOCKET_PATH) {
+    if let Some(socket_path) = context.docker_socket_path() {
         return Docker::connect_with_host(&format!("unix://{socket_path}"))
             .map_err(ComposeProdError::Docker);
     }
@@ -342,23 +364,27 @@ fn connect_docker() -> Result<Docker, ComposeProdError> {
 struct ComposeContext {
     repo_root: PathBuf,
     env_file: PathBuf,
-    env_values: HashMap<String, String>,
+    process_env: RawComposeProdEnv,
+    file_env: RawComposeProdEnv,
     project: String,
 }
 
 impl ComposeContext {
     fn from_cli(cli: &Cli) -> Result<Self, ComposeProdError> {
         let repo_root = repo_root()?;
-        let env_file = resolve_env_file(cli.env_file.as_ref(), &repo_root);
+        let process_env = RawComposeProdEnv::from_process()?;
+        let env_file = resolve_env_file(cli.env_file.as_ref(), &repo_root, &process_env);
         if !env_file.exists() {
             return Err(ComposeProdError::MissingEnvFile(env_file));
         }
         let env_values = load_env_file(&env_file)?;
-        let project = resolve_project(cli.project.as_deref(), &env_values);
+        let file_env = RawComposeProdEnv::from_map(&env_values)?;
+        let project = resolve_project(cli.project.as_deref(), &process_env, &file_env);
         Ok(Self {
             repo_root,
             env_file,
-            env_values,
+            process_env,
+            file_env,
             project,
         })
     }
@@ -447,14 +473,36 @@ impl ComposeContext {
         if let Some(namespace) = override_namespace {
             return Ok(namespace);
         }
-        if let Some(value) = env_non_empty(ENV_AGENTICS_RUNNER_NAMESPACE)
-            .or_else(|| file_env_non_empty(ENV_AGENTICS_RUNNER_NAMESPACE, &self.env_values))
-        {
+        if let Some(value) = env_value(
+            self.process_env.runner_namespace.as_ref(),
+            self.file_env.runner_namespace.as_ref(),
+        ) {
             return RunnerNamespace::try_new(value)
                 .map_err(|error| ComposeProdError::InvalidConfig(error.to_string()));
         }
         RunnerNamespace::try_new(self.project.clone())
             .map_err(|error| ComposeProdError::InvalidConfig(error.to_string()))
+    }
+
+    fn database_url(&self) -> Option<String> {
+        env_value(
+            self.process_env.database_url.as_ref(),
+            self.file_env.database_url.as_ref(),
+        )
+    }
+
+    fn docker_host(&self) -> Option<String> {
+        env_value(
+            self.process_env.docker_host.as_ref(),
+            self.file_env.docker_host.as_ref(),
+        )
+    }
+
+    fn docker_socket_path(&self) -> Option<String> {
+        env_value(
+            self.process_env.docker_socket_path.as_ref(),
+            self.file_env.docker_socket_path.as_ref(),
+        )
     }
 }
 
@@ -497,10 +545,14 @@ fn repo_root() -> Result<PathBuf, ComposeProdError> {
         .ok_or_else(|| ComposeProdError::InvalidConfig("cannot determine repo root".to_string()))
 }
 
-fn resolve_env_file(cli_env_file: Option<&PathBuf>, repo_root: &Path) -> PathBuf {
+fn resolve_env_file(
+    cli_env_file: Option<&PathBuf>,
+    repo_root: &Path,
+    process_env: &RawComposeProdEnv,
+) -> PathBuf {
     let path = cli_env_file
         .cloned()
-        .or_else(|| env_non_empty(ENV_COMPOSE_PROD_ENV_FILE).map(PathBuf::from))
+        .or_else(|| env_value(process_env.compose_prod_env_file.as_ref(), None).map(PathBuf::from))
         .unwrap_or_else(|| repo_root.join(DEFAULT_ENV_FILE));
     if path.is_absolute() {
         path
@@ -509,11 +561,19 @@ fn resolve_env_file(cli_env_file: Option<&PathBuf>, repo_root: &Path) -> PathBuf
     }
 }
 
-fn resolve_project(cli_project: Option<&str>, env_values: &HashMap<String, String>) -> String {
+fn resolve_project(
+    cli_project: Option<&str>,
+    process_env: &RawComposeProdEnv,
+    file_env: &RawComposeProdEnv,
+) -> String {
     cli_project
         .map(str::to_string)
-        .or_else(|| env_non_empty(ENV_COMPOSE_PROD_PROJECT))
-        .or_else(|| file_env_non_empty(ENV_COMPOSE_PROD_PROJECT, env_values))
+        .or_else(|| {
+            env_value(
+                process_env.compose_prod_project.as_ref(),
+                file_env.compose_prod_project.as_ref(),
+            )
+        })
         .unwrap_or_else(|| DEFAULT_PROJECT.to_string())
 }
 
@@ -526,9 +586,12 @@ fn load_env_file(path: &Path) -> Result<HashMap<String, String>, ComposeProdErro
     Ok(values)
 }
 
-fn file_env_non_empty(name: &str, file_env: &HashMap<String, String>) -> Option<String> {
-    file_env
-        .get(name)
+fn env_value(process_value: Option<&String>, file_value: Option<&String>) -> Option<String> {
+    non_empty_value(process_value).or_else(|| non_empty_value(file_value))
+}
+
+fn non_empty_value(value: Option<&String>) -> Option<String> {
+    value
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
 }
@@ -650,9 +713,7 @@ enum RunnerClaimLookup {
 
 impl RunnerClaimLookup {
     async fn from_context(context: &ComposeContext) -> Self {
-        let Some(database_url) = env_non_empty(ENV_DATABASE_URL)
-            .or_else(|| file_env_non_empty(ENV_DATABASE_URL, &context.env_values))
-            .filter(|value| !value.contains("${"))
+        let Some(database_url) = context.database_url().filter(|value| !value.contains("${"))
         else {
             return Self::Unavailable("db=not-configured-for-host-check".to_string());
         };
@@ -729,8 +790,8 @@ pub enum ComposeProdError {
 #[cfg(test)]
 mod tests {
     use super::{
-        Cli, ComposeContext, ComposeProdError, DEFAULT_PROJECT, ProdCommand, RunnerContainer,
-        RunnerDownPolicy, down, file_env_non_empty, resolve_project, run,
+        Cli, ComposeContext, ComposeProdError, DEFAULT_PROJECT, ProdCommand, RawComposeProdEnv,
+        RunnerContainer, RunnerDownPolicy, down, env_value, resolve_project, run,
     };
     use agentics_config::RunnerNamespace;
     use agentics_runner::{
@@ -823,16 +884,23 @@ mod tests {
     /// Verifies env file values can provide the project default.
     #[test]
     fn project_resolves_from_env_file_or_default() {
-        let mut env = HashMap::new();
-        assert_eq!(resolve_project(None, &env), DEFAULT_PROJECT);
-        env.insert(
-            "AGENTICS_COMPOSE_PROD_PROJECT".to_string(),
-            "custom-prod".to_string(),
-        );
-        assert_eq!(resolve_project(None, &env), "custom-prod");
-        assert_eq!(resolve_project(Some("cli-prod"), &env), "cli-prod");
+        let process_env = RawComposeProdEnv::default();
+        let mut file_env = RawComposeProdEnv::default();
         assert_eq!(
-            file_env_non_empty("AGENTICS_COMPOSE_PROD_PROJECT", &env).as_deref(),
+            resolve_project(None, &process_env, &file_env),
+            DEFAULT_PROJECT
+        );
+        file_env.compose_prod_project = Some("custom-prod".to_string());
+        assert_eq!(
+            resolve_project(None, &process_env, &file_env),
+            "custom-prod"
+        );
+        assert_eq!(
+            resolve_project(Some("cli-prod"), &process_env, &file_env),
+            "cli-prod"
+        );
+        assert_eq!(
+            env_value(None, file_env.compose_prod_project.as_ref()).as_deref(),
             Some("custom-prod")
         );
     }
@@ -841,7 +909,8 @@ mod tests {
         ComposeContext {
             repo_root: PathBuf::from("/tmp/agentics-test"),
             env_file: PathBuf::from("/tmp/agentics-test/prod.env"),
-            env_values: HashMap::new(),
+            process_env: RawComposeProdEnv::default(),
+            file_env: RawComposeProdEnv::default(),
             project: DEFAULT_PROJECT.to_string(),
         }
     }

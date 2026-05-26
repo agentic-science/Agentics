@@ -1,12 +1,10 @@
 import type { ZodType } from "zod";
+import { loadAgenticsWebEnv } from "@/lib/env";
 import { errorResponseSchema } from "@/lib/schemas";
 
-const SERVER_API_BASE_URL =
-  process.env.AGENTICS_API_BASE_URL ||
-  `http://127.0.0.1:${process.env.AGENTICS_API_PORT ?? "3100"}`;
-
-const BROWSER_API_BASE_URL =
-  process.env.NEXT_PUBLIC_AGENTICS_API_BASE_URL?.replace(/\/$/, "") ?? "";
+const WEB_ENV = loadAgenticsWebEnv();
+const SERVER_API_BASE_URL = WEB_ENV.serverApiBaseUrl;
+const BROWSER_API_BASE_URL = WEB_ENV.browserApiBaseUrl;
 
 /** Error thrown when an Agentics API request fails. */
 export class ApiClientError extends Error {

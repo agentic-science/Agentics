@@ -6,17 +6,14 @@
 //! migrations and writes deterministic fake challenge/submission data once the
 //! configured API and database are reachable.
 
-use std::collections::HashMap;
 use std::io::{Cursor, Seek, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
 
 use agentics_config::{
-    Config, DEFAULT_API_HOST, DEFAULT_API_PORT, ENV_AGENTICS_API_BASE_URL, ENV_AGENTICS_S3_BUCKET,
-    ENV_AGENTICS_S3_ENDPOINT_URL, ENV_AGENTICS_S3_FORCE_PATH_STYLE, ENV_AGENTICS_S3_PREFIX,
-    ENV_AGENTICS_S3_REGION, ENV_AGENTICS_STORAGE_BACKEND, ENV_AGENTICS_STORAGE_ROOT,
-    ENV_AGENTICS_STORAGE_WORK_ROOT, StorageBackend, default_local_api_base_url,
+    Config, DEFAULT_API_HOST, DEFAULT_API_PORT, ENV_AGENTICS_API_BASE_URL,
+    ENV_AGENTICS_S3_ENDPOINT_URL, local_api_base_url,
 };
 use agentics_storage::{StorageError, StorageWriteIntent, build_storage};
 use clap::{Parser, Subcommand};
@@ -31,16 +28,15 @@ use std::fs::File;
 
 mod local_demo_config;
 use local_demo_config::{
-    DemoDatabaseName, env_value, file_env_non_empty, load_dotenv_file, parse_url, repo_root,
+    DemoDatabaseName, RawLocalDemoEnv, env_value, load_dotenv_file, parse_url, repo_root,
     resolve_demo_database_url, validate_demo_database_url,
 };
 
 mod local_demo_seed;
 
-use crate::support::{ReportLine, SupportError, env_non_empty, print_reports, run_with_ctrl_c};
+use crate::support::{ReportLine, SupportError, print_reports, run_with_ctrl_c};
 
 const PREFIX: &str = "agentics-demo";
-const ENV_DEMO_ENV_FILE: &str = "AGENTICS_DEMO_ENV_FILE";
 const ENV_DEMO_DATABASE_NAME: &str = "AGENTICS_DEMO_DATABASE_NAME";
 const ENV_DEMO_DATABASE_URL: &str = "AGENTICS_DEMO_DATABASE_URL";
 const ENV_DEMO_DATABASE_URL_CONFIRM: &str = "AGENTICS_DEMO_DATABASE_URL_CONFIRM";
@@ -150,48 +146,70 @@ pub struct LocalDemoConfig {
     api_base_url: Url,
 }
 
-fn resolve_env_file(repo_root: &Path) -> PathBuf {
-    env_non_empty(ENV_DEMO_ENV_FILE)
+fn resolve_env_file(repo_root: &Path, process_env: &RawLocalDemoEnv) -> PathBuf {
+    env_value(process_env.demo_env_file.as_ref(), None)
         .map(PathBuf::from)
         .unwrap_or_else(|| repo_root.join("deploy/compose/env/dev.env.example"))
 }
 
 fn resolve_database_name(
-    file_env: &HashMap<String, String>,
+    process_env: &RawLocalDemoEnv,
+    file_env: &RawLocalDemoEnv,
 ) -> Result<DemoDatabaseName, LocalDemoError> {
     DemoDatabaseName::parse(
-        &env_value(ENV_DEMO_DATABASE_NAME, file_env)
-            .unwrap_or_else(|| DEFAULT_DEMO_DATABASE_NAME.to_string()),
+        &env_value(
+            process_env.demo_database_name.as_ref(),
+            file_env.demo_database_name.as_ref(),
+        )
+        .unwrap_or_else(|| DEFAULT_DEMO_DATABASE_NAME.to_string()),
     )
 }
 
 fn resolve_database_url(
     database_name: &DemoDatabaseName,
-    file_env: &HashMap<String, String>,
+    process_env: &RawLocalDemoEnv,
+    file_env: &RawLocalDemoEnv,
 ) -> Result<Url, LocalDemoError> {
     let database_url_raw = resolve_demo_database_url(
-        env_non_empty(ENV_DEMO_DATABASE_URL),
-        file_env_non_empty(ENV_DEMO_DATABASE_URL, file_env),
+        env_value(process_env.demo_database_url.as_ref(), None),
+        env_value(file_env.demo_database_url.as_ref(), None),
     )?;
     validate_demo_database_url(
         &database_url_raw,
         database_name,
-        env_value(ENV_DEMO_DATABASE_URL_CONFIRM, file_env).as_deref(),
+        env_value(
+            process_env.demo_database_url_confirm.as_ref(),
+            file_env.demo_database_url_confirm.as_ref(),
+        )
+        .as_deref(),
     )
 }
 
-fn resolve_api_base_url(file_env: &HashMap<String, String>) -> Result<Url, LocalDemoError> {
+fn resolve_api_base_url(
+    process_env: &RawLocalDemoEnv,
+    file_env: &RawLocalDemoEnv,
+) -> Result<Url, LocalDemoError> {
     parse_url(
         ENV_AGENTICS_API_BASE_URL,
-        &env_value(ENV_AGENTICS_API_BASE_URL, file_env)
-            .unwrap_or_else(|| default_local_api_base_url(DEFAULT_API_HOST, DEFAULT_API_PORT)),
+        &env_value(
+            process_env.api_base_url.as_ref(),
+            file_env.api_base_url.as_ref(),
+        )
+        .unwrap_or_else(|| local_api_base_url(DEFAULT_API_HOST, DEFAULT_API_PORT)),
     )
 }
 
-fn resolve_storage_root(repo_root: &Path, file_env: &HashMap<String, String>) -> PathBuf {
-    let storage_root = env_value(ENV_AGENTICS_STORAGE_ROOT, file_env)
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(agentics_config::DEFAULT_STORAGE_ROOT));
+fn resolve_storage_root(
+    repo_root: &Path,
+    process_env: &RawLocalDemoEnv,
+    file_env: &RawLocalDemoEnv,
+) -> PathBuf {
+    let storage_root = env_value(
+        process_env.storage_root.as_ref(),
+        file_env.storage_root.as_ref(),
+    )
+    .map(PathBuf::from)
+    .unwrap_or_else(|| PathBuf::from(agentics_config::DEFAULT_STORAGE_ROOT));
     if storage_root.is_absolute() {
         storage_root
     } else {
@@ -201,9 +219,14 @@ fn resolve_storage_root(repo_root: &Path, file_env: &HashMap<String, String>) ->
 
 fn resolve_storage_work_root(
     repo_root: &Path,
-    file_env: &HashMap<String, String>,
+    process_env: &RawLocalDemoEnv,
+    file_env: &RawLocalDemoEnv,
 ) -> Option<String> {
-    env_value(ENV_AGENTICS_STORAGE_WORK_ROOT, file_env).map(|value| {
+    env_value(
+        process_env.storage_work_root.as_ref(),
+        file_env.storage_work_root.as_ref(),
+    )
+    .map(|value| {
         let path = PathBuf::from(value);
         if path.is_absolute() {
             path
@@ -217,53 +240,51 @@ fn resolve_storage_work_root(
 
 fn resolve_storage_config(
     repo_root: &Path,
-    file_env: &HashMap<String, String>,
+    process_env: &RawLocalDemoEnv,
+    file_env: &RawLocalDemoEnv,
 ) -> Result<Config, LocalDemoError> {
     let mut config =
         Config::from_env().map_err(|error| LocalDemoError::InvalidConfig(error.to_string()))?;
-    config.storage_root = resolve_storage_root(repo_root, file_env)
+    config.storage_root = resolve_storage_root(repo_root, process_env, file_env)
         .to_string_lossy()
         .to_string();
-    config.storage_backend = env_value(ENV_AGENTICS_STORAGE_BACKEND, file_env)
-        .map(|value| value.parse::<StorageBackend>())
-        .transpose()
-        .map_err(|error| LocalDemoError::InvalidConfig(error.to_string()))?
+    config.storage_backend = process_env
+        .storage_backend
+        .or(file_env.storage_backend)
         .unwrap_or(config.storage_backend);
     config.storage_work_root =
-        resolve_storage_work_root(repo_root, file_env).or(config.storage_work_root);
-    config.s3_bucket = env_value(ENV_AGENTICS_S3_BUCKET, file_env).or(config.s3_bucket);
-    config.s3_prefix = env_value(ENV_AGENTICS_S3_PREFIX, file_env).or(config.s3_prefix);
-    config.s3_region = env_value(ENV_AGENTICS_S3_REGION, file_env).unwrap_or(config.s3_region);
-    config.s3_endpoint_url = env_value(ENV_AGENTICS_S3_ENDPOINT_URL, file_env)
-        .map(|value| parse_url(ENV_AGENTICS_S3_ENDPOINT_URL, &value))
-        .transpose()?
-        .or(config.s3_endpoint_url);
-    config.s3_force_path_style = env_value(ENV_AGENTICS_S3_FORCE_PATH_STYLE, file_env)
-        .map(|value| parse_bool(ENV_AGENTICS_S3_FORCE_PATH_STYLE, &value))
-        .transpose()?
+        resolve_storage_work_root(repo_root, process_env, file_env).or(config.storage_work_root);
+    config.s3_bucket =
+        env_value(process_env.s3_bucket.as_ref(), file_env.s3_bucket.as_ref()).or(config.s3_bucket);
+    config.s3_prefix =
+        env_value(process_env.s3_prefix.as_ref(), file_env.s3_prefix.as_ref()).or(config.s3_prefix);
+    config.s3_region = env_value(process_env.s3_region.as_ref(), file_env.s3_region.as_ref())
+        .unwrap_or(config.s3_region);
+    config.s3_endpoint_url = env_value(
+        process_env.s3_endpoint_url.as_ref(),
+        file_env.s3_endpoint_url.as_ref(),
+    )
+    .map(|value| parse_url(ENV_AGENTICS_S3_ENDPOINT_URL, &value))
+    .transpose()?
+    .or(config.s3_endpoint_url);
+    config.s3_force_path_style = process_env
+        .s3_force_path_style
+        .or(file_env.s3_force_path_style)
         .unwrap_or(config.s3_force_path_style);
     Ok(config)
-}
-
-fn parse_bool(name: &str, value: &str) -> Result<bool, LocalDemoError> {
-    match value.trim().to_ascii_lowercase().as_str() {
-        "1" | "true" | "yes" => Ok(true),
-        "0" | "false" | "no" => Ok(false),
-        _ => Err(LocalDemoError::InvalidConfig(format!(
-            "{name} must be true or false"
-        ))),
-    }
 }
 
 impl LocalDemoConfig {
     fn from_env() -> Result<Self, LocalDemoError> {
         let repo_root = repo_root()?;
-        let env_file = resolve_env_file(&repo_root);
-        let file_env = load_dotenv_file(&env_file)?;
-        let database_name = resolve_database_name(&file_env)?;
-        let database_url = resolve_database_url(&database_name, &file_env)?;
-        let api_base_url = resolve_api_base_url(&file_env)?;
-        let storage_config = resolve_storage_config(&repo_root, &file_env)?;
+        let process_env = RawLocalDemoEnv::from_process()?;
+        let env_file = resolve_env_file(&repo_root, &process_env);
+        let file_env_values = load_dotenv_file(&env_file)?;
+        let file_env = RawLocalDemoEnv::from_map(&file_env_values)?;
+        let database_name = resolve_database_name(&process_env, &file_env)?;
+        let database_url = resolve_database_url(&database_name, &process_env, &file_env)?;
+        let api_base_url = resolve_api_base_url(&process_env, &file_env)?;
+        let storage_config = resolve_storage_config(&repo_root, &process_env, &file_env)?;
         Ok(Self {
             repo_root,
             storage_config,
@@ -435,7 +456,7 @@ mod tests {
     use secrecy::SecretString;
 
     use super::{
-        DemoDatabaseName, ENV_DEMO_DATABASE_URL, NON_LOOPBACK_DATABASE_CONFIRMATION, parse_bool,
+        DemoDatabaseName, ENV_DEMO_DATABASE_URL, NON_LOOPBACK_DATABASE_CONFIRMATION,
         resolve_demo_database_url, validate_demo_database_url, write_demo_artifact,
     };
 
@@ -490,14 +511,6 @@ mod tests {
             )
             .is_ok()
         );
-    }
-
-    /// Verifies boolean env parsing accepts only explicit boolean values.
-    #[test]
-    fn storage_bool_env_is_strict() {
-        assert!(parse_bool("FLAG", "true").unwrap());
-        assert!(!parse_bool("FLAG", "0").unwrap());
-        assert!(parse_bool("FLAG", "maybe").is_err());
     }
 
     /// Verifies generated demo ZIPs contain the runnable solution contract.

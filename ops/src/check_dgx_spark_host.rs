@@ -25,19 +25,42 @@ use bollard::query_parameters::{
 };
 use clap::Parser;
 use futures::StreamExt;
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::dgx::{
-    DEFAULT_CUDA_IMAGE, DockerPullPolicy, ENV_DGX_CUDA_IMAGE, ENV_DGX_DOCKER_PULL_POLICY,
-    ENV_DGX_RUN_DOCKER_SMOKE,
+    DEFAULT_CUDA_IMAGE, DEFAULT_DGX_DOCKER_PULL_POLICY, DEFAULT_DGX_RUN_DOCKER_SMOKE,
+    DockerPullPolicy,
 };
 use crate::support::{
-    DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, append_bounded_bytes, env_non_empty,
-    parse_bool_env, print_reports, run_process, run_with_ctrl_c,
+    DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, append_bounded_bytes, print_reports,
+    run_process, run_with_ctrl_c,
 };
 
 const PREFIX: &str = "agentics-dgx-host";
+const ENV_PREFIX: &str = "AGENTICS_";
 const DOCKER_SMOKE_TIMEOUT_SECS: u64 = 120;
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct RawHostCheckEnv {
+    dgx_run_docker_smoke: Option<bool>,
+    dgx_cuda_image: Option<String>,
+    dgx_docker_pull_policy: Option<DockerPullPolicy>,
+}
+
+impl RawHostCheckEnv {
+    fn from_process() -> Result<Self, HostCheckError> {
+        envy::prefixed(ENV_PREFIX)
+            .from_env::<Self>()
+            .map_err(|error| HostCheckError::InvalidConfig(error.to_string()))
+    }
+
+    fn non_empty(value: Option<String>) -> Option<String> {
+        value
+            .map(|value| value.trim().to_string())
+            .filter(|value| !value.is_empty())
+    }
+}
 
 /// CLI for DGX Spark host inventory checks.
 #[derive(Debug, Parser)]
@@ -98,18 +121,21 @@ async fn run(cli: Cli) -> Result<Vec<ReportLine>, HostCheckError> {
         )]);
     }
 
+    let raw_env = RawHostCheckEnv::from_process()?;
     let timeout = Duration::from_secs(cli.command_timeout_seconds.max(1));
-    let run_smoke = cli.run_docker_smoke || parse_bool_env(ENV_DGX_RUN_DOCKER_SMOKE, false)?;
+    let run_smoke = cli.run_docker_smoke
+        || raw_env
+            .dgx_run_docker_smoke
+            .unwrap_or(DEFAULT_DGX_RUN_DOCKER_SMOKE);
     let cuda_image = cli
         .cuda_image
-        .or_else(|| env_non_empty(ENV_DGX_CUDA_IMAGE))
+        .or_else(|| RawHostCheckEnv::non_empty(raw_env.dgx_cuda_image))
         .unwrap_or_else(|| DEFAULT_CUDA_IMAGE.to_string());
     let pull_policy = match cli.docker_pull_policy {
         Some(policy) => policy.0,
-        None => env_non_empty(ENV_DGX_DOCKER_PULL_POLICY)
-            .as_deref()
-            .unwrap_or(DockerPullPolicy::Never.as_str())
-            .parse()?,
+        None => raw_env
+            .dgx_docker_pull_policy
+            .unwrap_or(DEFAULT_DGX_DOCKER_PULL_POLICY),
     };
 
     let mut reports = Vec::new();
@@ -122,7 +148,7 @@ async fn run(cli: Cli) -> Result<Vec<ReportLine>, HostCheckError> {
         true => docker_smoke_report(&cuda_image, pull_policy).await,
         false => ReportLine::skip(
             "NVIDIA Docker smoke",
-            "set AGENTICS_DGX_RUN_DOCKER_SMOKE=1 or --run-docker-smoke to run",
+            "set AGENTICS_DGX_RUN_DOCKER_SMOKE=true or --run-docker-smoke to run",
         ),
     });
     Ok(reports)
@@ -495,6 +521,8 @@ enum HostCheckError {
     Config(#[from] crate::dgx::DgxConfigError),
     #[error(transparent)]
     Docker(#[from] bollard::errors::Error),
+    #[error("invalid DGX host check config: {0}")]
+    InvalidConfig(String),
     #[error("Docker smoke timed out after {0}s")]
     Timeout(u64),
     #[error("{0}")]

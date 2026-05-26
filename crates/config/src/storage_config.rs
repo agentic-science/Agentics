@@ -35,10 +35,10 @@ pub const DEFAULT_S3_ENDPOINT_URL: &str = "http://127.0.0.1:9000";
 /// Default S3 path-style setting for RustFS-compatible object storage.
 pub const DEFAULT_S3_FORCE_PATH_STYLE: bool = true;
 
-const DEFAULT_STORAGE_MAX_BUNDLE_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
-const DEFAULT_STORAGE_MAX_STATEMENT_BYTES: u64 = 1024 * 1024;
-const DEFAULT_STORAGE_MAX_JSON_ARTIFACT_BYTES: u64 = 1024 * 1024;
-const DEFAULT_STORAGE_TMP_OBJECT_GRACE_HOURS: u64 = 24;
+pub(crate) const DEFAULT_STORAGE_MAX_BUNDLE_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
+pub(crate) const DEFAULT_STORAGE_MAX_STATEMENT_BYTES: u64 = 1024 * 1024;
+pub(crate) const DEFAULT_STORAGE_MAX_JSON_ARTIFACT_BYTES: u64 = 1024 * 1024;
+pub(crate) const DEFAULT_STORAGE_TMP_OBJECT_GRACE_HOURS: u64 = 24;
 
 /// Durable storage backend for platform objects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -72,64 +72,6 @@ impl FromStr for StorageBackend {
             ),
         }
     }
-}
-
-/// Default durable storage backend.
-pub(crate) fn default_storage_backend() -> StorageBackend {
-    DEFAULT_STORAGE_BACKEND
-}
-
-/// Default local filesystem durable object storage root for explicit local mode.
-pub(crate) fn default_storage_root() -> String {
-    DEFAULT_STORAGE_ROOT.to_string()
-}
-
-/// Default S3-compatible bucket.
-pub(crate) fn default_s3_bucket() -> Option<String> {
-    Some(DEFAULT_S3_BUCKET.to_string())
-}
-
-/// Default S3 region used by AWS-compatible local test services.
-pub(crate) fn default_s3_region() -> String {
-    DEFAULT_S3_REGION.to_string()
-}
-
-#[allow(
-    clippy::expect_used,
-    reason = "hard-coded default S3 endpoint is validated at compile-time by tests and has no runtime fallback"
-)]
-/// Default local RustFS endpoint for non-Compose S3-backed development.
-pub(crate) fn default_s3_endpoint_url() -> Option<url::Url> {
-    Some(
-        DEFAULT_S3_ENDPOINT_URL
-            .parse()
-            .expect("default S3 endpoint URL must be valid"),
-    )
-}
-
-/// Default S3 path-style access setting.
-pub(crate) fn default_s3_force_path_style() -> bool {
-    DEFAULT_S3_FORCE_PATH_STYLE
-}
-
-/// Default maximum stored challenge bundle archive bytes.
-pub(crate) fn default_storage_max_bundle_archive_bytes() -> u64 {
-    DEFAULT_STORAGE_MAX_BUNDLE_ARCHIVE_BYTES
-}
-
-/// Default maximum stored statement bytes.
-pub(crate) fn default_storage_max_statement_bytes() -> u64 {
-    DEFAULT_STORAGE_MAX_STATEMENT_BYTES
-}
-
-/// Default maximum stored creator/admin JSON artifact bytes.
-pub(crate) fn default_storage_max_json_artifact_bytes() -> u64 {
-    DEFAULT_STORAGE_MAX_JSON_ARTIFACT_BYTES
-}
-
-/// Default age after which temporary storage objects are eligible for cleanup.
-pub(crate) fn default_storage_tmp_object_grace_hours() -> u64 {
-    DEFAULT_STORAGE_TMP_OBJECT_GRACE_HOURS
 }
 
 /// Validate durable object storage configuration.
