@@ -286,9 +286,8 @@ Use persistent but clearly dev-scoped state by default:
 ```text
 .agentics-compose/dev/runtime
 .agentics-compose/dev/phase-mounts
-.agentics-compose/dev/storage
 .agentics-compose/dev/storage-work
-Compose volumes for Postgres, Cargo, and Bun state
+Compose volumes for Postgres, RustFS, Cargo, and Bun state
 ```
 
 Developers can override `AGENTICS_DEV_ROOT`; the path is mounted into containers
@@ -306,7 +305,7 @@ frontend/backend iteration. The first pass uses:
 
 - Postgres as a normal service container;
 - API/worker/web as local build containers with bind-mounted source;
-- local filesystem storage so the fake demo seed can write artifacts directly;
+- RustFS/S3 durable storage, with `storage-work` used only for scratch files;
 - later add production-like image builds.
 
 ### Development Runner Policy
@@ -579,7 +578,7 @@ stale job repair remains worker reconciliation and stale-lease behavior.
 - Add base and dev Compose files. Done.
 - Add dev env example. Done.
 - Add API, web, worker, Postgres, migrate, and seed services. Done.
-- Add RustFS. Deferred.
+- Add RustFS. Done.
 - Add Rust ops wrapper or focused just recipes. Done with just recipes.
 - Add dev runner host-path setup and cleanup. Host-path setup done; explicit
   cleanup command deferred.
@@ -595,7 +594,8 @@ stale job repair remains worker reconciliation and stale-lease behavior.
   default.
 - Run `cargo test -p integration-tests -- --include-ignored` inside the tests
   container. Done through `just compose-test-integration`.
-- Add RustFS/S3 integration smoke.
+- Add RustFS/S3 integration smoke. Done through the storage contract test recipe;
+  full runtime integration still depends on the dedicated test Docker daemon.
 - Capture logs and cleanup runner leftovers on failure.
 
 ### Phase 4: Production Compose
@@ -618,8 +618,6 @@ stale job repair remains worker reconciliation and stale-lease behavior.
 
 - Should dev API/worker/web run from bind-mounted source for fast iteration, or
   from production-like images for closer parity?
-- Should RustFS be mandatory in dev/test, or should local filesystem storage
-  remain available for the fastest inner loop?
 - Where should host-visible dev/test roots live by default on non-DGX machines?
 - When production moves beyond the first Compose version, is a dedicated Docker
   daemon/socket worth the extra operational setup?

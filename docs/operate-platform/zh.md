@@ -28,7 +28,8 @@ Local defaults 使用：
 - Web：`127.0.0.1:3001`
 - Postgres host port：`55432`
 - Challenge root：`examples/challenges`
-- Storage root：`.agentics-compose/dev/storage`
+- Durable storage：Compose RustFS volume 中的 RustFS-compatible S3
+- Storage scratch root：`.agentics-compose/dev/storage-work`
 
 Production Compose defaults 使用：
 
