@@ -243,7 +243,7 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
 async fn solution_submission_rejects_oversized_manifest_note_before_storage(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let config = helpers::test_config(storage.path(), &helpers::examples_challenges_root());
-    let app = helpers::spawn_app_with_config(pool.clone(), config).await;
+    let app = helpers::spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
 
     let register_response: serde_json::Value = client
@@ -305,10 +305,7 @@ async fn solution_submission_rejects_oversized_manifest_note_before_storage(pool
             .await
             .expect("failed to query solution submission count");
     assert_eq!(solution_submission_count, 0);
-    assert_eq!(
-        regular_file_count(&storage.path().join("solution-submissions")),
-        0
-    );
+    assert!(helpers::storage_prefix_is_empty(&config, "solution-submissions").await);
 }
 
 /// Verifies that invalid solution submission path ids return bad request.
@@ -869,30 +866,6 @@ async fn submit_solution_with_target(
         .send()
         .await
         .expect("failed to submit solution")
-}
-
-/// Count regular files under a test storage root.
-fn regular_file_count(root: &Path) -> usize {
-    if !root.exists() {
-        return 0;
-    }
-    let mut count = 0;
-    let mut stack = vec![root.to_path_buf()];
-    while let Some(path) = stack.pop() {
-        let entries = std::fs::read_dir(&path).expect("test storage root should be readable");
-        for entry in entries {
-            let entry = entry.expect("test storage entry should be readable");
-            let file_type = entry
-                .file_type()
-                .expect("test storage entry type should be readable");
-            if file_type.is_dir() {
-                stack.push(entry.path());
-            } else if file_type.is_file() {
-                count += 1;
-            }
-        }
-    }
-    count
 }
 
 /// Writes challenge window challenge to the target path.

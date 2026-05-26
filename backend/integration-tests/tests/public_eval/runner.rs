@@ -253,9 +253,8 @@ async fn worker_completes_piped_stdio_solution_submission(pool: sqlx::PgPool) {
     .fetch_one(&pool)
     .await
     .expect("failed to query piped-stdio validation job error");
-    let validation_runner_log = validation["evaluation"]["log_key"]
-        .as_str()
-        .and_then(|log_key| std::fs::read_to_string(storage.path().join(log_key)).ok());
+    let validation_runner_log =
+        runner_log_text(&config, validation["evaluation"]["log_key"].as_str()).await;
     assert_eq!(
         validation["status"], "completed",
         "unexpected piped-stdio validation response: {validation:#}; job_error={:?}; runner_log={:?}",
@@ -414,9 +413,8 @@ async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {
     .fetch_one(&pool)
     .await
     .expect("failed to query coexecuted validation job error");
-    let validation_runner_log = validation["evaluation"]["log_key"]
-        .as_str()
-        .and_then(|log_key| std::fs::read_to_string(storage.path().join(log_key)).ok());
+    let validation_runner_log =
+        runner_log_text(&config, validation["evaluation"]["log_key"].as_str()).await;
     assert_eq!(
         validation["status"], "completed",
         "unexpected coexecuted validation response: {validation:#}; job_error={:?}; runner_log={:?}",

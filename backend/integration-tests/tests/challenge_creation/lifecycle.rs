@@ -593,7 +593,7 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
         .as_str()
         .expect("storage key")
         .to_string();
-    assert!(storage.path().join(&storage_key).exists());
+    assert!(helpers::storage_key_exists(&config, &storage_key).await);
 
     client
         .post(api_url(
@@ -630,5 +630,5 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
         .expect("cleanup json");
     assert_eq!(cleanup["purged_private_assets"], 1);
     assert!(cleanup["purged_temporary_storage_objects"].is_i64());
-    assert!(!storage.path().join(&storage_key).exists());
+    assert!(!helpers::storage_key_exists(&config, &storage_key).await);
 }

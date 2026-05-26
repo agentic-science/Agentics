@@ -4,6 +4,7 @@ mod helpers;
 
 use std::path::Path;
 
+use agentics_config::Config;
 use agentics_domain::storage::StorageKey;
 use agentics_storage::{StorageWriteIntent, build_storage, pack_directory_to_tar};
 use helpers::{
@@ -105,6 +106,21 @@ async fn store_challenge_bundle_objects(
         .await
         .expect("store challenge statement");
     (private_key, public_key, statement_key)
+}
+
+/// Read a runner log through configured storage for assertion diagnostics.
+async fn runner_log_text(config: &Config, log_key: Option<&str>) -> Option<String> {
+    let log_key = log_key?;
+    let storage = build_storage(config).await.ok()?;
+    let key = StorageKey::try_new(log_key).ok()?;
+    storage
+        .get(
+            &key,
+            StorageWriteIntent::new("runner log", config.runner_max_result_log_bytes),
+        )
+        .await
+        .ok()
+        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
 }
 
 /// Creates a minimal piped-stdio challenge after validating caller inputs.

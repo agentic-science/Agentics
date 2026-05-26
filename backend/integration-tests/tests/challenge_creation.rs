@@ -4,8 +4,6 @@
 mod challenge_creation_helpers;
 mod helpers;
 
-use std::path::Path;
-
 use agentics_domain::error::ServiceError;
 use agentics_domain::models::challenge_creation::ChallengeDraftValidationStatus;
 use agentics_domain::models::hashes::Sha256Digest;
@@ -977,17 +975,16 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
     assert_eq!(draft_status, "approved");
     assert!(publish_claim_id.is_none());
 
-    let draft_bundle_root = storage
-        .path()
-        .join("challenge-bundles")
-        .join("sample-sum")
-        .join(draft_id);
     assert!(
-        directory_is_empty_or_absent(&draft_bundle_root),
+        helpers::storage_prefix_is_empty(
+            &config,
+            &format!("challenge-bundles/sample-sum/{draft_id}")
+        )
+        .await,
         "failed DB publish must remove the claim-scoped runtime bundle"
     );
     assert!(
-        directory_is_empty_or_absent(&storage.path().join("_tmp").join("challenge-bundles")),
+        helpers::storage_prefix_is_empty(&config, "_tmp/challenge-bundles").await,
         "failed DB publish must remove temporary runtime bundle directories"
     );
 }
@@ -1112,15 +1109,6 @@ async fn materialize_bundle_key(
         .await
         .expect("unpack challenge bundle");
     (materialized, bundle_dir)
-}
-
-/// Returns true for a missing or empty directory, and panics on other filesystem errors.
-fn directory_is_empty_or_absent(path: &Path) -> bool {
-    match std::fs::read_dir(path) {
-        Ok(mut entries) => entries.next().is_none(),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
-        Err(error) => panic!("failed to inspect {}: {error}", path.display()),
-    }
 }
 
 #[path = "challenge_creation/lifecycle.rs"]

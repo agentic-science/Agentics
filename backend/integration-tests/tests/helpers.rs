@@ -12,7 +12,7 @@ use agentics_config::{
     ENV_AGENTICS_S3_REGION, RunnerWritableStorageMode, StorageBackend,
 };
 use agentics_runner::connect_docker;
-use agentics_storage::{S3Storage, build_storage};
+use agentics_storage::{S3Storage, StorageKey, StorageWriteIntent, build_storage};
 use api_server::admin_auth_throttle::AdminAuthThrottle;
 use api_server::router;
 use api_server::state::AppState;
@@ -218,6 +218,53 @@ async fn ensure_test_storage_bucket(config: &Config) {
         .create_bucket_if_missing_for_tests()
         .await
         .expect("failed to create or inspect S3 test bucket");
+}
+
+/// Return whether a configured test-storage key exists.
+pub async fn storage_key_exists(config: &Config, key: &str) -> bool {
+    let storage = build_storage(config)
+        .await
+        .expect("failed to initialize test storage");
+    let key = StorageKey::try_new(key).expect("test storage key should be valid");
+    storage.exists(&key).await.expect("storage exists check")
+}
+
+/// Read bytes through the configured test-storage backend.
+pub async fn read_storage_key(config: &Config, key: &str, intent: StorageWriteIntent) -> Vec<u8> {
+    let storage = build_storage(config)
+        .await
+        .expect("failed to initialize test storage");
+    let key = StorageKey::try_new(key).expect("test storage key should be valid");
+    storage.get(&key, intent).await.expect("storage read")
+}
+
+/// Store test bytes through the configured test-storage backend.
+pub async fn put_storage_key(config: &Config, key: &StorageKey, bytes: &[u8]) {
+    let storage = build_storage(config)
+        .await
+        .expect("failed to initialize test storage");
+    let max_bytes = u64::try_from(bytes.len()).expect("test bytes length fits u64");
+    storage
+        .put(
+            key,
+            bytes,
+            StorageWriteIntent::new("test object", max_bytes),
+        )
+        .await
+        .expect("storage put");
+}
+
+/// Return whether a configured durable-storage prefix has no objects.
+pub async fn storage_prefix_is_empty(config: &Config, prefix: &str) -> bool {
+    let storage = build_storage(config)
+        .await
+        .expect("failed to initialize test storage");
+    let prefix = StorageKey::try_new(prefix).expect("test storage prefix should be valid");
+    storage
+        .list_prefix(&prefix)
+        .await
+        .expect("storage prefix list")
+        .is_empty()
 }
 
 fn env_or_default(name: &str, default: &str) -> String {

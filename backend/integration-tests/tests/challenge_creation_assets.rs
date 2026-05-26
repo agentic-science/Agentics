@@ -17,8 +17,9 @@ use agentics_persistence as db;
 use agentics_storage::StorageKey;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use helpers::{
-    TestCreatorSession, api_url, basic_auth_header, create_creator_session, spawn_app_with_config,
-    test_config, zip_project_zip_base64,
+    TestCreatorSession, api_url, basic_auth_header, create_creator_session, put_storage_key,
+    read_storage_key, spawn_app_with_config, storage_key_exists, test_config,
+    zip_project_zip_base64,
 };
 use serde_json::json;
 
@@ -38,7 +39,7 @@ async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let config = test_config(storage.path(), seeded_challenges.path());
-    let app = spawn_app_with_config(pool.clone(), config).await;
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
 
@@ -67,7 +68,7 @@ async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
         .as_str()
         .expect("storage key")
         .to_string();
-    assert!(storage.path().join(&storage_key).exists());
+    assert!(storage_key_exists(&config, &storage_key).await);
 
     let duplicate_response = creator_auth(
         client.post(api_url(
@@ -87,7 +88,7 @@ async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
     .expect("duplicate asset request");
     assert_eq!(duplicate_response.status(), reqwest::StatusCode::CONFLICT);
     assert!(
-        storage.path().join(&storage_key).exists(),
+        storage_key_exists(&config, &storage_key).await,
         "duplicate rejection must not delete the accepted durable asset"
     );
 }
@@ -339,7 +340,7 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
         &config.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
-    let app = spawn_app_with_config(pool.clone(), config).await;
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
 
@@ -376,10 +377,7 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
         .reserve_private_asset(&first, 10_000_000, 30, 30)
         .await
         .expect("first pending asset should reserve");
-    let durable_path = storage.path().join(storage_key.as_str());
-    std::fs::create_dir_all(durable_path.parent().expect("storage key parent"))
-        .expect("storage key parent should create");
-    std::fs::write(&durable_path, &asset_bytes).expect("stale durable object should write");
+    put_storage_key(&config, &storage_key, &asset_bytes).await;
     sqlx::query(
         "UPDATE challenge_private_assets SET created_at = NOW() - INTERVAL '60 minutes' WHERE id = $1::uuid",
     )
@@ -423,7 +421,15 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
     .expect("failed to query asset states");
     assert_eq!(states, vec!["failed".to_string(), "active".to_string()]);
     assert_eq!(
-        std::fs::read(&durable_path).expect("active durable object should exist"),
+        read_storage_key(
+            &config,
+            storage_key.as_str(),
+            agentics_storage::StorageWriteIntent::new(
+                "private benchmark asset",
+                u64::try_from(asset_bytes.len()).expect("test asset size fits u64"),
+            ),
+        )
+        .await,
         asset_bytes
     );
 
