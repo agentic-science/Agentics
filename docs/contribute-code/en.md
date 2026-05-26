@@ -105,7 +105,8 @@ sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just compose-test-docker-up
 just compose-test-integration
 ```
 
-This starts a test-scoped Postgres service and runs:
+This starts test-scoped Postgres and RustFS services, initializes the test S3
+bucket, and runs:
 
 ```bash
 cargo test -p integration-tests -- --include-ignored

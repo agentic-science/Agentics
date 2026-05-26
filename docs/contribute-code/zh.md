@@ -101,7 +101,8 @@ sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just compose-test-docker-up
 just compose-test-integration
 ```
 
-该命令会启动 test-scoped Postgres service，并在 Rust container 内运行：
+该命令会启动 test-scoped Postgres 和 RustFS services，初始化 test S3 bucket，
+并在 Rust container 内运行：
 
 ```bash
 cargo test -p integration-tests -- --include-ignored

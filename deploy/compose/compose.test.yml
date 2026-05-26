@@ -34,13 +34,25 @@ services:
           if mc alias set test http://rustfs:9000 "$${AGENTICS_RUSTFS_ACCESS_KEY}" "$${AGENTICS_RUSTFS_SECRET_KEY}" >/dev/null 2>&1; then
             mc mb -p "test/$${AGENTICS_S3_BUCKET}" >/dev/null 2>&1 || true
             mc anonymous set none "test/$${AGENTICS_S3_BUCKET}" >/dev/null 2>&1 || true
-            exit 0
+            touch /tmp/agentics-rustfs-bucket-ready
+            trap 'exit 0' INT TERM
+            tail -f /dev/null &
+            wait "$$!"
           fi
           sleep 1
         done
         mc alias set test http://rustfs:9000 "$${AGENTICS_RUSTFS_ACCESS_KEY}" "$${AGENTICS_RUSTFS_SECRET_KEY}" >/dev/null
         mc mb -p "test/$${AGENTICS_S3_BUCKET}" >/dev/null 2>&1 || true
         mc anonymous set none "test/$${AGENTICS_S3_BUCKET}" >/dev/null 2>&1 || true
+        touch /tmp/agentics-rustfs-bucket-ready
+        trap 'exit 0' INT TERM
+        tail -f /dev/null &
+        wait "$$!"
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/agentics-rustfs-bucket-ready"]
+      interval: 1s
+      timeout: 2s
+      retries: 30
     restart: "no"
 
   tests:
@@ -68,7 +80,7 @@ services:
       postgres:
         condition: service_healthy
       rustfs-bucket-init:
-        condition: service_completed_successfully
+        condition: service_healthy
     volumes:
       - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics:ro
       - ${AGENTICS_TEST_ROOT:?set AGENTICS_TEST_ROOT}:${AGENTICS_TEST_ROOT:?set AGENTICS_TEST_ROOT}
