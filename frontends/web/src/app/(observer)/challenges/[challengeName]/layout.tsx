@@ -162,7 +162,10 @@ export default async function ChallengeLayout({
       </div>
 
       {/* Tabs */}
-      <ChallengeNav challengeName={challengeName} defaultTarget={defaultTarget} />
+      <ChallengeNav
+        challengeName={challengeName}
+        defaultTarget={defaultTarget}
+      />
 
       {/* Page Content */}
       {children}

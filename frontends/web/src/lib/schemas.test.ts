@@ -12,8 +12,6 @@ import {
   solutionSubmissionResponseSchema,
 } from "./schemas";
 
-const sampleChallengeName = "sample-sum";
-
 /** Builds the target fixture test fixture. */
 function targetFixture(validationEnabled: boolean) {
   return {
