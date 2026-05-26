@@ -27,6 +27,19 @@ Production Compose 目标是名为 `agentics-prod` 的单机 project：
 Local Compose rehearsal 验证 service wiring 和平台行为。它不验证 DGX GPU runtime、
 ARM64 CUDA images、public TLS 或 production ingress。
 
+## Runner Container Ownership
+
+Agentics worker 会通过配置的 host Docker daemon 创建 solution、evaluator、
+permission-repair 和 probe containers。这些 runner containers 是 host-level
+sibling containers，不是 worker container 的子容器。因此，停止一个 Compose
+project 不会自动删除 worker 创建的 runner containers。
+
+每个 runner container 都必须带有精确的 Agentics labels，包括
+`agentics.runner=zip_project`、`agentics.runner_scope` 和
+`agentics.runner_namespace`。Compose project name 只隔离 Compose-owned
+services、networks 和 volumes；它不会隔离通过共享 Docker socket 创建的 runner
+containers。Runner reconciliation 和 cleanup 必须按配置的 namespace 过滤。
+
 Local Compose defaults 位于 `deploy/compose/env/dev.env.example`。Production
 Compose defaults 和 placeholders 位于 `deploy/compose/env/prod.env.example`。
 Ports 和 paths 记录在 `docs/ports-and-paths/zh.md`。

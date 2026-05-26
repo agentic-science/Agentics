@@ -292,13 +292,16 @@ failed after `AGENTICS_WORKER_STALE_JOB_MINUTES` and max-attempt logic.
 
 On startup and on each worker cycle, the worker also reconciles hosted-worker
 Agentics Docker containers against database job claims. The cleanup scope is
-limited to containers labelled `agentics.runner_scope=hosted-worker`, so CLI
-local validation containers on the same Docker host are not touched. Running
-hosted-worker containers are kept only when their `job_id`, `worker_id`, and
-`attempt_count` labels match a fresh `running` job claim. Missing, malformed,
-stale, superseded, and stopped stale runner containers in that hosted scope are
-killed or removed so a crashed worker cannot keep CPU, GPU, writable-mount, or
-Docker-layer quota slots indefinitely.
+limited to containers labelled `agentics.runner_scope=hosted-worker` and the
+configured `agentics.runner_namespace`, so CLI local validation containers and
+other Agentics stacks on the same Docker host are not touched. Compose project
+names do not isolate runner containers created through a shared Docker socket;
+the runner namespace label does. Running hosted-worker containers are kept only
+when their `job_id`, `worker_id`, and `attempt_count` labels match a fresh
+`running` job claim. Missing, malformed, stale, superseded, and stopped stale
+runner containers in that hosted namespace are killed or removed so a crashed
+worker cannot keep CPU, GPU, writable-mount, or Docker-layer quota slots
+indefinitely.
 
 After each runner container exits, a short permission-repair sidecar makes
 writable bind mounts host-cleanable. It runs with no network, a read-only root

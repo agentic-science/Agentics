@@ -59,6 +59,11 @@ override it only when you intentionally want a different cleanup namespace:
 AGENTICS_RUNNER_NAMESPACE=agentics-dev-$USER just compose-dev-up
 ```
 
+The Compose project name isolates Compose-owned containers, networks, and
+volumes. It does not isolate runner containers created through the host Docker
+socket, so runner cleanup and reconciliation depend on
+`AGENTICS_RUNNER_NAMESPACE`.
+
 By default, the dev API and web ports bind to `127.0.0.1`. To inspect the
 frontend from another machine through Tailscale or a trusted LAN, bind only to
 that interface and allow the hostname used by the browser:
@@ -109,6 +114,13 @@ Linux quota test root first with `agentics-prepare-dgx-spark-test-storage`, then
 start the dedicated daemon with the rootful command above. The wrapper uses a
 unique Compose project and runner namespace for each run, then removes
 test-scoped Compose volumes after the test service exits.
+
+Any container that creates runner containers through the host Docker socket must
+use host-visible paths. Mount runner runtime roots, storage work roots,
+challenge materialization roots, and quota slot paths into the worker or tests
+container at the same absolute path that the host Docker daemon sees. Avoid
+container-only `/tmp` paths for anything that will later be bind-mounted into a
+runner container.
 
 ## Frontend Demo Data
 

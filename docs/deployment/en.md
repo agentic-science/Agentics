@@ -29,6 +29,21 @@ The local Compose rehearsal validates service wiring and platform behavior. It
 does not validate DGX GPU runtime, ARM64 CUDA images, public TLS, or production
 ingress.
 
+## Runner Container Ownership
+
+Agentics workers create solution, evaluator, permission-repair, and probe
+containers through the configured host Docker daemon. Those runner containers
+are host-level sibling containers, not children of the worker container.
+Stopping a Compose project therefore does not automatically remove runner
+containers created by the worker.
+
+Every runner container must carry exact Agentics labels, including
+`agentics.runner=zip_project`, `agentics.runner_scope`, and
+`agentics.runner_namespace`. Compose project names isolate Compose-owned
+services, networks, and volumes, but they do not isolate runner containers
+created through the shared Docker socket. Runner reconciliation and cleanup must
+filter by the configured namespace.
+
 Local Compose defaults live in `deploy/compose/env/dev.env.example`.
 Production Compose defaults and placeholders live in
 `deploy/compose/env/prod.env.example`. Ports and paths are documented in

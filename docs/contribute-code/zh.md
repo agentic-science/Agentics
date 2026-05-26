@@ -59,6 +59,10 @@ namespace 时才覆盖它：
 AGENTICS_RUNNER_NAMESPACE=agentics-dev-$USER just compose-dev-up
 ```
 
+Compose project name 会隔离 Compose-owned containers、networks 和 volumes。
+它不会隔离通过 host Docker socket 创建的 runner containers，因此 runner cleanup
+和 reconciliation 依赖 `AGENTICS_RUNNER_NAMESPACE`。
+
 默认情况下，dev API 和 web ports 会 bind 到 `127.0.0.1`。如果要通过
 Tailscale 或可信 LAN 从另一台机器访问 frontend，请只 bind 到对应的网络接口，
 并允许浏览器实际使用的 hostname：
@@ -105,6 +109,12 @@ cargo test -p integration-tests -- --include-ignored
 先用 `agentics-prepare-dgx-spark-test-storage` 准备 Linux quota test root，再用上面的
 rootful command 启动专用 daemon。Wrapper 会为每次运行使用唯一的 Compose project
 和 runner namespace，并在 tests service 退出后删除 test-scoped Compose volumes。
+
+任何通过 host Docker socket 创建 runner containers 的 container，都必须使用
+host-visible paths。Runner runtime roots、storage work roots、challenge
+materialization roots 和 quota slot paths 应该以 host Docker daemon 看到的同一个
+absolute path 挂载进 worker 或 tests container。不要把稍后要 bind mount 到 runner
+container 的内容放在 container-only `/tmp` 下。
 
 ## Frontend Demo Data
 

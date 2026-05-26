@@ -137,6 +137,12 @@ are required, the host Docker daemon behind that socket must use a storage
 driver and data root that support `storage_opt.size`; Agentics no longer ships a
 project-owned Docker daemon service for production.
 
+The worker container usually does not need direct GPU access. It needs Docker
+socket access so it can ask the host Docker daemon to create runner containers
+with GPU device requests. GPU execution therefore depends on the host Docker
+daemon and NVIDIA Container Toolkit configuration, not on exposing GPU devices
+to API, web, Postgres, RustFS, or CPU-only worker services.
+
 ## Profile Check
 
 Run the non-mutating profile check first:

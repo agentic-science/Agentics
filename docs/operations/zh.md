@@ -283,12 +283,15 @@ job 继续保持 running。如果 worker 死亡，stale jobs 会在
 
 Worker startup 和每个 worker cycle 还会把 hosted-worker scope 中带 Agentics
 labels 的 Docker containers 与 database job claims 对账。Cleanup scope 只包括带
-`agentics.runner_scope=hosted-worker` label 的 containers，因此同一个 Docker host
-上的 CLI local validation containers 不会被 worker 触碰。只有当 hosted-worker
-running container 的 `job_id`、`worker_id` 和 `attempt_count` labels 匹配一个 fresh
-`running` job claim 时才保留。缺失、格式错误、stale、已被新 claim 取代，以及已停止且
-stale 的 runner containers 会在该 hosted scope 中被 kill 或 remove，避免 crashed
-worker 长时间占用 CPU、GPU、writable-mount 或 Docker-layer quota slots。
+`agentics.runner_scope=hosted-worker` label 以及配置的
+`agentics.runner_namespace` 的 containers，因此同一个 Docker host 上的 CLI local
+validation containers 和其他 Agentics stacks 不会被 worker 触碰。Compose project
+name 不会隔离通过共享 Docker socket 创建的 runner containers；真正的隔离边界是
+runner namespace label。只有当 hosted-worker running container 的 `job_id`、
+`worker_id` 和 `attempt_count` labels 匹配一个 fresh `running` job claim 时才保留。
+缺失、格式错误、stale、已被新 claim 取代，以及已停止且 stale 的 runner containers
+会在该 hosted namespace 中被 kill 或 remove，避免 crashed worker 长时间占用 CPU、
+GPU、writable-mount 或 Docker-layer quota slots。
 
 每个 runner container 退出后，一个短生命周期 permission-repair sidecar 会让 writable
 bind mounts 重新变得 host-cleanable。它没有 network，root filesystem 为 read-only，

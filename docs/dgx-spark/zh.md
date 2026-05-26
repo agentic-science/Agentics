@@ -134,6 +134,12 @@ Production Compose 使用 host Docker socket。如果需要 Docker writable-laye
 该 socket 背后的 host Docker daemon 必须使用支持 `storage_opt.size` 的 storage
 driver 和 data root。Agentics 不再为 production 提供项目自带 Docker daemon service。
 
+Worker container 通常不需要直接获得 GPU access。它需要 Docker socket access，
+以便请求 host Docker daemon 创建带 GPU device requests 的 runner containers。
+因此 GPU execution 依赖 host Docker daemon 和 NVIDIA Container Toolkit 配置，
+而不是把 GPU devices 暴露给 API、web、Postgres、RustFS 或 CPU-only worker
+services。
+
 ## Profile Check
 
 先运行 non-mutating profile check：
