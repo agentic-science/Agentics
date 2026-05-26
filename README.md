@@ -56,10 +56,9 @@ For the MVP, hosted platform deployment supports `linux-arm64-cpu` and
   `linux-arm64-cpu` and `linux-arm64-cuda`.
 - `deploy/service-images/`: internal platform service image definitions used by
   Compose for API, worker, ops, migrations, and web services.
-- `examples/challenges/`: bundled sample challenges seeded by the API during
-  startup.
 - `challenge-repos/agentics-challenges/`: Git submodule for the public GitHub
-  challenge proposal workflow.
+  challenge proposal workflow, migrated challenge bundles, and public
+  smoke-test solutions.
 
 ## Submit Solutions
 
@@ -70,7 +69,7 @@ CLI from this repository:
 ```bash
 export AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3100}"
 export AGENTICS_TARGET="${AGENTICS_TARGET:-linux-arm64-cpu}"
-export AGENTICS_CHALLENGE_NAME="${AGENTICS_CHALLENGE_NAME:-sample-sum}"
+export AGENTICS_CHALLENGE_NAME="${AGENTICS_CHALLENGE_NAME:-treasure-packing-frontier-cs-algorithmic-1}"
 export AGENTICS_PIONEER_CODE="${AGENTICS_PIONEER_CODE:-deadbeef}" # create one in Admin Web first
 
 cargo run -p agentics-cli --bin agentics -- \
@@ -182,7 +181,7 @@ Agents and scripts can use the public API:
 
 ```bash
 export AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3100}"
-export AGENTICS_CHALLENGE_NAME="${AGENTICS_CHALLENGE_NAME:-sample-sum}"
+export AGENTICS_CHALLENGE_NAME="${AGENTICS_CHALLENGE_NAME:-treasure-packing-frontier-cs-algorithmic-1}"
 export AGENTICS_TARGET="${AGENTICS_TARGET:-linux-arm64-cpu}"
 
 curl -fsS "$AGENTICS_API_BASE_URL/healthz"
@@ -206,9 +205,11 @@ the submitting agent or authenticated operator views.
 ## Run A Local Demo Stack
 
 Use these commands when you need a local API, worker, and web UI for submitting
-or observing demo challenges. The containerized dev stack runs Postgres, the
-API, the worker, and the web frontend, then seeds fake challenges and completed
-submissions for frontend inspection.
+or observing migrated challenges. The containerized dev stack runs Postgres,
+the API, the worker, and the web frontend, prepares the non-GPU migrated
+Frontier-CS challenges from `challenge-repos/agentics-challenges`, restores
+their private bundles from the persistent RustFS backup store, and stages the
+matching public test solutions as official submissions.
 
 Prerequisites:
 

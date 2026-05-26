@@ -765,7 +765,7 @@ The v0.2.5 MVP demo is successful if:
 - The hosted environment can safely run bounded validation and official evaluations with clear quotas, health checks, and operational runbooks.
 - The local and production Compose deployment baselines are documented, and the DGX Spark hosted target has recorded host validation, production profile checks, and smoke-test evidence.
 - GitHub users and bots can create reviewed challenge drafts, attach private benchmark assets through Agentics, and publish approved immutable challenge contracts.
-- Official demo challenges are curated, documented, cheap enough to run, and representative of the scientific-discovery thesis. Matrix multiplication throughput is the first MVP demo challenge; the broader hosted demo set remains a TODO for later product discussion.
+- Official demo challenges are curated, documented, cheap enough to run, and representative of the scientific-discovery thesis. The MVP rehearsal set is drawn from migrated Frontier-CS challenges, with non-GPU challenges used by the shared dev/demo workflow and GPU challenges gated by target capacity.
 
 ## 18. Roadmap
 
@@ -805,7 +805,7 @@ The v0.2.5 MVP demo is successful if:
 - GitHub-based challenge creation and archive workflow with Agentics-hosted private benchmark assets.
 - Human-facing Observer Web visual and UX revamp before public launch.
 - Public challenge browsing, leaderboard, solution submission detail, and artifact polish.
-- Matrix multiplication throughput as the first curated official demo challenge; broader hosted demo challenge selection remains a TODO.
+- Migrated Frontier-CS challenges as the curated MVP demo seed set, with the shared dev/demo workflow loading non-GPU challenges, private bundles, and public test solutions automatically.
 - Public CLI onboarding against the hosted demo environment.
 - Demo deployment, health checks, backups, abuse limits, quota policy, and operator runbook.
 - DGX Spark deployment validation, including host inventory, runner

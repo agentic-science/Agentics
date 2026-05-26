@@ -58,13 +58,13 @@ const defaultManifest = JSON.stringify(
   {
     schema_version: 1,
     request: "new_challenge",
-    challenge_name: "matrix-multiplication",
-    title: "Matrix Multiplication",
+    challenge_name: "frontier-cs-example-challenge",
+    title: "Frontier-CS Example Challenge",
     summary: {
-      en: "Benchmark matrix multiplication solutions.",
-      zh: "评测矩阵乘法解决方案。",
+      en: "Benchmark a small Frontier-CS style task.",
+      zh: "评测一个小型 Frontier-CS 风格任务。",
     },
-    keywords: ["linear algebra", "performance", "matrix"],
+    keywords: ["frontier-cs", "benchmark", "migration"],
     readme_path: "README.md",
     bundle_path: "v1",
     private_assets: [
@@ -105,7 +105,7 @@ export function CreatorConsole() {
     prNumber: "",
     prUrl: "",
     commitSha: "",
-    challengePath: "challenges/matrix-multiplication",
+    challengePath: "challenges/frontier-cs-example-challenge",
     manifestText: defaultManifest,
   });
   const [assetForm, setAssetForm] = useState<{

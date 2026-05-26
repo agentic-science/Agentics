@@ -1,708 +1,568 @@
-//! Typed local-demo seed data.
-//!
-//! The local demo used to seed its fake catalog, agents, submissions, and
-//! leaderboard rows from one raw SQL file. This module keeps the fixture data in
-//! Rust so IDs, names, storage keys, statuses, and evaluation payloads pass
-//! through the same domain constructors and persistence APIs as ordinary
-//! platform writes. SQL remains only at the database boundary for cleanup,
-//! demo-only agent insertion, and the narrow synthetic job claim needed before
-//! reusing the normal evaluation completion path.
+//! Frontier-CS dev-data seeding for the Compose development stack.
 
-use agentics_domain::models::challenge::ChallengeBundleSpec;
-use agentics_domain::models::evaluation::{
-    EvaluationJobStatus, EvaluationStatus, EvaluatorCaseStatus, MetricValue, PublicCaseResult,
-    RunMetricResult, ScoreSummary, ScoringMode, SolutionSubmissionStatus,
-};
-use agentics_domain::models::ids::{AgentId, EvaluationId, EvaluationJobId, SolutionSubmissionId};
-use agentics_domain::models::localization::LocalizedText;
-use agentics_domain::models::names::{
-    ChallengeKeyword, ChallengeName, MetricName, RunName, TargetName,
-};
+use std::fs;
+use std::io::{Seek, Write};
+use std::path::{Path, PathBuf};
+
+use agentics_config::Config;
+use agentics_contracts::challenge_bundle::{read_challenge_bundle_spec, validate_challenge_bundle};
+use agentics_contracts::challenge_creation::read_challenge_creation_manifest;
+use agentics_contracts::validation::archive::{ArchiveEnvelopePolicy, extract_zip_bytes_to_dir};
+use agentics_domain::models::challenge::{ChallengeBundleSpec, TargetAccelerator};
+use agentics_domain::models::challenge_creation::ChallengeCreationManifest;
+use agentics_domain::models::evaluation::ScoringMode;
+use agentics_domain::models::ids::{AgentId, EvaluationJobId, SolutionSubmissionId};
+use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::storage::StorageKey;
 use agentics_persistence::{
-    CreateSolutionSubmissionInput, MarkEvaluationStartedInput, PersistedEvaluationResult,
-    PublishChallengeInput, Repositories, SolutionSubmissionQuotaAdmission,
+    CreateSolutionSubmissionInput, Repositories, SolutionSubmissionQuotaAdmission,
 };
-use serde_json::{Value, json};
+use agentics_storage::{Storage, StorageWriteIntent, storage_work_root};
+use secrecy::ExposeSecret;
 use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
+use zip::CompressionMethod;
+use zip::write::SimpleFileOptions;
 
-use super::LocalDemoError;
+use super::{LocalDemoConfig, LocalDemoError};
+use crate::support::ReportLine;
 
-const SAMPLE_SUM_CHALLENGE: &str = "sample-sum";
-const GRID_ROUTING_CHALLENGE: &str = "grid-routing";
-const DEMO_WORKER_ID: &str = "local-demo-seed";
-const DEMO_CREDIT_TEXT: &str = "Seeded by agentics-local-demo";
-const DEMO_QUOTA_WINDOW_SECONDS: i64 = 86_400;
-const DEMO_PER_AGENT_CHALLENGE_LIMIT: i64 = 10_000;
+const CHALLENGE_REPOSITORY_ROOT: &str = "challenge-repos/agentics-challenges";
+const CHALLENGES_DIR: &str = "challenges";
+const TEST_SOLUTIONS_DIR: &str = "test-solutions";
+const PRIVATE_BACKUP_PREFIX: &str = "private-bundle-backups";
+const LEGACY_BACKUP_BATCH: &str = "frontier-cs-migrations-20260525";
+const DEV_SEED_AGENT_ID: &str = "10000000-0000-4000-8000-00000000fc00";
+const DEV_SEED_AGENT_DISPLAY_NAME: &str = "Frontier-CS Dev Baseline";
+const DEV_SEED_CREDIT_TEXT: &str = "Seeded by agentics-local-demo from test-solutions";
+const DEV_SEED_NOTE: &str = "Frontier-CS dev test solution";
+const DEV_QUOTA_WINDOW_SECONDS: i64 = 86_400;
+const DEV_PER_AGENT_CHALLENGE_LIMIT: i64 = 10_000;
+const MAX_PRIVATE_ASSET_FILE_COUNT: usize = 1024;
+const TEST_SOLUTION_ARTIFACT_BYTES: u64 = 64 * 1024 * 1024;
 
-#[derive(Debug, Clone, Copy)]
-struct DemoChallengeSeed {
-    name: &'static str,
-    title: &'static str,
-    summary_en: &'static str,
-    summary_zh: &'static str,
-    keywords: &'static [&'static str],
+#[derive(Debug, Clone)]
+struct FrontierChallenge {
+    name: ChallengeName,
+    challenge_root: PathBuf,
+    manifest: ChallengeCreationManifest,
+    spec: ChallengeBundleSpec,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct DemoAgentSeed {
-    id: &'static str,
-    display_name: &'static str,
-    description: &'static str,
-    owner: &'static str,
-    model: &'static str,
-    profile: &'static str,
+#[derive(Debug, Clone, Copy, Default)]
+struct SeedStats {
+    private_bundles: usize,
+    test_solution_submissions: usize,
+    skipped_test_solutions: usize,
 }
 
-#[derive(Debug, Clone, Copy)]
-struct DemoEvaluationSeed {
-    submission_id: &'static str,
-    job_id: &'static str,
-    evaluation_id: &'static str,
-    challenge_name: &'static str,
-    target: &'static str,
-    agent_id: &'static str,
-    note: &'static str,
-    explanation: &'static str,
-    score: f64,
-    passed: i64,
-    total: i64,
-}
-
-const DEMO_CHALLENGES: &[DemoChallengeSeed] = &[
-    DemoChallengeSeed {
-        name: "demo-ui-alpha",
-        title: "Orbital Protein Folding",
-        summary_en: "Predict compact protein conformations under synthetic orbital constraints.",
-        summary_zh: "在合成轨道约束下预测紧凑蛋白构象。",
-        keywords: &["biology", "protein folding", "simulation"],
-    },
-    DemoChallengeSeed {
-        name: "demo-ui-beta",
-        title: "Catalyst Search",
-        summary_en: "Find reaction pathways that maximize yield while minimizing unsafe intermediates.",
-        summary_zh: "寻找最大化产率并减少不安全中间体的反应路径。",
-        keywords: &["chemistry", "catalysis", "optimization"],
-    },
-    DemoChallengeSeed {
-        name: "demo-ui-gamma",
-        title: "Cellular Maze",
-        summary_en: "Route signaling molecules through a noisy cellular grid without crossing blocked regions.",
-        summary_zh: "让信号分子穿过嘈杂细胞网格，并避开阻塞区域。",
-        keywords: &["biology", "planning", "grid search"],
-    },
-    DemoChallengeSeed {
-        name: "demo-ui-delta",
-        title: "Climate Patch",
-        summary_en: "Select localized interventions that reduce simulated heat stress under budget limits.",
-        summary_zh: "在预算限制下选择局部干预以降低模拟热应激。",
-        keywords: &["climate", "optimization", "policy"],
-    },
-    DemoChallengeSeed {
-        name: "demo-ui-epsilon",
-        title: "Lab Scheduler",
-        summary_en: "Optimize robotic wet-lab batches while preserving reagent and timing constraints.",
-        summary_zh: "在保持试剂和时间约束的同时优化机器人湿实验批次。",
-        keywords: &["lab automation", "scheduling", "robotics"],
-    },
-    DemoChallengeSeed {
-        name: "demo-ui-zeta",
-        title: "Spectra Denoising",
-        summary_en: "Recover clean spectral peaks from corrupted instrument traces.",
-        summary_zh: "从受干扰的仪器轨迹中恢复干净的光谱峰。",
-        keywords: &["signal processing", "spectra", "denoising"],
-    },
-    DemoChallengeSeed {
-        name: "demo-ui-eta",
-        title: "Genome Primer",
-        summary_en: "Design primer sets that cover target regions while avoiding off-target matches.",
-        summary_zh: "设计覆盖目标区域并避免脱靶匹配的引物集合。",
-        keywords: &["genomics", "primer design", "biology"],
-    },
-    DemoChallengeSeed {
-        name: "demo-ui-theta",
-        title: "Graph Molecules",
-        summary_en: "Generate candidate molecules that satisfy graph constraints and scoring rules.",
-        summary_zh: "生成满足图约束和评分规则的候选分子。",
-        keywords: &["chemistry", "graph search", "molecules"],
-    },
-    DemoChallengeSeed {
-        name: "demo-ui-iota",
-        title: "Signal Forecast",
-        summary_en: "Forecast sparse experimental signals with uncertainty-aware ranking.",
-        summary_zh: "使用不确定性感知排序预测稀疏实验信号。",
-        keywords: &["forecasting", "uncertainty", "signals"],
-    },
-    DemoChallengeSeed {
-        name: "demo-ui-kappa",
-        title: "Microscopy Segment",
-        summary_en: "Segment cell boundaries from noisy microscopy tiles with hidden labels.",
-        summary_zh: "在隐藏标签下从噪声显微图块中分割细胞边界。",
-        keywords: &["microscopy", "segmentation", "biology"],
-    },
-];
-
-const DEMO_AGENTS: &[DemoAgentSeed] = &[
-    DemoAgentSeed {
-        id: "10000000-0000-4000-8000-000000000001",
-        display_name: "Maple Baseline",
-        description: "Deterministic reference implementation for local demo data.",
-        owner: "Agentics Demo",
-        model: "baseline",
-        profile: "demo",
-    },
-    DemoAgentSeed {
-        id: "10000000-0000-4000-8000-000000000002",
-        display_name: "Vector Alchemist",
-        description: "Optimized vectorized solution with strong private benchmark results.",
-        owner: "Agentics Demo",
-        model: "demo-optimizer",
-        profile: "demo",
-    },
-    DemoAgentSeed {
-        id: "10000000-0000-4000-8000-000000000003",
-        display_name: "Careful Optimizer",
-        description: "Conservative solution with lower variance across cases.",
-        owner: "Agentics Demo",
-        model: "careful-demo",
-        profile: "demo",
-    },
-    DemoAgentSeed {
-        id: "10000000-0000-4000-8000-000000000004",
-        display_name: "Experimental Draft",
-        description: "Fresh demo participant used for pending UI states.",
-        owner: "Agentics Demo",
-        model: "experimental",
-        profile: "demo",
-    },
-];
-
-const DEMO_RESULTS: &[DemoEvaluationSeed] = &[
-    DemoEvaluationSeed {
-        submission_id: "20000000-0000-4000-8000-000000000001",
-        job_id: "30000000-1000-4000-8000-000000000001",
-        evaluation_id: "40000000-0000-4000-8000-000000000001",
-        challenge_name: SAMPLE_SUM_CHALLENGE,
-        target: "linux-arm64-cpu",
-        agent_id: "10000000-0000-4000-8000-000000000001",
-        note: "Reference arithmetic implementation.",
-        explanation: "Straightforward parser with exact integer arithmetic.",
-        score: 1.0000,
-        passed: 16,
-        total: 16,
-    },
-    DemoEvaluationSeed {
-        submission_id: "20000000-0000-4000-8000-000000000002",
-        job_id: "30000000-1000-4000-8000-000000000002",
-        evaluation_id: "40000000-0000-4000-8000-000000000002",
-        challenge_name: SAMPLE_SUM_CHALLENGE,
-        target: "linux-arm64-cpu",
-        agent_id: "10000000-0000-4000-8000-000000000002",
-        note: "Fast path for compact JSON inputs.",
-        explanation: "Vectorized decode path and minimal allocation.",
-        score: 0.9375,
-        passed: 15,
-        total: 16,
-    },
-    DemoEvaluationSeed {
-        submission_id: "20000000-0000-4000-8000-000000000003",
-        job_id: "30000000-1000-4000-8000-000000000003",
-        evaluation_id: "40000000-0000-4000-8000-000000000003",
-        challenge_name: SAMPLE_SUM_CHALLENGE,
-        target: "linux-arm64-cpu",
-        agent_id: "10000000-0000-4000-8000-000000000003",
-        note: "Handles edge cases but misses overflow probe.",
-        explanation: "Careful implementation that intentionally leaves one case unresolved.",
-        score: 0.8125,
-        passed: 13,
-        total: 16,
-    },
-    DemoEvaluationSeed {
-        submission_id: "20000000-0000-4000-8000-000000000101",
-        job_id: "30000000-1000-4000-8000-000000000101",
-        evaluation_id: "40000000-0000-4000-8000-000000000101",
-        challenge_name: GRID_ROUTING_CHALLENGE,
-        target: "linux-arm64-cpu",
-        agent_id: "10000000-0000-4000-8000-000000000002",
-        note: "Shortest-path routing with deterministic tie breaking.",
-        explanation: "A* style route search tuned for narrow corridors.",
-        score: 0.9167,
-        passed: 11,
-        total: 12,
-    },
-    DemoEvaluationSeed {
-        submission_id: "20000000-0000-4000-8000-000000000102",
-        job_id: "30000000-1000-4000-8000-000000000102",
-        evaluation_id: "40000000-0000-4000-8000-000000000102",
-        challenge_name: GRID_ROUTING_CHALLENGE,
-        target: "linux-arm64-cpu",
-        agent_id: "10000000-0000-4000-8000-000000000003",
-        note: "Conservative BFS route planner.",
-        explanation: "Prioritizes valid paths over path length.",
-        score: 0.8333,
-        passed: 10,
-        total: 12,
-    },
-    DemoEvaluationSeed {
-        submission_id: "20000000-0000-4000-8000-000000000103",
-        job_id: "30000000-1000-4000-8000-000000000103",
-        evaluation_id: "40000000-0000-4000-8000-000000000103",
-        challenge_name: GRID_ROUTING_CHALLENGE,
-        target: "linux-arm64-cpu",
-        agent_id: "10000000-0000-4000-8000-000000000001",
-        note: "Baseline Manhattan fallback.",
-        explanation: "Simple fallback route planner with obstacle checks.",
-        score: 0.6667,
-        passed: 8,
-        total: 12,
-    },
-];
-
-pub(super) async fn seed_database(pool: &PgPool) -> Result<(), LocalDemoError> {
-    let repos = Repositories::new(pool);
-    let source_challenge = load_challenge(&repos, SAMPLE_SUM_CHALLENGE).await?;
-    load_challenge(&repos, GRID_ROUTING_CHALLENGE).await?;
-
-    cleanup_demo_rows(pool).await?;
-    touch_base_challenges(pool).await?;
-    publish_demo_challenges(&repos, &source_challenge).await?;
-    insert_demo_agents(pool).await?;
-    seed_demo_results(pool, &repos).await?;
-    upsert_demo_heartbeats(pool).await?;
-    Ok(())
-}
-
-pub(super) fn demo_artifact_keys() -> Result<Vec<StorageKey>, LocalDemoError> {
-    DEMO_RESULTS
-        .iter()
-        .map(|result| result.artifact_key())
-        .collect()
-}
-
-async fn load_challenge(
-    repos: &Repositories,
-    name: &str,
-) -> Result<agentics_persistence::ChallengeRecord, LocalDemoError> {
-    let challenge_name = challenge_name(name)?;
-    repos
-        .challenges()
-        .get_published_by_name(&challenge_name)
-        .await?
-        .ok_or_else(|| {
-            LocalDemoError::InvalidConfig(format!(
-                "{name} challenge was not seeded; start the API before seeding demo results"
-            ))
-        })
-}
-
-async fn cleanup_demo_rows(pool: &PgPool) -> Result<(), LocalDemoError> {
-    for result in DEMO_RESULTS {
-        let submission_id = solution_submission_id(result.submission_id)?;
-        sqlx::query("DELETE FROM solution_submissions WHERE id = $1::uuid")
-            .bind(submission_id.as_str())
-            .execute(pool)
+/// Prepare the API startup seed root with only migrated non-GPU Frontier-CS challenges.
+pub(super) async fn prepare_challenge_root(
+    config: &LocalDemoConfig,
+) -> Result<usize, LocalDemoError> {
+    let source_root = challenge_repository_root(config.repo_root()).join(CHALLENGES_DIR);
+    let destination_root = PathBuf::from(&config.storage_config().challenges_root);
+    let challenges = discover_frontier_challenges(&source_root).await?;
+    let storage = agentics_storage::build_storage(config.storage_config())
+        .await
+        .map_err(|error| LocalDemoError::StorageInit(error.to_string()))?;
+    replace_dir(&destination_root)?;
+    for challenge in &challenges {
+        let destination = destination_root.join(challenge.name.as_str());
+        copy_dir_rejecting_symlinks(&challenge.challenge_root, &destination)?;
+        let Some(bundle_path) = &challenge.manifest.bundle_path else {
+            continue;
+        };
+        let destination_bundle = destination.join(bundle_path.as_path());
+        for asset in &challenge.manifest.private_assets {
+            if !asset.required {
+                continue;
+            }
+            let asset_key = find_private_asset_key(
+                storage.as_ref(),
+                &challenge.name,
+                asset.asset_name.as_str(),
+            )
             .await?;
+            let bytes = storage
+                .get(
+                    &asset_key,
+                    StorageWriteIntent::new(
+                        "Frontier-CS private asset ZIP",
+                        config
+                            .storage_config()
+                            .challenge_private_asset_bytes_per_draft,
+                    ),
+                )
+                .await?;
+            extract_private_asset_overlay(
+                &bytes,
+                &destination_bundle,
+                asset.asset_name.as_str(),
+                config
+                    .storage_config()
+                    .challenge_private_asset_bytes_per_draft,
+            )
+            .await?;
+        }
+        validate_challenge_bundle(&destination_bundle).await?;
     }
-    for agent in DEMO_AGENTS {
-        let agent_id = agent_id(agent.id)?;
-        sqlx::query("DELETE FROM agent_tokens WHERE agent_id = $1::uuid")
-            .bind(agent_id.as_str())
-            .execute(pool)
-            .await?;
-        sqlx::query("DELETE FROM agents WHERE id = $1::uuid")
-            .bind(agent_id.as_str())
-            .execute(pool)
-            .await?;
-    }
-    for challenge in DEMO_CHALLENGES {
-        let name = challenge_name(challenge.name)?;
-        sqlx::query("DELETE FROM challenges WHERE challenge_name = $1")
-            .bind(name.as_str())
-            .execute(pool)
-            .await?;
-    }
-    Ok(())
+    Ok(challenges.len())
 }
 
-async fn touch_base_challenges(pool: &PgPool) -> Result<(), LocalDemoError> {
-    sqlx::query(
-        "UPDATE challenges SET created_at = NOW(), updated_at = NOW() WHERE challenge_name = $1",
-    )
-    .bind(SAMPLE_SUM_CHALLENGE)
-    .execute(pool)
-    .await?;
-    sqlx::query(
-        "UPDATE challenges SET created_at = NOW() - INTERVAL '1 second', updated_at = NOW() WHERE challenge_name = $1",
-    )
-    .bind(GRID_ROUTING_CHALLENGE)
-    .execute(pool)
-    .await?;
-    Ok(())
-}
+/// Seed private runtime bundles and real Frontier-CS test solution submissions.
+pub(super) async fn seed_database(
+    config: &LocalDemoConfig,
+) -> Result<Vec<ReportLine>, LocalDemoError> {
+    let pool = PgPoolOptions::new()
+        .max_connections(3)
+        .connect(config.database_url_secret().expose_secret())
+        .await?;
+    let storage = agentics_storage::build_storage(config.storage_config())
+        .await
+        .map_err(|error| LocalDemoError::StorageInit(error.to_string()))?;
+    let challenges =
+        discover_frontier_challenges(&PathBuf::from(&config.storage_config().challenges_root))
+            .await?;
 
-async fn publish_demo_challenges(
-    repos: &Repositories,
-    source_challenge: &agentics_persistence::ChallengeRecord,
-) -> Result<(), LocalDemoError> {
-    let source_spec: ChallengeBundleSpec =
-        serde_json::from_value(source_challenge.spec_json.clone()).map_err(|error| {
-            LocalDemoError::InvalidConfig(format!(
-                "stored sample challenge spec is invalid: {error}"
-            ))
+    ensure_dev_seed_agent(&pool).await?;
+
+    let mut stats = SeedStats::default();
+    for challenge in &challenges {
+        verify_published_runtime_bundle(&pool, &challenge.name).await?;
+        stats.private_bundles = stats.private_bundles.checked_add(1).ok_or_else(|| {
+            LocalDemoError::InvalidConfig("private bundle count overflow".to_string())
         })?;
 
-    for challenge in DEMO_CHALLENGES {
-        let challenge_name = challenge_name(challenge.name)?;
-        let summary = LocalizedText::new(challenge.summary_en, challenge.summary_zh);
-        let mut spec = source_spec.clone();
-        spec.challenge_name = challenge_name.clone();
-        spec.challenge_title = challenge.title.to_string();
-        spec.summary = summary.clone();
-        spec.keywords = challenge_keywords(challenge.keywords)?;
-
-        let input = PublishChallengeInput {
-            challenge_name: &challenge_name,
-            bundle_key: &source_challenge.bundle_key,
-            public_bundle_key: &source_challenge.public_bundle_key,
-            statement_key: &source_challenge.statement_key,
-            spec: &spec,
-            title: challenge.title,
-            summary: &summary,
-        };
-        repos.challenges().publish(&input).await?;
-    }
-    Ok(())
-}
-
-async fn insert_demo_agents(pool: &PgPool) -> Result<(), LocalDemoError> {
-    for agent in DEMO_AGENTS {
-        let agent_id = agent_id(agent.id)?;
-        sqlx::query(
-            r#"
-            INSERT INTO agents (
-                id, display_name, agent_description, owner, model_info, status, created_at
-            )
-            VALUES ($1::uuid, $2, $3, $4, $5, 'active', NOW() - INTERVAL '2 days')
-            "#,
-        )
-        .bind(agent_id.as_str())
-        .bind(agent.display_name)
-        .bind(agent.description)
-        .bind(agent.owner)
-        .bind(agent_model_info(agent))
-        .execute(pool)
-        .await?;
-    }
-    Ok(())
-}
-
-async fn seed_demo_results(pool: &PgPool, repos: &Repositories) -> Result<(), LocalDemoError> {
-    for result in DEMO_RESULTS {
-        let challenge = load_challenge(repos, result.challenge_name).await?;
-        let submission_id = solution_submission_id(result.submission_id)?;
-        let job_id = evaluation_job_id(result.job_id)?;
-        let target = target_name(result.target)?;
-
-        repos
-            .solution_submissions()
-            .create_with_job(&CreateSolutionSubmissionInput {
-                solution_submission_id: submission_id.clone(),
-                job_id: job_id.clone(),
-                agent_id: agent_id(result.agent_id)?,
-                challenge_name: challenge.challenge_name,
-                target: target.clone(),
-                artifact_key: result.artifact_key()?,
-                note: result.note.to_string(),
-                eval_type: ScoringMode::Official,
-                explanation: result.explanation.to_string(),
-                parent_solution_submission_id: None,
-                credit_text: DEMO_CREDIT_TEXT.to_string(),
-                quota_admission: SolutionSubmissionQuotaAdmission {
-                    window_seconds: DEMO_QUOTA_WINDOW_SECONDS,
-                    per_agent_challenge_limit: DEMO_PER_AGENT_CHALLENGE_LIMIT,
-                    challenge_lifetime_limit: None,
-                    max_active_official_jobs: None,
-                },
-            })
-            .await?;
-
-        let attempt_count = claim_demo_job(pool, &job_id, &submission_id).await?;
-        mark_demo_evaluation_finished(
-            repos,
-            result,
-            &submission_id,
-            &job_id,
-            &target,
-            attempt_count,
-        )
-        .await?;
-    }
-    Ok(())
-}
-
-async fn claim_demo_job(
-    pool: &PgPool,
-    job_id: &EvaluationJobId,
-    submission_id: &SolutionSubmissionId,
-) -> Result<i32, LocalDemoError> {
-    let mut tx = pool.begin().await?;
-    let attempt_count = sqlx::query_scalar::<_, i32>(
-        r#"
-        UPDATE evaluation_jobs
-        SET status = $3,
-            claimed_at = NOW(),
-            worker_id = $4,
-            attempt_count = attempt_count + 1
-        WHERE id = $1::uuid
-          AND solution_submission_id = $2::uuid
-          AND status = $5
-        RETURNING attempt_count
-        "#,
-    )
-    .bind(job_id.as_str())
-    .bind(submission_id.as_str())
-    .bind(EvaluationJobStatus::Running.as_str())
-    .bind(DEMO_WORKER_ID)
-    .bind(EvaluationJobStatus::Staged.as_str())
-    .fetch_optional(&mut *tx)
-    .await?
-    .ok_or_else(|| {
-        LocalDemoError::InvalidConfig(format!(
-            "demo evaluation job {job_id} was not staged for the synthetic seed claim"
-        ))
-    })?;
-
-    sqlx::query(
-        r#"
-        UPDATE solution_submissions
-        SET status = $2, updated_at = NOW()
-        WHERE id = $1::uuid
-          AND visible_after_eval = FALSE
-        "#,
-    )
-    .bind(submission_id.as_str())
-    .bind(SolutionSubmissionStatus::Running.as_str())
-    .execute(&mut *tx)
-    .await?;
-    tx.commit().await?;
-    Ok(attempt_count)
-}
-
-async fn mark_demo_evaluation_finished(
-    repos: &Repositories,
-    result: &DemoEvaluationSeed,
-    submission_id: &SolutionSubmissionId,
-    job_id: &EvaluationJobId,
-    target: &TargetName,
-    attempt_count: i32,
-) -> Result<(), LocalDemoError> {
-    let evaluation_id = evaluation_id(result.evaluation_id)?;
-    let started = repos
-        .evaluation_jobs()
-        .mark_started(&MarkEvaluationStartedInput {
-            evaluation_id,
-            solution_submission_id: submission_id.clone(),
-            job_id: job_id.clone(),
-            worker_id: DEMO_WORKER_ID.to_string(),
-            claim_attempt_count: attempt_count,
-            target: target.clone(),
-            eval_type: ScoringMode::Official,
-        })
-        .await?;
-    if !started {
-        return Err(LocalDemoError::InvalidConfig(format!(
-            "demo evaluation job {job_id} could not be marked running"
-        )));
-    }
-
-    let finished = repos
-        .evaluation_jobs()
-        .mark_finished(&PersistedEvaluationResult {
-            solution_submission_id: submission_id.clone(),
-            job_id: job_id.clone(),
-            worker_id: DEMO_WORKER_ID.to_string(),
-            claim_attempt_count: attempt_count,
-            target: target.clone(),
-            eval_type: ScoringMode::Official,
-            status: EvaluationStatus::Completed,
-            rank_score: Some(result.score),
-            aggregate_metrics: result.aggregate_metrics()?,
-            run_metrics: result.run_metrics()?,
-            public_results: result.public_results(),
-            validation_summary: None,
-            official_summary: Some(result.official_summary()),
-            log_key: None,
-            last_error: None,
-        })
-        .await?;
-    if !finished {
-        return Err(LocalDemoError::InvalidConfig(format!(
-            "demo evaluation job {job_id} could not be marked completed"
-        )));
-    }
-    Ok(())
-}
-
-async fn upsert_demo_heartbeats(pool: &PgPool) -> Result<(), LocalDemoError> {
-    for (service_name, payload) in [
-        (
-            "api-server",
-            json!({"profile": "local-demo", "status": "running"}),
-        ),
-        (
-            "worker",
-            json!({"profile": "local-demo", "status": "not started; fake results seeded directly"}),
-        ),
-    ] {
-        sqlx::query(
-            r#"
-            INSERT INTO service_heartbeats (service_name, last_seen_at, payload)
-            VALUES ($1, NOW(), $2)
-            ON CONFLICT (service_name) DO UPDATE
-            SET last_seen_at = EXCLUDED.last_seen_at,
-                payload = EXCLUDED.payload
-            "#,
-        )
-        .bind(service_name)
-        .bind(payload)
-        .execute(pool)
-        .await?;
-    }
-    Ok(())
-}
-
-impl DemoEvaluationSeed {
-    fn artifact_key(self) -> Result<StorageKey, LocalDemoError> {
-        StorageKey::try_new(format!("solution-submissions/{}.zip", self.submission_id)).map_err(
-            |error| LocalDemoError::InvalidConfig(format!("invalid demo artifact key: {error}")),
-        )
-    }
-
-    fn aggregate_metrics(self) -> Result<Vec<MetricValue>, LocalDemoError> {
-        Ok(vec![
-            MetricValue {
-                metric_name: metric_name("score")?,
-                value: self.score,
-            },
-            MetricValue {
-                metric_name: metric_name("passed_cases")?,
-                value: self.passed as f64,
-            },
-        ])
-    }
-
-    fn run_metrics(self) -> Result<Vec<RunMetricResult>, LocalDemoError> {
-        Ok(vec![
-            RunMetricResult {
-                run_name: run_name("public_smoke")?,
-                metrics: vec![MetricValue {
-                    metric_name: metric_name("score")?,
-                    value: self.public_score(),
-                }],
-            },
-            RunMetricResult {
-                run_name: run_name("private_suite")?,
-                metrics: vec![MetricValue {
-                    metric_name: metric_name("score")?,
-                    value: self.score,
-                }],
-            },
-        ])
-    }
-
-    fn public_results(self) -> Vec<PublicCaseResult> {
-        vec![
-            PublicCaseResult {
-                case_name: "public_smoke".to_string(),
-                status: EvaluatorCaseStatus::Passed,
-                score: self.public_score(),
-                message: Some("Demo public case passed.".to_string()),
-            },
-            PublicCaseResult {
-                case_name: "private_suite".to_string(),
-                status: if self.passed == self.total {
-                    EvaluatorCaseStatus::Passed
-                } else {
-                    EvaluatorCaseStatus::Failed
-                },
-                score: self.score,
-                message: Some("Seeded private benchmark summary.".to_string()),
-            },
-        ]
-    }
-
-    fn official_summary(self) -> ScoreSummary {
-        ScoreSummary {
-            score: self.score,
-            passed: self.passed,
-            total: self.total,
+        if seed_test_solution_submission(&pool, storage.as_ref(), config, challenge).await? {
+            stats.test_solution_submissions = stats
+                .test_solution_submissions
+                .checked_add(1)
+                .ok_or_else(|| {
+                    LocalDemoError::InvalidConfig(
+                        "test solution submission count overflow".to_string(),
+                    )
+                })?;
+        } else {
+            stats.skipped_test_solutions =
+                stats.skipped_test_solutions.checked_add(1).ok_or_else(|| {
+                    LocalDemoError::InvalidConfig(
+                        "skipped test solution count overflow".to_string(),
+                    )
+                })?;
         }
     }
+    pool.close().await;
 
-    #[allow(
-        clippy::arithmetic_side_effects,
-        reason = "demo score adjustment is bounded by f64::min and uses fixture constants"
-    )]
-    fn public_score(self) -> f64 {
-        (self.score + 0.03).min(1.0)
+    Ok(vec![
+        ReportLine::pass(
+            "private bundles",
+            format!(
+                "verified {} prepared Frontier-CS runtime bundles",
+                stats.private_bundles
+            ),
+        ),
+        ReportLine::pass(
+            "test submissions",
+            format!(
+                "staged {} official test solution(s); skipped {} without test solution or existing submission",
+                stats.test_solution_submissions, stats.skipped_test_solutions
+            ),
+        ),
+    ])
+}
+
+#[cfg(test)]
+pub(super) async fn upload_test_solution_artifact_for_test(
+    storage: &dyn Storage,
+    config: &Config,
+    solution_root: &Path,
+    challenge_name: &str,
+) -> Result<StorageKey, LocalDemoError> {
+    upload_test_solution_artifact(storage, config, solution_root, challenge_name).await
+}
+
+async fn discover_frontier_challenges(
+    challenges_root: &Path,
+) -> Result<Vec<FrontierChallenge>, LocalDemoError> {
+    let mut entries = fs::read_dir(challenges_root)?.collect::<std::io::Result<Vec<_>>>()?;
+    entries.sort_by_key(|entry| entry.path());
+
+    let mut challenges = Vec::new();
+    for entry in entries {
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let challenge_root = entry.path();
+        let manifest_path = challenge_root.join("agentics.challenge.json");
+        if !manifest_path.is_file() {
+            continue;
+        }
+        let manifest = read_challenge_creation_manifest(&challenge_root).await?;
+        if !manifest.challenge_name.as_str().contains("frontier-cs") {
+            continue;
+        }
+        let Some(bundle_path) = &manifest.bundle_path else {
+            continue;
+        };
+        let bundle_dir = challenge_root.join(bundle_path.as_path());
+        let spec = read_challenge_bundle_spec(&bundle_dir).await?;
+        if spec
+            .targets
+            .iter()
+            .any(|target| target.accelerator == TargetAccelerator::Gpu)
+        {
+            continue;
+        }
+        challenges.push(FrontierChallenge {
+            name: manifest.challenge_name.clone(),
+            challenge_root,
+            manifest,
+            spec,
+        });
+    }
+    Ok(challenges)
+}
+
+async fn find_private_asset_key(
+    storage: &dyn Storage,
+    challenge_name: &ChallengeName,
+    asset_name: &str,
+) -> Result<StorageKey, LocalDemoError> {
+    for candidate in private_asset_key_candidates(challenge_name.as_str(), asset_name)? {
+        if storage.exists(&candidate).await? {
+            return Ok(candidate);
+        }
+    }
+    Err(LocalDemoError::InvalidConfig(format!(
+        "missing private asset backup for `{challenge_name}` asset `{asset_name}`; run the private-bundle restore step first"
+    )))
+}
+
+fn private_asset_key_candidates(
+    challenge_name: &str,
+    asset_name: &str,
+) -> Result<Vec<StorageKey>, LocalDemoError> {
+    [
+        format!("{PRIVATE_BACKUP_PREFIX}/{challenge_name}/{asset_name}.zip"),
+        format!("{PRIVATE_BACKUP_PREFIX}/{challenge_name}/{challenge_name}-{asset_name}.zip"),
+        format!("{PRIVATE_BACKUP_PREFIX}/{challenge_name}/official-runs.zip"),
+        format!("{PRIVATE_BACKUP_PREFIX}/{challenge_name}/official-session.zip"),
+        format!(
+            "{PRIVATE_BACKUP_PREFIX}/{LEGACY_BACKUP_BATCH}/uploaded-assets/{challenge_name}-{asset_name}.zip"
+        ),
+        format!(
+            "{PRIVATE_BACKUP_PREFIX}/{LEGACY_BACKUP_BATCH}/tmp-zips/{challenge_name}-private.zip"
+        ),
+    ]
+    .into_iter()
+    .map(|value| {
+        StorageKey::try_new(value).map_err(|error| LocalDemoError::InvalidConfig(error.to_string()))
+    })
+    .collect()
+}
+
+async fn extract_private_asset_overlay(
+    bytes: &[u8],
+    target_dir: &Path,
+    asset_name: &str,
+    max_uncompressed_bytes: u64,
+) -> Result<(), LocalDemoError> {
+    let bytes = bytes.to_vec();
+    let target_dir = target_dir.to_path_buf();
+    let asset_name = asset_name.to_string();
+    tokio::task::spawn_blocking(move || {
+        let policy = ArchiveEnvelopePolicy::new(
+            format!("private asset `{asset_name}`"),
+            max_uncompressed_bytes,
+            MAX_PRIVATE_ASSET_FILE_COUNT,
+            max_uncompressed_bytes,
+        );
+        extract_zip_bytes_to_dir(&bytes, &target_dir, &policy)
+    })
+    .await
+    .map_err(|error| {
+        LocalDemoError::InvalidConfig(format!("private asset task failed: {error}"))
+    })??;
+    Ok(())
+}
+
+async fn verify_published_runtime_bundle(
+    pool: &PgPool,
+    challenge_name: &ChallengeName,
+) -> Result<(), LocalDemoError> {
+    let bundle_key = sqlx::query_scalar::<_, Option<String>>(
+        r#"
+        SELECT bundle_key
+        FROM challenges
+        WHERE challenge_name = $1
+        "#,
+    )
+    .bind(challenge_name.as_str())
+    .fetch_optional(pool)
+    .await?;
+    let Some(Some(bundle_key)) = bundle_key else {
+        return Err(LocalDemoError::InvalidConfig(format!(
+            "challenge `{challenge_name}` was not published by API startup seeding"
+        )));
+    };
+    if bundle_key.trim().is_empty() {
+        return Err(LocalDemoError::InvalidConfig(format!(
+            "challenge `{challenge_name}` has an empty runtime bundle key"
+        )));
+    }
+    Ok(())
+}
+
+async fn ensure_dev_seed_agent(pool: &PgPool) -> Result<AgentId, LocalDemoError> {
+    let agent_id = agent_id(DEV_SEED_AGENT_ID)?;
+    sqlx::query(
+        r#"
+        INSERT INTO agents (
+            id, display_name, agent_description, owner, model_info, status, created_at
+        )
+        VALUES ($1::uuid, $2, $3, $4, $5, 'active', NOW())
+        ON CONFLICT (id) DO UPDATE
+        SET display_name = EXCLUDED.display_name,
+            agent_description = EXCLUDED.agent_description,
+            owner = EXCLUDED.owner,
+            model_info = EXCLUDED.model_info,
+            status = 'active'
+        "#,
+    )
+    .bind(agent_id.as_str())
+    .bind(DEV_SEED_AGENT_DISPLAY_NAME)
+    .bind("Real baseline submissions loaded from agentics-challenges/test-solutions.")
+    .bind("Agentics Dev")
+    .bind(serde_json::json!({"profile": "frontier-cs-dev", "source": "test-solutions"}))
+    .execute(pool)
+    .await?;
+    Ok(agent_id)
+}
+
+async fn seed_test_solution_submission(
+    pool: &PgPool,
+    storage: &dyn Storage,
+    config: &LocalDemoConfig,
+    challenge: &FrontierChallenge,
+) -> Result<bool, LocalDemoError> {
+    let solution_root = challenge_repository_root(config.repo_root())
+        .join(TEST_SOLUTIONS_DIR)
+        .join(challenge.name.as_str());
+    if !solution_root.is_dir() {
+        return Ok(false);
+    }
+    let Some(target) = challenge.spec.sole_target() else {
+        return Ok(false);
+    };
+    let agent_id = agent_id(DEV_SEED_AGENT_ID)?;
+    if existing_test_submission(pool, &agent_id, &challenge.name, target).await? {
+        return Ok(false);
+    }
+
+    let artifact_key = upload_test_solution_artifact(
+        storage,
+        config.storage_config(),
+        &solution_root,
+        challenge.name.as_str(),
+    )
+    .await?;
+    Repositories::new(pool)
+        .solution_submissions()
+        .create_with_job(&CreateSolutionSubmissionInput {
+            solution_submission_id: SolutionSubmissionId::generate(),
+            job_id: EvaluationJobId::generate(),
+            agent_id,
+            challenge_name: challenge.name.clone(),
+            target: target.clone(),
+            artifact_key,
+            note: DEV_SEED_NOTE.to_string(),
+            eval_type: ScoringMode::Official,
+            explanation: format!(
+                "Development smoke solution from test-solutions/{}.",
+                challenge.name
+            ),
+            parent_solution_submission_id: None,
+            credit_text: DEV_SEED_CREDIT_TEXT.to_string(),
+            quota_admission: SolutionSubmissionQuotaAdmission {
+                window_seconds: DEV_QUOTA_WINDOW_SECONDS,
+                per_agent_challenge_limit: DEV_PER_AGENT_CHALLENGE_LIMIT,
+                challenge_lifetime_limit: None,
+                max_active_official_jobs: None,
+            },
+        })
+        .await?;
+    Ok(true)
+}
+
+async fn existing_test_submission(
+    pool: &PgPool,
+    agent_id: &AgentId,
+    challenge_name: &ChallengeName,
+    target: &TargetName,
+) -> Result<bool, LocalDemoError> {
+    let exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1 FROM solution_submissions
+            WHERE agent_id = $1::uuid
+              AND challenge_name = $2
+              AND target = $3
+              AND note = $4
+        )
+        "#,
+    )
+    .bind(agent_id.as_str())
+    .bind(challenge_name.as_str())
+    .bind(target.as_str())
+    .bind(DEV_SEED_NOTE)
+    .fetch_one(pool)
+    .await?;
+    Ok(exists)
+}
+
+async fn upload_test_solution_artifact(
+    storage: &dyn Storage,
+    config: &Config,
+    solution_root: &Path,
+    challenge_name: &str,
+) -> Result<StorageKey, LocalDemoError> {
+    let artifact_key = StorageKey::try_new(format!(
+        "solution-submissions/frontier-dev-seed/{challenge_name}.zip"
+    ))
+    .map_err(|error| LocalDemoError::InvalidConfig(error.to_string()))?;
+    if storage.exists(&artifact_key).await? {
+        storage.delete(&artifact_key).await?;
+    }
+    let archive_path = storage_work_root(config)?.join("_tmp").join(format!(
+        "frontier-dev-solution-{challenge_name}-{}.zip",
+        uuid::Uuid::new_v4()
+    ));
+    zip_dir(solution_root, &archive_path)?;
+    storage
+        .put_file(
+            &artifact_key,
+            &archive_path,
+            StorageWriteIntent::new(
+                "Frontier-CS test solution ZIP",
+                TEST_SOLUTION_ARTIFACT_BYTES,
+            ),
+        )
+        .await?;
+    remove_file_if_exists(&archive_path)?;
+    Ok(artifact_key)
+}
+
+fn zip_dir(source_dir: &Path, destination: &Path) -> Result<(), LocalDemoError> {
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let file = fs::File::create(destination)?;
+    let mut archive = zip::ZipWriter::new(file);
+    zip_dir_entries(source_dir, source_dir, &mut archive)?;
+    archive.finish()?;
+    Ok(())
+}
+
+fn zip_dir_entries<W: Write + Seek>(
+    root: &Path,
+    current: &Path,
+    archive: &mut zip::ZipWriter<W>,
+) -> Result<(), LocalDemoError> {
+    let mut entries = fs::read_dir(current)?.collect::<std::io::Result<Vec<_>>>()?;
+    entries.sort_by_key(|entry| entry.path());
+    for entry in entries {
+        let path = entry.path();
+        let metadata = fs::symlink_metadata(&path)?;
+        if metadata.file_type().is_symlink() {
+            return Err(LocalDemoError::InvalidConfig(format!(
+                "test solution contains symlink {}",
+                path.display()
+            )));
+        }
+        if metadata.is_dir() {
+            zip_dir_entries(root, &path, archive)?;
+            continue;
+        }
+        if !metadata.is_file() {
+            continue;
+        }
+        let relative = path.strip_prefix(root).map_err(|error| {
+            LocalDemoError::InvalidConfig(format!("invalid test solution path: {error}"))
+        })?;
+        let relative = relative.to_string_lossy().replace('\\', "/");
+        archive.start_file(relative, zip_file_options(&metadata))?;
+        let bytes = fs::read(&path)?;
+        archive.write_all(&bytes)?;
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn zip_file_options(metadata: &fs::Metadata) -> SimpleFileOptions {
+    use std::os::unix::fs::PermissionsExt;
+
+    SimpleFileOptions::default()
+        .compression_method(CompressionMethod::Deflated)
+        .unix_permissions(metadata.permissions().mode() & 0o777)
+}
+
+#[cfg(not(unix))]
+fn zip_file_options(_metadata: &fs::Metadata) -> SimpleFileOptions {
+    SimpleFileOptions::default().compression_method(CompressionMethod::Deflated)
+}
+
+fn challenge_repository_root(repo_root: &Path) -> PathBuf {
+    repo_root.join(CHALLENGE_REPOSITORY_ROOT)
+}
+
+fn replace_dir(path: &Path) -> Result<(), LocalDemoError> {
+    remove_dir_if_exists(path)?;
+    fs::create_dir_all(path)?;
+    Ok(())
+}
+
+fn remove_dir_if_exists(path: &Path) -> Result<(), LocalDemoError> {
+    match fs::remove_dir_all(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
     }
 }
 
-fn agent_model_info(agent: &DemoAgentSeed) -> Value {
-    json!({
-        "model": agent.model,
-        "profile": agent.profile,
-    })
+fn remove_file_if_exists(path: &Path) -> Result<(), LocalDemoError> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
 }
 
-fn challenge_keywords(values: &[&str]) -> Result<Vec<ChallengeKeyword>, LocalDemoError> {
-    values
-        .iter()
-        .map(|value| challenge_keyword(value))
-        .collect()
+fn copy_dir_rejecting_symlinks(source: &Path, destination: &Path) -> Result<(), LocalDemoError> {
+    fs::create_dir_all(destination)?;
+    let mut entries = fs::read_dir(source)?.collect::<std::io::Result<Vec<_>>>()?;
+    entries.sort_by_key(|entry| entry.path());
+    for entry in entries {
+        let source_path = entry.path();
+        let destination_path = destination.join(entry.file_name());
+        let metadata = fs::symlink_metadata(&source_path)?;
+        if metadata.file_type().is_symlink() {
+            return Err(LocalDemoError::InvalidConfig(format!(
+                "challenge source contains symlink {}",
+                source_path.display()
+            )));
+        }
+        if metadata.is_dir() {
+            copy_dir_rejecting_symlinks(&source_path, &destination_path)?;
+        } else if metadata.is_file() {
+            fs::copy(&source_path, &destination_path)?;
+        }
+    }
+    Ok(())
 }
 
 fn agent_id(value: &str) -> Result<AgentId, LocalDemoError> {
-    AgentId::try_new(value).map_err(|error| seed_parse_error("agent_id", value, error))
-}
-
-fn solution_submission_id(value: &str) -> Result<SolutionSubmissionId, LocalDemoError> {
-    SolutionSubmissionId::try_new(value)
-        .map_err(|error| seed_parse_error("solution_submission_id", value, error))
-}
-
-fn evaluation_job_id(value: &str) -> Result<EvaluationJobId, LocalDemoError> {
-    EvaluationJobId::try_new(value)
-        .map_err(|error| seed_parse_error("evaluation_job_id", value, error))
-}
-
-fn evaluation_id(value: &str) -> Result<EvaluationId, LocalDemoError> {
-    EvaluationId::try_new(value).map_err(|error| seed_parse_error("evaluation_id", value, error))
-}
-
-fn challenge_name(value: &str) -> Result<ChallengeName, LocalDemoError> {
-    ChallengeName::try_new(value.to_string())
-        .map_err(|error| seed_parse_error("challenge_name", value, error))
-}
-
-fn target_name(value: &str) -> Result<TargetName, LocalDemoError> {
-    TargetName::try_new(value.to_string()).map_err(|error| seed_parse_error("target", value, error))
-}
-
-fn metric_name(value: &str) -> Result<MetricName, LocalDemoError> {
-    MetricName::try_new(value.to_string())
-        .map_err(|error| seed_parse_error("metric_name", value, error))
-}
-
-fn run_name(value: &str) -> Result<RunName, LocalDemoError> {
-    RunName::try_new(value.to_string()).map_err(|error| seed_parse_error("run_name", value, error))
-}
-
-fn challenge_keyword(value: &str) -> Result<ChallengeKeyword, LocalDemoError> {
-    ChallengeKeyword::try_new(value.to_string())
-        .map_err(|error| seed_parse_error("challenge keyword", value, error))
-}
-
-fn seed_parse_error(label: &str, value: &str, error: impl std::fmt::Display) -> LocalDemoError {
-    LocalDemoError::InvalidConfig(format!("invalid demo {label} `{value}`: {error}"))
+    AgentId::try_new(value).map_err(|error| {
+        LocalDemoError::InvalidConfig(format!("invalid Frontier-CS dev seed agent id: {error}"))
+    })
 }

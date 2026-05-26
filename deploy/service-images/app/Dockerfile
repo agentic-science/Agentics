@@ -26,6 +26,4 @@ COPY --from=builder /workspace/Agentics/target/release/agentics-check-dgx-spark-
 COPY --from=builder /workspace/Agentics/target/release/agentics-migrate /usr/local/bin/agentics-migrate
 COPY --from=builder /workspace/Agentics/target/release/agentics-compose-prod /usr/local/bin/agentics-compose-prod
 COPY --from=builder /workspace/Agentics/target/release/agentics-copy-private-bundle-backups /usr/local/bin/agentics-copy-private-bundle-backups
-COPY --from=builder /workspace/Agentics/examples /app/examples
-
-ENV AGENTICS_CHALLENGES_ROOT=/app/examples/challenges
+ENV AGENTICS_CHALLENGES_ROOT=/app/no-seeded-challenges

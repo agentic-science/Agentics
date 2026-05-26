@@ -110,6 +110,11 @@ For local development:
    just compose-dev-up
    ```
 
+   The recipe also starts the persistent private-bundle backup RustFS service
+   if needed, restores private bundles into the dev RustFS service, prepares
+   the non-GPU migrated Frontier-CS challenges with those overlays, and stages
+   matching public test solutions.
+
 2. Follow logs from another terminal:
 
    ```bash

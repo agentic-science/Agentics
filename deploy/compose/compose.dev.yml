@@ -16,7 +16,10 @@ x-rust-dev: &rust-dev
     AGENTICS_S3_FORCE_PATH_STYLE: ${AGENTICS_S3_FORCE_PATH_STYLE:-true}
     AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}}
     AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}}
+    AGENTICS_RUSTFS_PORT: ${AGENTICS_RUSTFS_PORT:-9000}
+    AGENTICS_RUSTFS_CONSOLE_PORT: ${AGENTICS_RUSTFS_CONSOLE_PORT:-9001}
     AGENTICS_STORAGE_WORK_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/storage-work
+    AGENTICS_CHALLENGES_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/frontier-cs-challenges
     AGENTICS_RUNNER_RUNTIME_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/runtime
     AGENTICS_RUNNER_PHASE_MOUNT_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/phase-mounts
     AGENTICS_RUNNER_NAMESPACE: ${AGENTICS_RUNNER_NAMESPACE:-agentics-dev}
@@ -101,6 +104,10 @@ services:
       - --bin
       - agentics-local-demo
       - -p
+      - agentics-ops
+      - --bin
+      - agentics-copy-private-bundle-backups
+      - -p
       - api-server
       - --bin
       - api
@@ -108,6 +115,24 @@ services:
       - worker
       - --bin
       - worker
+    restart: "no"
+
+  prepare-challenges:
+    <<: *rust-dev
+    depends_on:
+      rust-build:
+        condition: service_completed_successfully
+      private-bundle-restore:
+        condition: service_completed_successfully
+    command:
+      - cargo
+      - run
+      - -p
+      - agentics-ops
+      - --bin
+      - agentics-local-demo
+      - --
+      - prepare
     restart: "no"
 
   migrate:
@@ -128,10 +153,32 @@ services:
       - migrate
     restart: "no"
 
+  private-bundle-restore:
+    <<: *rust-dev
+    network_mode: host
+    depends_on:
+      rust-build:
+        condition: service_completed_successfully
+      rustfs-bucket-init:
+        condition: service_completed_successfully
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        cargo run -p agentics-ops --bin agentics-copy-private-bundle-backups -- \
+          --backup-env-file deploy/compose/env/rustfs-private-backup.env \
+          --prod-env-file deploy/compose/env/dev.env.example \
+          --destination-endpoint-url "http://127.0.0.1:$${AGENTICS_RUSTFS_PORT:-9000}" \
+          --work-dir "$${AGENTICS_STORAGE_WORK_ROOT}/private-bundle-backup-copy"
+    restart: "no"
+
   api:
     <<: *rust-dev
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      prepare-challenges:
         condition: service_completed_successfully
       rustfs-bucket-init:
         condition: service_completed_successfully
@@ -150,6 +197,8 @@ services:
     depends_on:
       api:
         condition: service_started
+      private-bundle-restore:
+        condition: service_completed_successfully
       rustfs-bucket-init:
         condition: service_completed_successfully
     command:

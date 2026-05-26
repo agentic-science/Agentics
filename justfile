@@ -70,8 +70,10 @@ rustfs-private-backup-logs:
 test-storage-s3:
     AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}}" AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}}" AGENTICS_S3_TEST_ENDPOINT="${AGENTICS_S3_TEST_ENDPOINT:-http://127.0.0.1:${AGENTICS_RUSTFS_PORT:-9000}}" AGENTICS_S3_TEST_BUCKET="${AGENTICS_S3_TEST_BUCKET:-agentics-test}" AGENTICS_S3_FORCE_PATH_STYLE="${AGENTICS_S3_FORCE_PATH_STYLE:-true}" cargo test -p agentics-storage rustfs_s3_storage_round_trips_when_configured -- --nocapture
 
-# Start the containerized development stack with seeded fake data
+# Start the containerized development stack with migrated Frontier-CS dev data
 compose-dev-up:
+    test -f deploy/compose/env/rustfs-private-backup.env
+    {{compose_rustfs_private_backup}} up -d --remove-orphans
     @root="${AGENTICS_DEV_ROOT:-$PWD/.agentics-compose/dev}"; \
       project="${AGENTICS_COMPOSE_DEV_PROJECT:-agentics-dev-${USER:-local}}"; \
       namespace="${AGENTICS_RUNNER_NAMESPACE:-$project}"; \
@@ -98,6 +100,15 @@ compose-dev-logs:
       project="${AGENTICS_COMPOSE_DEV_PROJECT:-agentics-dev-${USER:-local}}"; \
       namespace="${AGENTICS_RUNNER_NAMESPACE:-$project}"; \
       AGENTICS_REPO_ROOT="$PWD" AGENTICS_DEV_ROOT="$root" AGENTICS_RUNNER_NAMESPACE="$namespace" {{compose_dev}} -p "$project" logs -f
+
+# Alias for the old local demo workflow; dev is the single local rehearsal path.
+demo-up: compose-dev-up
+
+# Alias for the old local demo workflow; dev is the single local rehearsal path.
+demo-down: compose-dev-down
+
+# Alias for the old local demo workflow; dev is the single local rehearsal path.
+demo-logs: compose-dev-logs
 
 # Build production Compose images
 compose-prod-build:

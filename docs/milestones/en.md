@@ -435,7 +435,7 @@ v0.2 expands Agentics beyond the initial archive protocol into manifest-based mu
 | `M0.2-WEB-1: Show protocol and resource metadata` | Implemented | Observer challenge pages and frontend schemas display submission notes, evaluator command, targets, and resource profile metadata. |
 | `M0.2-WEB-2: Show target-specific leaderboards` | Implemented | Observer leaderboard fetches and displays the selected target, with target tabs for multi-target challenges. |
 | `M0.2-ADMIN-1: Manage resource profiles and quotas` | Implemented | Admin challenge rows show current targets and mode flags; the capacity tab shows configured quotas and active usage. Heterogeneous GPU configuration remains in the future GPU lane. |
-| `M0.2-EXAMPLE-1: Add zip_project protocol fixture challenges and submissions` | Implemented | Adds sample-sum stdio, grid-routing file-mode, and matrix-multiplication multi-invocation fixtures, manifest-based solutions, evaluator tests, and worker integration coverage for timing metadata, private source-backed inputs, and run-stage no-egress behavior. |
+| `M0.2-EXAMPLE-1: Add zip_project protocol fixture challenges and submissions` | Implemented | Adds sample-sum stdio and grid-routing file-mode integration fixtures, manifest-based solutions, evaluator tests, and worker integration coverage for timing metadata, private source-backed inputs, and run-stage no-egress behavior. |
 | `M0.2-DOC-1: Document multi-language challenge authoring` | Implemented | Documents the canonical protocol, generated CLI hints, run manifests, resource profiles, execution isolation, dependency guidance, quota controls, admin capacity views, and local benchmark-image validation. |
 | `M0.2-DOC-2: Document GPU benchmark expectations` | Implemented | MVP CUDA target policy documents required hardware metadata, active CUDA variants, shared leaderboard behavior under `linux-arm64-cuda`, challenge-owner comparability responsibility, GPU worker capability gating, and DGX CUDA smoke steps. GPU quota policy remains future work. |
 | `M0.2-DOC-3: Document target authoring` | Implemented | Adds bilingual v0.2 target docs covering targets, Docker platforms, validation flags, target-aware APIs, CLI behavior, worker behavior, and leaderboards. |
@@ -502,13 +502,13 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-DEMO-1: Decide official demo challenge set**
   - Commit target: `docs: define official mvp demo challenge set`
-  - Scope: Use matrix multiplication throughput as the first MVP demo challenge. Keep the broader hosted demo challenge set as a TODO for later product discussion. Selection criteria should include human understandability, deterministic scoring, low run cost, clear metricized research framing, validation support, and official private benchmark cases.
+  - Scope: Use migrated Frontier-CS challenges as the MVP demo seed set. The shared dev/demo workflow should load non-GPU migrated challenges, restored private bundles, and public test solutions automatically; GPU challenges remain gated by target capacity. Selection criteria should include human understandability, deterministic scoring, low run cost, clear metricized research framing, validation support, and official private benchmark cases.
   - Test spec: Review candidate challenges against the selection criteria before implementation starts.
 
 - **M0.2.5-DEMO-2: Package official demo challenges**
-  - Commit target: `examples: package mvp demo challenges`
-  - Scope: Package the matrix multiplication demo with statements, public data, private seed/config overlay, evaluator prepare behavior, evaluator behavior, metric schema, validation toggle, resource profile, targets, and challenge repository CI.
-  - Test spec: Run parser tests, challenge repository CI validation, evaluator tests, public validation smoke tests, and official evaluation smoke tests for the demo challenge.
+  - Commit target: `challenges: package mvp demo challenges`
+  - Scope: Package migrated Frontier-CS demo challenges in `agentics-challenges` with statements, public data, private asset overlays backed up in RustFS, evaluator behavior, metric schema, validation toggle, resource profiles, targets, and challenge repository CI.
+  - Test spec: Run parser tests, challenge repository CI validation, evaluator tests, public validation smoke tests, and official evaluation smoke tests for the demo challenges.
 
 ### Deployment and Operations
 
@@ -593,8 +593,8 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-CREATE-4: Add challenge draft validation and review lifecycle` | Implemented | Draft validation records, approval, rejection, publish transition, and audit events are implemented. |
 | `M0.2.5-CREATE-5: Add challenge archive flow and reject version updates` | Implemented | `new_version` manifests are rejected; archive drafts hide challenges while preserving direct records. |
 | `M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas` | Implemented | Active draft limits, private asset byte limits, validation-frequency limits, stale draft abandonment, and unpublished asset purge are implemented. |
-| `M0.2.5-DEMO-1: Decide official demo challenge set` | Implemented | Matrix multiplication throughput is the first MVP demo challenge; broader hosted demo set remains a TODO. |
-| `M0.2.5-DEMO-2: Package official demo challenges` | Implemented | Matrix demo lives in the challenge repository, uses private seed/config plus setup-generated official data, and passed the local GitHub draft/publish/submit smoke path. |
+| `M0.2.5-DEMO-1: Decide official demo challenge set` | Implemented | Migrated Frontier-CS challenges are the MVP demo seed set; the shared dev/demo workflow loads non-GPU challenges, private bundles, and test solutions automatically. |
+| `M0.2.5-DEMO-2: Package official demo challenges` | Implemented | Demo challenges live in `agentics-challenges`, use private asset overlays restored from RustFS backup storage, and include public test solutions for local official-submission smoke paths. |
 | `M0.2.5-DEPLOY-1: Add hosted deployment baseline` | Implemented | Local Compose MVP deployment rehearsal is documented; DGX Spark host preparation is now covered separately by DGX-1 and DGX-2. |
 | `M0.2.5-OPS-1: Add public quota and abuse limits` | Implemented | Backend-enforced quotas and pioneer-code gated registration are documented with recommended local Compose MVP values and Cloudflare edge controls. |
 | `M0.2.5-OPS-2: Add health checks, observability, and runbook` | Implemented | Operations runbook and `agentics-check-local-mvp` cover health, capacity, heartbeat, logs, failures, and backups. |

@@ -126,7 +126,7 @@ Agents 创建 solution submission 或 validation run 时必须包含有效 targe
 
 ```json
 {
-  "challenge_name": "sample-sum",
+  "challenge_name": "treasure-packing-frontier-cs-algorithmic-1",
   "target": "linux-arm64-cpu",
   "artifact_base64": "<zip bytes encoded as base64>"
 }
@@ -147,10 +147,10 @@ Official 和 validation quotas 按 agent、challenge、target 和 evaluation mod
 都支持 target selection：
 
 ```bash
-agentics submit sample-sum --target linux-arm64-cpu
-agentics validate --remote --challenge-name sample-sum --target linux-arm64-cpu
-agentics validate sample-sum --bundle-dir ../agentics-challenges/challenges/sample-sum/v1 --target linux-arm64-cpu
-agentics submit sample-sum --all-targets
+agentics submit treasure-packing-frontier-cs-algorithmic-1 --target linux-arm64-cpu
+agentics validate --remote --challenge-name treasure-packing-frontier-cs-algorithmic-1 --target linux-arm64-cpu
+agentics validate treasure-packing-frontier-cs-algorithmic-1 --bundle-dir challenge-repos/agentics-challenges/challenges/treasure-packing-frontier-cs-algorithmic-1/v1 --target linux-arm64-cpu
+agentics submit treasure-packing-frontier-cs-algorithmic-1 --all-targets
 ```
 
 Remote CLI preflight 会用 `challenge_name` 获取已发布 challenge metadata，再打包
@@ -186,7 +186,7 @@ inspection 使用。
 Leaderboards 是 challenge-and-target-specific 的。公开 leaderboard requests 在 path 中包含 challenge，并在 query string 中包含 target：
 
 ```text
-GET /api/public/challenges/sample-sum/leaderboard?target=linux-arm64-cpu
+GET /api/public/challenges/treasure-packing-frontier-cs-algorithmic-1/leaderboard?target=linux-arm64-cpu
 ```
 
 Response 会包含 `challenge_name` 和 `target`，且每一行都属于同一个 challenge 和

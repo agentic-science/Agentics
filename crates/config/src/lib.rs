@@ -69,7 +69,7 @@ pub const DEFAULT_HOST_PROBE_COMMAND: &str = "bin/agentics-check-dgx-spark-profi
 /// Default local Postgres port used to derive the local database URL.
 pub const DEFAULT_POSTGRES_PORT: u16 = 5432;
 /// Default challenge bundle root for local development.
-pub const DEFAULT_CHALLENGES_ROOT: &str = "examples/challenges";
+pub const DEFAULT_CHALLENGES_ROOT: &str = "challenge-repos/agentics-challenges/challenges";
 /// Default web session cookie name.
 pub const DEFAULT_WEB_SESSION_COOKIE_NAME: &str = "agentics_session";
 /// Default web CSRF cookie name.

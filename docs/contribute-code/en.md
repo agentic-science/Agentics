@@ -46,12 +46,15 @@ The easiest way to run the platform for development is the Compose dev stack:
 just compose-dev-up
 ```
 
-This starts Postgres, runs migrations, starts the API, seeds deterministic fake
-challenges and completed submissions for frontend inspection, then starts the
-worker and Next.js frontend. Source files are bind-mounted into the Rust and Bun
-containers, so ordinary edits are visible without copying files. Cargo build
-output, Bun dependencies, and Postgres data live in Compose volumes, while demo
-storage and runner work roots live under `.agentics-compose/dev/` by default.
+This starts the persistent private-bundle backup RustFS service if needed, then
+starts Postgres, runs migrations, restores private bundles into the dev RustFS
+store, prepares the non-GPU migrated Frontier-CS challenge root with those
+private overlays, starts the API, stages the matching public test solutions as
+official submissions, and starts the worker and Next.js frontend. Source files
+are bind-mounted into the Rust and Bun containers, so ordinary edits are visible
+without copying files. Cargo build output, Bun dependencies, and Postgres data
+live in Compose volumes, while dev storage and runner work roots live under
+`.agentics-compose/dev/` by default.
 
 The worker uses the host Docker socket so it can create sibling runner
 containers. Those containers are labeled with `AGENTICS_RUNNER_NAMESPACE`;
@@ -124,10 +127,14 @@ container at the same absolute path that the host Docker daemon sees. Avoid
 container-only `/tmp` paths for anything that will later be bind-mounted into a
 runner container.
 
-## Frontend Demo Data
+## Frontend Dev Data
 
-The Compose dev stack seeds deterministic fake challenges, public leaderboards,
-and completed submissions before the web service starts:
+The Compose dev stack uses the migrated challenge repository as its source of
+truth. Before the web service starts, it publishes all migrated non-GPU
+Frontier-CS challenges, assembles their runtime bundles with restored private
+asset overlays, and stages any matching workspace in
+`challenge-repos/agentics-challenges/test-solutions/` as an official
+test-solution submission:
 
 ```bash
 just compose-dev-up

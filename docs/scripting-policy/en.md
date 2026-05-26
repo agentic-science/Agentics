@@ -8,8 +8,8 @@ reporting.
 ## Scope
 
 This policy applies when adding or changing platform-owned operational scripts
-and executables, including local MVP checks, Compose demo seeding, DGX Spark
-host/profile checks, DGX storage preparation, and DGX profile management.
+and executables, including local MVP checks, Compose dev-data seeding, DGX
+Spark host/profile checks, DGX storage preparation, and DGX profile management.
 
 Challenge payload scripts, sample solution scripts, and image-local smoke
 scripts have separate runtime contracts and are outside this policy unless a

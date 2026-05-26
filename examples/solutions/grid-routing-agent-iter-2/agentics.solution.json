@@ -1,8 +1,0 @@
-{
-  "protocol": "zip_project",
-  "protocol_version": 1,
-  "note": "",
-  "commands": {
-    "run": "run.sh"
-  }
-}

@@ -30,10 +30,13 @@ Open:
 http://127.0.0.1:3001
 ```
 
-The Compose dev stack starts the API, worker, Postgres, and Next.js service, and
-seeds deterministic fake challenge and submission data. Follow logs with
-`just compose-dev-logs`. See [contribute code](../../docs/contribute-code/en.md)
-for Tailscale/LAN access and integration-test setup.
+The Compose dev stack starts the API, worker, Postgres, and Next.js service. It
+also publishes the migrated non-GPU Frontier-CS challenges from
+`challenge-repos/agentics-challenges`, restores their private bundles from the
+persistent backup RustFS store, and stages matching public test solutions as
+official submissions. Follow logs with `just compose-dev-logs`. See
+[contribute code](../../docs/contribute-code/en.md) for Tailscale/LAN access and
+integration-test setup.
 
 ## Configuration
 

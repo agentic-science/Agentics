@@ -76,16 +76,16 @@ describe("CreatorConsole", () => {
     });
     getChallengeDraftMock.mockRejectedValue(new Error("not configured"));
     getChallengeShortlistMock.mockResolvedValue({
-      challenge_name: "matrix-multiplication",
+      challenge_name: "frontier-cs-example-challenge",
       items: [],
     });
     getCreatorChallengeParticipantsMock.mockResolvedValue({
-      challenge_name: "matrix-multiplication",
+      challenge_name: "frontier-cs-example-challenge",
       target: "linux-arm64-cpu",
       items: [],
     });
     getCreatorChallengeStatsMock.mockResolvedValue({
-      challenge_name: "matrix-multiplication",
+      challenge_name: "frontier-cs-example-challenge",
       target: "linux-arm64-cpu",
       agent_count: 0,
       solution_submission_count: 0,
@@ -98,14 +98,14 @@ describe("CreatorConsole", () => {
     });
     createChallengeShortlistRevisionMock.mockResolvedValue({
       id: "33333333-3333-4333-8333-333333333333",
-      challenge_name: "matrix-multiplication",
+      challenge_name: "frontier-cs-example-challenge",
       uploader_agent_id: "11111111-1111-4111-8111-111111111111",
       requested_count: 1,
       added_count: 1,
       sha256:
         "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
       storage_key:
-        "challenge-shortlists/matrix-multiplication/33333333-3333-4333-8333-333333333333.json",
+        "challenge-shortlists/frontier-cs-example-challenge/33333333-3333-4333-8333-333333333333.json",
       created_at: "2026-05-15T00:00:00Z",
     });
     uploadPrivateAssetMock.mockRejectedValue(new Error("not configured"));
@@ -175,7 +175,7 @@ describe("CreatorConsole", () => {
           pr_url:
             "https://github.com/agentics-reifying/agentics-challenges/pull/42",
           commit_sha: "0123456789abcdef0123456789abcdef01234567",
-          challenge_path: "challenges/matrix-multiplication",
+          challenge_path: "challenges/frontier-cs-example-challenge",
           pr_author_github_user_id: 123,
         }),
         "csrf-token",
@@ -242,7 +242,7 @@ function fillDraftRequiredFields(view: RenderResult) {
 
 const challengeDraftResponse = {
   id: "44444444-4444-4444-8444-444444444444",
-  challenge_name: "matrix-multiplication",
+  challenge_name: "frontier-cs-example-challenge",
   request: "new_challenge",
   status: "draft",
   creator_agent_id: "11111111-1111-4111-8111-111111111111",
@@ -252,17 +252,17 @@ const challengeDraftResponse = {
   pr_number: 42,
   pr_url: "https://github.com/agentics-reifying/agentics-challenges/pull/42",
   commit_sha: "0123456789abcdef0123456789abcdef01234567",
-  challenge_path: "challenges/matrix-multiplication",
+  challenge_path: "challenges/frontier-cs-example-challenge",
   manifest_sha256:
     "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   manifest: {
     schema_version: 1,
     request: "new_challenge",
-    challenge_name: "matrix-multiplication",
-    title: "Matrix Multiplication",
+    challenge_name: "frontier-cs-example-challenge",
+    title: "Frontier-CS Example Challenge",
     summary: {
-      en: "Benchmark matrix multiplication solutions.",
-      zh: "评测矩阵乘法解决方案。",
+      en: "Benchmark a small Frontier-CS style task.",
+      zh: "评测一个小型 Frontier-CS 风格任务。",
     },
     keywords: ["linear algebra"],
     readme_path: "README.md",

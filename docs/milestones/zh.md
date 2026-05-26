@@ -435,7 +435,7 @@ v0.2 将 Agentics 从初始 archive protocol 扩展到基于 manifest 的 multi-
 | `M0.2-WEB-1：展示 protocol 和 resource metadata` | 已实现 | Observer challenge pages 和 frontend schemas 展示 submission notes、evaluator command、targets 和 resource profile metadata。 |
 | `M0.2-WEB-2：展示 target-specific leaderboards` | 已实现 | Observer leaderboard 会获取并展示 selected target，并为 multi-target challenges 显示 target tabs。 |
 | `M0.2-ADMIN-1：管理 resource profiles 和 quotas` | 已实现 | Admin challenge rows 展示 current targets 和 mode flags；capacity tab 展示 configured quotas 和 active usage。Heterogeneous GPU configuration 保留在未来 GPU lane 中。 |
-| `M0.2-EXAMPLE-1：添加 zip_project protocol fixture challenges 和 submissions` | 已实现 | 添加 sample-sum stdio、grid-routing file-mode 和 matrix-multiplication multi-invocation fixtures、manifest-based solutions、evaluator tests，以及覆盖 timing metadata、private source-backed inputs 和 run-stage no-egress behavior 的 worker integration tests。 |
+| `M0.2-EXAMPLE-1：添加 zip_project protocol fixture challenges 和 submissions` | 已实现 | 添加 sample-sum stdio 和 grid-routing file-mode integration fixtures、manifest-based solutions、evaluator tests，以及覆盖 timing metadata、private source-backed inputs 和 run-stage no-egress behavior 的 worker integration tests。 |
 | `M0.2-DOC-1：记录 multi-language challenge authoring` | 已实现 | 已记录 canonical protocol、generated CLI hints、run manifests、resource profiles、execution isolation、dependency guidance、quota controls、admin capacity views 和 local benchmark-image validation。 |
 | `M0.2-DOC-2：记录 GPU benchmark expectations` | 已实现 | MVP CUDA target policy 已记录 required hardware metadata、active CUDA variants、`linux-arm64-cuda` 下的 shared leaderboard behavior、challenge-owner comparability responsibility、GPU worker capability gating 和 DGX CUDA smoke steps。GPU quota policy 仍是未来工作。 |
 | `M0.2-DOC-3：记录 target authoring` | 已实现 | 新增双语 v0.2 target docs，覆盖 targets、Docker platforms、validation flags、target-aware APIs、CLI behavior、worker behavior 和 leaderboards。 |
@@ -502,13 +502,13 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 
 - **M0.2.5-DEMO-1：确定 official demo challenge set**
   - Commit target：`docs: define official mvp demo challenge set`
-  - Scope：将 matrix multiplication throughput 作为第一个 MVP demo challenge。更完整的 hosted demo challenge set 仍作为后续产品讨论 TODO。选择标准应包括 human understandability、deterministic scoring、低运行成本、清晰的 metricized research framing、validation support 和 official private benchmark cases。
+  - Scope：使用 migrated Frontier-CS challenges 作为 MVP demo seed set。共享 dev/demo workflow 应自动加载 non-GPU migrated challenges、恢复后的 private bundles 和 public test solutions；GPU challenges 继续受 target capacity 约束。选择标准应包括 human understandability、deterministic scoring、低运行成本、清晰的 metricized research framing、validation support 和 official private benchmark cases。
   - Test spec：在实现开始前，根据选择标准审查 candidate challenges。
 
 - **M0.2.5-DEMO-2：打包 official demo challenges**
-  - Commit target：`examples: package mvp demo challenges`
-  - Scope：为 matrix multiplication demo 打包 statements、public data、private seed/config overlay、evaluator prepare behavior、evaluator behavior、metric schema、validation toggle、resource profile、targets 和 challenge repository CI。
-  - Test spec：为 demo challenge 运行 parser tests、challenge repository CI validation、evaluator tests、public validation smoke tests 和 official evaluation smoke tests。
+  - Commit target：`challenges: package mvp demo challenges`
+  - Scope：在 `agentics-challenges` 中打包 migrated Frontier-CS demo challenges，包括 statements、public data、已备份到 RustFS 的 private asset overlays、evaluator behavior、metric schema、validation toggle、resource profiles、targets 和 challenge repository CI。
+  - Test spec：为 demo challenges 运行 parser tests、challenge repository CI validation、evaluator tests、public validation smoke tests 和 official evaluation smoke tests。
 
 ### Deployment 和 Operations
 
@@ -593,8 +593,8 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-CREATE-4：添加 challenge draft validation 和 review lifecycle` | 已实现 | 已实现 draft validation records、approval、rejection、publish transition 和 audit events。 |
 | `M0.2.5-CREATE-5：添加 challenge archive flow 并拒绝 version updates` | 已实现 | `new_version` manifests 会被拒绝；archive drafts 会隐藏 challenge 但保留 direct records。 |
 | `M0.2.5-CREATE-6：添加 stale draft cleanup 和 challenge creation quotas` | 已实现 | 已实现 active draft limits、private asset byte limits、validation-frequency limits、stale draft abandonment 和 unpublished asset purge。 |
-| `M0.2.5-DEMO-1：确定 official demo challenge set` | 已实现 | Matrix multiplication throughput 是第一个 MVP demo challenge；更完整的 hosted demo set 仍是 TODO。 |
-| `M0.2.5-DEMO-2：打包 official demo challenges` | 已实现 | Matrix demo 位于 challenge repository，使用 private seed/config 和 setup-generated official data，并已通过 local GitHub draft/publish/submit smoke path。 |
+| `M0.2.5-DEMO-1：确定 official demo challenge set` | 已实现 | Migrated Frontier-CS challenges 是 MVP demo seed set；共享 dev/demo workflow 会自动加载 non-GPU challenges、private bundles 和 test solutions。 |
+| `M0.2.5-DEMO-2：打包 official demo challenges` | 已实现 | Demo challenges 位于 `agentics-challenges`，使用从 RustFS backup storage 恢复的 private asset overlays，并包含 public test solutions 用于 local official-submission smoke paths。 |
 | `M0.2.5-DEPLOY-1：添加 hosted deployment baseline` | 已实现 | 已文档化 Local Compose MVP deployment rehearsal；DGX Spark host preparation 现在由 DGX-1 和 DGX-2 单独覆盖。 |
 | `M0.2.5-OPS-1：添加 public quota 和 abuse limits` | 已实现 | 已记录 backend-enforced quotas、pioneer-code gated registration、推荐 local Compose MVP 数值和 Cloudflare edge controls。 |
 | `M0.2.5-OPS-2：添加 health checks、observability 和 runbook` | 已实现 | Operations runbook 和 `agentics-check-local-mvp` 覆盖 health、capacity、heartbeat、logs、failures 和 backups。 |

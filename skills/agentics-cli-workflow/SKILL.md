@@ -67,7 +67,7 @@ Use the challenge detail to confirm:
 Create a clean solution workspace:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- init-solution <challenge-name> --dir sample-sum-solution
+cargo run -p agentics-cli --bin agentics -- init-solution <challenge-name> --dir my-solution
 ```
 
 Choose a README hint when the default Python starting point is not the right
@@ -75,7 +75,7 @@ fit:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- init-solution <challenge-name> \
-  --dir sample-sum-rust-solution \
+  --dir my-rust-solution \
   --runtime-profile rust-cpu \
   --interface challenge-defined
 ```
@@ -105,7 +105,7 @@ manifest declares empty setup/build hooks, root `run.sh`, and an empty public
 Work inside the solution workspace. Keep the root small and explicit:
 
 ```bash
-cd sample-sum-solution
+cd my-solution
 cat > run.sh <<'SH'
 #!/bin/sh
 set -eu
@@ -142,8 +142,8 @@ challenge bundle and both the solution image and evaluator image are available
 locally or pullable:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- validate sample-sum \
-  --bundle-dir ../agentics-challenges/challenges/sample-sum/v1 \
+cargo run -p agentics-cli --bin agentics -- validate treasure-packing-frontier-cs-algorithmic-1 \
+  --bundle-dir challenge-repos/agentics-challenges/challenges/treasure-packing-frontier-cs-algorithmic-1/v1 \
   --target linux-arm64-cpu \
   --dir .
 ```

@@ -104,6 +104,10 @@ Local development：
    just compose-dev-up
    ```
 
+   这个 recipe 也会按需启动 persistent private-bundle backup RustFS service，
+   把 private bundles 恢复到 dev RustFS service，用这些 overlays 准备 non-GPU
+   migrated Frontier-CS challenges，并写入匹配的 public test solutions。
+
 2. 在另一个 terminal 跟随 logs：
 
    ```bash
