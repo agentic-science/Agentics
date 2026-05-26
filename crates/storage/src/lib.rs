@@ -420,11 +420,7 @@ impl Storage for LocalStorage {
                 ));
             }
             let mut source = tokio::fs::File::open(&full).await?;
-            let mut file = tokio::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&temporary)
-                .await?;
+            let mut file = create_private_file(&temporary).await?;
             let copied = tokio::io::copy(&mut source, &mut file).await?;
             if copied != metadata.len() {
                 return Err(StorageError::Internal(format!(
@@ -676,7 +672,7 @@ impl Storage for S3Storage {
             .object_len(temporary_key)
             .await?
             .ok_or_else(|| StorageError::ObjectNotFound(temporary_key.to_string()))?;
-        tokio::fs::create_dir_all(&self.work_root).await?;
+        ensure_private_directory(&self.work_root).await?;
         let local_temp = self
             .work_root
             .join(format!("agentics-s3-promote-{}", uuid::Uuid::new_v4()));
@@ -692,10 +688,7 @@ impl Storage for S3Storage {
         match cleanup_result {
             Ok(()) => promote_result,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => promote_result,
-            Err(cleanup_error) => match promote_result {
-                Ok(_) => Err(cleanup_error.into()),
-                Err(error) => Err(error),
-            },
+            Err(_cleanup_error) => promote_result,
         }
     }
 
@@ -781,11 +774,7 @@ impl Storage for S3Storage {
                     destination.display().to_string(),
                 ));
             }
-            let mut file = tokio::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&temporary)
-                .await?;
+            let mut file = create_private_file(&temporary).await?;
             let mut body = output.body.into_async_read();
             let mut written = 0u64;
             let mut buffer = [0u8; 64 * 1024];
@@ -988,11 +977,7 @@ async fn put_local_bytes(
     }
     let temporary_full = parent.join(format!(".agentics-write-{}", uuid::Uuid::new_v4()));
     let write_result = async {
-        let mut temporary = tokio::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&temporary_full)
-            .await?;
+        let mut temporary = create_private_file(&temporary_full).await?;
         temporary.write_all(content).await?;
         temporary.flush().await?;
         drop(temporary);
@@ -1003,6 +988,58 @@ async fn put_local_bytes(
     }
     .await;
     cleanup_temp_file_on_error(write_result, &temporary_full).await
+}
+
+async fn ensure_private_directory(path: &Path) -> Result<()> {
+    let path = path.to_path_buf();
+    tokio::task::spawn_blocking(move || ensure_private_directory_sync(&path))
+        .await
+        .map_err(|e| StorageError::Internal(e.to_string()))?
+}
+
+#[cfg(unix)]
+fn ensure_private_directory_sync(path: &Path) -> Result<()> {
+    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(path)?;
+    let metadata = std::fs::metadata(path)?;
+    if !metadata.is_dir() {
+        return Err(StorageError::InvalidKey(format!(
+            "storage work root is not a directory: {}",
+            path.display()
+        )));
+    }
+    let mode = metadata.permissions().mode();
+    if mode & 0o077 != 0 {
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode & !0o077))?;
+    }
+    let tightened_mode = std::fs::metadata(path)?.permissions().mode();
+    if tightened_mode & 0o077 != 0 {
+        return Err(StorageError::InvalidKey(format!(
+            "storage work root must not be group/world accessible: {}",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn ensure_private_directory_sync(path: &Path) -> Result<()> {
+    std::fs::create_dir_all(path)?;
+    Ok(())
+}
+
+async fn create_private_file(path: &Path) -> Result<tokio::fs::File> {
+    let mut options = tokio::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        options.mode(0o600);
+    }
+    Ok(options.open(path).await?)
 }
 
 async fn finalize_local_temp_without_overwrite(

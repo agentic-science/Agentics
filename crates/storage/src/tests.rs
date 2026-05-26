@@ -253,6 +253,47 @@ async fn local_storage_deletes_only_stale_prefix_objects() {
 
 #[cfg(unix)]
 #[tokio::test]
+async fn private_temp_files_use_owner_only_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = temp_storage_root("private-temp-file");
+    let path = root.join("scratch");
+    let file = super::create_private_file(&path)
+        .await
+        .expect("private temp file should create");
+    drop(file);
+
+    let mode = fs::metadata(&path)
+        .expect("private temp file metadata")
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(mode, 0o600);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn storage_work_root_is_tightened_to_owner_only() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = temp_storage_root("private-work-root");
+    fs::create_dir_all(&root).expect("work root");
+    fs::set_permissions(&root, fs::Permissions::from_mode(0o755)).expect("work root permissions");
+
+    super::ensure_private_directory(&root)
+        .await
+        .expect("work root should tighten");
+
+    let mode = fs::metadata(&root)
+        .expect("work root metadata")
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(mode & 0o077, 0);
+}
+
+#[cfg(unix)]
+#[tokio::test]
 async fn local_storage_rejects_symlink_prefixes() {
     use std::os::unix::fs::symlink;
 
