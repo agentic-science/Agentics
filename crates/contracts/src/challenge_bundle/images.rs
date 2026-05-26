@@ -6,8 +6,9 @@ use agentics_domain::models::challenge::{
     TargetAccelerator,
 };
 use agentics_domain::models::images::ChallengeImageReference;
+use garde::Validate;
 
-use super::{require_non_empty, validate_positive_u32, validate_positive_u64};
+use super::require_non_empty;
 
 const SUPPORTED_CUDA_VARIANTS: &[(&str, &str)] =
     &[("cu126", "12.6"), ("cu130", "13.0"), ("cu132", "13.2")];
@@ -132,6 +133,7 @@ fn require_supported_image_repository(
 
 /// Validate image, timeout, memory, CPU, disk, and hardware fields for a target.
 fn validate_resource_profile(profile: &ResourceProfileSpec, field: &str) -> Result<()> {
+    validate_garde(profile, field)?;
     validate_stage_resource_profile(&profile.solution.setup, &format!("{field}.solution.setup"))?;
     validate_stage_resource_profile(&profile.solution.build, &format!("{field}.solution.build"))?;
     if let Some(run) = &profile.solution.run {
@@ -157,36 +159,47 @@ fn validate_resource_profile(profile: &ResourceProfileSpec, field: &str) -> Resu
 
 /// Validate limits for one execution stage.
 fn validate_stage_resource_profile(stage: &StageResourceProfile, field: &str) -> Result<()> {
-    validate_positive_u64(stage.timeout_sec, &format!("{field}.timeout_sec"))?;
-    validate_positive_u64(stage.memory_limit_mb, &format!("{field}.memory_limit_mb"))?;
-    validate_positive_u32(stage.cpu_limit_millis, &format!("{field}.cpu_limit_millis"))?;
-    validate_positive_u64(stage.disk_limit_mb, &format!("{field}.disk_limit_mb"))?;
+    validate_garde(stage, field)?;
 
     Ok(())
 }
 
 /// Validate generic hardware fields independent of target accelerator policy.
 fn validate_hardware_profile(hardware: &HardwareProfileSpec, field: &str) -> Result<()> {
-    require_non_empty(&hardware.kind, &format!("{field}.kind"))?;
-    if let Some(gpu_model) = &hardware.gpu_model {
-        require_non_empty(gpu_model, &format!("{field}.gpu_model"))?;
-    }
-    if let Some(gpu_count) = hardware.gpu_count {
-        validate_positive_u32(gpu_count, &format!("{field}.gpu_count"))?;
-    }
-    if let Some(gpu_memory_gb) = hardware.gpu_memory_gb {
-        validate_positive_u64(gpu_memory_gb, &format!("{field}.gpu_memory_gb"))?;
-    }
-    if let Some(cuda_variant) = &hardware.cuda_variant {
-        require_non_empty(cuda_variant, &format!("{field}.cuda_variant"))?;
-    }
-    if let Some(cuda_version) = &hardware.cuda_version {
-        require_non_empty(cuda_version, &format!("{field}.cuda_version"))?;
-    }
-    if let Some(driver_minimum) = &hardware.driver_minimum {
-        require_non_empty(driver_minimum, &format!("{field}.driver_minimum"))?;
-    }
+    validate_garde(hardware, field)?;
 
+    Ok(())
+}
+
+fn validate_garde<T>(value: &T, field: &str) -> Result<()>
+where
+    T: Validate<Context = ()>,
+{
+    value
+        .validate()
+        .map_err(|report| ServiceError::Validation(format_garde_report(field, &report)))
+}
+
+fn format_garde_report(field: &str, report: &garde::Report) -> String {
+    report
+        .iter()
+        .map(|(path, error)| {
+            if path.is_empty() {
+                format!("{field}: {error}")
+            } else {
+                format!("{field}.{path}: {error}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+fn validate_positive_u32(value: u32, field: &str) -> Result<()> {
+    if value == 0 {
+        return Err(ServiceError::Validation(format!(
+            "{field} must be greater than 0"
+        )));
+    }
     Ok(())
 }
 

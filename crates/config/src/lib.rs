@@ -26,6 +26,7 @@ mod env;
 mod local_urls;
 mod runtime_modes;
 mod storage_config;
+mod validation;
 pub use env::{
     RawApiWebEnv, RawAppEnv, RawAuthEnv, RawDatabaseEnv, RawGithubOauthEnv, RawLoggingEnv,
     RawMoltbookEnv, RawQuotaEnv, RawRunnerEnv, RawStorageEnv, RawWorkerEnv,
@@ -419,11 +420,7 @@ impl Config {
     /// Reject settings that are acceptable for local development but dangerous
     /// when the API is reachable from another machine.
     pub fn validate_api_security(&self) -> anyhow::Result<()> {
-        validate_required_trimmed(Some(&self.admin_username), ENV_AGENTICS_ADMIN_USERNAME)?;
-        validate_required_trimmed(
-            Some(self.admin_password.expose_secret()),
-            ENV_AGENTICS_ADMIN_PASSWORD,
-        )?;
+        validation::validate_api_security_fields(self)?;
         if self.uses_default_admin_credentials()
             && !self.allow_insecure_default_admin_credentials
             && !local_urls::is_loopback_host(&self.api_host)
@@ -443,71 +440,10 @@ impl Config {
             );
         }
 
-        if self.max_active_agents == 0 {
-            anyhow::bail!("AGENTICS_MAX_ACTIVE_AGENTS must be greater than zero");
-        }
-        if self.official_runs_per_agent_challenge_day == 0 {
-            anyhow::bail!(
-                "AGENTICS_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY must be greater than zero"
-            );
-        }
-        if self.max_active_official_jobs == 0 {
-            anyhow::bail!("AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS must be greater than zero");
-        }
-        if self.max_active_challenge_drafts_per_agent == 0 {
-            anyhow::bail!(
-                "AGENTICS_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT must be greater than zero"
-            );
-        }
-        if self.challenge_private_asset_bytes_per_draft == 0 {
-            anyhow::bail!(
-                "AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT must be greater than zero"
-            );
-        }
-        if self.challenge_draft_validations_per_day == 0 {
-            anyhow::bail!("AGENTICS_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY must be greater than zero");
-        }
-        if self.challenge_draft_validation_timeout_minutes <= 0 {
-            anyhow::bail!(
-                "AGENTICS_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES must be greater than zero"
-            );
-        }
-        if self.challenge_private_asset_pending_timeout_minutes <= 0 {
-            anyhow::bail!(
-                "AGENTICS_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES must be greater than zero"
-            );
-        }
-        if self.challenge_draft_publish_timeout_minutes <= 0 {
-            anyhow::bail!(
-                "AGENTICS_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES must be greater than zero"
-            );
-        }
-        if self.challenge_draft_ttl_days <= 0 {
-            anyhow::bail!("AGENTICS_CHALLENGE_DRAFT_TTL_DAYS must be greater than zero");
-        }
-        if self.unpublished_challenge_asset_grace_days <= 0 {
-            anyhow::bail!(
-                "AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS must be greater than zero"
-            );
-        }
-        if self.web_session_ttl_hours <= 0 {
-            anyhow::bail!("AGENTICS_WEB_SESSION_TTL_HOURS must be greater than zero");
-        }
-        local_urls::validate_cookie_name(
-            &self.web_session_cookie_name,
-            "AGENTICS_WEB_SESSION_COOKIE_NAME",
-        )?;
-        local_urls::validate_cookie_name(
-            &self.web_csrf_cookie_name,
-            "AGENTICS_WEB_CSRF_COOKIE_NAME",
-        )?;
         if self.web_session_cookie_name == self.web_csrf_cookie_name {
             anyhow::bail!(
                 "AGENTICS_WEB_SESSION_COOKIE_NAME and AGENTICS_WEB_CSRF_COOKIE_NAME must differ"
             );
-        }
-        for origin in self.cors_allowed_origin_values() {
-            validate_cors_origin(&origin)?;
         }
         self.validate_moltbook_config()?;
         if !local_urls::is_loopback_host(&self.api_host) && !self.web_session_cookie_secure {
@@ -718,46 +654,7 @@ impl Config {
 
     /// Validate platform-owned output tree limits.
     fn validate_runner_output_limits(&self) -> anyhow::Result<()> {
-        if self.runner_max_output_files == 0 {
-            anyhow::bail!("AGENTICS_RUNNER_MAX_OUTPUT_FILES must be greater than zero");
-        }
-        if self.runner_max_output_dirs == 0 {
-            anyhow::bail!("AGENTICS_RUNNER_MAX_OUTPUT_DIRS must be greater than zero");
-        }
-        if self.runner_max_output_depth == 0 {
-            anyhow::bail!("AGENTICS_RUNNER_MAX_OUTPUT_DEPTH must be greater than zero");
-        }
-        if self.runner_max_runs == 0 {
-            anyhow::bail!("AGENTICS_RUNNER_MAX_RUNS must be greater than zero");
-        }
-        if self.runner_max_runs
-            > agentics_contracts::challenge_bundle::MAX_CHALLENGE_RUNS_PER_EVALUATION
-        {
-            anyhow::bail!(
-                "AGENTICS_RUNNER_MAX_RUNS must be at most {}",
-                agentics_contracts::challenge_bundle::MAX_CHALLENGE_RUNS_PER_EVALUATION
-            );
-        }
-        if self.runner_max_result_json_bytes == 0 {
-            anyhow::bail!("AGENTICS_RUNNER_MAX_RESULT_JSON_BYTES must be greater than zero");
-        }
-        if self.runner_max_public_results == 0 {
-            anyhow::bail!("AGENTICS_RUNNER_MAX_PUBLIC_RESULTS must be greater than zero");
-        }
-        if self.runner_max_result_log_bytes == 0 {
-            anyhow::bail!("AGENTICS_RUNNER_MAX_RESULT_LOG_BYTES must be greater than zero");
-        }
-        if self.runner_max_interaction_bytes_per_direction == 0 {
-            anyhow::bail!(
-                "AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION must be greater than zero"
-            );
-        }
-        if self.runner_interaction_shutdown_grace_secs == 0 {
-            anyhow::bail!(
-                "AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS must be greater than zero"
-            );
-        }
-        Ok(())
+        validation::validate_runner_output_limits(self)
     }
 
     /// Handles runner writable storage mode for this module.

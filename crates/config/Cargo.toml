@@ -11,6 +11,7 @@ agentics-domain = { workspace = true }
 agentics-contracts = { workspace = true }
 anyhow = { workspace = true }
 envy = { workspace = true }
+garde = { workspace = true }
 http = { workspace = true }
 nix = { workspace = true }
 secrecy = { workspace = true }

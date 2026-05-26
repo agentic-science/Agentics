@@ -62,7 +62,8 @@ pub const MIN_CHALLENGE_KEYWORDS: usize = 1;
 pub const MAX_CHALLENGE_KEYWORDS: usize = 6;
 
 /// Parsed `spec.json` contract for a challenge bundle.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct ChallengeBundleSpec {
     pub schema_version: i32,
@@ -71,6 +72,7 @@ pub struct ChallengeBundleSpec {
     /// Localized summary used in compact challenge catalog surfaces.
     pub summary: LocalizedText,
     /// Required public keywords used by catalog search and filtering.
+    #[garde(length(min = MIN_CHALLENGE_KEYWORDS, max = MAX_CHALLENGE_KEYWORDS))]
     #[schemars(length(min = 1, max = 6))]
     pub keywords: Vec<ChallengeKeyword>,
     pub solution: SolutionSpec,
@@ -249,9 +251,17 @@ pub struct SolutionSpec {
 }
 
 /// Evaluator entrypoint and output-file contract for a bundle.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct EvaluatorSpec {
+    #[garde(
+        length(min = 1),
+        inner(
+            custom(crate::validation::trimmed_non_empty),
+            custom(crate::validation::no_nul)
+        )
+    )]
     pub command: Vec<String>,
     pub result_file: BundleRelativePath,
 }
@@ -404,11 +414,13 @@ pub struct ChallengeTargetSpec {
 }
 
 /// Resource envelope and Docker images declared by a challenge.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct ResourceProfileSpec {
     pub name: ResourceProfileName,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(custom(crate::validation::optional_trimmed_non_empty))]
     pub resource_description: Option<String>,
     pub solution_image: ChallengeImageReference,
     pub evaluator_image: ChallengeImageReference,
@@ -437,31 +449,44 @@ pub struct EvaluatorStageProfiles {
 }
 
 /// Resource envelope for one Docker-executed stage.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct StageResourceProfile {
+    #[garde(range(min = 1))]
     pub timeout_sec: u64,
+    #[garde(range(min = 1))]
     pub memory_limit_mb: u64,
+    #[garde(range(min = 1))]
     pub cpu_limit_millis: u32,
+    #[garde(range(min = 1))]
     pub disk_limit_mb: u64,
+    #[garde(skip)]
     pub network_access: ZipProjectNetworkAccess,
 }
 
 /// Optional hardware metadata advertised with a resource profile.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 pub struct HardwareProfileSpec {
+    #[garde(custom(crate::validation::trimmed_non_empty))]
     pub kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(custom(crate::validation::optional_trimmed_non_empty))]
     pub gpu_model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(range(min = 1))]
     pub gpu_count: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(range(min = 1))]
     pub gpu_memory_gb: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(custom(crate::validation::optional_trimmed_non_empty))]
     pub cuda_variant: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(custom(crate::validation::optional_trimmed_non_empty))]
     pub cuda_version: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(custom(crate::validation::optional_trimmed_non_empty))]
     pub driver_minimum: Option<String>,
 }
 
@@ -686,36 +711,63 @@ pub struct PublicCoexecutedBenchmarkExecutionSpec {
 }
 
 /// Optional separated-evaluator command that sets up generated benchmark inputs.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct ChallengeSetupSpec {
+    #[garde(
+        length(min = 1),
+        inner(
+            custom(crate::validation::trimmed_non_empty),
+            custom(crate::validation::no_nul)
+        )
+    )]
     pub command: Vec<String>,
     /// Relative path, under the setup workspace, to the generated run manifest.
     pub result_runs_file: BundleRelativePath,
     /// Challenge-owner notes about seeds, versions, or external data provenance.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(custom(crate::validation::optional_trimmed_non_empty))]
     pub reproducibility_notes: Option<String>,
 }
 
 /// Optional interactive-evaluator command that sets up one generated interactive session.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct PipedStdioSetupSpec {
+    #[garde(
+        length(min = 1),
+        inner(
+            custom(crate::validation::trimmed_non_empty),
+            custom(crate::validation::no_nul)
+        )
+    )]
     pub command: Vec<String>,
     /// Relative path, under the setup workspace, to the generated session manifest.
     pub result_session_file: BundleRelativePath,
     /// Challenge-owner notes about seeds, versions, or external data provenance.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(custom(crate::validation::optional_trimmed_non_empty))]
     pub reproducibility_notes: Option<String>,
 }
 
 /// Optional coexecuted-evaluator command that sets up files for a coexecuted run.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct CoexecutedBenchmarkSetupSpec {
+    #[garde(
+        length(min = 1),
+        inner(
+            custom(crate::validation::trimmed_non_empty),
+            custom(crate::validation::no_nul)
+        )
+    )]
     pub command: Vec<String>,
     /// Challenge-owner notes about seeds, versions, or external data provenance.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[garde(custom(crate::validation::optional_trimmed_non_empty))]
     pub reproducibility_notes: Option<String>,
 }
 

@@ -147,7 +147,8 @@ fn default_required() -> bool {
 }
 
 /// Creator-authenticated request for binding a public GitHub PR to a draft.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct CreateChallengeDraftRequest {
     pub repo_url: GithubRepoRemote,
@@ -155,6 +156,7 @@ pub struct CreateChallengeDraftRequest {
     pub pr_url: GithubPullRequestUrl,
     pub commit_sha: GitCommitSha,
     pub challenge_path: RepoRelativePath,
+    #[garde(range(min = 1))]
     pub pr_author_github_user_id: i64,
     pub manifest: ChallengeCreationManifest,
 }
@@ -462,24 +464,29 @@ pub struct ChallengeDraftListResponse {
 }
 
 /// Payload for uploading a private benchmark asset to Agentics storage.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct UploadChallengePrivateAssetRequest {
     pub asset_name: AssetName,
     pub kind: ChallengePrivateAssetKind,
     pub required: bool,
+    #[garde(custom(crate::validation::trimmed_non_empty))]
     pub asset_base64: String,
 }
 
 /// Admin payload for validating a draft against a checked-out repository path.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct ValidateChallengeDraftRequest {
+    #[garde(custom(crate::validation::trimmed_non_empty))]
     pub repository_path: String,
 }
 
 /// Admin payload for accepting or rejecting a challenge draft.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct ReviewChallengeDraftRequest {
     #[serde(default)]

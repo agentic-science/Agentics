@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::str::FromStr;
 
 use serde::Deserialize;
@@ -76,45 +75,19 @@ impl FromStr for StorageBackend {
 
 /// Validate durable object storage configuration.
 pub(crate) fn validate_object_storage_config(config: &Config) -> anyhow::Result<()> {
-    if config.storage_max_bundle_archive_bytes == 0 {
-        anyhow::bail!("AGENTICS_STORAGE_MAX_BUNDLE_ARCHIVE_BYTES must be greater than zero");
-    }
-    if config.storage_max_statement_bytes == 0 {
-        anyhow::bail!("AGENTICS_STORAGE_MAX_STATEMENT_BYTES must be greater than zero");
-    }
-    if config.storage_max_json_artifact_bytes == 0 {
-        anyhow::bail!("AGENTICS_STORAGE_MAX_JSON_ARTIFACT_BYTES must be greater than zero");
-    }
-    if config.storage_tmp_object_grace_hours == 0 {
-        anyhow::bail!("AGENTICS_STORAGE_TMP_OBJECT_GRACE_HOURS must be greater than zero");
-    }
-    if let Some(work_root) = config
-        .storage_work_root
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        && !Path::new(work_root).is_absolute()
-    {
-        anyhow::bail!("AGENTICS_STORAGE_WORK_ROOT must be an absolute path");
-    }
+    crate::validation::validate_storage_common_fields(config)?;
     match config.storage_backend {
         StorageBackend::Local => Ok(()),
         StorageBackend::S3 => {
             validate_required_trimmed(config.s3_bucket.as_deref(), "AGENTICS_S3_BUCKET")?;
-            validate_s3_prefix(config.s3_prefix.as_deref())?;
-            validate_required_trimmed(Some(&config.s3_region), "AGENTICS_S3_REGION")?;
-            if let Some(endpoint) = config.s3_endpoint_url.as_ref()
-                && !matches!(endpoint.scheme(), "http" | "https")
-            {
-                anyhow::bail!("AGENTICS_S3_ENDPOINT_URL must start with http:// or https://");
-            }
+            crate::validation::validate_s3_fields(config)?;
             Ok(())
         }
     }
 }
 
 /// Validate an optional S3 key prefix.
-fn validate_s3_prefix(value: Option<&str>) -> anyhow::Result<()> {
+pub(crate) fn validate_s3_prefix(value: Option<&str>) -> anyhow::Result<()> {
     let Some(prefix) = value.map(str::trim).filter(|value| !value.is_empty()) else {
         return Ok(());
     };

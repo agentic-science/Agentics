@@ -15,10 +15,11 @@ use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{
     ChallengeBundleSpec, ChallengeExecutionMode, ChallengeRunInputFile, ChallengeRunManifest,
     ChallengeRunSpec, ChallengeSetupSpec, ChallengeSolutionPublicationPolicy,
-    CoexecutedBenchmarkSetupSpec, MAX_CHALLENGE_KEYWORDS, MIN_CHALLENGE_KEYWORDS,
+    CoexecutedBenchmarkSetupSpec, EvaluatorSpec, MAX_CHALLENGE_KEYWORDS, MIN_CHALLENGE_KEYWORDS,
     PipedStdioSessionManifest, PipedStdioSetupSpec, PrivateBenchmarkPolicy,
 };
 use agentics_domain::models::paths::BundleRelativePath;
+use garde::Validate;
 
 mod filesystem;
 mod images;
@@ -301,6 +302,7 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
     require_non_empty(&spec.summary.en, "summary.en")?;
     require_non_empty(&spec.summary.zh, "summary.zh")?;
     validate_challenge_keywords(spec)?;
+    validate_garde(spec, "spec")?;
 
     if spec.schema_version != 1 {
         return Err(ServiceError::Validation(
@@ -321,15 +323,15 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
         agentics_domain::models::challenge::ChallengeExecutionSpec::SeparatedEvaluator(
             execution,
         ) => {
-            validate_evaluator_command(
-                &execution.separated_evaluator.command,
+            validate_evaluator_spec(
+                &execution.separated_evaluator,
                 "execution.separated_evaluator.command",
                 ChallengeExecutionMode::SeparatedEvaluator,
             )?;
         }
         agentics_domain::models::challenge::ChallengeExecutionSpec::PipedStdio(execution) => {
-            validate_evaluator_command(
-                &execution.interactive_evaluator.command,
+            validate_evaluator_spec(
+                &execution.interactive_evaluator,
                 "execution.interactive_evaluator.command",
                 ChallengeExecutionMode::PipedStdio,
             )?;
@@ -337,8 +339,8 @@ fn validate_challenge_bundle_spec(spec: &ChallengeBundleSpec) -> Result<()> {
         agentics_domain::models::challenge::ChallengeExecutionSpec::CoexecutedBenchmark(
             execution,
         ) => {
-            validate_evaluator_command(
-                &execution.coexecuted_evaluator.command,
+            validate_evaluator_spec(
+                &execution.coexecuted_evaluator,
                 "execution.coexecuted_evaluator.command",
                 ChallengeExecutionMode::CoexecutedBenchmark,
             )?;
@@ -416,45 +418,14 @@ pub fn validate_digest_pinned_images(spec: &ChallengeBundleSpec) -> Result<()> {
 }
 
 /// Validates evaluator command invariants for this contract.
-fn validate_evaluator_command(
-    command: &[String],
+fn validate_evaluator_spec(
+    evaluator: &EvaluatorSpec,
     field: &str,
     mode: ChallengeExecutionMode,
 ) -> Result<()> {
-    if command.is_empty() {
-        return Err(ServiceError::Validation(format!(
-            "{field} must not be empty"
-        )));
-    }
-    for (index, part) in command.iter().enumerate() {
-        require_non_empty(part, &format!("{field}[{index}]"))?;
-        if part.contains('\0') {
-            return Err(ServiceError::Validation(format!(
-                "{field}[{index}] must not contain NUL bytes"
-            )));
-        }
-    }
-
-    validate_declared_script_runtime(command, field, mode)?;
-
-    Ok(())
-}
-
-/// Validates setup command invariants for this contract.
-fn validate_setup_command(command: &[String], field: &str) -> Result<()> {
-    if command.is_empty() {
-        return Err(ServiceError::Validation(format!(
-            "{field} must not be empty"
-        )));
-    }
-    for (index, part) in command.iter().enumerate() {
-        require_non_empty(part, &format!("{field}[{index}]"))?;
-        if part.contains('\0') {
-            return Err(ServiceError::Validation(format!(
-                "{field}[{index}] must not contain NUL bytes"
-            )));
-        }
-    }
+    let evaluator_field = field.strip_suffix(".command").unwrap_or(field);
+    validate_garde(evaluator, evaluator_field)?;
+    validate_declared_script_runtime(&evaluator.command, field, mode)?;
 
     Ok(())
 }
@@ -760,12 +731,9 @@ fn validate_setup_spec(
     field: &str,
     mode: ChallengeExecutionMode,
 ) -> Result<()> {
+    validate_garde(setup, field)?;
     let command_field = format!("{field}.command");
-    validate_setup_command(&setup.command, &command_field)?;
     validate_declared_script_runtime(&setup.command, &command_field, mode)?;
-    if let Some(notes) = &setup.reproducibility_notes {
-        require_non_empty(notes, &format!("{field}.reproducibility_notes"))?;
-    }
 
     Ok(())
 }
@@ -776,12 +744,9 @@ fn validate_piped_stdio_setup_spec(
     field: &str,
     mode: ChallengeExecutionMode,
 ) -> Result<()> {
+    validate_garde(setup, field)?;
     let command_field = format!("{field}.command");
-    validate_setup_command(&setup.command, &command_field)?;
     validate_declared_script_runtime(&setup.command, &command_field, mode)?;
-    if let Some(notes) = &setup.reproducibility_notes {
-        require_non_empty(notes, &format!("{field}.reproducibility_notes"))?;
-    }
 
     Ok(())
 }
@@ -792,12 +757,9 @@ fn validate_coexecuted_benchmark_setup_spec(
     field: &str,
     mode: ChallengeExecutionMode,
 ) -> Result<()> {
+    validate_garde(setup, field)?;
     let command_field = format!("{field}.command");
-    validate_setup_command(&setup.command, &command_field)?;
     validate_declared_script_runtime(&setup.command, &command_field, mode)?;
-    if let Some(notes) = &setup.reproducibility_notes {
-        require_non_empty(notes, &format!("{field}.reproducibility_notes"))?;
-    }
 
     Ok(())
 }
@@ -1047,26 +1009,27 @@ fn require_non_empty(value: &str, field: &str) -> Result<()> {
     text::require_non_empty(value, field)
 }
 
-/// Validates positive u64 invariants for this contract.
-fn validate_positive_u64(value: u64, field: &str) -> Result<()> {
-    if value == 0 {
-        return Err(ServiceError::Validation(format!(
-            "{field} must be greater than 0"
-        )));
-    }
-
-    Ok(())
+fn validate_garde<T>(value: &T, field: &str) -> Result<()>
+where
+    T: Validate<Context = ()>,
+{
+    value
+        .validate()
+        .map_err(|report| ServiceError::Validation(format_garde_report(field, &report)))
 }
 
-/// Validates positive u32 invariants for this contract.
-fn validate_positive_u32(value: u32, field: &str) -> Result<()> {
-    if value == 0 {
-        return Err(ServiceError::Validation(format!(
-            "{field} must be greater than 0"
-        )));
-    }
-
-    Ok(())
+fn format_garde_report(field: &str, report: &garde::Report) -> String {
+    report
+        .iter()
+        .map(|(path, error)| {
+            if path.is_empty() {
+                format!("{field}: {error}")
+            } else {
+                format!("{field}.{path}: {error}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("; ")
 }
 
 #[cfg(test)]

@@ -58,9 +58,11 @@ impl fmt::Display for AgentStatus {
 }
 
 /// Agent registration payload accepted by the public API.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct RegisterAgentRequest {
+    #[garde(custom(crate::validation::trimmed_non_empty))]
     pub display_name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pioneer_code: Option<PioneerCodeInput>,
@@ -82,7 +84,8 @@ pub struct RegisterAgentResponse {
 }
 
 /// Admin payload for creating a pioneer code.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct CreatePioneerCodeRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -147,11 +150,13 @@ pub struct RevokePioneerCodeResponse {
 }
 
 /// Solution submission creation payload with a base64-encoded ZIP artifact.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct CreateSolutionSubmissionRequest {
     pub challenge_name: ChallengeName,
     pub target: TargetName,
+    #[garde(custom(crate::validation::trimmed_non_empty))]
     pub artifact_base64: String,
     #[serde(default)]
     pub explanation: String,
@@ -405,9 +410,11 @@ pub struct CreatorChallengeParticipantsResponse {
 }
 
 /// Delta-only shortlist upload request.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct CreateChallengeShortlistRevisionRequest {
+    #[garde(length(min = 1))]
     pub agent_ids_to_add: Vec<AgentId>,
 }
 
@@ -500,7 +507,8 @@ pub struct AdminServiceHeartbeatListResponse {
 }
 
 /// Admin payload for attaching a Moltbook discussion post to a published challenge.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct SetChallengeMoltbookDiscussionRequest {
     pub discussion_url: MoltbookPostUrl,

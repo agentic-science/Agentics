@@ -8,7 +8,8 @@ use super::pioneer_codes::PioneerCodeInput;
 use super::urls::GithubOauthAuthorizationUrl;
 
 /// Browser-submitted admin login credentials.
-#[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct AdminLoginRequest {
     pub username: String,
@@ -25,7 +26,8 @@ pub struct AdminSessionResponse {
 }
 
 /// Browser-submitted request to start GitHub OAuth.
-#[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct GithubOauthLoginRequest {
     pub pioneer_code: Option<PioneerCodeInput>,
@@ -38,10 +40,13 @@ pub struct GithubOauthLoginResponse {
 }
 
 /// Browser-submitted request that completes GitHub OAuth.
-#[derive(Debug, Clone, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
 pub struct GithubOauthCallbackRequest {
+    #[garde(custom(crate::validation::trimmed_non_empty))]
     pub code: String,
+    #[garde(custom(crate::validation::trimmed_non_empty))]
     pub state: String,
 }
 

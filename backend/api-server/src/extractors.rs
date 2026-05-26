@@ -3,23 +3,13 @@ use axum::{
     extract::{FromRequest, FromRequestParts, Path, Request},
     http::{Method, header, request::Parts},
 };
+use garde::Validate;
 use secrecy::ExposeSecret;
 use serde::de::DeserializeOwned;
 
 use agentics_domain::error::ServiceError;
 use agentics_domain::models::ErrorDetail;
-use agentics_domain::models::auth::{
-    AdminLoginRequest, GithubOauthCallbackRequest, GithubOauthLoginRequest,
-};
-use agentics_domain::models::challenge_creation::{
-    CreateChallengeDraftRequest, ReviewChallengeDraftRequest, UploadChallengePrivateAssetRequest,
-    ValidateChallengeDraftRequest,
-};
 use agentics_domain::models::ids::{AgentId, AgentTokenId, ChallengeDraftId, SolutionSubmissionId};
-use agentics_domain::models::request::{
-    CreateChallengeShortlistRevisionRequest, CreatePioneerCodeRequest,
-    CreateSolutionSubmissionRequest, RegisterAgentRequest, SetChallengeMoltbookDiscussionRequest,
-};
 use agentics_persistence::{AuthenticatedAdminSession, AuthenticatedCreatorSession, Repositories};
 use agentics_services::auth;
 
@@ -367,128 +357,31 @@ fn bad_request(message: &str) -> ApiError {
     ServiceError::bad_request(message).into()
 }
 
-/// Validates that a string request field has visible, non-whitespace content.
-fn require_non_empty(value: &str, field: &str) -> std::result::Result<(), ServiceError> {
-    if !value.trim().is_empty() {
-        return Ok(());
-    }
-    Err(field_validation_error(
-        field,
-        format!("{field} must not be empty"),
-        "must not be empty",
-    ))
-}
-
-/// Builds a request-validation error with one structured field detail.
-fn field_validation_error(
-    field: &str,
-    message: impl Into<String>,
-    detail_message: impl Into<String>,
-) -> ServiceError {
-    ServiceError::validation_failed(
-        message,
-        vec![ErrorDetail {
-            field: Some(field.to_string()),
-            message: detail_message.into(),
-        }],
-    )
-}
-
-impl ValidateRequest for RegisterAgentRequest {
-    /// Ensures agent registration provides a display name.
+impl<T> ValidateRequest for T
+where
+    T: Validate<Context = ()>,
+{
+    /// Runs derived `garde` request validators and maps them into the API error envelope.
     fn validate(&self) -> std::result::Result<(), ServiceError> {
-        require_non_empty(&self.display_name, "display_name")
+        Validate::validate(self).map_err(garde_report_to_service_error)
     }
 }
 
-impl ValidateRequest for AdminLoginRequest {
-    /// Defers empty credential handling to the login handler so failures stay unauthorized.
-    fn validate(&self) -> std::result::Result<(), ServiceError> {
-        Ok(())
-    }
-}
-
-impl ValidateRequest for CreatePioneerCodeRequest {
-    /// Defers pioneer-code semantics to the handler, which needs runtime config.
-    fn validate(&self) -> std::result::Result<(), ServiceError> {
-        Ok(())
-    }
-}
-
-impl ValidateRequest for CreateChallengeDraftRequest {
-    /// Ensures GitHub draft metadata has positive numeric identifiers.
-    fn validate(&self) -> std::result::Result<(), ServiceError> {
-        if self.pr_author_github_user_id <= 0 {
-            return Err(field_validation_error(
-                "pr_author_github_user_id",
-                "pr_author_github_user_id must be greater than zero",
-                "must be greater than zero",
-            ));
-        }
-        Ok(())
-    }
-}
-
-impl ValidateRequest for GithubOauthLoginRequest {
-    /// Defers pioneer-code semantics to the handler, which needs runtime config.
-    fn validate(&self) -> std::result::Result<(), ServiceError> {
-        Ok(())
-    }
-}
-
-impl ValidateRequest for GithubOauthCallbackRequest {
-    /// Ensures the browser returned both OAuth values before backend exchange.
-    fn validate(&self) -> std::result::Result<(), ServiceError> {
-        require_non_empty(&self.code, "code")?;
-        require_non_empty(&self.state, "state")
-    }
-}
-
-impl ValidateRequest for UploadChallengePrivateAssetRequest {
-    /// Ensures private asset uploads contain an encoded ZIP payload.
-    fn validate(&self) -> std::result::Result<(), ServiceError> {
-        require_non_empty(&self.asset_base64, "asset_base64")
-    }
-}
-
-impl ValidateRequest for ValidateChallengeDraftRequest {
-    /// Ensures draft validation references a local checkout path.
-    fn validate(&self) -> std::result::Result<(), ServiceError> {
-        require_non_empty(&self.repository_path, "repository_path")
-    }
-}
-
-impl ValidateRequest for ReviewChallengeDraftRequest {
-    /// Accepts review decisions because serde has already validated the enum payload.
-    fn validate(&self) -> std::result::Result<(), ServiceError> {
-        Ok(())
-    }
-}
-
-impl ValidateRequest for CreateSolutionSubmissionRequest {
-    /// Ensures solution submissions contain an encoded artifact payload.
-    fn validate(&self) -> std::result::Result<(), ServiceError> {
-        require_non_empty(&self.artifact_base64, "artifact_base64")
-    }
-}
-
-impl ValidateRequest for CreateChallengeShortlistRevisionRequest {
-    /// Ensures shortlist updates add at least one agent id.
-    fn validate(&self) -> std::result::Result<(), ServiceError> {
-        if self.agent_ids_to_add.is_empty() {
-            return Err(field_validation_error(
-                "agent_ids_to_add",
-                "agent_ids_to_add must contain at least one agent id",
-                "must contain at least one agent id",
-            ));
-        }
-        Ok(())
-    }
-}
-
-impl ValidateRequest for SetChallengeMoltbookDiscussionRequest {
-    /// URL syntax is validated by the typed request field during deserialization.
-    fn validate(&self) -> std::result::Result<(), ServiceError> {
-        Ok(())
-    }
+fn garde_report_to_service_error(report: garde::Report) -> ServiceError {
+    let details = report
+        .into_inner()
+        .into_iter()
+        .map(|(path, error)| ErrorDetail {
+            field: (!path.is_empty()).then(|| path.to_string()),
+            message: error.to_string(),
+        })
+        .collect::<Vec<_>>();
+    let message = details
+        .first()
+        .map(|detail| match &detail.field {
+            Some(field) => format!("{field}: {}", detail.message),
+            None => detail.message.clone(),
+        })
+        .unwrap_or_else(|| "request validation failed".to_string());
+    ServiceError::validation_failed(message, details)
 }
