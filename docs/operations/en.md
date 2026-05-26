@@ -315,6 +315,11 @@ Minimum log retention for MVP rehearsal:
 
 3. Check API logs for config validation failures, especially default admin credentials on non-loopback binds.
 
+If logs show a SQLx migration version or checksum mismatch, the database was
+created with an older pre-MVP migration history. Recreate the disposable dev or
+test database, or restore production rehearsal Postgres from a snapshot taken
+for the same code revision; do not edit `_sqlx_migrations` manually.
+
 ### Worker Heartbeat Is Missing
 
 1. Start or restart the worker.
@@ -429,4 +434,6 @@ Back up together:
 - Deployed binary/build identifiers.
 - Published challenge repo commit SHAs and submodule revision.
 
-Restore by stopping API and worker, restoring database and storage from the same snapshot, then starting API, worker, and web.
+Restore by stopping API and worker, restoring database and storage from the
+same snapshot, then starting API, worker, and web. Agentics does not maintain
+down migrations; schema rollback is snapshot-based.

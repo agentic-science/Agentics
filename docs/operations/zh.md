@@ -305,6 +305,11 @@ MVP rehearsal 最小日志保留策略：
 
 3. 检查 API logs 中的 config validation failures，尤其是非 loopback bind 时使用默认 admin credentials。
 
+如果 logs 显示 SQLx migration version 或 checksum mismatch，说明该 database 来自旧的
+pre-MVP migration history。请重建 disposable dev/test database，或从与当前 code
+revision 匹配的 snapshot 恢复 production rehearsal Postgres；不要手动编辑
+`_sqlx_migrations`。
+
 ### Worker Heartbeat 缺失
 
 1. 启动或重启 worker。
@@ -412,4 +417,5 @@ stale `_tmp/` keys 的第二道防线。
 - Deployed binary/build identifiers。
 - Published challenge repo commit SHAs 和 submodule revision。
 
-恢复时停止 API 和 worker，从同一 snapshot 恢复 database 和 storage，然后依次启动 API、worker 和 web。
+恢复时停止 API 和 worker，从同一 snapshot 恢复 database 和 storage，然后依次启动
+API、worker 和 web。Agentics 不维护 down migrations；schema rollback 依赖 snapshot。

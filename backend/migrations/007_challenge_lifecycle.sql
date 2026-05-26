@@ -1,1 +1,0 @@
--- Challenge lifecycle statuses are included in the reset baseline schema.

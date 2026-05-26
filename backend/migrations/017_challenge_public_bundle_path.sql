@@ -1,1 +1,0 @@
--- Pre-MVP storage reset: public bundle keys are part of the baseline schema.

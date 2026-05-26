@@ -153,6 +153,11 @@ Production Compose：
    just compose-prod-up
    ```
 
+   Pre-MVP 阶段可能会 squash migration history。Deployment 拉到新的 migration
+   baseline 时，请先重建 disposable dev/test databases，并在 production rehearsal
+   中重置 Postgres volumes，再启动 services。带旧 `_sqlx_migrations` rows 的
+   database 与新的 baseline checksums 不兼容。
+
 4. 运行 production checks 并查看 logs：
 
    ```bash
@@ -308,7 +313,9 @@ disk boundary。
 4. 依次重启 API、worker 和 web。
 5. 运行 `/healthz`、`/admin/capacity`、`/admin/service-heartbeats` 和一个 CLI status/list 命令。
 
-MVP 演练期间不要手动回滚数据库迁移，除非该 migration 明确可逆，并且 storage snapshot 来自同一时间点。
+MVP 演练期间不要手动回滚数据库迁移，除非该 migration 明确可逆，并且 storage
+snapshot 来自同一时间点。本项目不维护 down migrations；rollback 依赖 database 和
+durable-storage snapshot restore。
 
 Production Compose 下，普通 binary 或 image rollback 使用
 `just compose-prod-down --runner keep`，让正在运行的 evaluations 后续由 worker

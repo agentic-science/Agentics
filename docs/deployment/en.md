@@ -161,6 +161,12 @@ For production Compose:
    just compose-prod-up
    ```
 
+   Pre-MVP migration history may be squashed. When a deployment picks up a new
+   migration baseline, recreate disposable dev/test databases and reset
+   production-rehearsal Postgres volumes before starting services. Existing
+   databases with old `_sqlx_migrations` rows are incompatible with the new
+   baseline checksums.
+
 4. Run production checks and inspect logs:
 
    ```bash
@@ -329,7 +335,10 @@ The safe rollback path is:
 4. Restart API, then worker, then web.
 5. Run `/healthz`, `/admin/capacity`, `/admin/service-heartbeats`, and one CLI status/list command.
 
-Do not roll back database migrations by hand during MVP rehearsals unless the migration is explicitly reversible and the storage snapshot is from the same point in time.
+Do not roll back database migrations by hand during MVP rehearsals unless the
+migration is explicitly reversible and the storage snapshot is from the same
+point in time. The project does not maintain down migrations; rollback is a
+database and durable-storage snapshot restore.
 
 For production Compose, use `just compose-prod-down --runner keep` for ordinary
 binary or image rollback when running evaluations can be allowed to reconcile

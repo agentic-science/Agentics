@@ -69,6 +69,12 @@ volumes. It does not isolate runner containers created through the host Docker
 socket, so runner cleanup and reconciliation depend on
 `AGENTICS_RUNNER_NAMESPACE`.
 
+The project is still pre-MVP, so database migration history can be squashed
+when the team intentionally resets the baseline schema. After a migration
+history reset, recreate local dev and test databases or Compose Postgres
+volumes before running migrations again; old `_sqlx_migrations` rows will not
+match the new baseline checksums.
+
 By default, the dev API and web ports bind to `127.0.0.1`. To inspect the
 frontend from another machine through Tailscale or a trusted LAN, bind only to
 that interface and allow the hostname used by the browser:
@@ -178,6 +184,10 @@ Run checks before committing code changes:
 cargo fmt --all
 DATABASE_URL="$AGENTICS_DATABASE_URL" cargo test --workspace
 ```
+
+If SQLx reports a migration version or checksum mismatch, the local database
+was created from an older pre-MVP migration history. Drop and recreate that
+disposable database instead of editing `_sqlx_migrations` by hand.
 
 For frontend changes:
 
