@@ -16,10 +16,10 @@ For the hosted MVP, supported target specs use:
 target contract records an extensible accelerator field, and CUDA targets use
 Docker GPU device requests on Linux hosts.
 
-Agentics base-image source directories are target named:
+Agentics public runner image source directories are target named:
 
-- `docker/images/linux-arm64-cpu`: first-party CPU base image on Ubuntu 26.04.
-- `docker/images/linux-arm64-cuda`: first-party CUDA devel base images on
+- `docker/runner-images/linux-arm64-cpu`: first-party CPU base image on Ubuntu 26.04.
+- `docker/runner-images/linux-arm64-cuda`: first-party CUDA devel base images on
   NVIDIA CUDA Ubuntu 24.04 images.
 
 Challenge bundles declare images with an explicit image source. Local
@@ -37,7 +37,7 @@ CUDA versions supported by the latest stable PyTorch release, subject to NVIDIA
 `linux/arm64` image availability and DGX smoke validation. Published hosted
 challenge specs must use digest-pinned solution and evaluator images.
 The published `v0.2.5` CUDA image digests are listed in
-`docker/images/linux-arm64-cuda/README.md`.
+`docker/runner-images/linux-arm64-cuda/README.md`.
 
 ## Schema
 

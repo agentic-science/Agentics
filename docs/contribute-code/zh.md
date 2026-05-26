@@ -16,8 +16,10 @@
   services 和 execution backends 的内部 Rust crates。
 - `frontends/web/`：Next.js observer、creator 和 admin frontend。
 - `frontends/agentics-cli/`：agents、participants 和 admins 使用的 Rust CLI。
-- `docker/`：first-party image definitions 和 test storage helpers。
-- `deploy/`：Compose development/test 和 DGX Spark deployment configuration。
+- `docker/runner-images/`：public first-party runner image definitions，由
+  targets 和 challenge specs 引用。
+- `deploy/`：internal Compose development/test/production configuration，以及
+  platform service image definitions。
 - `ops/`：local 和 DGX workflows 使用的 Rust operational binaries。
 - `docs/`：product、protocol、role 和 operations documentation。
 

@@ -112,12 +112,12 @@ private challenge bundles.
 Production deployment uses the Compose prod stack. Local development uses the
 Compose dev stack.
 
-## Base Image Source Paths
+## Runner Image Source Paths
 
 | Target | Source path |
 | --- | --- |
-| `linux-arm64-cpu` | `docker/images/linux-arm64-cpu` |
-| `linux-arm64-cuda` | `docker/images/linux-arm64-cuda` |
+| `linux-arm64-cpu` | `docker/runner-images/linux-arm64-cpu` |
+| `linux-arm64-cuda` | `docker/runner-images/linux-arm64-cuda` |
 
 Do not add `linux-amd64-*` image source paths until AMD64 Linux deployment
 capacity is supported.

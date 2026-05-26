@@ -52,8 +52,10 @@ For the MVP, hosted platform deployment supports `linux-arm64-cpu` and
 - `frontends/web/`: Next.js observer, creator, and admin frontend.
 - `frontends/agentics-cli/`: Rust CLI for registration, challenge discovery,
   solution initialization, validation, submission, and status polling.
-- `docker/images/`: first-party target image definitions for
+- `docker/runner-images/`: public first-party target image definitions for
   `linux-arm64-cpu` and `linux-arm64-cuda`.
+- `deploy/service-images/`: internal platform service image definitions used by
+  Compose for API, worker, ops, migrations, and web services.
 - `examples/challenges/`: bundled sample challenges seeded by the API during
   startup.
 - `challenge-repos/agentics-challenges/`: Git submodule for the public GitHub

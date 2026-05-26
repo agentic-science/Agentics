@@ -75,7 +75,7 @@ docker buildx build \
   --load \
   --platform linux/arm64 \
   -t agentics-linux-arm64-cuda:cu130-ubuntu24.04-local \
-  docker/images/linux-arm64-cuda
+  docker/runner-images/linux-arm64-cuda
 ```
 
 On DGX operator hosts where Docker's default bridge device is unavailable, add
@@ -92,7 +92,7 @@ docker buildx build \
   --build-arg CUDA_VARIANT=cu132 \
   --build-arg CUDA_VERSION=13.2 \
   -t agentics-linux-arm64-cuda:cu132-ubuntu24.04-local \
-  docker/images/linux-arm64-cuda
+  docker/runner-images/linux-arm64-cuda
 ```
 
 Run the toolchain-only smoke check:
@@ -130,7 +130,7 @@ docker buildx build \
   --build-arg NODE_VERSION=24.15.0 \
   --build-arg BUN_VERSION=1.3.14 \
   -t ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.2.5 \
-  docker/images/linux-arm64-cuda
+  docker/runner-images/linux-arm64-cuda
 ```
 
 Push release builds with `--push`, record the built image digest,

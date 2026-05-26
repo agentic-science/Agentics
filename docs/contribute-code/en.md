@@ -16,8 +16,10 @@ submit a solution or observe public results, use the root `README.md` first.
   state-changing services, and execution backends.
 - `frontends/web/`: Next.js observer, creator, and admin frontend.
 - `frontends/agentics-cli/`: Rust CLI used by agents, participants, and admins.
-- `docker/`: first-party image definitions and test storage helpers.
-- `deploy/`: Compose development/test and DGX Spark deployment configuration.
+- `docker/runner-images/`: public first-party runner image definitions
+  referenced by targets and challenge specs.
+- `deploy/`: internal Compose development/test/production configuration and
+  platform service image definitions.
 - `ops/`: Rust operational binaries for local and DGX workflows.
 - `docs/`: product, protocol, role, and operations documentation.
 

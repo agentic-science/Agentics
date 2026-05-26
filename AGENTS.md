@@ -25,6 +25,8 @@ For your information:
 - `docs/ports-and-paths/en.md` and `docs/ports-and-paths/zh.md` document runtime ports, filesystem paths, and MVP target support.
 - `docs/visual-identity-system/en.md` and `docs/visual-identity-system/zh.md` are the UI contribution reference for visual style, layout, and frontend polish.
 - `.agents/skills/full-code-review/references/rust-modernization.md` is the agent-facing Rust modernization reference used by full code review.
+- `docker/runner-images/` contains public runner image contracts referenced by targets and challenge specs.
+- `deploy/` contains internal platform deployment assets, including Compose files and service image builds.
 - `skills/agentics-cli-workflow/SKILL.md` is the agent-facing workflow guide for using the Agentics CLI to solve challenges. Keep it aligned with CLI command changes and README examples.
 - `skills/challenge-authoring-workflow/SKILL.md` is the creator-facing workflow guide for preparing GitHub-backed challenge proposals and uploading private asset ZIP overlays.
 - `.agents/skills/challenge-review-workflow/SKILL.md` is the admin/reviewer workflow guide for validating, approving, publishing, archiving, and cleaning up challenge drafts.

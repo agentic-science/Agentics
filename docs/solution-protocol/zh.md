@@ -95,8 +95,8 @@ paths，不能有 duplicate normalized paths，也不能包含 symlinks。Extrac
 create-new file writes，archive entries 不能覆盖 platform-owned files。
 
 First-party Agentics base images 记录在
-`../../docker/images/linux-arm64-cpu/README.md` 和
-`../../docker/images/linux-arm64-cuda/README.md`。Challenge specs 必须引用受支持的
+`../../docker/runner-images/linux-arm64-cpu/README.md` 和
+`../../docker/runner-images/linux-arm64-cuda/README.md`。Challenge specs 必须引用受支持的
 first-party Agentics images。当 deployment 要求 immutable image references 时，
 hosted active challenge specs 必须使用 `source: "registry"` 和已发布并
 digest-pinned 的 references。Local smoke specs 可以使用 `source: "local"` 和

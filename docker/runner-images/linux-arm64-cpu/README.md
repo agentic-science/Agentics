@@ -29,7 +29,7 @@ docker buildx build \
   --load \
   --platform "$(docker info --format '{{.OSType}}/{{.Architecture}}')" \
   -t agentics-linux-arm64-cpu:ubuntu26.04-local \
-  docker/images/linux-arm64-cpu
+  docker/runner-images/linux-arm64-cpu
 ```
 
 On DGX operator hosts where Docker's default bridge device is unavailable, add
@@ -51,7 +51,7 @@ docker buildx build \
   --platform linux/arm64 \
   --output type=oci,dest=/tmp/agentics-linux-arm64-cpu-ubuntu26.04.oci \
   -t ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0 \
-  docker/images/linux-arm64-cpu
+  docker/runner-images/linux-arm64-cpu
 ```
 
 ## Release Notes
@@ -67,7 +67,7 @@ docker buildx build \
   --build-arg NODE_VERSION=<concrete-node-version> \
   --build-arg BUN_VERSION=<concrete-bun-version> \
   -t ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0 \
-  docker/images/linux-arm64-cpu
+  docker/runner-images/linux-arm64-cpu
 ```
 
 Challenge specs may use `source: "local"` for the local tag above during

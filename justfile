@@ -234,7 +234,7 @@ compose-test-integration:
       mkdir -p "$runtime_root" "$tmpdir"; \
       if ! docker --host "$docker_host" image inspect "$runner_image" >/dev/null 2>&1; then \
         if ! docker image inspect "$runner_image" >/dev/null 2>&1; then \
-          docker build --platform linux/arm64 -t "$runner_image" docker/images/linux-arm64-cpu; \
+          docker build --platform linux/arm64 -t "$runner_image" docker/runner-images/linux-arm64-cpu; \
         fi; \
         image_tar="$runtime_root/runner-image.tar"; \
         docker image save -o "$image_tar" "$runner_image"; \

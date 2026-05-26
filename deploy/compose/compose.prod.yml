@@ -4,7 +4,7 @@ x-app-image: &app-image
   image: ${AGENTICS_APP_IMAGE:-agentics-app:prod-local}
   build:
     context: ../..
-    dockerfile: docker/app/Dockerfile
+    dockerfile: deploy/service-images/app/Dockerfile
 
 x-app-env: &app-env
   env_file:
@@ -155,7 +155,7 @@ services:
     image: ${AGENTICS_WEB_IMAGE:-agentics-web:prod-local}
     build:
       context: ../..
-      dockerfile: docker/web/Dockerfile
+      dockerfile: deploy/service-images/web/Dockerfile
     env_file:
       - ${AGENTICS_COMPOSE_PROD_SERVICE_ENV_FILE:-./env/prod.env.example}
     depends_on:
