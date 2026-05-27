@@ -150,7 +150,8 @@ agentics-cli
   CLI UX, API client, ZIP packaging, workspace generation, and local validation
   through contracts and runner interfaces. Output rendering is split by surface
   and submission/validation/report renderers live in a focused output module.
-  Admin draft command handling is split from submit/validate/report flows.
+  Submission and validation command workflows are also split from auth/config
+  and admin draft command handling.
 
 web
   Typed API clients, SWR-backed data hooks, generated schema consumption, and
@@ -163,7 +164,8 @@ ops
   Deployment, local smoke, DGX profile, and host-check tooling. Production
   Compose orchestration keeps runner-Docker daemon management and hosted-runner
   cleanup in focused modules instead of keeping all shutdown and cleanup logic in
-  one wrapper.
+  one wrapper. DGX profile checks keep mutating Docker canary probes separate
+  from read-only profile validation.
 ```
 
 The dependency direction should be:
@@ -333,8 +335,8 @@ challenge metadata updates, creator owner workflows, admin read aggregation,
 and public/owner projection and redaction surfaces. Recent cleanup also split
 grouped config structs, challenge domain models, submission/draft workflow
 modules, runner labels, storage backend options, public metric projection
-helpers, creator/admin web panels, CLI submission output, and production Compose
-runner cleanup.
+helpers, creator/admin web panels, CLI submission commands/output, production
+Compose runner cleanup, and DGX mutating profile probes.
 
 The remaining architecture work before MVP is mostly discipline, not new public
 behavior:

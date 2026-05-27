@@ -139,8 +139,9 @@ worker
 agentics-cli
   CLI UX、API client、ZIP packaging、workspace generation，以及通过 contracts
   和 runner interfaces 执行 local validation。Output rendering 按 surface 拆分，
-  submission/validation/report renderers 放在聚焦的 output module。Admin draft
-  command handling 也已经从 submit/validate/report flows 中拆出。
+  submission/validation/report renderers 放在聚焦的 output module。Submission 和
+  validation command workflows 也已经从 auth/config 与 admin draft command
+  handling 中拆出。
 
 web
   Typed API clients、SWR-backed data hooks、generated schema consumption，以及面向
@@ -151,7 +152,8 @@ web
 ops
   Deployment、local smoke、DGX profile 和 host-check tooling。Production Compose
   orchestration 将 runner-Docker daemon management 和 hosted-runner cleanup 放在
-  聚焦模块中，而不是把 shutdown 和 cleanup logic 都塞进一个 wrapper。
+  聚焦模块中，而不是把 shutdown 和 cleanup logic 都塞进一个 wrapper。DGX profile
+  checks 将 mutating Docker canary probes 和 read-only profile validation 分离。
 ```
 
 依赖方向应当是：
@@ -310,8 +312,8 @@ challenge draft lifecycle、Moltbook challenge metadata updates、creator owner
 workflows、admin read aggregation，以及 public/owner projection/redaction surfaces。
 最近的清理还拆分了 grouped config structs、challenge domain models、
 submission/draft workflow modules、runner labels、storage backend options、public
-metric projection helpers、creator/admin web panels、CLI submission output，以及
-production Compose runner cleanup。
+metric projection helpers、creator/admin web panels、CLI submission commands/output、
+production Compose runner cleanup，以及 DGX mutating profile probes。
 
 MVP 前剩余的架构工作主要是纪律要求，而不是新增 public behavior：
 
