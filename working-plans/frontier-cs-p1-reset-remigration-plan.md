@@ -244,6 +244,70 @@ affected challenge.
 - Affected challenge: migration-wide production setup and rehearsal restore,
   before individual challenge remigration.
 
+### 2026-05-28: Interactive Runner Treated Trusted Success As Participant Failure
+
+- Symptom: several `piped_stdio` official submissions produced a valid
+  trusted evaluator `result.json` locally, but production marked the submission
+  failed when the participant process stayed alive or exited nonzero after the
+  evaluator had already written the result.
+- Cause: the runner waited for both interactive containers as a pair and used
+  the participant exit code even after the trusted interactive-evaluator had
+  completed successfully. For Agentics interactive challenges, the evaluator is
+  the result owner; once it exits successfully, lingering participant shutdown
+  is cleanup, not scoring authority.
+- Fix: track participant and interactive-evaluator exits separately. When the
+  trusted evaluator exits with code 0, start the configured graceful shutdown
+  window for the participant, kill it if needed, and report participant exit 0
+  for the completed interactive outcome.
+- Verification: `cargo fmt --check`, `cargo test -p agentics-runner`, rebuilt
+  production images, and local official P1 harness checks for the previously
+  failing interactive sessions.
+- Affected challenge: all `piped_stdio` Frontier-CS remigrations with
+  participant sentinels or EOF-driven termination.
+
+### 2026-05-28: Testlib Interactive Adapters Wrote Replies To Stdin
+
+- Symptom: some remigrated Testlib interactive wrappers hung or failed official
+  runs even though the interactor source and session data were otherwise valid.
+- Cause: generated wrappers passed `/dev/stdin` as argv 2 to
+  `registerInteraction`. In Testlib interactive mode, argv 2 is opened as
+  `tout`, the stream used to write messages back to the participant, while
+  `ouf` reads participant messages from the process stdin. The correct
+  participant-facing stream is `/dev/stdout`.
+- Fix: replace the affected generated wrapper argument with `/dev/stdout`
+  across migrated Testlib interactive challenges, and re-smoke the P1 failures.
+- Verification: `python3 scripts/validate_challenges.py`; local official
+  `piped_stdio` sweep for the previously failing P1 sessions.
+- Affected challenge: migrated Frontier-CS Testlib interactive challenges.
+
+### 2026-05-28: Modulo Collision Source Interactor Exhausts Evaluator Memory
+
+- Symptom: `modulo-collision-size-frontier-cs-algorithmic-36` official local
+  smoke timed out on the source hidden bucket counts.
+- Cause: the copied Frontier-CS interactor allocated `vector<int>(n)` while the
+  official source cases use bucket counts in the hundreds of millions. The
+  protocol only needs per-query residue counts, whose size is bounded by the
+  submitted query length.
+- Fix: keep the protocol and scoring semantics but use sparse per-query residue
+  counts in the Agentics evaluator. The smoke baseline was also bounded so it
+  proves public validation without spending excessive official round trips.
+- Verification: public local smoke scored 100, and official local smoke
+  completed with a bounded zero-score result instead of timing out.
+- Affected challenge: `modulo-collision-size-frontier-cs-algorithmic-36`.
+
+### 2026-05-28: Ink Pen Smoke Solution Exited After First Source File
+
+- Symptom: `ink-pen-selection-frontier-cs-algorithmic-68` official local smoke
+  produced a partial score but `status: failed` because the second source file
+  saw EOF from the participant.
+- Cause: the test solution handled one interactor input file and then exited,
+  while the Agentics official session chains multiple Frontier-CS source files
+  in one participant process.
+- Fix: make the smoke solution loop over repeated `t` headers until EOF.
+- Verification: public local smoke scored 100, and official local smoke
+  completed with `status: passed`, score `34.132534`, and zero protocol errors.
+- Affected challenge: `ink-pen-selection-frontier-cs-algorithmic-68`.
+
 ## Assumptions
 
 - Scope is P1 only; P2 issues remain for a separate targeted-fix/private-bundle

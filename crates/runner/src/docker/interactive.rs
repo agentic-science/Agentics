@@ -6,7 +6,7 @@ use bollard::container::LogOutput;
 use bollard::query_parameters::{AttachContainerOptionsBuilder, StartContainerOptions};
 use futures::{Stream, StreamExt};
 use tokio::io::{AsyncWrite, AsyncWriteExt};
-use tokio::time::timeout;
+use tokio::time::{Instant as TokioInstant, sleep_until, timeout};
 
 use super::{
     ContainerOutcome, InteractiveSessionOutcome, PLATFORM_CONTAINER_LOG_LIMIT_BYTES,
@@ -66,31 +66,25 @@ pub(super) async fn run_attached_interactive_pair(
         PLATFORM_CONTAINER_LOG_LIMIT_BYTES,
         kill_switch,
     );
-    let wait_pair = async {
-        let (participant, interactive_evaluator) = tokio::join!(
-            wait_container_exit(docker, participant_id),
-            wait_container_exit(docker, interactive_evaluator_id)
-        );
-        Ok::<_, ServiceError>((participant?, interactive_evaluator?))
-    };
+    let participant_wait = wait_container_exit(docker, participant_id);
+    let interactive_evaluator_wait = wait_container_exit(docker, interactive_evaluator_id);
     let session_timeout = tokio::time::sleep(Duration::from_secs(timeout_sec));
     tokio::pin!(participant_pump);
     tokio::pin!(interactive_evaluator_pump);
-    tokio::pin!(wait_pair);
+    tokio::pin!(participant_wait);
+    tokio::pin!(interactive_evaluator_wait);
     tokio::pin!(session_timeout);
 
     let mut participant_pump_state = AttachedPumpState::Pending;
     let mut interactive_evaluator_pump_state = AttachedPumpState::Pending;
-    let mut exits = None;
-    let mut wait_pending = true;
+    let mut participant_exit = None;
+    let mut interactive_evaluator_exit = None;
+    let mut participant_grace_deadline = None;
     let mut terminal = None;
 
     loop {
         if terminal.is_some()
-            || exits.is_some()
-            || (!wait_pending
-                && !participant_pump_state.is_pending()
-                && !interactive_evaluator_pump_state.is_pending())
+            || (participant_exit.is_some() && interactive_evaluator_exit.is_some())
         {
             break;
         }
@@ -114,12 +108,44 @@ pub(super) async fn run_attached_interactive_pair(
                     }
                 }
             }
-            result = &mut wait_pair, if wait_pending => {
-                wait_pending = false;
+            result = &mut participant_wait, if participant_exit.is_none() => {
                 match result {
-                    Ok(pair) => exits = Some(pair),
+                    Ok(exit_code) => participant_exit = Some(exit_code),
                     Err(error) => terminal = Some(InteractiveTerminal::Error(error)),
                 }
+            }
+            result = &mut interactive_evaluator_wait, if interactive_evaluator_exit.is_none() => {
+                match result {
+                    Ok(exit_code) => {
+                        interactive_evaluator_exit = Some(exit_code);
+                        if exit_code == 0 && participant_exit.is_none() {
+                            participant_grace_deadline =
+                                match TokioInstant::now()
+                                    .checked_add(Duration::from_secs(shutdown_grace_secs))
+                                {
+                                    Some(deadline) => Some(deadline),
+                                    None => {
+                                        terminal =
+                                            Some(InteractiveTerminal::Error(ServiceError::Docker(
+                                                "interactive participant shutdown grace duration overflowed"
+                                                    .to_string(),
+                                            )));
+                                        None
+                                    }
+                                };
+                        }
+                    }
+                    Err(error) => terminal = Some(InteractiveTerminal::Error(error)),
+                }
+            }
+            () = async {
+                match participant_grace_deadline {
+                    Some(deadline) => sleep_until(deadline).await,
+                    None => std::future::pending::<()>().await,
+                }
+            }, if participant_grace_deadline.is_some() && participant_exit.is_none() => {
+                kill_container_if_running(docker, participant_id).await?;
+                participant_exit = Some(0);
             }
             () = &mut session_timeout => {
                 terminal = Some(InteractiveTerminal::Timeout);
@@ -183,9 +209,15 @@ pub(super) async fn run_attached_interactive_pair(
         None => {}
     }
 
-    let (participant_exit, interactive_evaluator_exit) = exits.ok_or_else(|| {
-        ServiceError::Docker("interactive containers exited without status".to_string())
+    let interactive_evaluator_exit = interactive_evaluator_exit.ok_or_else(|| {
+        ServiceError::Docker("interactive-evaluator container exited without status".to_string())
     })?;
+    let participant_exit = participant_exit.unwrap_or(0);
+    let effective_participant_exit = if interactive_evaluator_exit == 0 {
+        0
+    } else {
+        participant_exit
+    };
     let (participant_pump, interactive_evaluator_pump) = finish_attached_pump_pair(
         participant_pump_state,
         participant_pump.as_mut(),
@@ -198,7 +230,7 @@ pub(super) async fn run_attached_interactive_pair(
     let wall_time_ms = duration_millis(started.elapsed());
     Ok(InteractiveSessionOutcome {
         participant: ContainerOutcome {
-            exit_code: participant_exit,
+            exit_code: effective_participant_exit,
             logs: participant_pump.logs,
             timed_out: false,
             wall_time_ms,
