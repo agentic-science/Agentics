@@ -36,7 +36,7 @@ async fn main() -> anyhow::Result<()> {
     config.validate_api_security()?;
     info!(
         "starting api server on {}:{}",
-        config.api_host, config.api_port
+        config.api_web.api_host, config.api_web.api_port
     );
 
     let db = create_pool(&config, 10)
@@ -47,10 +47,17 @@ async fn main() -> anyhow::Result<()> {
         .context("build storage backend")?;
 
     // Seed challenges from challenges_root
-    if tokio::fs::metadata(&config.challenges_root).await.is_ok() {
+    if tokio::fs::metadata(&config.storage.challenges_root)
+        .await
+        .is_ok()
+    {
         Repositories::new(&db)
             .maintenance()
-            .ensure_challenges_seeded_from_root(&config, storage.as_ref(), &config.challenges_root)
+            .ensure_challenges_seeded_from_root(
+                &config,
+                storage.as_ref(),
+                &config.storage.challenges_root,
+            )
             .await
             .context("seed challenges from configured root")?;
     }
@@ -64,14 +71,17 @@ async fn main() -> anyhow::Result<()> {
 
     let app = router::router(&config).with_state(state);
 
-    let listener = TcpListener::bind(format!("{}:{}", config.api_host, config.api_port))
-        .await
-        .with_context(|| {
-            format!(
-                "bind API listener on {}:{}",
-                config.api_host, config.api_port
-            )
-        })?;
+    let listener = TcpListener::bind(format!(
+        "{}:{}",
+        config.api_web.api_host, config.api_web.api_port
+    ))
+    .await
+    .with_context(|| {
+        format!(
+            "bind API listener on {}:{}",
+            config.api_web.api_host, config.api_web.api_port
+        )
+    })?;
     info!("api server listening on {}", listener.local_addr()?);
 
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;

@@ -135,7 +135,7 @@ impl FromRequestParts<AppState> for AdminAuth {
             .and_then(|h| h.to_str().ok());
 
         if let Some(parsed) = auth::parse_basic_auth(auth_header) {
-            if parsed.username == state.config.admin_username
+            if parsed.username == state.config.auth.admin_username
                 && state
                     .config
                     .admin_password_matches(parsed.password.expose_secret())
@@ -160,7 +160,7 @@ impl FromRequestParts<AppState> for AdminAuth {
                 .headers
                 .get(header::COOKIE)
                 .and_then(|h| h.to_str().ok()),
-            &state.config.web_session_cookie_name,
+            &state.config.api_web.web_session_cookie_name,
         )
         .ok_or_else(|| unauthorized("需要有效的 admin session 或 basic auth"))?;
 
@@ -203,7 +203,7 @@ impl FromRequestParts<AppState> for CreatorAuth {
                 .headers
                 .get(header::COOKIE)
                 .and_then(|h| h.to_str().ok()),
-            &state.config.web_session_cookie_name,
+            &state.config.api_web.web_session_cookie_name,
         )
         .ok_or_else(|| unauthorized("需要有效的 creator session"))?;
 
@@ -220,7 +220,7 @@ impl FromRequestParts<AppState> for CreatorAuth {
                 .headers
                 .get(header::COOKIE)
                 .and_then(|h| h.to_str().ok()),
-            &state.config.web_csrf_cookie_name,
+            &state.config.api_web.web_csrf_cookie_name,
         );
 
         Ok(CreatorAuth {

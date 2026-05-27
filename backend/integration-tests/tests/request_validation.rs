@@ -96,7 +96,7 @@ async fn admin_basic_mutation_requires_automation_header(pool: sqlx::PgPool) {
     let app = helpers::spawn_app_with_config(pool, config.clone()).await;
     let client = reqwest::Client::new();
     let admin_auth = basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
 
@@ -718,7 +718,7 @@ async fn admin_direct_publish_is_disabled(pool: sqlx::PgPool) {
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let admin_auth = basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
 

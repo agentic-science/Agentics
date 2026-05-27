@@ -625,6 +625,7 @@ fn current_unix_timestamp_secs() -> i64 {
 /// Connect to Docker using `AGENTICS_DOCKER_HOST` when configured, otherwise the local default.
 pub fn connect_docker(config: &Config) -> Result<Docker> {
     match config
+        .runner
         .docker_host
         .as_deref()
         .map(str::trim)

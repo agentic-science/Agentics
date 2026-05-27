@@ -167,7 +167,7 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
     let admin_auth = basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
     let draft = create_draft(&client, &app, &creator, 9, manifest_json()).await;
@@ -302,7 +302,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
     let admin_auth = basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
 
@@ -618,7 +618,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
     let admin_auth = basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
 
@@ -721,7 +721,7 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
     let admin_auth = basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
 
@@ -850,7 +850,7 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
     let admin_auth = basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
 
@@ -920,7 +920,7 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
         .put(
             &existing_statement_key,
             b"# Existing\n",
-            StorageWriteIntent::new("challenge statement", config.storage_max_statement_bytes),
+            StorageWriteIntent::new("challenge statement", config.storage.max_statement_bytes),
         )
         .await
         .expect("existing statement should store");
@@ -1099,7 +1099,7 @@ async fn materialize_bundle_key(
             &archive,
             StorageWriteIntent::new(
                 "challenge bundle archive",
-                config.storage_max_bundle_archive_bytes,
+                config.storage.max_bundle_archive_bytes,
             ),
         )
         .await

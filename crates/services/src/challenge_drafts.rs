@@ -78,7 +78,7 @@ pub async fn create_challenge_draft(
             &persistence::CreateChallengeDraftInput {
                 draft_id: draft_id.clone(),
                 creator_agent_id: creator.agent_id.clone(),
-                max_active_drafts: i64::from(config.max_active_challenge_drafts_per_agent),
+                max_active_drafts: i64::from(config.quotas.max_active_challenge_drafts_per_agent),
                 creator_github_user_id: creator.github_user_id,
                 creator_github_login: creator.github_login.clone(),
                 repo_url: body.repo_url,
@@ -180,10 +180,10 @@ pub async fn upload_challenge_private_asset(
     let asset_size_bytes = u64::try_from(asset_bytes.len()).map_err(|_| {
         ServiceError::BadRequest("private asset size exceeds supported range".to_string())
     })?;
-    if asset_size_bytes > config.challenge_private_asset_bytes_per_draft {
+    if asset_size_bytes > config.quotas.challenge_private_asset_bytes_per_draft {
         return Err(ServiceError::BadRequest(format!(
             "private asset must be at most {} bytes",
-            config.challenge_private_asset_bytes_per_draft
+            config.quotas.challenge_private_asset_bytes_per_draft
         )));
     }
     let asset_size_bytes_i64 = i64::try_from(asset_size_bytes).map_err(|_| {
@@ -192,7 +192,7 @@ pub async fn upload_challenge_private_asset(
     validate_private_asset_zip_upload(
         &asset_bytes,
         body.asset_name.as_str(),
-        config.challenge_private_asset_bytes_per_draft,
+        config.quotas.challenge_private_asset_bytes_per_draft,
     )
     .await?;
     let sha256 = challenge_creation::sha256_digest(&asset_bytes);
@@ -222,9 +222,11 @@ pub async fn upload_challenge_private_asset(
                 temporary_storage_key: temporary_asset_key.clone(),
                 uploader_agent_id: creator_agent_id.clone(),
             },
-            config.challenge_private_asset_bytes_per_draft,
-            config.challenge_draft_validation_timeout_minutes,
-            config.challenge_private_asset_pending_timeout_minutes,
+            config.quotas.challenge_private_asset_bytes_per_draft,
+            config.quotas.challenge_draft_validation_timeout_minutes,
+            config
+                .quotas
+                .challenge_private_asset_pending_timeout_minutes,
         )
         .await
         .map_err(ServiceError::unique_violation_as_conflict)?;
@@ -235,7 +237,7 @@ pub async fn upload_challenge_private_asset(
             &asset_bytes,
             StorageWriteIntent::new(
                 "challenge private asset ZIP",
-                config.challenge_private_asset_bytes_per_draft,
+                config.quotas.challenge_private_asset_bytes_per_draft,
             ),
         )
         .await
@@ -368,7 +370,7 @@ pub async fn validate_challenge_draft(
     ) {
         return Err(ServiceError::Conflict);
     }
-    let validation_limit = i64::from(config.challenge_draft_validations_per_day);
+    let validation_limit = i64::from(config.quotas.challenge_draft_validations_per_day);
     let repository_path = RepositoryCheckoutPath::from_existing_dir(&body.repository_path)?;
     let validation_record_id = ChallengeDraftValidationRecordId::generate();
     repos
@@ -382,7 +384,7 @@ pub async fn validate_challenge_draft(
             },
             CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS,
             validation_limit,
-            config.challenge_draft_validation_timeout_minutes,
+            config.quotas.challenge_draft_validation_timeout_minutes,
         )
         .await?;
     let validation = validate_draft_repository(storage, config, &draft, &repository_path).await;
@@ -494,11 +496,13 @@ pub async fn cleanup_challenge_drafts(
     let repos = Repositories::new(pool);
     let abandoned = repos
         .challenge_drafts()
-        .abandon_stale(config.challenge_draft_ttl_days)
+        .abandon_stale(config.quotas.challenge_draft_ttl_days)
         .await?;
     let purge_candidates = repos
         .challenge_drafts()
-        .list_unpublished_private_assets_for_purge(config.unpublished_challenge_asset_grace_days)
+        .list_unpublished_private_assets_for_purge(
+            config.quotas.unpublished_challenge_asset_grace_days,
+        )
         .await?;
 
     let mut purged = 0_i64;
@@ -542,7 +546,8 @@ pub async fn cleanup_challenge_drafts(
 
 fn temporary_storage_cleanup_cutoff(config: &Config) -> Result<SystemTime> {
     let seconds = config
-        .storage_tmp_object_grace_hours
+        .storage
+        .tmp_object_grace_hours
         .checked_mul(60 * 60)
         .ok_or_else(|| {
             ServiceError::Internal("temporary storage grace window overflow".to_string())
@@ -801,7 +806,7 @@ pub(super) async fn assemble_runtime_bundle(
                 &asset.storage_key,
                 StorageWriteIntent::new(
                     "challenge private asset ZIP",
-                    config.challenge_private_asset_bytes_per_draft,
+                    config.quotas.challenge_private_asset_bytes_per_draft,
                 ),
             )
             .await?;
@@ -809,7 +814,7 @@ pub(super) async fn assemble_runtime_bundle(
             &bytes,
             runtime_bundle_path,
             &asset.asset_name,
-            config.challenge_private_asset_bytes_per_draft,
+            config.quotas.challenge_private_asset_bytes_per_draft,
         )
         .await?;
     }

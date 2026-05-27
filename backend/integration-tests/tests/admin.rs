@@ -15,7 +15,7 @@ async fn admin_read_models_power_operator_console(pool: sqlx::PgPool) {
     let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let auth = helpers::basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
     let client = reqwest::Client::new();
@@ -113,7 +113,7 @@ async fn admin_manages_challenge_moltbook_discussion_anchor(pool: sqlx::PgPool) 
     let config = test_config(storage.path(), &examples_challenges_root());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let auth = helpers::basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
     let client = reqwest::Client::new();
@@ -208,7 +208,7 @@ async fn direct_challenge_creation_and_publish_routes_are_disabled(pool: sqlx::P
         .header(
             "Authorization",
             helpers::basic_auth_header(
-                &config.admin_username,
+                &config.auth.admin_username,
                 config.expose_admin_password_for_http_basic(),
             ),
         )
@@ -229,7 +229,7 @@ async fn direct_challenge_creation_and_publish_routes_are_disabled(pool: sqlx::P
         .header(
             "Authorization",
             helpers::basic_auth_header(
-                &config.admin_username,
+                &config.auth.admin_username,
                 config.expose_admin_password_for_http_basic(),
             ),
         )
@@ -269,7 +269,7 @@ async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
     let login_response = client
         .post(api_url(&app, "/api/auth/admin/login"))
         .json(&serde_json::json!({
-            "username": config.admin_username,
+            "username": config.auth.admin_username,
             "password": config.expose_admin_password_for_http_basic()
         }))
         .send()
@@ -286,7 +286,7 @@ async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
         .collect::<Vec<_>>();
     assert!(
         set_cookies.iter().any(|value| {
-            value.starts_with(&format!("{}=", config.web_session_cookie_name))
+            value.starts_with(&format!("{}=", config.api_web.web_session_cookie_name))
                 && value.contains("HttpOnly")
         }),
         "admin login should set an HttpOnly session cookie"
@@ -295,7 +295,7 @@ async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
         .iter()
         .find_map(|value| {
             value
-                .strip_prefix(&format!("{}=", config.web_session_cookie_name))
+                .strip_prefix(&format!("{}=", config.api_web.web_session_cookie_name))
                 .map(|_| value.split(';').next().expect("cookie pair").to_string())
         })
         .expect("admin login should set the session cookie");
@@ -352,7 +352,7 @@ async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
             .iter()
             .filter_map(|value| value.to_str().ok())
             .any(|value| {
-                value.starts_with(&format!("{}=", config.web_session_cookie_name))
+                value.starts_with(&format!("{}=", config.api_web.web_session_cookie_name))
                     && value.contains("Max-Age=0")
             }),
         "admin logout should expire the session cookie"
@@ -435,11 +435,11 @@ async fn failed_admin_authentication_is_throttled(pool: sqlx::PgPool) {
 async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
-    config.max_active_official_jobs = 1;
-    config.official_runs_per_agent_challenge_day = 1;
+    config.quotas.max_active_official_jobs = 1;
+    config.quotas.official_runs_per_agent_challenge_day = 1;
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let admin_auth = helpers::basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
     let client = reqwest::Client::new();

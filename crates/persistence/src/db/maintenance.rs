@@ -279,7 +279,7 @@ async fn put_bundle_archive_if_missing(
         &archive_path,
         StorageWriteIntent::new(
             "challenge bundle archive",
-            config.storage_max_bundle_archive_bytes,
+            config.storage.max_bundle_archive_bytes,
         ),
     )
     .await?;
@@ -289,7 +289,7 @@ async fn put_bundle_archive_if_missing(
             &archive_path,
             StorageWriteIntent::new(
                 "challenge bundle archive",
-                config.storage_max_bundle_archive_bytes,
+                config.storage.max_bundle_archive_bytes,
             ),
         )
         .await;
@@ -320,7 +320,7 @@ async fn put_statement_if_missing(
         .put(
             key,
             &bytes,
-            StorageWriteIntent::new("challenge statement", config.storage_max_statement_bytes),
+            StorageWriteIntent::new("challenge statement", config.storage.max_statement_bytes),
         )
         .await
     {

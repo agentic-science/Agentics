@@ -125,7 +125,7 @@ async fn private_asset_upload_rejects_active_validation_and_recovers_stale_claim
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let mut config = test_config(storage.path(), seeded_challenges.path());
-    config.challenge_draft_validation_timeout_minutes = 30;
+    config.quotas.challenge_draft_validation_timeout_minutes = 30;
     let app = spawn_app_with_config(pool.clone(), config).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
@@ -337,7 +337,7 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let config = test_config(storage.path(), seeded_challenges.path());
     let admin_auth = basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;

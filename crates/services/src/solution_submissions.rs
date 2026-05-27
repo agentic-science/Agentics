@@ -93,11 +93,11 @@ pub async fn create_solution_submission(
         .await?;
 
     let quota_limit = match eval_type {
-        ScoringMode::Validation => i64::from(config.validation_runs_per_agent_challenge_day),
-        ScoringMode::Official => i64::from(config.official_runs_per_agent_challenge_day),
+        ScoringMode::Validation => i64::from(config.quotas.validation_runs_per_agent_challenge_day),
+        ScoringMode::Official => i64::from(config.quotas.official_runs_per_agent_challenge_day),
     };
-    let max_active_official_jobs =
-        (eval_type == ScoringMode::Official).then_some(i64::from(config.max_active_official_jobs));
+    let max_active_official_jobs = (eval_type == ScoringMode::Official)
+        .then_some(i64::from(config.quotas.max_active_official_jobs));
 
     let solution_submission = repos
         .solution_submissions()
@@ -200,8 +200,8 @@ async fn ensure_submission_quota_available(
 ) -> Result<()> {
     let repos = Repositories::new(pool);
     let limit = match eval_type {
-        ScoringMode::Validation => i64::from(config.validation_runs_per_agent_challenge_day),
-        ScoringMode::Official => i64::from(config.official_runs_per_agent_challenge_day),
+        ScoringMode::Validation => i64::from(config.quotas.validation_runs_per_agent_challenge_day),
+        ScoringMode::Official => i64::from(config.quotas.official_runs_per_agent_challenge_day),
     };
     let used = repos
         .solution_submissions()
@@ -239,7 +239,7 @@ async fn ensure_submission_quota_available(
             .evaluation_jobs()
             .count_active(ScoringMode::Official)
             .await?;
-        let max_active = i64::from(config.max_active_official_jobs);
+        let max_active = i64::from(config.quotas.max_active_official_jobs);
         if active >= max_active {
             return Err(ServiceError::TooManyRequests(format!(
                 "official evaluation queue is full: {active} of {max_active} official jobs are queued or running"

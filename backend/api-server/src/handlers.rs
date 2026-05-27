@@ -92,7 +92,7 @@ pub async fn register_agent(
     State(state): State<AppState>,
     ValidatedJson(body): ValidatedJson<RegisterAgentRequest>,
 ) -> Result<(StatusCode, Json<RegisterAgentResponse>)> {
-    let max_active_agents = i64::from(state.config.max_active_agents);
+    let max_active_agents = i64::from(state.config.quotas.max_active_agents);
 
     let token = auth::create_agent_token();
     let token_hash = auth::hash_agent_token(&token);

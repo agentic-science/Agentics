@@ -33,8 +33,8 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
     let (private_bundle, public_bundle) = write_cuda_smoke_bundles(bundles.path());
 
     let mut config = test_config(storage.path(), challenges.path());
-    config.worker_accelerators = WorkerAccelerators::Gpu;
-    config.worker_gpu_probe_image = Some(CUDA_IMAGE.to_string());
+    config.worker.accelerators = WorkerAccelerators::Gpu;
+    config.worker.gpu_probe_image = Some(CUDA_IMAGE.to_string());
 
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     publish_cuda_smoke_challenge(&pool, &config, &private_bundle, &public_bundle).await;
@@ -197,7 +197,8 @@ async fn publish_cuda_smoke_challenge(
     let statement_key = StorageKey::try_new("challenge-statements/cuda-smoke/manual.md")
         .expect("valid statement key");
     let private_archive = config
-        .storage_work_root
+        .storage
+        .work_root
         .as_ref()
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| std::env::temp_dir().join("agentics-storage-work"))
@@ -205,7 +206,7 @@ async fn publish_cuda_smoke_challenge(
     let public_archive = private_archive.with_file_name("cuda-public.tar");
     let bundle_archive_intent = StorageWriteIntent::new(
         "challenge bundle archive",
-        config.storage_max_bundle_archive_bytes,
+        config.storage.max_bundle_archive_bytes,
     );
     pack_directory_to_tar(private_bundle, &private_archive, bundle_archive_intent)
         .await
@@ -219,7 +220,7 @@ async fn publish_cuda_smoke_challenge(
             &private_archive,
             StorageWriteIntent::new(
                 "challenge bundle archive",
-                config.storage_max_bundle_archive_bytes,
+                config.storage.max_bundle_archive_bytes,
             ),
         )
         .await
@@ -230,7 +231,7 @@ async fn publish_cuda_smoke_challenge(
             &public_archive,
             StorageWriteIntent::new(
                 "challenge bundle archive",
-                config.storage_max_bundle_archive_bytes,
+                config.storage.max_bundle_archive_bytes,
             ),
         )
         .await
@@ -242,7 +243,7 @@ async fn publish_cuda_smoke_challenge(
         .put(
             &statement_key,
             &statement,
-            StorageWriteIntent::new("challenge statement", config.storage_max_statement_bytes),
+            StorageWriteIntent::new("challenge statement", config.storage.max_statement_bytes),
         )
         .await
         .expect("store statement");

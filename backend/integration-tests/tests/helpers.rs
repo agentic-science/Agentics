@@ -55,7 +55,7 @@ pub struct TestCreatorSession {
 /// Spawn the API server with environment-derived config.
 pub async fn spawn_app(pool: PgPool) -> TestApp {
     let mut config = Config::from_env().expect("failed to load config");
-    config.agent_registration_mode = AgentRegistrationMode::Public;
+    config.auth.agent_registration_mode = AgentRegistrationMode::Public;
     spawn_app_with_config(pool, config).await
 }
 
@@ -68,10 +68,14 @@ pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
     let storage = build_storage(&config)
         .await
         .expect("failed to initialize test storage");
-    if std::fs::exists(&config.challenges_root).expect("failed to inspect challenge root") {
+    if std::fs::exists(&config.storage.challenges_root).expect("failed to inspect challenge root") {
         agentics_persistence::Repositories::new(&pool)
             .maintenance()
-            .ensure_challenges_seeded_from_root(&config, storage.as_ref(), &config.challenges_root)
+            .ensure_challenges_seeded_from_root(
+                &config,
+                storage.as_ref(),
+                &config.storage.challenges_root,
+            )
             .await
             .expect("failed to seed challenges");
     }
@@ -115,101 +119,109 @@ pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
 
 /// Build an isolated config for integration tests.
 pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
-    Config {
-        database_url: SecretString::from(
-            "postgres://agentics:agentics@127.0.0.1:5432/agentics_test",
-        ),
-        api_host: "127.0.0.1".to_string(),
-        api_port: 0,
-        storage_root: storage_root.to_string_lossy().to_string(),
-        storage_backend: StorageBackend::S3,
-        storage_work_root: Some(storage_root.join("_work").to_string_lossy().to_string()),
-        s3_bucket: Some(env_or_default(ENV_AGENTICS_S3_BUCKET, DEFAULT_S3_BUCKET)),
-        s3_prefix: Some(test_s3_prefix()),
-        s3_region: env_or_default(ENV_AGENTICS_S3_REGION, DEFAULT_S3_REGION),
-        s3_endpoint_url: Some(test_s3_endpoint_url()),
-        s3_force_path_style: test_s3_force_path_style(),
-        storage_max_bundle_archive_bytes: 1024 * 1024 * 1024,
-        storage_max_statement_bytes: 1024 * 1024,
-        storage_max_json_artifact_bytes: 1024 * 1024,
-        storage_tmp_object_grace_hours: 24,
-        challenges_root: challenges_root.to_string_lossy().to_string(),
-        admin_username: "admin".to_string(),
-        admin_password: SecretString::from("secret"),
-        allow_insecure_default_admin_credentials: false,
-        cors_allowed_origins: "http://127.0.0.1:3001,http://localhost:3001".to_string(),
-        moltbook_submolt_name: "agentics-platform"
+    let mut config = Config::default();
+    config.database.url =
+        SecretString::from("postgres://agentics:agentics@127.0.0.1:5432/agentics_test");
+    config.api_web.api_host = "127.0.0.1".to_string();
+    config.api_web.api_port = 0;
+    config.api_web.cors_allowed_origins = "http://127.0.0.1:3001,http://localhost:3001".to_string();
+    config.api_web.web_session_cookie_name = "agentics_session".to_string();
+    config.api_web.web_csrf_cookie_name = "agentics_csrf".to_string();
+    config.api_web.web_session_ttl_hours = 24;
+    config.api_web.web_session_cookie_secure = false;
+
+    config.storage.root = storage_root.to_string_lossy().to_string();
+    config.storage.backend = StorageBackend::S3;
+    config.storage.work_root = Some(storage_root.join("_work").to_string_lossy().to_string());
+    config.storage.s3_bucket = Some(env_or_default(ENV_AGENTICS_S3_BUCKET, DEFAULT_S3_BUCKET));
+    config.storage.s3_prefix = Some(test_s3_prefix());
+    config.storage.s3_region = env_or_default(ENV_AGENTICS_S3_REGION, DEFAULT_S3_REGION);
+    config.storage.s3_endpoint_url = Some(test_s3_endpoint_url());
+    config.storage.s3_force_path_style = test_s3_force_path_style();
+    config.storage.max_bundle_archive_bytes = 1024 * 1024 * 1024;
+    config.storage.max_statement_bytes = 1024 * 1024;
+    config.storage.max_json_artifact_bytes = 1024 * 1024;
+    config.storage.tmp_object_grace_hours = 24;
+    config.storage.challenges_root = challenges_root.to_string_lossy().to_string();
+
+    config.auth.admin_username = "admin".to_string();
+    config.auth.admin_password = SecretString::from("secret");
+    config.auth.allow_insecure_default_admin_credentials = false;
+    config.auth.agent_registration_mode = AgentRegistrationMode::Public;
+
+    config.moltbook.submolt_name = "agentics-platform"
+        .parse()
+        .expect("valid test Moltbook Submolt name");
+    config.moltbook.submolt_url = "https://www.moltbook.com/m/agentics-platform"
+        .parse()
+        .expect("valid test Moltbook Submolt URL");
+
+    config.worker.poll_interval_ms = 3000;
+    config.worker.stale_job_minutes = 1;
+    config.worker.accelerators = agentics_config::WorkerAccelerators::None;
+    config.worker.gpu_probe_image = None;
+
+    config.quotas.validation_runs_per_agent_challenge_day = 20;
+    config.quotas.official_runs_per_agent_challenge_day = 5;
+    config.quotas.max_active_official_jobs = 20;
+    config.quotas.max_active_agents = 1_000;
+    config.quotas.max_active_challenge_drafts_per_agent = 10;
+    config.quotas.challenge_private_asset_bytes_per_draft = 250 * 1024 * 1024;
+    config.quotas.challenge_draft_validations_per_day = 10;
+    config.quotas.challenge_draft_validation_timeout_minutes = 30;
+    config
+        .quotas
+        .challenge_private_asset_pending_timeout_minutes = 30;
+    config.quotas.challenge_draft_publish_timeout_minutes = 30;
+    config.quotas.challenge_draft_ttl_days = 14;
+    config.quotas.unpublished_challenge_asset_grace_days = 7;
+
+    config.github_oauth.client_id = Some("test-client-id".to_string());
+    config.github_oauth.client_secret = Some(SecretString::from("test-client-secret"));
+    config.github_oauth.redirect_url = Some(
+        "http://127.0.0.1/auth/github/callback"
             .parse()
-            .expect("valid test Moltbook Submolt name"),
-        moltbook_submolt_url: "https://www.moltbook.com/m/agentics-platform"
-            .parse()
-            .expect("valid test Moltbook Submolt URL"),
-        worker_poll_interval_ms: 3000,
-        worker_stale_job_minutes: 1,
-        worker_accelerators: agentics_config::WorkerAccelerators::None,
-        worker_gpu_probe_image: None,
-        validation_runs_per_agent_challenge_day: 20,
-        official_runs_per_agent_challenge_day: 5,
-        max_active_official_jobs: 20,
-        max_active_agents: 1_000,
-        max_active_challenge_drafts_per_agent: 10,
-        challenge_private_asset_bytes_per_draft: 250 * 1024 * 1024,
-        challenge_draft_validations_per_day: 10,
-        challenge_draft_validation_timeout_minutes: 30,
-        challenge_private_asset_pending_timeout_minutes: 30,
-        challenge_draft_publish_timeout_minutes: 30,
-        challenge_draft_ttl_days: 14,
-        unpublished_challenge_asset_grace_days: 7,
-        github_oauth_client_id: Some("test-client-id".to_string()),
-        github_oauth_client_secret: Some(SecretString::from("test-client-secret")),
-        github_oauth_redirect_url: Some(
-            "http://127.0.0.1/auth/github/callback"
-                .parse()
-                .expect("valid test GitHub OAuth redirect URL"),
-        ),
-        github_oauth_authorize_url: "https://github.com/login/oauth/authorize"
-            .parse()
-            .expect("valid test GitHub OAuth authorize URL"),
-        github_oauth_token_url: "https://github.com/login/oauth/access_token"
-            .parse()
-            .expect("valid test GitHub OAuth token URL"),
-        github_api_user_url: "https://api.github.com/user"
-            .parse()
-            .expect("valid test GitHub API user URL"),
-        web_session_cookie_name: "agentics_session".to_string(),
-        web_csrf_cookie_name: "agentics_csrf".to_string(),
-        web_session_ttl_hours: 24,
-        web_session_cookie_secure: false,
-        agent_registration_mode: AgentRegistrationMode::Public,
-        docker_host: std::env::var("AGENTICS_TEST_DOCKER_HOST").ok(),
-        host_probe_mode: agentics_config::HostProbeMode::Off,
-        host_probe_command: agentics_config::DEFAULT_HOST_PROBE_COMMAND.to_string(),
-        runner_security_profile: agentics_config::RunnerSecurityProfile::Development,
-        require_digest_pinned_images: false,
-        runner_writable_storage_mode: RunnerWritableStorageMode::Unbounded,
-        runner_namespace: test_runner_namespace(),
-        runner_runtime_root: std::env::var("AGENTICS_TEST_RUNNER_RUNTIME_ROOT").ok(),
-        runner_phase_mount_root: std::env::var("AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT").ok(),
-        runner_writable_slot_classes_mb: std::env::var(
-            "AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB",
-        )
-        .unwrap_or_else(|_| "64,256,1024,4096".to_string()),
-        runner_docker_layer_quota: false,
-        runner_max_output_files: 8192,
-        runner_max_output_dirs: 1024,
-        runner_max_output_depth: 32,
-        runner_max_runs: 100,
-        runner_max_result_json_bytes: 4 * 1024 * 1024,
-        runner_max_public_results: 1024,
-        runner_max_result_log_bytes: 256 * 1024,
-        runner_max_interaction_bytes_per_direction: 16 * 1024 * 1024,
-        runner_interaction_shutdown_grace_secs: 2,
-        log_level: "error".to_string(),
-    }
+            .expect("valid test GitHub OAuth redirect URL"),
+    );
+    config.github_oauth.authorize_url = "https://github.com/login/oauth/authorize"
+        .parse()
+        .expect("valid test GitHub OAuth authorize URL");
+    config.github_oauth.token_url = "https://github.com/login/oauth/access_token"
+        .parse()
+        .expect("valid test GitHub OAuth token URL");
+    config.github_oauth.api_user_url = "https://api.github.com/user"
+        .parse()
+        .expect("valid test GitHub API user URL");
+
+    config.runner.docker_host = std::env::var("AGENTICS_TEST_DOCKER_HOST").ok();
+    config.runner.host_probe_mode = agentics_config::HostProbeMode::Off;
+    config.runner.host_probe_command = agentics_config::DEFAULT_HOST_PROBE_COMMAND.to_string();
+    config.runner.security_profile = agentics_config::RunnerSecurityProfile::Development;
+    config.runner.require_digest_pinned_images = false;
+    config.runner.writable_storage_mode = RunnerWritableStorageMode::Unbounded;
+    config.runner.namespace = test_runner_namespace();
+    config.runner.runtime_root = std::env::var("AGENTICS_TEST_RUNNER_RUNTIME_ROOT").ok();
+    config.runner.phase_mount_root = std::env::var("AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT").ok();
+    config.runner.writable_slot_classes_mb =
+        std::env::var("AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB")
+            .unwrap_or_else(|_| "64,256,1024,4096".to_string());
+    config.runner.docker_layer_quota = false;
+    config.runner.max_output_files = 8192;
+    config.runner.max_output_dirs = 1024;
+    config.runner.max_output_depth = 32;
+    config.runner.max_runs = 100;
+    config.runner.max_result_json_bytes = 4 * 1024 * 1024;
+    config.runner.max_public_results = 1024;
+    config.runner.max_result_log_bytes = 256 * 1024;
+    config.runner.max_interaction_bytes_per_direction = 16 * 1024 * 1024;
+    config.runner.interaction_shutdown_grace_secs = 2;
+
+    config.logging.log_level = "error".to_string();
+    config
 }
 
 async fn ensure_test_storage_bucket(config: &Config) {
-    if config.storage_backend != StorageBackend::S3 {
+    if config.storage.backend != StorageBackend::S3 {
         return;
     }
     let storage = S3Storage::from_config(config)

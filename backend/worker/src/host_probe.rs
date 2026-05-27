@@ -25,11 +25,11 @@ const HOST_PROBE_TIMEOUT_SECS: u64 = 60;
 
 /// Run the configured hosted profile probe before the worker accepts jobs.
 pub(crate) async fn enforce_host_probe(config: &Config) -> anyhow::Result<()> {
-    match config.host_probe_mode {
+    match config.runner.host_probe_mode {
         HostProbeMode::Off => Ok(()),
         HostProbeMode::Warn | HostProbeMode::Require => {
-            let mode = config.host_probe_mode;
-            let command = config.host_probe_command.as_str();
+            let mode = config.runner.host_probe_mode;
+            let command = config.runner.host_probe_command.as_str();
             let output = run_host_probe_command(command, mode).await;
             match output {
                 Ok(output)
@@ -163,7 +163,7 @@ pub(crate) async fn enforce_worker_gpu_probe(
     config: &Config,
     docker: &Docker,
 ) -> anyhow::Result<()> {
-    if config.worker_accelerators != WorkerAccelerators::Gpu {
+    if config.worker.accelerators != WorkerAccelerators::Gpu {
         return Ok(());
     }
     if !cfg!(target_os = "linux") {

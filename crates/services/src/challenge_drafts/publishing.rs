@@ -46,7 +46,7 @@ pub async fn publish_challenge_draft(
         .challenge_drafts()
         .claim_for_publish(
             draft_id.as_str(),
-            config.challenge_draft_publish_timeout_minutes,
+            config.quotas.challenge_draft_publish_timeout_minutes,
         )
         .await?;
     let draft = claim.draft;
@@ -218,7 +218,7 @@ async fn prepare_and_publish_new_challenge_draft(
     let storage_result = async {
         let bundle_archive_intent = StorageWriteIntent::new(
             "challenge bundle archive",
-            config.storage_max_bundle_archive_bytes,
+            config.storage.max_bundle_archive_bytes,
         );
         pack_directory_to_tar(
             ctx.temporary_bundle_path,
@@ -238,7 +238,7 @@ async fn prepare_and_publish_new_challenge_draft(
                 &private_archive_path,
                 StorageWriteIntent::new(
                     "challenge bundle archive",
-                    config.storage_max_bundle_archive_bytes,
+                    config.storage.max_bundle_archive_bytes,
                 ),
             )
             .await?;
@@ -248,7 +248,7 @@ async fn prepare_and_publish_new_challenge_draft(
                 &public_archive_path,
                 StorageWriteIntent::new(
                     "challenge bundle archive",
-                    config.storage_max_bundle_archive_bytes,
+                    config.storage.max_bundle_archive_bytes,
                 ),
             )
             .await?;
@@ -258,7 +258,7 @@ async fn prepare_and_publish_new_challenge_draft(
             .put(
                 &statement_key,
                 &statement_bytes,
-                StorageWriteIntent::new("challenge statement", config.storage_max_statement_bytes),
+                StorageWriteIntent::new("challenge statement", config.storage.max_statement_bytes),
             )
             .await?;
         Ok::<(), ServiceError>(())

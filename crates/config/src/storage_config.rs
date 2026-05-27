@@ -75,12 +75,18 @@ impl FromStr for StorageBackend {
 
 /// Validate durable object storage configuration.
 pub(crate) fn validate_object_storage_config(config: &Config) -> anyhow::Result<()> {
-    crate::validation::validate_storage_common_fields(config)?;
-    match config.storage_backend {
+    crate::validation::validate_report(&config.storage)?;
+    match config.storage.backend {
         StorageBackend::Local => Ok(()),
         StorageBackend::S3 => {
-            validate_required_trimmed(config.s3_bucket.as_deref(), "AGENTICS_S3_BUCKET")?;
-            crate::validation::validate_s3_fields(config)?;
+            validate_required_trimmed(config.storage.s3_bucket.as_deref(), "AGENTICS_S3_BUCKET")?;
+            validate_s3_prefix(config.storage.s3_prefix.as_deref())?;
+            validate_required_trimmed(Some(&config.storage.s3_region), "AGENTICS_S3_REGION")?;
+            if let Some(endpoint_url) = &config.storage.s3_endpoint_url
+                && !matches!(endpoint_url.scheme(), "http" | "https")
+            {
+                anyhow::bail!("AGENTICS_S3_ENDPOINT_URL must start with http:// or https://");
+            }
             Ok(())
         }
     }

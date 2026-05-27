@@ -55,27 +55,27 @@ pub async fn execute_evaluation_job(
     tokio::fs::create_dir_all(&evaluator_output_root).await?;
 
     let limits = EvaluationLimitConfig {
-        max_runs: config.runner_max_runs,
-        max_result_json_bytes: config.runner_max_result_json_bytes,
-        max_public_results: config.runner_max_public_results,
-        max_result_log_bytes: config.runner_max_result_log_bytes,
+        max_runs: config.runner.max_runs,
+        max_result_json_bytes: config.runner.max_result_json_bytes,
+        max_public_results: config.runner.max_public_results,
+        max_result_log_bytes: config.runner.max_result_log_bytes,
     };
     let max_log_bytes = EVALUATION_LOG_BYTES_PER_RUN
         .checked_mul(limits.max_runs)
         .ok_or_else(|| ServiceError::Runner("evaluation log limit overflow".to_string()))?;
     let mut logs = EvaluationLogs::new(max_log_bytes);
-    let docker_backend = super::DockerRunnerBackend::new(docker, &config.runner_namespace);
+    let docker_backend = super::DockerRunnerBackend::new(docker, &config.runner.namespace);
     let runner_storage = RunnerStorage::from_config(config)?;
     let output_limits = OutputTreeLimits {
-        max_files: config.runner_max_output_files,
-        max_dirs: config.runner_max_output_dirs,
-        max_depth: config.runner_max_output_depth,
+        max_files: config.runner.max_output_files,
+        max_dirs: config.runner.max_output_dirs,
+        max_depth: config.runner.max_output_depth,
     };
     let runner_context = RunnerContext {
         docker,
         backend: &docker_backend,
         storage: &runner_storage,
-        runner_namespace: &config.runner_namespace,
+        runner_namespace: &config.runner.namespace,
         job_id,
         attempt: &attempt,
         container_scope,
@@ -93,7 +93,7 @@ pub async fn execute_evaluation_job(
                 &bundle_archive_path,
                 agentics_storage::StorageWriteIntent::new(
                     "challenge bundle archive",
-                    config.storage_max_bundle_archive_bytes,
+                    config.storage.max_bundle_archive_bytes,
                 ),
             )
             .await?;
@@ -235,9 +235,11 @@ pub async fn execute_evaluation_job(
                         run_work_root: &run_work_root,
                         evaluator_output_root: &evaluator_output_root,
                         max_interaction_bytes_per_direction: config
-                            .runner_max_interaction_bytes_per_direction,
+                            .runner
+                            .max_interaction_bytes_per_direction,
                         interaction_shutdown_grace_secs: config
-                            .runner_interaction_shutdown_grace_secs,
+                            .runner
+                            .interaction_shutdown_grace_secs,
                     },
                     &mut logs,
                 )

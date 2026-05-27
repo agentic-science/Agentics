@@ -51,11 +51,11 @@ impl RunnerStorage {
     pub(super) fn from_config(config: &Config) -> Result<Self> {
         Ok(Self {
             mode: config.runner_writable_storage_mode(),
-            phase_mount_root: config.runner_phase_mount_root.as_ref().map(PathBuf::from),
+            phase_mount_root: config.runner.phase_mount_root.as_ref().map(PathBuf::from),
             slot_classes_mb: config
                 .runner_writable_slot_classes_mb()
                 .map_err(|e| ServiceError::Runner(e.to_string()))?,
-            docker_layer_quota: config.runner_docker_layer_quota,
+            docker_layer_quota: config.runner.docker_layer_quota,
         })
     }
 

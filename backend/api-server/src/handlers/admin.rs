@@ -249,12 +249,14 @@ pub async fn get_admin_capacity(
         quotas: AdminQuotaSettingsDto {
             validation_runs_per_agent_challenge_day: state
                 .config
+                .quotas
                 .validation_runs_per_agent_challenge_day,
             official_runs_per_agent_challenge_day: state
                 .config
+                .quotas
                 .official_runs_per_agent_challenge_day,
-            max_active_official_jobs: state.config.max_active_official_jobs,
-            max_active_agents: state.config.max_active_agents,
+            max_active_official_jobs: state.config.quotas.max_active_official_jobs,
+            max_active_agents: state.config.quotas.max_active_agents,
         },
         usage: AdminCapacityUsageDto {
             active_agents,
@@ -275,7 +277,7 @@ pub async fn rejudge(
         QueueEvaluationJobRequest {
             solution_submission_id: id,
             eval_type: ScoringMode::Official,
-            max_active_official_jobs: Some(i64::from(state.config.max_active_official_jobs)),
+            max_active_official_jobs: Some(i64::from(state.config.quotas.max_active_official_jobs)),
         },
     )
     .await?;
@@ -308,7 +310,7 @@ pub async fn official_run(
         QueueEvaluationJobRequest {
             solution_submission_id: id,
             eval_type: ScoringMode::Official,
-            max_active_official_jobs: Some(i64::from(state.config.max_active_official_jobs)),
+            max_active_official_jobs: Some(i64::from(state.config.quotas.max_active_official_jobs)),
         },
     )
     .await?;

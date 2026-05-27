@@ -190,7 +190,7 @@ async fn public_challenge_catalog_supports_pagination(pool: sqlx::PgPool) {
 async fn registration_respects_active_agent_quota(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
-    config.max_active_agents = 1;
+    config.quotas.max_active_agents = 1;
     let app = spawn_app_with_config(pool, config).await;
     let client = reqwest::Client::new();
 
@@ -216,7 +216,7 @@ async fn registration_respects_active_agent_quota(pool: sqlx::PgPool) {
 async fn registration_quota_is_serialized(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
-    config.max_active_agents = 1;
+    config.quotas.max_active_agents = 1;
     let app = spawn_app_with_config(pool.clone(), config).await;
     let client = reqwest::Client::new();
     let first_url = api_url(&app, "/api/agents/register");

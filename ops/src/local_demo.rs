@@ -215,32 +215,35 @@ fn resolve_storage_config(
 ) -> Result<Config, LocalDemoError> {
     let mut config =
         Config::from_env().map_err(|error| LocalDemoError::InvalidConfig(error.to_string()))?;
-    config.storage_root = resolve_storage_root(repo_root, process_env, file_env)
+    config.storage.root = resolve_storage_root(repo_root, process_env, file_env)
         .to_string_lossy()
         .to_string();
-    config.storage_backend = process_env
+    config.storage.backend = process_env
         .storage_backend
         .or(file_env.storage_backend)
-        .unwrap_or(config.storage_backend);
-    config.storage_work_root =
-        resolve_storage_work_root(repo_root, process_env, file_env).or(config.storage_work_root);
-    config.s3_bucket =
-        env_value(process_env.s3_bucket.as_ref(), file_env.s3_bucket.as_ref()).or(config.s3_bucket);
-    config.s3_prefix =
-        env_value(process_env.s3_prefix.as_ref(), file_env.s3_prefix.as_ref()).or(config.s3_prefix);
-    config.s3_region = env_value(process_env.s3_region.as_ref(), file_env.s3_region.as_ref())
-        .unwrap_or(config.s3_region);
-    config.s3_endpoint_url = env_value(
+        .unwrap_or(config.storage.backend);
+    config.storage.work_root =
+        resolve_storage_work_root(repo_root, process_env, file_env).or(config.storage.work_root);
+    config.storage.s3_bucket =
+        env_value(process_env.s3_bucket.as_ref(), file_env.s3_bucket.as_ref())
+            .or(config.storage.s3_bucket);
+    config.storage.s3_prefix =
+        env_value(process_env.s3_prefix.as_ref(), file_env.s3_prefix.as_ref())
+            .or(config.storage.s3_prefix);
+    config.storage.s3_region =
+        env_value(process_env.s3_region.as_ref(), file_env.s3_region.as_ref())
+            .unwrap_or(config.storage.s3_region);
+    config.storage.s3_endpoint_url = env_value(
         process_env.s3_endpoint_url.as_ref(),
         file_env.s3_endpoint_url.as_ref(),
     )
     .map(|value| parse_url(ENV_AGENTICS_S3_ENDPOINT_URL, &value))
     .transpose()?
-    .or(config.s3_endpoint_url);
-    config.s3_force_path_style = process_env
+    .or(config.storage.s3_endpoint_url);
+    config.storage.s3_force_path_style = process_env
         .s3_force_path_style
         .or(file_env.s3_force_path_style)
-        .unwrap_or(config.s3_force_path_style);
+        .unwrap_or(config.storage.s3_force_path_style);
     Ok(config)
 }
 
@@ -433,10 +436,11 @@ mod tests {
     async fn test_solution_artifacts_are_uploaded_through_storage_backend() {
         let tempdir = tempfile::tempdir().expect("tempdir");
         let mut storage_config = Config::from_env().expect("default config should load");
-        storage_config.storage_backend = StorageBackend::Local;
-        storage_config.storage_root = tempdir.path().join("storage").display().to_string();
-        storage_config.storage_work_root = Some(tempdir.path().join("work").display().to_string());
-        storage_config.challenges_root = tempdir.path().join("challenges").display().to_string();
+        storage_config.storage.backend = StorageBackend::Local;
+        storage_config.storage.root = tempdir.path().join("storage").display().to_string();
+        storage_config.storage.work_root = Some(tempdir.path().join("work").display().to_string());
+        storage_config.storage.challenges_root =
+            tempdir.path().join("challenges").display().to_string();
         let config = super::LocalDemoConfig {
             repo_root: tempdir.path().to_path_buf(),
             storage_config,

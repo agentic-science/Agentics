@@ -189,8 +189,8 @@ pub trait Storage: std::fmt::Debug + Send + Sync {
 /// Build the configured durable storage backend.
 pub async fn build_storage(config: &Config) -> anyhow::Result<Arc<dyn Storage>> {
     config.validate_object_storage_config()?;
-    match config.storage_backend {
-        StorageBackend::Local => Ok(Arc::new(LocalStorage::new(&config.storage_root))),
+    match config.storage.backend {
+        StorageBackend::Local => Ok(Arc::new(LocalStorage::new(&config.storage.root))),
         StorageBackend::S3 => Ok(Arc::new(S3Storage::from_config(config).await?)),
     }
 }
@@ -198,7 +198,8 @@ pub async fn build_storage(config: &Config) -> anyhow::Result<Arc<dyn Storage>> 
 /// Return the host-local work root for object storage staging and materialization.
 pub fn storage_work_root(config: &Config) -> Result<PathBuf> {
     let root = config
-        .storage_work_root
+        .storage
+        .work_root
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
@@ -511,16 +512,17 @@ impl S3Storage {
     pub async fn from_config(config: &Config) -> anyhow::Result<Self> {
         Self::from_options(S3StorageOptions {
             bucket: config
+                .storage
                 .s3_bucket
                 .as_deref()
                 .map(str::trim)
                 .filter(|value| !value.is_empty())
                 .ok_or_else(|| anyhow::anyhow!("AGENTICS_S3_BUCKET must be set"))?
                 .to_string(),
-            prefix: config.s3_prefix.clone(),
-            region: config.s3_region.clone(),
-            endpoint_url: config.s3_endpoint_url.clone(),
-            force_path_style: config.s3_force_path_style,
+            prefix: config.storage.s3_prefix.clone(),
+            region: config.storage.s3_region.clone(),
+            endpoint_url: config.storage.s3_endpoint_url.clone(),
+            force_path_style: config.storage.s3_force_path_style,
             work_root: Some(storage_work_root(config)?),
         })
         .await

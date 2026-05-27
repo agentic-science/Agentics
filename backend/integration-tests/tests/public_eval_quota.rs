@@ -35,17 +35,17 @@ fn quota_sensitive_runner_config(
 ) -> agentics_config::Config {
     validate_quota_sensitive_runner_env().expect("quota env should be validated before use");
     let mut config = test_config(storage_root, challenges_root);
-    config.runner_writable_storage_mode = std::env::var(QUOTA_TEST_STORAGE_MODE_ENV)
+    config.runner.writable_storage_mode = std::env::var(QUOTA_TEST_STORAGE_MODE_ENV)
         .expect("validated quota storage mode")
         .parse()
         .expect("validated quota storage mode");
-    config.runner_runtime_root =
+    config.runner.runtime_root =
         Some(std::env::var(QUOTA_TEST_RUNTIME_ROOT_ENV).expect("validated quota runtime root"));
-    config.runner_phase_mount_root =
+    config.runner.phase_mount_root =
         Some(std::env::var(QUOTA_TEST_PHASE_MOUNT_ROOT_ENV).expect("validated quota mount root"));
-    config.runner_writable_slot_classes_mb =
+    config.runner.writable_slot_classes_mb =
         std::env::var(QUOTA_TEST_SLOT_CLASSES_ENV).expect("validated quota slot classes");
-    config.runner_docker_layer_quota =
+    config.runner.docker_layer_quota =
         std::env::var("AGENTICS_TEST_RUNNER_DOCKER_LAYER_QUOTA").is_ok_and(|value| value == "true");
     config
 }
@@ -435,7 +435,7 @@ fn is_quota_exhaustion(error: &std::io::Error) -> bool {
 async fn setup_build_file_count_is_not_limited_by_output_cap(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
-    config.runner_max_output_files = 8;
+    config.runner.max_output_files = 8;
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
 

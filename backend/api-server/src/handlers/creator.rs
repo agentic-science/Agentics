@@ -102,7 +102,7 @@ pub async fn create_challenge_shortlist_revision(
             &raw_json,
             agentics_storage::StorageWriteIntent::new(
                 "challenge shortlist JSON",
-                state.config.storage_max_json_artifact_bytes,
+                state.config.storage.max_json_artifact_bytes,
             ),
         )
         .await?;

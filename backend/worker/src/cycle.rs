@@ -43,7 +43,7 @@ impl Worker {
         let cleanup = reconcile_worker_containers(
             &docker,
             &db,
-            config.worker_stale_job_minutes.max(1),
+            config.worker.stale_job_minutes.max(1),
             &config,
         )
         .await?;
@@ -68,7 +68,7 @@ impl Worker {
 
     /// Poll for queued jobs until the shutdown watch channel is set to `true`.
     pub async fn run(&self, mut shutdown: tokio::sync::watch::Receiver<bool>) {
-        let mut ticker = interval(Duration::from_millis(self.config.worker_poll_interval_ms));
+        let mut ticker = interval(Duration::from_millis(self.config.worker.poll_interval_ms));
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
         loop {

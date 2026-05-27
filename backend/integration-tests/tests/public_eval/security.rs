@@ -99,7 +99,7 @@ async fn worker_rejects_piped_stdio_interaction_limit(pool: sqlx::PgPool) {
     let challenges = tempfile::tempdir().expect("failed to create challenge tempdir");
     create_piped_stdio_challenge(challenges.path());
     let mut config = test_config(storage.path(), challenges.path());
-    config.runner_max_interaction_bytes_per_direction = 1;
+    config.runner.max_interaction_bytes_per_direction = 1;
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
 

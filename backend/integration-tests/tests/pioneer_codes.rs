@@ -14,11 +14,11 @@ use reqwest::StatusCode;
 async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
-    config.agent_registration_mode = AgentRegistrationMode::PioneerCode;
+    config.auth.agent_registration_mode = AgentRegistrationMode::PioneerCode;
     let app = spawn_app_with_config(pool, config.clone()).await;
     let client = reqwest::Client::new();
     let auth = basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
 
@@ -135,11 +135,11 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
 async fn finite_pioneer_code_consumption_is_atomic(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
-    config.agent_registration_mode = AgentRegistrationMode::PioneerCode;
+    config.auth.agent_registration_mode = AgentRegistrationMode::PioneerCode;
     let app = spawn_app_with_config(pool, config.clone()).await;
     let client = reqwest::Client::new();
     let auth = basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
 
@@ -190,11 +190,11 @@ async fn finite_pioneer_code_consumption_is_atomic(pool: sqlx::PgPool) {
 async fn github_oauth_login_start_uses_post_body(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
-    config.agent_registration_mode = AgentRegistrationMode::PioneerCode;
+    config.auth.agent_registration_mode = AgentRegistrationMode::PioneerCode;
     let app = spawn_app_with_config(pool, config.clone()).await;
     let client = reqwest::Client::new();
     let auth = basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
 

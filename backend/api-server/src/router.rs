@@ -241,7 +241,7 @@ pub fn router(config: &Config) -> Router<AppState> {
 
 /// Return a JSON body limit that can carry one configured private asset after base64 encoding.
 fn private_asset_json_body_limit(config: &Config) -> usize {
-    let decoded_limit = config.challenge_private_asset_bytes_per_draft;
+    let decoded_limit = config.quotas.challenge_private_asset_bytes_per_draft;
     let base64_limit = decoded_limit
         .saturating_add(2)
         .div_ceil(3)

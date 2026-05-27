@@ -49,13 +49,13 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
     let challenges = tempfile::tempdir().expect("failed to create challenges tempdir");
     create_admin_bundle(challenges.path());
     let mut config = test_config(storage.path(), challenges.path());
-    config.max_active_official_jobs = 1;
-    config.official_runs_per_agent_challenge_day = 2;
+    config.quotas.max_active_official_jobs = 1;
+    config.quotas.official_runs_per_agent_challenge_day = 2;
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let admin_sum_id = published_challenge_name(&pool, "admin-sum").await;
     let admin_auth = basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
 

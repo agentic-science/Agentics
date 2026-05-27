@@ -53,7 +53,7 @@ async fn store_challenge_bundle_objects(
     let public_archive = temp.path().join("public.tar");
     let bundle_archive_intent = StorageWriteIntent::new(
         "challenge bundle archive",
-        config.storage_max_bundle_archive_bytes,
+        config.storage.max_bundle_archive_bytes,
     );
     pack_directory_to_tar(private_bundle, &private_archive, bundle_archive_intent)
         .await
@@ -78,7 +78,7 @@ async fn store_challenge_bundle_objects(
             &private_archive,
             StorageWriteIntent::new(
                 "challenge bundle archive",
-                config.storage_max_bundle_archive_bytes,
+                config.storage.max_bundle_archive_bytes,
             ),
         )
         .await
@@ -89,7 +89,7 @@ async fn store_challenge_bundle_objects(
             &public_archive,
             StorageWriteIntent::new(
                 "challenge bundle archive",
-                config.storage_max_bundle_archive_bytes,
+                config.storage.max_bundle_archive_bytes,
             ),
         )
         .await
@@ -101,7 +101,7 @@ async fn store_challenge_bundle_objects(
         .put(
             &statement_key,
             &statement,
-            StorageWriteIntent::new("challenge statement", config.storage_max_statement_bytes),
+            StorageWriteIntent::new("challenge statement", config.storage.max_statement_bytes),
         )
         .await
         .expect("store challenge statement");
@@ -116,7 +116,7 @@ async fn runner_log_text(config: &Config, log_key: Option<&str>) -> Option<Strin
     storage
         .get(
             &key,
-            StorageWriteIntent::new("runner log", config.runner_max_result_log_bytes),
+            StorageWriteIntent::new("runner log", config.runner.max_result_log_bytes),
         )
         .await
         .ok()

@@ -56,7 +56,8 @@ pub(super) async fn read_solution_submission_logs(
 
     let max_stored_log_bytes = state
         .config
-        .runner_max_runs
+        .runner
+        .max_runs
         .checked_mul(1024 * 1024)
         .ok_or_else(|| ServiceError::Internal("runner log byte budget overflow".to_string()))?;
     let bytes = state

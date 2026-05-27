@@ -140,9 +140,9 @@ fn local_runner_config(storage_root: &Path) -> Result<Config> {
     })?;
 
     let mut config = Config::from_env()?;
-    config.storage_root = storage_root_value.to_string();
-    config.storage_backend = agentics_config::StorageBackend::Local;
-    config.storage_work_root = Some(storage_root.join("_work").to_string_lossy().to_string());
+    config.storage.root = storage_root_value.to_string();
+    config.storage.backend = agentics_config::StorageBackend::Local;
+    config.storage.work_root = Some(storage_root.join("_work").to_string_lossy().to_string());
     config.validate_runner_storage()?;
     Ok(config)
 }
@@ -272,7 +272,7 @@ async fn pack_local_validation_public_bundle(
             &bundle_archive_path,
             StorageWriteIntent::new(
                 "challenge public bundle archive",
-                context.config.storage_max_bundle_archive_bytes,
+                context.config.storage.max_bundle_archive_bytes,
             ),
         )
         .await?;
@@ -284,7 +284,7 @@ async fn pack_local_validation_public_bundle(
                 &bundle_archive_path,
                 StorageWriteIntent::new(
                     "challenge public bundle archive",
-                    context.config.storage_max_bundle_archive_bytes,
+                    context.config.storage.max_bundle_archive_bytes,
                 ),
             )
             .await?)

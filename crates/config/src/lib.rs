@@ -1,6 +1,7 @@
 //! Environment-backed runtime configuration.
 
 use anyhow::Context as _;
+use garde::Validate;
 use secrecy::{ExposeSecret, SecretString};
 use std::path::{Path, PathBuf};
 
@@ -144,78 +145,201 @@ pub const DEFAULT_RUNNER_DOCKER_LAYER_QUOTA: bool = false;
 pub const DEFAULT_LOG_LEVEL: &str = "info";
 
 /// Application configuration loaded from validated `AGENTICS_*` environment values.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Validate)]
+#[garde(allow_unvalidated)]
 pub struct Config {
-    pub database_url: SecretString,
+    #[garde(dive)]
+    pub database: DatabaseConfig,
+    #[garde(dive)]
+    pub api_web: ApiWebConfig,
+    #[garde(dive)]
+    pub storage: StorageConfig,
+    #[garde(dive)]
+    pub auth: AuthConfig,
+    #[garde(dive)]
+    pub moltbook: MoltbookConfig,
+    #[garde(dive)]
+    pub worker: WorkerConfig,
+    #[garde(dive)]
+    pub quotas: QuotaConfig,
+    #[garde(dive)]
+    pub github_oauth: GithubOauthConfig,
+    #[garde(dive)]
+    pub runner: RunnerConfig,
+    #[garde(dive)]
+    pub logging: LoggingConfig,
+}
+
+/// Database connection configuration.
+#[derive(Debug, Clone, Validate)]
+#[garde(allow_unvalidated)]
+pub struct DatabaseConfig {
+    pub url: SecretString,
+}
+
+/// API listener and browser session configuration.
+#[derive(Debug, Clone, Validate)]
+#[garde(allow_unvalidated)]
+pub struct ApiWebConfig {
     pub api_host: String,
     pub api_port: u16,
-    pub storage_root: String,
-    pub storage_backend: StorageBackend,
-    pub storage_work_root: Option<String>,
+    #[garde(custom(validation::cors_origin_list))]
+    pub cors_allowed_origins: String,
+    #[garde(custom(validation::cookie_name))]
+    pub web_session_cookie_name: String,
+    #[garde(custom(validation::cookie_name))]
+    pub web_csrf_cookie_name: String,
+    #[garde(range(min = 1))]
+    pub web_session_ttl_hours: i64,
+    pub web_session_cookie_secure: bool,
+}
+
+/// Durable object storage and challenge seed-root configuration.
+#[derive(Debug, Clone, Validate)]
+#[garde(allow_unvalidated)]
+pub struct StorageConfig {
+    pub root: String,
+    pub backend: StorageBackend,
+    #[garde(custom(validation::optional_absolute_path))]
+    pub work_root: Option<String>,
     pub s3_bucket: Option<String>,
     pub s3_prefix: Option<String>,
     pub s3_region: String,
     pub s3_endpoint_url: Option<url::Url>,
     pub s3_force_path_style: bool,
-    pub storage_max_bundle_archive_bytes: u64,
-    pub storage_max_statement_bytes: u64,
-    pub storage_max_json_artifact_bytes: u64,
-    pub storage_tmp_object_grace_hours: u64,
+    #[garde(range(min = 1))]
+    pub max_bundle_archive_bytes: u64,
+    #[garde(range(min = 1))]
+    pub max_statement_bytes: u64,
+    #[garde(range(min = 1))]
+    pub max_json_artifact_bytes: u64,
+    #[garde(range(min = 1))]
+    pub tmp_object_grace_hours: u64,
     pub challenges_root: String,
+}
+
+/// Administrator and agent-registration configuration.
+#[derive(Debug, Clone, Validate)]
+#[garde(allow_unvalidated)]
+pub struct AuthConfig {
+    #[garde(custom(validation::trimmed_non_empty))]
     pub admin_username: String,
+    #[garde(custom(validation::secret_non_empty))]
     pub admin_password: SecretString,
     pub allow_insecure_default_admin_credentials: bool,
-    pub cors_allowed_origins: String,
-    pub moltbook_submolt_name: MoltbookSubmoltName,
-    pub moltbook_submolt_url: MoltbookSubmoltUrl,
-    pub worker_poll_interval_ms: u64,
-    pub worker_stale_job_minutes: i32,
-    pub worker_accelerators: WorkerAccelerators,
-    pub worker_gpu_probe_image: Option<String>,
-    pub validation_runs_per_agent_challenge_day: u32,
-    pub official_runs_per_agent_challenge_day: u32,
-    pub max_active_official_jobs: u32,
-    pub max_active_agents: u32,
-    pub max_active_challenge_drafts_per_agent: u32,
-    pub challenge_private_asset_bytes_per_draft: u64,
-    pub challenge_draft_validations_per_day: u32,
-    pub challenge_draft_validation_timeout_minutes: i32,
-    pub challenge_private_asset_pending_timeout_minutes: i32,
-    pub challenge_draft_publish_timeout_minutes: i32,
-    pub challenge_draft_ttl_days: i64,
-    pub unpublished_challenge_asset_grace_days: i64,
-    pub github_oauth_client_id: Option<String>,
-    pub github_oauth_client_secret: Option<SecretString>,
-    pub github_oauth_redirect_url: Option<GithubOauthRedirectUrl>,
-    pub github_oauth_authorize_url: GithubOauthAuthorizeUrl,
-    pub github_oauth_token_url: GithubOauthTokenUrl,
-    pub github_api_user_url: GithubApiUserUrl,
-    pub web_session_cookie_name: String,
-    pub web_csrf_cookie_name: String,
-    pub web_session_ttl_hours: i64,
-    pub web_session_cookie_secure: bool,
     pub agent_registration_mode: AgentRegistrationMode,
+}
+
+/// Platform Moltbook community configuration.
+#[derive(Debug, Clone, Validate)]
+#[garde(allow_unvalidated)]
+pub struct MoltbookConfig {
+    pub submolt_name: MoltbookSubmoltName,
+    pub submolt_url: MoltbookSubmoltUrl,
+}
+
+/// Worker polling and accelerator capability configuration.
+#[derive(Debug, Clone, Validate)]
+#[garde(allow_unvalidated)]
+pub struct WorkerConfig {
+    #[garde(range(min = 1))]
+    pub poll_interval_ms: u64,
+    #[garde(range(min = 1))]
+    pub stale_job_minutes: i32,
+    pub accelerators: WorkerAccelerators,
+    #[garde(custom(validation::optional_trimmed_non_empty))]
+    pub gpu_probe_image: Option<String>,
+}
+
+/// Platform quota and lifecycle configuration.
+#[derive(Debug, Clone, Validate)]
+#[garde(allow_unvalidated)]
+pub struct QuotaConfig {
+    #[garde(range(min = 1))]
+    pub validation_runs_per_agent_challenge_day: u32,
+    #[garde(range(min = 1))]
+    pub official_runs_per_agent_challenge_day: u32,
+    #[garde(range(min = 1))]
+    pub max_active_official_jobs: u32,
+    #[garde(range(min = 1))]
+    pub max_active_agents: u32,
+    #[garde(range(min = 1))]
+    pub max_active_challenge_drafts_per_agent: u32,
+    #[garde(range(min = 1))]
+    pub challenge_private_asset_bytes_per_draft: u64,
+    #[garde(range(min = 1))]
+    pub challenge_draft_validations_per_day: u32,
+    #[garde(range(min = 1))]
+    pub challenge_draft_validation_timeout_minutes: i32,
+    #[garde(range(min = 1))]
+    pub challenge_private_asset_pending_timeout_minutes: i32,
+    #[garde(range(min = 1))]
+    pub challenge_draft_publish_timeout_minutes: i32,
+    #[garde(range(min = 1))]
+    pub challenge_draft_ttl_days: i64,
+    #[garde(range(min = 1))]
+    pub unpublished_challenge_asset_grace_days: i64,
+}
+
+/// GitHub OAuth configuration for challenge creators.
+#[derive(Debug, Clone, Validate)]
+#[garde(allow_unvalidated)]
+pub struct GithubOauthConfig {
+    #[garde(custom(validation::optional_trimmed_non_empty))]
+    pub client_id: Option<String>,
+    #[garde(custom(validation::optional_secret_non_empty))]
+    pub client_secret: Option<SecretString>,
+    pub redirect_url: Option<GithubOauthRedirectUrl>,
+    pub authorize_url: GithubOauthAuthorizeUrl,
+    pub token_url: GithubOauthTokenUrl,
+    pub api_user_url: GithubApiUserUrl,
+}
+
+/// Docker runner and execution safety configuration.
+#[derive(Debug, Clone, Validate)]
+#[garde(allow_unvalidated)]
+pub struct RunnerConfig {
     /// Optional Docker host URI used by CI or remote Docker setups.
     pub docker_host: Option<String>,
     pub host_probe_mode: HostProbeMode,
+    #[garde(custom(validation::trimmed_non_empty))]
     pub host_probe_command: String,
-    pub runner_security_profile: RunnerSecurityProfile,
+    pub security_profile: RunnerSecurityProfile,
     pub require_digest_pinned_images: bool,
-    pub runner_writable_storage_mode: RunnerWritableStorageMode,
-    pub runner_namespace: RunnerNamespace,
-    pub runner_runtime_root: Option<String>,
-    pub runner_phase_mount_root: Option<String>,
-    pub runner_writable_slot_classes_mb: String,
-    pub runner_docker_layer_quota: bool,
-    pub runner_max_output_files: u64,
-    pub runner_max_output_dirs: u64,
-    pub runner_max_output_depth: u64,
-    pub runner_max_runs: u64,
-    pub runner_max_result_json_bytes: u64,
-    pub runner_max_public_results: u64,
-    pub runner_max_result_log_bytes: u64,
-    pub runner_max_interaction_bytes_per_direction: u64,
-    pub runner_interaction_shutdown_grace_secs: u64,
+    pub writable_storage_mode: RunnerWritableStorageMode,
+    pub namespace: RunnerNamespace,
+    #[garde(custom(validation::optional_absolute_path))]
+    pub runtime_root: Option<String>,
+    #[garde(custom(validation::optional_absolute_path))]
+    pub phase_mount_root: Option<String>,
+    #[garde(custom(validation::runner_slot_class_csv))]
+    pub writable_slot_classes_mb: String,
+    pub docker_layer_quota: bool,
+    #[garde(range(min = 1))]
+    pub max_output_files: u64,
+    #[garde(range(min = 1))]
+    pub max_output_dirs: u64,
+    #[garde(range(min = 1))]
+    pub max_output_depth: u64,
+    #[garde(range(min = 1, max = agentics_contracts::challenge_bundle::MAX_CHALLENGE_RUNS_PER_EVALUATION))]
+    pub max_runs: u64,
+    #[garde(range(min = 1))]
+    pub max_result_json_bytes: u64,
+    #[garde(range(min = 1))]
+    pub max_public_results: u64,
+    #[garde(range(min = 1))]
+    pub max_result_log_bytes: u64,
+    #[garde(range(min = 1))]
+    pub max_interaction_bytes_per_direction: u64,
+    #[garde(range(min = 1))]
+    pub interaction_shutdown_grace_secs: u64,
+}
+
+/// Runtime logging configuration.
+#[derive(Debug, Clone, Validate)]
+#[garde(allow_unvalidated)]
+pub struct LoggingConfig {
+    #[garde(custom(validation::trimmed_non_empty))]
     pub log_level: String,
 }
 
@@ -223,85 +347,106 @@ impl Default for Config {
     /// Build local-development configuration used when env/config fields are absent.
     fn default() -> Self {
         Self {
-            database_url: local_database_url(DEFAULT_POSTGRES_PORT),
-            api_host: DEFAULT_API_HOST.to_string(),
-            api_port: DEFAULT_API_PORT,
-            storage_root: DEFAULT_STORAGE_ROOT.to_string(),
-            storage_backend: DEFAULT_STORAGE_BACKEND,
-            storage_work_root: None,
-            s3_bucket: Some(DEFAULT_S3_BUCKET.to_string()),
-            s3_prefix: None,
-            s3_region: DEFAULT_S3_REGION.to_string(),
-            s3_endpoint_url: Some(builtin_s3_endpoint_url()),
-            s3_force_path_style: DEFAULT_S3_FORCE_PATH_STYLE,
-            storage_max_bundle_archive_bytes:
-                storage_config::DEFAULT_STORAGE_MAX_BUNDLE_ARCHIVE_BYTES,
-            storage_max_statement_bytes: storage_config::DEFAULT_STORAGE_MAX_STATEMENT_BYTES,
-            storage_max_json_artifact_bytes:
-                storage_config::DEFAULT_STORAGE_MAX_JSON_ARTIFACT_BYTES,
-            storage_tmp_object_grace_hours: storage_config::DEFAULT_STORAGE_TMP_OBJECT_GRACE_HOURS,
-            challenges_root: DEFAULT_CHALLENGES_ROOT.to_string(),
-            admin_username: DEFAULT_ADMIN_USERNAME.to_string(),
-            admin_password: SecretString::from(INSECURE_DEFAULT_ADMIN_PASSWORD),
-            allow_insecure_default_admin_credentials:
-                DEFAULT_ALLOW_INSECURE_DEFAULT_ADMIN_CREDENTIALS,
-            cors_allowed_origins: local_cors_allowed_origins(DEFAULT_WEB_PORT),
-            moltbook_submolt_name: builtin_moltbook_submolt_name(),
-            moltbook_submolt_url: builtin_moltbook_submolt_url(),
-            worker_poll_interval_ms: DEFAULT_WORKER_POLL_INTERVAL_MS,
-            worker_stale_job_minutes: DEFAULT_WORKER_STALE_JOB_MINUTES,
-            worker_accelerators: DEFAULT_WORKER_ACCELERATORS,
-            worker_gpu_probe_image: None,
-            validation_runs_per_agent_challenge_day:
-                DEFAULT_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY,
-            official_runs_per_agent_challenge_day: DEFAULT_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY,
-            max_active_official_jobs: DEFAULT_MAX_ACTIVE_OFFICIAL_JOBS,
-            max_active_agents: DEFAULT_MAX_ACTIVE_AGENTS,
-            max_active_challenge_drafts_per_agent: DEFAULT_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT,
-            challenge_private_asset_bytes_per_draft:
-                DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT,
-            challenge_draft_validations_per_day: DEFAULT_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY,
-            challenge_draft_validation_timeout_minutes:
-                DEFAULT_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES,
-            challenge_private_asset_pending_timeout_minutes:
-                DEFAULT_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES,
-            challenge_draft_publish_timeout_minutes:
-                DEFAULT_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES,
-            challenge_draft_ttl_days: DEFAULT_CHALLENGE_DRAFT_TTL_DAYS,
-            unpublished_challenge_asset_grace_days: DEFAULT_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS,
-            github_oauth_client_id: None,
-            github_oauth_client_secret: None,
-            github_oauth_redirect_url: None,
-            github_oauth_authorize_url: builtin_github_oauth_authorize_url(),
-            github_oauth_token_url: builtin_github_oauth_token_url(),
-            github_api_user_url: builtin_github_api_user_url(),
-            web_session_cookie_name: DEFAULT_WEB_SESSION_COOKIE_NAME.to_string(),
-            web_csrf_cookie_name: DEFAULT_WEB_CSRF_COOKIE_NAME.to_string(),
-            web_session_ttl_hours: DEFAULT_WEB_SESSION_TTL_HOURS,
-            web_session_cookie_secure: DEFAULT_WEB_SESSION_COOKIE_SECURE,
-            agent_registration_mode: DEFAULT_AGENT_REGISTRATION_MODE,
-            docker_host: None,
-            host_probe_mode: DEFAULT_HOST_PROBE_MODE,
-            host_probe_command: DEFAULT_HOST_PROBE_COMMAND.to_string(),
-            runner_security_profile: DEFAULT_RUNNER_SECURITY_PROFILE,
-            require_digest_pinned_images: DEFAULT_REQUIRE_DIGEST_PINNED_IMAGES,
-            runner_writable_storage_mode: DEFAULT_RUNNER_WRITABLE_STORAGE_MODE,
-            runner_namespace: builtin_runner_namespace(),
-            runner_runtime_root: None,
-            runner_phase_mount_root: None,
-            runner_writable_slot_classes_mb: DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB.to_string(),
-            runner_docker_layer_quota: DEFAULT_RUNNER_DOCKER_LAYER_QUOTA,
-            runner_max_output_files: DEFAULT_RUNNER_MAX_OUTPUT_FILES,
-            runner_max_output_dirs: DEFAULT_RUNNER_MAX_OUTPUT_DIRS,
-            runner_max_output_depth: DEFAULT_RUNNER_MAX_OUTPUT_DEPTH,
-            runner_max_runs: DEFAULT_RUNNER_MAX_RUNS,
-            runner_max_result_json_bytes: DEFAULT_RUNNER_MAX_RESULT_JSON_BYTES,
-            runner_max_public_results: DEFAULT_RUNNER_MAX_PUBLIC_RESULTS,
-            runner_max_result_log_bytes: DEFAULT_RUNNER_MAX_RESULT_LOG_BYTES,
-            runner_max_interaction_bytes_per_direction:
-                DEFAULT_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION,
-            runner_interaction_shutdown_grace_secs: DEFAULT_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS,
-            log_level: DEFAULT_LOG_LEVEL.to_string(),
+            database: DatabaseConfig {
+                url: local_database_url(DEFAULT_POSTGRES_PORT),
+            },
+            api_web: ApiWebConfig {
+                api_host: DEFAULT_API_HOST.to_string(),
+                api_port: DEFAULT_API_PORT,
+                cors_allowed_origins: local_cors_allowed_origins(DEFAULT_WEB_PORT),
+                web_session_cookie_name: DEFAULT_WEB_SESSION_COOKIE_NAME.to_string(),
+                web_csrf_cookie_name: DEFAULT_WEB_CSRF_COOKIE_NAME.to_string(),
+                web_session_ttl_hours: DEFAULT_WEB_SESSION_TTL_HOURS,
+                web_session_cookie_secure: DEFAULT_WEB_SESSION_COOKIE_SECURE,
+            },
+            storage: StorageConfig {
+                root: DEFAULT_STORAGE_ROOT.to_string(),
+                backend: DEFAULT_STORAGE_BACKEND,
+                work_root: None,
+                s3_bucket: Some(DEFAULT_S3_BUCKET.to_string()),
+                s3_prefix: None,
+                s3_region: DEFAULT_S3_REGION.to_string(),
+                s3_endpoint_url: Some(builtin_s3_endpoint_url()),
+                s3_force_path_style: DEFAULT_S3_FORCE_PATH_STYLE,
+                max_bundle_archive_bytes: storage_config::DEFAULT_STORAGE_MAX_BUNDLE_ARCHIVE_BYTES,
+                max_statement_bytes: storage_config::DEFAULT_STORAGE_MAX_STATEMENT_BYTES,
+                max_json_artifact_bytes: storage_config::DEFAULT_STORAGE_MAX_JSON_ARTIFACT_BYTES,
+                tmp_object_grace_hours: storage_config::DEFAULT_STORAGE_TMP_OBJECT_GRACE_HOURS,
+                challenges_root: DEFAULT_CHALLENGES_ROOT.to_string(),
+            },
+            auth: AuthConfig {
+                admin_username: DEFAULT_ADMIN_USERNAME.to_string(),
+                admin_password: SecretString::from(INSECURE_DEFAULT_ADMIN_PASSWORD),
+                allow_insecure_default_admin_credentials:
+                    DEFAULT_ALLOW_INSECURE_DEFAULT_ADMIN_CREDENTIALS,
+                agent_registration_mode: DEFAULT_AGENT_REGISTRATION_MODE,
+            },
+            moltbook: MoltbookConfig {
+                submolt_name: builtin_moltbook_submolt_name(),
+                submolt_url: builtin_moltbook_submolt_url(),
+            },
+            worker: WorkerConfig {
+                poll_interval_ms: DEFAULT_WORKER_POLL_INTERVAL_MS,
+                stale_job_minutes: DEFAULT_WORKER_STALE_JOB_MINUTES,
+                accelerators: DEFAULT_WORKER_ACCELERATORS,
+                gpu_probe_image: None,
+            },
+            quotas: QuotaConfig {
+                validation_runs_per_agent_challenge_day:
+                    DEFAULT_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY,
+                official_runs_per_agent_challenge_day:
+                    DEFAULT_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY,
+                max_active_official_jobs: DEFAULT_MAX_ACTIVE_OFFICIAL_JOBS,
+                max_active_agents: DEFAULT_MAX_ACTIVE_AGENTS,
+                max_active_challenge_drafts_per_agent:
+                    DEFAULT_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT,
+                challenge_private_asset_bytes_per_draft:
+                    DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT,
+                challenge_draft_validations_per_day: DEFAULT_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY,
+                challenge_draft_validation_timeout_minutes:
+                    DEFAULT_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES,
+                challenge_private_asset_pending_timeout_minutes:
+                    DEFAULT_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES,
+                challenge_draft_publish_timeout_minutes:
+                    DEFAULT_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES,
+                challenge_draft_ttl_days: DEFAULT_CHALLENGE_DRAFT_TTL_DAYS,
+                unpublished_challenge_asset_grace_days:
+                    DEFAULT_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS,
+            },
+            github_oauth: GithubOauthConfig {
+                client_id: None,
+                client_secret: None,
+                redirect_url: None,
+                authorize_url: builtin_github_oauth_authorize_url(),
+                token_url: builtin_github_oauth_token_url(),
+                api_user_url: builtin_github_api_user_url(),
+            },
+            runner: RunnerConfig {
+                docker_host: None,
+                host_probe_mode: DEFAULT_HOST_PROBE_MODE,
+                host_probe_command: DEFAULT_HOST_PROBE_COMMAND.to_string(),
+                security_profile: DEFAULT_RUNNER_SECURITY_PROFILE,
+                require_digest_pinned_images: DEFAULT_REQUIRE_DIGEST_PINNED_IMAGES,
+                writable_storage_mode: DEFAULT_RUNNER_WRITABLE_STORAGE_MODE,
+                namespace: builtin_runner_namespace(),
+                runtime_root: None,
+                phase_mount_root: None,
+                writable_slot_classes_mb: DEFAULT_RUNNER_WRITABLE_SLOT_CLASSES_MB.to_string(),
+                docker_layer_quota: DEFAULT_RUNNER_DOCKER_LAYER_QUOTA,
+                max_output_files: DEFAULT_RUNNER_MAX_OUTPUT_FILES,
+                max_output_dirs: DEFAULT_RUNNER_MAX_OUTPUT_DIRS,
+                max_output_depth: DEFAULT_RUNNER_MAX_OUTPUT_DEPTH,
+                max_runs: DEFAULT_RUNNER_MAX_RUNS,
+                max_result_json_bytes: DEFAULT_RUNNER_MAX_RESULT_JSON_BYTES,
+                max_public_results: DEFAULT_RUNNER_MAX_PUBLIC_RESULTS,
+                max_result_log_bytes: DEFAULT_RUNNER_MAX_RESULT_LOG_BYTES,
+                max_interaction_bytes_per_direction:
+                    DEFAULT_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION,
+                interaction_shutdown_grace_secs: DEFAULT_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS,
+            },
+            logging: LoggingConfig {
+                log_level: DEFAULT_LOG_LEVEL.to_string(),
+            },
         }
     }
 }
@@ -420,53 +565,60 @@ impl Config {
     /// Reject settings that are acceptable for local development but dangerous
     /// when the API is reachable from another machine.
     pub fn validate_api_security(&self) -> anyhow::Result<()> {
-        validation::validate_api_security_fields(self)?;
+        validation::validate_report(&self.auth)?;
+        validation::validate_report(&self.api_web)?;
+        validation::validate_report(&self.quotas)?;
+        validation::validate_report(&self.github_oauth)?;
         if self.uses_default_admin_credentials()
-            && !self.allow_insecure_default_admin_credentials
-            && !local_urls::is_loopback_host(&self.api_host)
+            && !self.auth.allow_insecure_default_admin_credentials
+            && !local_urls::is_loopback_host(&self.api_web.api_host)
         {
             anyhow::bail!(
                 "refusing to bind API to `{}` with default admin credentials; set AGENTICS_ADMIN_PASSWORD or explicitly set AGENTICS_ALLOW_INSECURE_DEFAULT_ADMIN_CREDENTIALS=true for local-only development",
-                self.api_host
+                self.api_web.api_host
             );
         }
 
-        if !local_urls::is_loopback_host(&self.api_host)
-            && self.agent_registration_mode == AgentRegistrationMode::Public
+        if !local_urls::is_loopback_host(&self.api_web.api_host)
+            && self.auth.agent_registration_mode == AgentRegistrationMode::Public
         {
             anyhow::bail!(
                 "refusing to bind API to `{}` with AGENTICS_AGENT_REGISTRATION_MODE=public; public registration is local-development only",
-                self.api_host
+                self.api_web.api_host
             );
         }
 
-        if self.web_session_cookie_name == self.web_csrf_cookie_name {
+        if self.api_web.web_session_cookie_name == self.api_web.web_csrf_cookie_name {
             anyhow::bail!(
                 "AGENTICS_WEB_SESSION_COOKIE_NAME and AGENTICS_WEB_CSRF_COOKIE_NAME must differ"
             );
         }
         self.validate_moltbook_config()?;
-        if !local_urls::is_loopback_host(&self.api_host) && !self.web_session_cookie_secure {
+        if !local_urls::is_loopback_host(&self.api_web.api_host)
+            && !self.api_web.web_session_cookie_secure
+        {
             anyhow::bail!(
                 "AGENTICS_WEB_SESSION_COOKIE_SECURE must be true when the API is reachable from another machine"
             );
         }
-        if self.github_oauth_client_id.is_some()
-            || self.github_oauth_client_secret.is_some()
-            || self.github_oauth_redirect_url.is_some()
+        if self.github_oauth.client_id.is_some()
+            || self.github_oauth.client_secret.is_some()
+            || self.github_oauth.redirect_url.is_some()
         {
             validate_required_trimmed(
-                self.github_oauth_client_id.as_deref(),
+                self.github_oauth.client_id.as_deref(),
                 "AGENTICS_GITHUB_OAUTH_CLIENT_ID",
             )?;
             validate_required_trimmed(
-                self.github_oauth_client_secret
+                self.github_oauth
+                    .client_secret
                     .as_ref()
                     .map(ExposeSecret::expose_secret),
                 "AGENTICS_GITHUB_OAUTH_CLIENT_SECRET",
             )?;
             validate_required_trimmed(
-                self.github_oauth_redirect_url
+                self.github_oauth
+                    .redirect_url
                     .as_ref()
                     .map(GithubOauthRedirectUrl::as_str),
                 "AGENTICS_GITHUB_OAUTH_REDIRECT_URL",
@@ -485,10 +637,10 @@ impl Config {
 
     /// Validate Moltbook platform-community configuration.
     fn validate_moltbook_config(&self) -> anyhow::Result<()> {
-        let url_name = self.moltbook_submolt_url.submolt_name().map_err(|e| {
+        let url_name = self.moltbook.submolt_url.submolt_name().map_err(|e| {
             anyhow::anyhow!("{} is invalid: {e}", ENV_AGENTICS_MOLTBOOK_SUBMOLT_URL)
         })?;
-        if url_name != self.moltbook_submolt_name {
+        if url_name != self.moltbook.submolt_name {
             anyhow::bail!(
                 "{} must match the Submolt name in {}",
                 ENV_AGENTICS_MOLTBOOK_SUBMOLT_NAME,
@@ -505,9 +657,9 @@ impl Config {
         self.validate_worker_accelerator_config()?;
         self.validate_hosted_image_policy()?;
 
-        match self.runner_writable_storage_mode {
+        match self.runner.writable_storage_mode {
             RunnerWritableStorageMode::Unbounded => {
-                if self.runner_security_profile == RunnerSecurityProfile::Production {
+                if self.runner.security_profile == RunnerSecurityProfile::Production {
                     anyhow::bail!(
                         "AGENTICS_RUNNER_SECURITY_PROFILE=production requires AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots"
                     );
@@ -519,7 +671,7 @@ impl Config {
                         "AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots is Linux-only"
                     );
                 }
-                if !self.runner_docker_layer_quota {
+                if !self.runner.docker_layer_quota {
                     anyhow::bail!(
                         "AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true is required alongside AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots"
                     );
@@ -528,7 +680,8 @@ impl Config {
                     "AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots",
                 )?;
                 let mount_root = self
-                    .runner_phase_mount_root
+                    .runner
+                    .phase_mount_root
                     .as_deref()
                     .map(str::trim)
                     .filter(|value| !value.is_empty())
@@ -546,36 +699,38 @@ impl Config {
             }
         }
 
-        if self.runner_docker_layer_quota && !cfg!(target_os = "linux") {
+        if self.runner.docker_layer_quota && !cfg!(target_os = "linux") {
             anyhow::bail!("AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true is Linux-only");
         }
-        if self.runner_security_profile == RunnerSecurityProfile::Production
-            && self.host_probe_mode != HostProbeMode::Require
+        if self.runner.security_profile == RunnerSecurityProfile::Production
+            && self.runner.host_probe_mode != HostProbeMode::Require
         {
             anyhow::bail!(
                 "AGENTICS_RUNNER_SECURITY_PROFILE=production requires AGENTICS_HOST_PROBE_MODE=require"
             );
         }
-        if self.host_probe_mode == HostProbeMode::Require && !self.runner_docker_layer_quota {
+        if self.runner.host_probe_mode == HostProbeMode::Require && !self.runner.docker_layer_quota
+        {
             anyhow::bail!(
                 "AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true is required when AGENTICS_HOST_PROBE_MODE=require"
             );
         }
-        if self.host_probe_mode != HostProbeMode::Off && !cfg!(target_os = "linux") {
+        if self.runner.host_probe_mode != HostProbeMode::Off && !cfg!(target_os = "linux") {
             anyhow::bail!(
                 "AGENTICS_HOST_PROBE_MODE={} is Linux-only",
-                self.host_probe_mode.as_str()
+                self.runner.host_probe_mode.as_str()
             );
         }
-        if self.host_probe_mode != HostProbeMode::Off {
+        if self.runner.host_probe_mode != HostProbeMode::Off {
             validate_required_trimmed(
-                Some(&self.host_probe_command),
+                Some(&self.runner.host_probe_command),
                 ENV_AGENTICS_HOST_PROBE_COMMAND,
             )?;
             self.validate_required_runner_runtime_root("AGENTICS_HOST_PROBE_MODE is enabled")?;
         }
         if let Some(runtime_root) = self
-            .runner_runtime_root
+            .runner
+            .runtime_root
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
@@ -583,16 +738,16 @@ impl Config {
         {
             anyhow::bail!("AGENTICS_RUNNER_RUNTIME_ROOT must be an absolute path");
         }
-        if self.runner_security_profile == RunnerSecurityProfile::Production {
+        if self.runner.security_profile == RunnerSecurityProfile::Production {
             self.validate_private_host_directory(
                 "AGENTICS_RUNNER_RUNTIME_ROOT",
-                self.runner_runtime_root.as_deref(),
+                self.runner.runtime_root.as_deref(),
             )?;
-            if self.runner_writable_storage_mode == RunnerWritableStorageMode::XfsProjectQuotaSlots
+            if self.runner.writable_storage_mode == RunnerWritableStorageMode::XfsProjectQuotaSlots
             {
                 self.validate_private_host_directory(
                     "AGENTICS_RUNNER_PHASE_MOUNT_ROOT",
-                    self.runner_phase_mount_root.as_deref(),
+                    self.runner.phase_mount_root.as_deref(),
                 )?;
             }
         }
@@ -602,9 +757,9 @@ impl Config {
 
     /// Validate worker accelerator capability knobs before accepting jobs.
     fn validate_worker_accelerator_config(&self) -> anyhow::Result<()> {
-        match self.worker_accelerators {
+        match self.worker.accelerators {
             WorkerAccelerators::None => {
-                if let Some(image) = self.worker_gpu_probe_image.as_deref()
+                if let Some(image) = self.worker.gpu_probe_image.as_deref()
                     && image.trim().is_empty()
                 {
                     anyhow::bail!("AGENTICS_WORKER_GPU_PROBE_IMAGE must not be empty");
@@ -623,7 +778,8 @@ impl Config {
     /// Return the validated GPU probe image for GPU-capable workers.
     pub fn worker_gpu_probe_image(&self) -> anyhow::Result<&str> {
         let image = self
-            .worker_gpu_probe_image
+            .worker
+            .gpu_probe_image
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
@@ -637,14 +793,14 @@ impl Config {
 
     /// Return whether this configuration must enforce immutable hosted images.
     pub fn requires_digest_pinned_images(&self) -> bool {
-        self.require_digest_pinned_images
-            || self.host_probe_mode == HostProbeMode::Require
-            || self.runner_security_profile == RunnerSecurityProfile::Production
+        self.runner.require_digest_pinned_images
+            || self.runner.host_probe_mode == HostProbeMode::Require
+            || self.runner.security_profile == RunnerSecurityProfile::Production
     }
 
     /// Reject hosted profiles that try to opt out of immutable image references.
     fn validate_hosted_image_policy(&self) -> anyhow::Result<()> {
-        if self.requires_digest_pinned_images() && !self.require_digest_pinned_images {
+        if self.requires_digest_pinned_images() && !self.runner.require_digest_pinned_images {
             anyhow::bail!(
                 "AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES must be true for profiles using AGENTICS_HOST_PROBE_MODE=require or AGENTICS_RUNNER_SECURITY_PROFILE=production"
             );
@@ -654,18 +810,19 @@ impl Config {
 
     /// Validate platform-owned output tree limits.
     fn validate_runner_output_limits(&self) -> anyhow::Result<()> {
-        validation::validate_runner_output_limits(self)
+        validation::validate_report(&self.runner)
     }
 
     /// Handles runner writable storage mode for this module.
     pub fn runner_writable_storage_mode(&self) -> RunnerWritableStorageMode {
-        self.runner_writable_storage_mode
+        self.runner.writable_storage_mode
     }
 
     /// Return the host-visible root for transient runner artifacts.
     pub fn runner_runtime_root(&self) -> anyhow::Result<PathBuf> {
         let Some(runtime_root) = self
-            .runner_runtime_root
+            .runner
+            .runtime_root
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
@@ -681,7 +838,8 @@ impl Config {
     /// Require a Docker-daemon-visible runner runtime root for hosted paths.
     fn validate_required_runner_runtime_root(&self, reason: &str) -> anyhow::Result<()> {
         let runtime_root = self
-            .runner_runtime_root
+            .runner
+            .runtime_root
             .as_deref()
             .map(str::trim)
             .filter(|value| !value.is_empty())
@@ -713,19 +871,20 @@ impl Config {
 
     /// Return the configured agent-registration mode.
     pub fn agent_registration_mode(&self) -> AgentRegistrationMode {
-        self.agent_registration_mode
+        self.auth.agent_registration_mode
     }
 
     /// Return whether local-only testing knobs such as unlimited pioneer codes may be used.
     pub fn allows_local_registration_testing_knobs(&self) -> bool {
-        local_urls::is_loopback_host(&self.api_host)
+        local_urls::is_loopback_host(&self.api_web.api_host)
     }
 
     /// Handles runner writable slot classes mb for this module.
     pub fn runner_writable_slot_classes_mb(&self) -> anyhow::Result<Vec<u64>> {
         let mut classes = Vec::new();
         for raw in self
-            .runner_writable_slot_classes_mb
+            .runner
+            .writable_slot_classes_mb
             .split(|ch: char| ch == ',' || ch.is_ascii_whitespace())
         {
             let value = raw.trim();
@@ -749,7 +908,8 @@ impl Config {
 
     /// Split the comma-separated CORS allowlist into trimmed origin strings.
     pub fn cors_allowed_origin_values(&self) -> Vec<String> {
-        self.cors_allowed_origins
+        self.api_web
+            .cors_allowed_origins
             .split(',')
             .map(str::trim)
             .filter(|origin| !origin.is_empty())
@@ -759,13 +919,13 @@ impl Config {
 
     /// Handles uses default admin credentials for this module.
     fn uses_default_admin_credentials(&self) -> bool {
-        self.admin_username == DEFAULT_ADMIN_USERNAME
-            && self.admin_password.expose_secret() == INSECURE_DEFAULT_ADMIN_PASSWORD
+        self.auth.admin_username == DEFAULT_ADMIN_USERNAME
+            && self.auth.admin_password.expose_secret() == INSECURE_DEFAULT_ADMIN_PASSWORD
     }
 
     /// Compare a candidate admin password against the configured secret.
     pub fn admin_password_matches(&self, candidate: &str) -> bool {
-        self.admin_password.expose_secret() == candidate
+        self.auth.admin_password.expose_secret() == candidate
     }
 
     /// Expose the admin password for integration-test Basic auth construction.
@@ -774,20 +934,22 @@ impl Config {
     /// exists for test clients that must send the configured password over the
     /// same HTTP boundary as real clients.
     pub fn expose_admin_password_for_http_basic(&self) -> &str {
-        self.admin_password.expose_secret()
+        self.auth.admin_password.expose_secret()
     }
 
     /// Return whether GitHub OAuth is fully configured for creator login.
     pub fn github_oauth_enabled(&self) -> bool {
-        self.github_oauth_client_id
+        self.github_oauth
+            .client_id
             .as_deref()
             .is_some_and(|value| !value.trim().is_empty())
             && self
-                .github_oauth_client_secret
+                .github_oauth
+                .client_secret
                 .as_ref()
                 .map(ExposeSecret::expose_secret)
                 .is_some_and(|value| !value.trim().is_empty())
-            && self.github_oauth_redirect_url.is_some()
+            && self.github_oauth.redirect_url.is_some()
     }
 }
 

@@ -43,8 +43,8 @@ fn challenge_moltbook_discussion_response(
     ChallengeMoltbookDiscussionResponse {
         challenge_name: record.challenge_name,
         moltbook: MoltbookCommunityDto {
-            submolt_name: config.moltbook_submolt_name.clone(),
-            submolt_url: config.moltbook_submolt_url.clone(),
+            submolt_name: config.moltbook.submolt_name.clone(),
+            submolt_url: config.moltbook.submolt_url.clone(),
             discussion_url: record.discussion_url,
         },
     }

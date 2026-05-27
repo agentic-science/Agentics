@@ -142,14 +142,14 @@ pub async fn reconcile_runner_containers(
     stale_minutes: i32,
     config: &Config,
 ) -> Result<RunnerContainerCleanupSummary> {
-    DockerRunnerBackend::new(docker, &config.runner_namespace)
+    DockerRunnerBackend::new(docker, &config.runner.namespace)
         .reconcile_containers(pool, stale_minutes)
         .await
 }
 
 /// Remove stopped Agentics runner containers.
 pub async fn remove_stopped_runner_containers(docker: &Docker, config: &Config) -> Result<u64> {
-    DockerRunnerBackend::new(docker, &config.runner_namespace)
+    DockerRunnerBackend::new(docker, &config.runner.namespace)
         .remove_stopped_runner_containers()
         .await
 }
@@ -159,7 +159,7 @@ pub async fn remove_stale_local_validation_containers(
     docker: &Docker,
     config: &Config,
 ) -> Result<RunnerContainerCleanupSummary> {
-    DockerRunnerBackend::new(docker, &config.runner_namespace)
+    DockerRunnerBackend::new(docker, &config.runner.namespace)
         .remove_stale_local_validation_containers()
         .await
 }

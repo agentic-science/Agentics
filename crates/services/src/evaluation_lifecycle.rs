@@ -99,7 +99,7 @@ impl<'a> EvaluationWorkerService<'a> {
         let repos = Repositories::new(self.db);
         let job = repos
             .evaluation_jobs()
-            .claim_next(worker_id, self.config.worker_accelerators)
+            .claim_next(worker_id, self.config.worker.accelerators)
             .await?;
 
         let Some(job) = job else {
@@ -120,7 +120,7 @@ impl<'a> EvaluationWorkerService<'a> {
                 worker_id,
                 &HeartbeatPayload {
                     status: "running".to_string(),
-                    accelerators: self.config.worker_accelerators.heartbeat_values(),
+                    accelerators: self.config.worker.accelerators.heartbeat_values(),
                     job_id: Some(job.id.clone()),
                     solution_submission_id: Some(job.solution_submission_id.clone()),
                     last_completed_job_id: None,
@@ -194,7 +194,7 @@ impl<'a> EvaluationWorkerService<'a> {
         let repos = Repositories::new(self.db);
         let reaped = repos
             .maintenance()
-            .reap_stuck_jobs(self.config.worker_stale_job_minutes.max(1))
+            .reap_stuck_jobs(self.config.worker.stale_job_minutes.max(1))
             .await?;
         if reaped.requeued > 0 || reaped.failed > 0 {
             info!(
@@ -206,7 +206,7 @@ impl<'a> EvaluationWorkerService<'a> {
         let cleanup = reconcile_worker_containers(
             self.docker,
             self.db,
-            self.config.worker_stale_job_minutes.max(1),
+            self.config.worker.stale_job_minutes.max(1),
             self.config,
         )
         .await?;
@@ -383,7 +383,7 @@ impl<'a> EvaluationWorkerService<'a> {
                 worker_id,
                 &HeartbeatPayload {
                     status: "idle".to_string(),
-                    accelerators: self.config.worker_accelerators.heartbeat_values(),
+                    accelerators: self.config.worker.accelerators.heartbeat_values(),
                     job_id: None,
                     solution_submission_id: None,
                     last_completed_job_id,
@@ -445,7 +445,7 @@ impl EvaluationWorkerMaintenanceSummary {
 }
 
 fn lease_refresh_interval(config: &Config) -> Duration {
-    let stale_minutes = u64::from(config.worker_stale_job_minutes.max(1).unsigned_abs());
+    let stale_minutes = u64::from(config.worker.stale_job_minutes.max(1).unsigned_abs());
     let stale_window = Duration::from_secs(stale_minutes.saturating_mul(60));
     stale_window
         .checked_div(3)

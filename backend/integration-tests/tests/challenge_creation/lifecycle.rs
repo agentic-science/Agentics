@@ -67,7 +67,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
             .await
             .expect("participant agent id");
     let admin_auth = basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
 
@@ -251,7 +251,7 @@ async fn archive_draft_requires_challenge_owner(pool: sqlx::PgPool) {
     let owner = create_creator_session(&pool, 1001, "owner").await;
     let non_owner = create_creator_session(&pool, 1002, "non-owner").await;
     let admin_auth = basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
 
@@ -444,14 +444,14 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     .expect("asset length fits u64");
 
     let mut config = test_config(storage.path(), seeded_challenges.path());
-    config.max_active_challenge_drafts_per_agent = 1;
-    config.challenge_draft_validations_per_day = 1;
-    config.challenge_private_asset_bytes_per_draft = valid_asset_len;
+    config.quotas.max_active_challenge_drafts_per_agent = 1;
+    config.quotas.challenge_draft_validations_per_day = 1;
+    config.quotas.challenge_private_asset_bytes_per_draft = valid_asset_len;
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
     let admin_auth = basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
 
@@ -556,12 +556,12 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let mut config = test_config(storage.path(), seeded_challenges.path());
-    config.unpublished_challenge_asset_grace_days = 1;
+    config.quotas.unpublished_challenge_asset_grace_days = 1;
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
     let admin_auth = basic_auth_header(
-        &config.admin_username,
+        &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
 

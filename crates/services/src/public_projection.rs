@@ -75,15 +75,15 @@ pub async fn get_challenge_detail(
     let statement_bytes = storage
         .get(
             &challenge.statement_key,
-            StorageWriteIntent::new("challenge statement", config.storage_max_statement_bytes),
+            StorageWriteIntent::new("challenge statement", config.storage.max_statement_bytes),
         )
         .await?;
     let statement = String::from_utf8(statement_bytes).map_err(|e| {
         ServiceError::Internal(format!("stored challenge statement is not UTF-8: {e}"))
     })?;
     let moltbook = MoltbookCommunityDto {
-        submolt_name: config.moltbook_submolt_name.clone(),
-        submolt_url: config.moltbook_submolt_url.clone(),
+        submolt_name: config.moltbook.submolt_name.clone(),
+        submolt_url: config.moltbook.submolt_url.clone(),
         discussion_url: challenge.moltbook_discussion_url.clone(),
     };
     present_challenge_detail(&challenge, &statement, moltbook)

@@ -10,7 +10,7 @@ use agentics_domain::error::Result;
 pub async fn create_pool(config: &Config, max_connections: u32) -> Result<PgPool> {
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(max_connections)
-        .connect(config.database_url.expose_secret())
+        .connect(config.database.url.expose_secret())
         .await?;
     Ok(pool)
 }

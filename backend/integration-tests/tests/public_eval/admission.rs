@@ -63,7 +63,7 @@ async fn validation_run_is_rejected_when_challenge_disables_validation(pool: sql
 async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
-    config.validation_runs_per_agent_challenge_day = 1;
+    config.quotas.validation_runs_per_agent_challenge_day = 1;
     let app = spawn_app_with_config(pool.clone(), config).await;
     let client = reqwest::Client::new();
 
@@ -161,7 +161,7 @@ async fn validation_run_quota_rejects_and_resets(pool: sqlx::PgPool) {
 async fn official_submission_quota_rejects_before_artifact_decode(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
-    config.official_runs_per_agent_challenge_day = 1;
+    config.quotas.official_runs_per_agent_challenge_day = 1;
     let app = spawn_app_with_config(pool.clone(), config).await;
     let client = reqwest::Client::new();
 
@@ -225,8 +225,8 @@ async fn official_submission_quota_rejects_before_artifact_decode(pool: sqlx::Pg
 async fn official_active_queue_limit_rejects_before_artifact_decode(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
-    config.official_runs_per_agent_challenge_day = 10;
-    config.max_active_official_jobs = 1;
+    config.quotas.official_runs_per_agent_challenge_day = 10;
+    config.quotas.max_active_official_jobs = 1;
     let app = spawn_app_with_config(pool.clone(), config).await;
     let client = reqwest::Client::new();
 
@@ -290,8 +290,8 @@ async fn official_active_queue_limit_rejects_before_artifact_decode(pool: sqlx::
 async fn concurrent_official_admission_locks_admit_only_one(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
-    config.official_runs_per_agent_challenge_day = 1;
-    config.max_active_official_jobs = 1;
+    config.quotas.official_runs_per_agent_challenge_day = 1;
+    config.quotas.max_active_official_jobs = 1;
     let app = spawn_app_with_config(pool.clone(), config).await;
     let client = reqwest::Client::new();
     let token = register_agent_token(&client, &app, "concurrent-official-quota-agent").await;

@@ -66,7 +66,7 @@ pub async fn admin_login(
             .record_failed_attempt(&request.username, &remote_addr.ip().to_string())?;
         return Err(ServiceError::Unauthorized.into());
     }
-    if request.username != state.config.admin_username
+    if request.username != state.config.auth.admin_username
         || !state
             .config
             .admin_password_matches(request.password.expose_secret())
@@ -121,7 +121,7 @@ pub async fn admin_logout(
 ) -> Result<(StatusCode, AppendHeaders<[(HeaderName, String); 2]>)> {
     if let Some(session_token) = cookie_value(
         headers.get(header::COOKIE).and_then(|h| h.to_str().ok()),
-        &state.config.web_session_cookie_name,
+        &state.config.api_web.web_session_cookie_name,
     ) {
         Repositories::new(&state.db)
             .sessions()
@@ -141,9 +141,9 @@ pub async fn admin_session(
     headers: HeaderMap,
 ) -> Result<Json<AdminSessionResponse>> {
     let cookie_header = headers.get(header::COOKIE).and_then(|h| h.to_str().ok());
-    let session_token = cookie_value(cookie_header, &state.config.web_session_cookie_name)
+    let session_token = cookie_value(cookie_header, &state.config.api_web.web_session_cookie_name)
         .ok_or(ServiceError::Unauthorized)?;
-    let csrf_token = cookie_value(cookie_header, &state.config.web_csrf_cookie_name)
+    let csrf_token = cookie_value(cookie_header, &state.config.api_web.web_csrf_cookie_name)
         .ok_or(ServiceError::Unauthorized)?;
     let session = Repositories::new(&state.db)
         .sessions()
@@ -171,13 +171,14 @@ pub async fn github_oauth_login(
     Json<GithubOauthLoginResponse>,
 )> {
     let client_id = required_oauth_config(
-        state.config.github_oauth_client_id.as_deref(),
+        state.config.github_oauth.client_id.as_deref(),
         "AGENTICS_GITHUB_OAUTH_CLIENT_ID",
     )?;
     let redirect_url = required_oauth_config(
         state
             .config
-            .github_oauth_redirect_url
+            .github_oauth
+            .redirect_url
             .as_ref()
             .map(|url| url.as_str()),
         "AGENTICS_GITHUB_OAUTH_REDIRECT_URL",
@@ -213,7 +214,7 @@ pub async fn github_oauth_login(
         })
         .await?;
 
-    let mut authorization_url = state.config.github_oauth_authorize_url.to_url();
+    let mut authorization_url = state.config.github_oauth.authorize_url.to_url();
     authorization_url
         .query_pairs_mut()
         .append_pair("client_id", client_id)
@@ -311,7 +312,7 @@ async fn upsert_callback_creator_agent(
             &github_user.login,
             oauth_state.pioneer_code_hash.as_deref(),
             require_pioneer_code,
-            i64::from(state.config.max_active_agents),
+            i64::from(state.config.quotas.max_active_agents),
         )
         .await
     {
@@ -386,13 +387,14 @@ pub async fn creator_session(creator: CreatorAuth) -> Result<Json<CreatorSession
 /// Exchanges a one-time GitHub OAuth code for an access token.
 async fn exchange_github_code(state: &AppState, code: &str) -> Result<SecretString> {
     let client_id = required_oauth_config(
-        state.config.github_oauth_client_id.as_deref(),
+        state.config.github_oauth.client_id.as_deref(),
         "AGENTICS_GITHUB_OAUTH_CLIENT_ID",
     )?;
     let client_secret = required_oauth_config(
         state
             .config
-            .github_oauth_client_secret
+            .github_oauth
+            .client_secret
             .as_ref()
             .map(ExposeSecret::expose_secret),
         "AGENTICS_GITHUB_OAUTH_CLIENT_SECRET",
@@ -400,7 +402,8 @@ async fn exchange_github_code(state: &AppState, code: &str) -> Result<SecretStri
     let redirect_url = required_oauth_config(
         state
             .config
-            .github_oauth_redirect_url
+            .github_oauth
+            .redirect_url
             .as_ref()
             .map(|url| url.as_str()),
         "AGENTICS_GITHUB_OAUTH_REDIRECT_URL",
@@ -412,7 +415,7 @@ async fn exchange_github_code(state: &AppState, code: &str) -> Result<SecretStri
         ("redirect_uri", redirect_url),
     ])?;
     let response = reqwest::Client::new()
-        .post(state.config.github_oauth_token_url.as_str())
+        .post(state.config.github_oauth.token_url.as_str())
         .header(reqwest::header::ACCEPT, "application/json")
         .header(reqwest::header::USER_AGENT, GITHUB_USER_AGENT)
         .header(
@@ -454,7 +457,7 @@ async fn fetch_github_user(
     access_token: &SecretString,
 ) -> Result<GithubUserResponse> {
     let response = reqwest::Client::new()
-        .get(state.config.github_api_user_url.as_str())
+        .get(state.config.github_oauth.api_user_url.as_str())
         .bearer_auth(access_token.expose_secret())
         .header(reqwest::header::ACCEPT, "application/vnd.github+json")
         .header(reqwest::header::USER_AGENT, GITHUB_USER_AGENT)
@@ -502,6 +505,7 @@ fn form_urlencoded(values: &[(&str, &str)]) -> Result<String> {
 fn session_ttl_seconds(state: &AppState) -> Result<i64> {
     Ok(state
         .config
+        .api_web
         .web_session_ttl_hours
         .checked_mul(60 * 60)
         .ok_or_else(|| ServiceError::Internal("web session TTL overflow".to_string()))?)
@@ -523,7 +527,7 @@ fn oauth_nonce_cookie(state: &AppState, browser_nonce: &str) -> (HeaderName, Str
             browser_nonce,
             OAUTH_STATE_TTL_MINUTES * 60,
             true,
-            state.config.web_session_cookie_secure,
+            state.config.api_web.web_session_cookie_secure,
         ),
     )
 }
@@ -537,7 +541,7 @@ fn expired_oauth_nonce_cookie(state: &AppState) -> (HeaderName, String) {
             "",
             0,
             true,
-            state.config.web_session_cookie_secure,
+            state.config.api_web.web_session_cookie_secure,
         ),
     )
 }
@@ -553,21 +557,21 @@ fn session_cookies(
         (
             header::SET_COOKIE,
             build_cookie(
-                &state.config.web_session_cookie_name,
+                &state.config.api_web.web_session_cookie_name,
                 session_token,
                 ttl_seconds,
                 true,
-                state.config.web_session_cookie_secure,
+                state.config.api_web.web_session_cookie_secure,
             ),
         ),
         (
             header::SET_COOKIE,
             build_cookie(
-                &state.config.web_csrf_cookie_name,
+                &state.config.api_web.web_csrf_cookie_name,
                 csrf_token,
                 ttl_seconds,
                 false,
-                state.config.web_session_cookie_secure,
+                state.config.api_web.web_session_cookie_secure,
             ),
         ),
     ]
@@ -579,21 +583,21 @@ fn expired_session_cookies(state: &AppState) -> [(HeaderName, String); 2] {
         (
             header::SET_COOKIE,
             build_cookie(
-                &state.config.web_session_cookie_name,
+                &state.config.api_web.web_session_cookie_name,
                 "",
                 0,
                 true,
-                state.config.web_session_cookie_secure,
+                state.config.api_web.web_session_cookie_secure,
             ),
         ),
         (
             header::SET_COOKIE,
             build_cookie(
-                &state.config.web_csrf_cookie_name,
+                &state.config.api_web.web_csrf_cookie_name,
                 "",
                 0,
                 false,
-                state.config.web_session_cookie_secure,
+                state.config.api_web.web_session_cookie_secure,
             ),
         ),
     ]

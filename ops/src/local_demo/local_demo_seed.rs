@@ -61,7 +61,7 @@ pub(super) async fn prepare_challenge_root(
     config: &LocalDemoConfig,
 ) -> Result<usize, LocalDemoError> {
     let source_root = challenge_repository_root(config.repo_root()).join(CHALLENGES_DIR);
-    let destination_root = PathBuf::from(&config.storage_config().challenges_root);
+    let destination_root = PathBuf::from(&config.storage_config().storage.challenges_root);
     let challenges = discover_frontier_challenges(&source_root).await?;
     let storage = agentics_storage::build_storage(config.storage_config())
         .await
@@ -91,6 +91,7 @@ pub(super) async fn prepare_challenge_root(
                         "Frontier-CS private asset ZIP",
                         config
                             .storage_config()
+                            .quotas
                             .challenge_private_asset_bytes_per_draft,
                     ),
                 )
@@ -101,6 +102,7 @@ pub(super) async fn prepare_challenge_root(
                 asset.asset_name.as_str(),
                 config
                     .storage_config()
+                    .quotas
                     .challenge_private_asset_bytes_per_draft,
             )
             .await?;
@@ -121,9 +123,10 @@ pub(super) async fn seed_database(
     let storage = agentics_storage::build_storage(config.storage_config())
         .await
         .map_err(|error| LocalDemoError::StorageInit(error.to_string()))?;
-    let challenges =
-        discover_frontier_challenges(&PathBuf::from(&config.storage_config().challenges_root))
-            .await?;
+    let challenges = discover_frontier_challenges(&PathBuf::from(
+        &config.storage_config().storage.challenges_root,
+    ))
+    .await?;
 
     ensure_dev_seed_agent(&pool).await?;
 
