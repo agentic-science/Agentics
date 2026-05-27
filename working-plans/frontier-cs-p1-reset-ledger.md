@@ -97,3 +97,46 @@ For every `pending reset` challenge:
   `pending reset` candidates were removed in
   `agentics-challenges` commit `1b67b3a`. Challenge repository validation after
   the reset reported `validated 213 challenge(s)`.
+
+## Remigration Preparation Log
+
+- Worker A remigrated algorithmic problems `3,4,10,13,14` as
+  `piped_stdio` in `agentics-challenges` commit `33bed6b`.
+- Worker B remigrated algorithmic problems `16,17,25,28,30` as
+  `piped_stdio` in `agentics-challenges` commit `0bb4514`.
+- Worker C remigrated algorithmic problems `36,40,52,53,54` as
+  `piped_stdio` in `agentics-challenges` commit `3eb2f5c`.
+- Worker D remigrated algorithmic problems `60,63,68,69,73` as
+  `piped_stdio` in `agentics-challenges` commit `7347b07`.
+- Worker E remigrated algorithmic problems `77,79,82,85` as
+  `piped_stdio` in `agentics-challenges` commit `eff2709`.
+  `binary-slate-machine-frontier-cs-algorithmic-81` was reverified and left
+  unchanged.
+- Worker F remigrated algorithmic problems `86,89,93,101,104` as
+  `piped_stdio` in `agentics-challenges` commit `6fee20f`.
+- Worker G remigrated algorithmic problems `106,107` as `piped_stdio` in
+  `agentics-challenges` commit `99ab67c`.
+- Worker G remigrated the three research P1 challenges in
+  `agentics-challenges` commit `d27364f`:
+  `llm-router-frontier-cs-llm-router`,
+  `mamba2-scan-frontier-cs-mamba2-scan`, and
+  `sql-parser-coverage-frontier-cs-grammar-fuzzing-seed-sql`.
+- The faithfulness QA logs that defined this P1 reset scope were committed in
+  `agentics-challenges` commit `c25b715`.
+
+## Remigration Validation Log
+
+- `python3 scripts/validate_challenges.py` in `agentics-challenges` reported
+  `validated 247 challenge(s)` after all prepared remigrations were committed.
+- All 31 remigrated algorithmic reset candidates use `piped_stdio`,
+  `acknowledge_stdio_protocol_framing: true`, and `linux-arm64-cpu`.
+- `llm-router-frontier-cs-llm-router` and
+  `sql-parser-coverage-frontier-cs-grammar-fuzzing-seed-sql` use
+  `coexecuted_benchmark` on `linux-arm64-cpu`.
+- `mamba2-scan-frontier-cs-mamba2-scan` uses `coexecuted_benchmark` on
+  `linux-arm64-cuda`.
+- All three coexecuted remigrations set `acknowledge_danger: true` and omit a
+  solution run resource profile.
+- Private ZIP staging paths were generated under `/tmp/frontier-p1-remigration`
+  by worker package. A traversal/symlink/public-overwrite inspection found no
+  unsafe archive entries.
