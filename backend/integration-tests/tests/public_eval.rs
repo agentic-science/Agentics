@@ -257,6 +257,7 @@ Path(args.output_path).write_text(json.dumps({
             "solution_publication": "public",
             "execution": {
                 "mode": "piped_stdio",
+                "acknowledge_stdio_protocol_framing": true,
                 "interactive_evaluator": {
                     "command": ["python", "interactive-evaluator/run.py"],
                     "result_file": "result.json"

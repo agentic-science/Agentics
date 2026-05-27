@@ -652,6 +652,12 @@ fn validate_piped_stdio_execution(
     spec: &ChallengeBundleSpec,
     execution: &agentics_domain::models::challenge::PipedStdioExecutionSpec,
 ) -> Result<()> {
+    if !execution.acknowledge_stdio_protocol_framing {
+        return Err(ServiceError::Validation(
+            "execution.acknowledge_stdio_protocol_framing must be true for piped_stdio: the challenge author must document the stdin/stdout message protocol, including session start and termination, multi-case framing if used, EOF behavior, malformed participant output handling, and trusted evaluator result.json ownership."
+                .to_string(),
+        ));
+    }
     if let Some(setup) = &execution.validation_setup {
         validate_piped_stdio_setup_spec(
             setup,

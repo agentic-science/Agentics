@@ -137,6 +137,7 @@ pub struct SeparatedEvaluatorExecutionSpec {
 #[serde(deny_unknown_fields)]
 pub struct PipedStdioExecutionSpec {
     pub interactive_evaluator: EvaluatorSpec,
+    pub acknowledge_stdio_protocol_framing: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub validation_session: Option<BundleRelativePath>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -192,6 +193,7 @@ impl From<ChallengeExecutionSpec> for PublicChallengeExecutionSpec {
             ChallengeExecutionSpec::PipedStdio(spec) => {
                 Self::PipedStdio(PublicPipedStdioExecutionSpec {
                     interactive_evaluator: spec.interactive_evaluator,
+                    acknowledge_stdio_protocol_framing: spec.acknowledge_stdio_protocol_framing,
                     validation_session: spec.validation_session,
                     validation_setup: spec.validation_setup,
                 })
@@ -223,6 +225,7 @@ pub struct PublicSeparatedEvaluatorExecutionSpec {
 #[serde(deny_unknown_fields)]
 pub struct PublicPipedStdioExecutionSpec {
     pub interactive_evaluator: EvaluatorSpec,
+    pub acknowledge_stdio_protocol_framing: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub validation_session: Option<BundleRelativePath>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

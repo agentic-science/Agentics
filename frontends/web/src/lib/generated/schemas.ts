@@ -1178,6 +1178,7 @@ export const challengeDetailResponseSchema = z
                     .describe(
                       "Evaluator entrypoint and output-file contract for a bundle.",
                     ),
+                  acknowledge_stdio_protocol_framing: z.boolean(),
                   validation_session: z
                     .string()
                     .regex(

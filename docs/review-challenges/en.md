@@ -42,6 +42,10 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
   `validation_setup` for `piped_stdio`. `coexecuted_benchmark` validation
   uses the coexecuted-evaluator directly and may optionally declare
   `validation_setup`.
+- For `piped_stdio`, confirm `acknowledge_stdio_protocol_framing: true` and
+  verify the challenge documents the stdin/stdout message protocol: session
+  start and termination, multi-case framing if used, EOF behavior, malformed
+  participant output handling, and trusted evaluator `result.json` ownership.
 - Confirm official scoring has the selected execution mode's official source:
   `official_runs` or `official_evaluation_setup` for `separated_evaluator`, and
   `official_session` or `official_evaluation_setup` for `piped_stdio`, with private data

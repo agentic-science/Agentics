@@ -25,7 +25,10 @@ Reviewer checklist:
   `execution.separated_evaluator.result_file` identify the trusted separated-evaluator entry point
   and result JSON. For `piped_stdio`, `execution.interactive_evaluator.command` plus
   `execution.interactive_evaluator.result_file` identify the trusted interactive-evaluator
-  entry point and result JSON. For `coexecuted_benchmark`,
+  entry point and result JSON. Confirm `acknowledge_stdio_protocol_framing: true` and
+  review the documented stdin/stdout message protocol, including session start
+  and termination, multi-case framing if used, EOF behavior, malformed output
+  handling, and trusted evaluator result ownership. For `coexecuted_benchmark`,
   `execution.coexecuted_evaluator.command`, `execution.coexecuted_evaluator.result_file`, and
   `acknowledge_danger: true` identify a weaker-trust coexecuted-evaluator that
   imports participant code from `/workspace` inside the evaluator-image

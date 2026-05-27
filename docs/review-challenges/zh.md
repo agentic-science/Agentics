@@ -38,6 +38,10 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
   `validation_setup`，`piped_stdio` 使用 `validation_session` 或
   `validation_setup`。`coexecuted_benchmark` validation 直接使用 coexecuted-evaluator，也可以声明可选
   `validation_setup`。
+- 对于 `piped_stdio`，确认 `acknowledge_stdio_protocol_framing: true`，并检查
+  challenge 已说明 stdin/stdout message protocol：session 如何开始和结束、如果使用
+  multiple cases 如何 framing、EOF behavior、malformed participant output 的处理方式，
+  以及由可信 evaluator 写入 `result.json`。
 - 确认 official scoring 有所选 execution mode 的对应 official source：
   `separated_evaluator` 使用 `official_runs` 或 `official_evaluation_setup`，
   `piped_stdio` 使用 `official_session` 或 `official_evaluation_setup`，并按预期使用

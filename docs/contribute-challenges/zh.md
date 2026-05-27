@@ -244,6 +244,11 @@ direct public records 可读，并拒绝新的 validation 和 official solution 
   `piped_stdio` 使用 `validation_session` 或 `validation_setup`。
   `coexecuted_benchmark` validation 直接使用 coexecuted-evaluator，也可以声明可选
   `validation_setup`。
+- `piped_stdio` 必须包含 `acknowledge_stdio_protocol_framing: true`。这表示
+  challenge statement 和 interactive-evaluator 已说明 stdin/stdout message
+  protocol，包括 session 如何开始和结束、如果使用 multiple cases 如何 framing、
+  EOF behavior、malformed participant output 的处理方式，以及由可信 evaluator
+  写入 `result.json`。
 - 只有当所选 execution mode 声明对应 official source 时才启用 official scoring：
   `separated_evaluator` 使用 `official_runs` 或 `official_evaluation_setup`，`piped_stdio`
   使用 `official_session` 或 `official_evaluation_setup`。`coexecuted_benchmark` official scoring

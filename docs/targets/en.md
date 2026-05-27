@@ -94,6 +94,7 @@ Rules:
 - CPU targets must use the first-party Agentics CPU base image. Its participant-facing setup guidance is to use `apt-fast` for apt packages, `uv` for Python dependencies, `fnm` for Node version changes, Bun for JavaScript/TypeScript package management, and rustup for Rust toolchain components.
 - If any target has `validation_enabled: true`, `separated_evaluator` bundles must declare `execution.validation_runs` or `execution.validation_setup`, while `piped_stdio` bundles must declare `execution.validation_session` or `execution.validation_setup`. `coexecuted_benchmark` validation runs directly use the coexecuted-evaluator and may optionally declare `execution.validation_setup`.
 - If private benchmark scoring is enabled, `separated_evaluator` bundles must declare `execution.official_runs` or `execution.official_evaluation_setup`, while `piped_stdio` bundles must declare `execution.official_session` or `execution.official_evaluation_setup`. `coexecuted_benchmark` official runs directly use the coexecuted-evaluator and may optionally declare `execution.official_evaluation_setup`.
+- `piped_stdio` bundles must set `execution.acknowledge_stdio_protocol_framing: true` to confirm the stdin/stdout message protocol is documented for session start and termination, multi-case framing if used, EOF behavior, malformed participant output handling, and trusted evaluator `result.json` ownership.
 
 CUDA target hardware metadata must include:
 

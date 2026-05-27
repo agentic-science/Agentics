@@ -782,6 +782,7 @@ mod tests {
                 .expect("spec should parse");
         spec["execution"] = json!({
             "mode": "piped_stdio",
+            "acknowledge_stdio_protocol_framing": true,
             "interactive_evaluator": {
                 "command": ["python", "interactive-evaluator/run.py"],
                 "result_file": "result.json"

@@ -124,6 +124,7 @@ pub(super) fn base_piped_stdio_spec() -> ChallengeBundleSpec {
             ],
             result_file: bundle_path("result.json"),
         },
+        acknowledge_stdio_protocol_framing: true,
         validation_session: Some(bundle_path("public/session.json")),
         validation_setup: None,
         official_session: Some(bundle_path("private-benchmark/session.json")),

@@ -658,11 +658,53 @@ fn piped_stdio_static_sessions_are_valid_and_projected_publicly() {
 
     assert_eq!(execution_json["mode"], serde_json::json!("piped_stdio"));
     assert_eq!(
+        execution_json["acknowledge_stdio_protocol_framing"],
+        serde_json::json!(true)
+    );
+    assert_eq!(
         execution_json["validation_session"],
         serde_json::json!("public/session.json")
     );
     assert!(execution_json.get("official_session").is_none());
     assert!(execution_json.get("official_evaluation_setup").is_none());
+}
+
+/// Verifies that piped-stdio challenges require explicit stdio protocol framing acknowledgement.
+#[test]
+fn piped_stdio_requires_stdio_protocol_framing_acknowledgement() {
+    let mut spec = base_piped_stdio_spec();
+    if let ChallengeExecutionSpec::PipedStdio(execution) = &mut spec.execution {
+        execution.acknowledge_stdio_protocol_framing = false;
+    }
+
+    let error =
+        validate_challenge_bundle_spec(&spec).expect_err("missing stdio framing ack should fail");
+
+    assert!(
+        error
+            .to_string()
+            .contains("acknowledge_stdio_protocol_framing")
+    );
+    assert!(error.to_string().contains("stdin/stdout message protocol"));
+}
+
+/// Verifies that piped-stdio specs cannot omit the stdio framing acknowledgement.
+#[test]
+fn piped_stdio_rejects_missing_stdio_protocol_framing_acknowledgement() {
+    let mut spec_json = serde_json::to_value(base_piped_stdio_spec()).expect("spec serializes");
+    spec_json["execution"]
+        .as_object_mut()
+        .expect("execution must be an object")
+        .remove("acknowledge_stdio_protocol_framing");
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("piped stdio should reject missing stdio framing acknowledgement");
+
+    assert!(
+        error
+            .to_string()
+            .contains("acknowledge_stdio_protocol_framing")
+    );
 }
 
 /// Verifies that separated-evaluator-only run manifest fields are rejected for piped-stdio.

@@ -232,10 +232,15 @@ solution, each run invocation executes in a fresh solution container, and the
 trusted challenge-owned separated-evaluator runs afterward in a separate container.
 
 For `piped_stdio`, bundles declare `execution.interactive_evaluator.command` and
-`execution.interactive_evaluator.result_file`. They must declare
-`execution.validation_session` or `execution.validation_setup` when validation
-is enabled, and `execution.official_session` or `execution.official_evaluation_setup`
-when private benchmark scoring is enabled. The trusted challenge-owned
+`execution.interactive_evaluator.result_file`, and must set
+`execution.acknowledge_stdio_protocol_framing: true`. That acknowledgement means
+the challenge author has documented the stdin/stdout message protocol, including
+session start and termination, multi-case framing if used, EOF behavior,
+malformed participant output handling, and trusted evaluator `result.json`
+ownership. They must declare `execution.validation_session` or
+`execution.validation_setup` when validation is enabled, and
+`execution.official_session` or `execution.official_evaluation_setup` when
+private benchmark scoring is enabled. The trusted challenge-owned
 interactive-evaluator runs concurrently with exactly one participant run container. The
 worker relays interactive-evaluator stdout to participant stdin and participant stdout to
 interactive-evaluator stdin. The interactive-evaluator writes the same evaluator `result.json` contract
@@ -275,6 +280,12 @@ Run manifests are challenge-owned JSON files with a `runs` array. Each run has a
 Setup-generated session locators resolve under `/setup`. Participant run
 containers never receive `/challenge`, `/setup`, `/session`, private files,
 or session source files.
+
+The session manifest identifies the data available to the trusted
+interactive-evaluator, but it is not the participant protocol. A `piped_stdio`
+challenge must document the messages that cross the pipes between
+interactive-evaluator and participant, the exact final-answer or sentinel
+convention, what happens on EOF, and how malformed output is scored or rejected.
 
 When `separated_evaluator` declares `validation_setup` or `official_evaluation_setup`,
 the worker runs that setup command in the evaluator image before solution

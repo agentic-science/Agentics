@@ -261,6 +261,11 @@ validation and official solution submissions.
   `separated_evaluator`, and `validation_session` or `validation_setup` for
   `piped_stdio`. `coexecuted_benchmark` validation uses the coexecuted-evaluator
   directly and may optionally declare `validation_setup`.
+- `piped_stdio` must include `acknowledge_stdio_protocol_framing: true`. This
+  confirms the challenge statement and interactive-evaluator document the
+  stdin/stdout message protocol, including session start and termination,
+  multi-case framing if used, EOF behavior, malformed participant output
+  handling, and trusted evaluator `result.json` ownership.
 - Official scoring is enabled only when the selected execution mode declares
   its official source: `official_runs` or `official_evaluation_setup` for
   `separated_evaluator`, and `official_session` or `official_evaluation_setup` for

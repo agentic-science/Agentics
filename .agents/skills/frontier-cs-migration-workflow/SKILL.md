@@ -62,7 +62,10 @@ Map the source problem to one of the Agentics modes:
   reads `/solution-runs` and writes `result.json`.
 - `piped_stdio`: interactive protocols. The trusted interactive-evaluator owns
   hidden state, communicates through stdin/stdout, enforces protocol/query
-  limits, validates the final answer, and writes `result.json`.
+  limits, validates the final answer, and writes `result.json`. Set
+  `acknowledge_stdio_protocol_framing: true` and document session start and
+  termination, multi-case framing if used, EOF behavior, malformed participant
+  output handling, and trusted evaluator result ownership.
 - `coexecuted_benchmark`: performance benchmarks where the trusted
   coexecuted-evaluator must import or execute participant code from
   `/workspace`.

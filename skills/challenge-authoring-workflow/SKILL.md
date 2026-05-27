@@ -50,9 +50,13 @@ Every bundle must also declare the execution topology explicitly. Use
 `execution.mode: "separated_evaluator"`, `execution.separated_evaluator.command`, and
 `execution.separated_evaluator.result_file` for ordinary multi-run checker-style
 benchmarks. Use `execution.mode: "piped_stdio"`, `execution.interactive_evaluator.command`,
-and `execution.interactive_evaluator.result_file` for one interactive session where the
-trusted challenge-owned interactive-evaluator writes
-`result.json`. Use `execution.mode: "coexecuted_benchmark"`,
+`execution.interactive_evaluator.result_file`, and
+`acknowledge_stdio_protocol_framing: true` for one interactive session where the
+trusted challenge-owned interactive-evaluator writes `result.json`. The
+challenge statement or notes must document the stdin/stdout message protocol,
+including session start and termination, multi-case framing if used, EOF
+behavior, malformed participant output handling, and trusted evaluator result
+ownership. Use `execution.mode: "coexecuted_benchmark"`,
 `execution.coexecuted_evaluator.command`, `execution.coexecuted_evaluator.result_file`, and
 `acknowledge_danger: true` only for throughput-style benchmarks where the
 trusted coexecuted-evaluator must import participant code from `/workspace` inside the

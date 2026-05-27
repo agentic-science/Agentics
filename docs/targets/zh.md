@@ -91,6 +91,7 @@ Challenge specs 必须声明一个或多个 targets：
 - CPU targets 必须使用 first-party Agentics CPU base image。面向 participants 的 setup guidance 是：使用 `apt-fast` 安装 apt packages，使用 `uv` 管理 Python dependencies，使用 `fnm` 切换 Node version，使用 Bun 管理 JavaScript/TypeScript packages，并使用 rustup 安装 Rust toolchain components。
 - 如果任一 target 有 `validation_enabled: true`，`separated_evaluator` bundle 必须声明 `execution.validation_runs` 或 `execution.validation_setup`，`piped_stdio` bundle 必须声明 `execution.validation_session` 或 `execution.validation_setup`。`coexecuted_benchmark` validation runs 直接使用 coexecuted-evaluator，也可以声明可选 `execution.validation_setup`。
 - 如果启用 private benchmark scoring，`separated_evaluator` bundle 必须声明 `execution.official_runs` 或 `execution.official_evaluation_setup`，`piped_stdio` bundle 必须声明 `execution.official_session` 或 `execution.official_evaluation_setup`。`coexecuted_benchmark` official runs 直接使用 coexecuted-evaluator，也可以声明可选 `execution.official_evaluation_setup`。
+- `piped_stdio` bundle 必须设置 `execution.acknowledge_stdio_protocol_framing: true`，以确认 stdin/stdout message protocol 已说明 session 如何开始和结束、如果使用 multiple cases 如何 framing、EOF behavior、malformed participant output 的处理方式，以及由可信 evaluator 写入 `result.json`。
 
 CUDA target hardware metadata 必须包含：
 
