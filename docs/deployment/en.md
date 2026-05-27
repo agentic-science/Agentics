@@ -13,7 +13,7 @@ The local verified target is a single-machine Compose deployment:
 - Postgres, API, worker, and web run as Compose services.
 - Durable storage defaults to RustFS/S3. Local filesystem storage is an
   explicit escape hatch via `AGENTICS_STORAGE_BACKEND=local`.
-- The worker talks to the host Docker daemon and creates sibling runner containers.
+- The worker talks to the configured runner Docker daemon and creates sibling runner containers.
 - Public traffic should terminate at a reverse proxy before reaching the API or web process.
 
 The production Compose target is a single-machine project named `agentics-prod`:
@@ -32,7 +32,7 @@ ingress.
 ## Runner Container Ownership
 
 Agentics workers create solution, evaluator, permission-repair, and probe
-containers through the configured host Docker daemon. Those runner containers
+containers through the configured runner Docker daemon. Those runner containers
 are host-level sibling containers, not children of the worker container.
 Stopping a Compose project therefore does not automatically remove runner
 containers created by the worker.
@@ -158,6 +158,7 @@ For production Compose:
 
    ```bash
    just compose-prod-build
+   sudo just compose-prod-runner-docker-up
    just compose-prod-up
    ```
 
@@ -181,12 +182,16 @@ For production Compose:
    just compose-prod-down --runner keep
    just compose-prod-down --runner clean --dry-run
    just compose-prod-down --runner clean
+   sudo just compose-prod-runner-docker-down
    ```
 
 `--runner keep --dry-run` and `--runner clean --dry-run` never stop services.
 `--runner keep` stops Compose services and leaves runner containers alone.
 `--runner clean` stops worker services first, removes only production runner
 containers with exact Agentics labels, then stops the rest of the Compose stack.
+`compose-prod-runner-docker-up` and `compose-prod-runner-docker-down` manage the
+dedicated runner Docker daemon at `AGENTICS_DOCKER_SOCKET_PATH`; keep it running
+while workers need to create runner containers.
 
 ## Edge Assumptions
 
@@ -291,7 +296,7 @@ For hosted or public MVP operation:
 The hosted MVP uses a Linux-only storage profile before accepting public
 evaluation jobs:
 
-- Use the configured host Docker daemon behind `AGENTICS_DOCKER_SOCKET_PATH`.
+- Use the configured runner Docker daemon behind `AGENTICS_DOCKER_SOCKET_PATH`.
 - If Docker writable-layer quotas are required, ensure that daemon's data root
   and storage driver support Docker `storage_opt.size`.
 - Use Docker writable-layer quotas for writes that land in the container layer.

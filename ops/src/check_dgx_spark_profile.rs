@@ -480,6 +480,16 @@ async fn check_docker_daemon(config: &DgxProfileCheckConfig) -> Vec<ReportLine> 
                     "not visible; acceptable while GPU execution remains disabled",
                 ));
             }
+            match docker.inspect_network("bridge", None).await {
+                Ok(_) => reports.push(ReportLine::pass(
+                    "Docker bridge network",
+                    "default bridge network is available for network-enabled setup phases",
+                )),
+                Err(error) => reports.push(ReportLine::fail(
+                    "Docker bridge network",
+                    format!("default bridge network is unavailable: {error}"),
+                )),
+            }
             reports
         }
         Err(error) => vec![ReportLine::fail(

@@ -118,6 +118,14 @@ compose-prod-build:
 compose-prod-up:
     {{compose_prod}} up
 
+# Start the dedicated production runner Docker daemon
+compose-prod-runner-docker-up *args:
+    {{compose_prod}} runner-docker-up {{args}}
+
+# Stop the dedicated production runner Docker daemon
+compose-prod-runner-docker-down *args:
+    {{compose_prod}} runner-docker-down {{args}}
+
 # Stop the production Compose stack; requires --runner keep or --runner clean
 compose-prod-down *args:
     {{compose_prod}} down {{args}}

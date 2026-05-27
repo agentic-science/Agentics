@@ -32,7 +32,7 @@ production Compose env file。
 | Runner runtime root | `/srv/agentics/runtime` |
 | Production Compose storage work root | `/srv/agentics/storage-work` |
 | API container 内的 production challenge review checkout | `/srv/agentics/review-checkouts/agentics-challenges` |
-| Production host Docker socket | 默认 `/var/run/docker.sock` |
+| Production runner Docker socket | 默认 `/srv/agentics/docker.sock` |
 | 为 quota-capable host 准备的 Docker data root | `/srv/agentics/docker-data-root` |
 | Loop image root | `/srv/agentics/loop-images` |
 | Phase mount root | `/srv/agentics/phase-mounts` |
@@ -45,8 +45,12 @@ DGX 默认 quota slot classes 为 `64`、`256`、`1024` 和 `4096` MiB，每个 
 和 class 有 100 个 slots。Worker 会为 writable container bind mounts 租用这些
 slots，并使用 Docker `storage_opt.size` 约束 container-layer writes。Slots 还会按默认
 每 MiB `256` 个 inodes 设置 inode hard limits：默认 classes 分别是 `16384`、
-`65536`、`262144` 和 `1048576` 个 inodes。Evaluator-visible run trees 另行限制为
+`65536`、`262144` 和 `1048576` 个 inodes。MVP production Compose environment
+会为 setup-heavy Frontier-CS migration rehearsals 额外准备 `8192`、`12288` 和
+`16384` MiB slots。Evaluator-visible run trees 另行限制为
 `8192` 个 files、`1024` 个 directories 和 `32` 层 depth。
+Production runner containers 使用由 `just compose-prod-runner-docker-up` 启动的
+dedicated Docker daemon；它的默认 bridge network 由 host bridge `agentics0` 支撑。
 
 `/srv/agentics-test` 用于开发者运行 quota-sensitive integration tests。它必须用
 `agentics-prepare-dgx-spark-test-storage` 单独准备，且 hosted workers 不应使用。

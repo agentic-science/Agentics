@@ -38,6 +38,10 @@ use crate::support::{
     print_reports, run_command, run_with_ctrl_c,
 };
 
+mod runner_docker;
+
+use runner_docker::{runner_docker_down, runner_docker_up};
+
 const PREFIX: &str = "agentics-compose-prod";
 const ENV_PREFIX: &str = "AGENTICS_";
 const DEFAULT_PROJECT: &str = "agentics-prod";
@@ -96,6 +100,18 @@ pub enum ProdCommand {
     Check,
     /// Copy backed-up migrated challenge private bundles into production storage.
     RestorePrivateBundles,
+    /// Start the dedicated production runner Docker daemon.
+    RunnerDockerUp {
+        /// Show the resolved daemon config without starting Docker.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Stop the dedicated production runner Docker daemon.
+    RunnerDockerDown {
+        /// Show the resolved daemon config without stopping Docker.
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Clean matching production runner containers.
     CleanRunners {
         /// Override the runner namespace. Defaults to AGENTICS_RUNNER_NAMESPACE or the Compose project.
@@ -134,6 +150,13 @@ struct RawComposeProdEnv {
     database_url: Option<String>,
     docker_host: Option<String>,
     docker_socket_path: Option<String>,
+    docker_socket_gid: Option<u32>,
+    dgx_docker_data_root: Option<String>,
+    dgx_runner_docker_exec_root: Option<String>,
+    dgx_runner_docker_pidfile: Option<String>,
+    dgx_runner_docker_log: Option<String>,
+    dgx_runner_docker_bridge: Option<String>,
+    dgx_runner_docker_bridge_cidr: Option<String>,
     rustfs_backup_container: Option<String>,
 }
 
@@ -195,6 +218,8 @@ async fn run(cli: Cli) -> Result<ExitCode, ComposeProdError> {
                 .await
         }
         ProdCommand::RestorePrivateBundles => restore_private_bundles(&context).await,
+        ProdCommand::RunnerDockerUp { dry_run } => runner_docker_up(&context, dry_run).await,
+        ProdCommand::RunnerDockerDown { dry_run } => runner_docker_down(&context, dry_run).await,
         ProdCommand::CleanRunners {
             namespace,
             scope,
@@ -620,6 +645,27 @@ impl ComposeContext {
         env_value(
             self.process_env.docker_socket_path.as_ref(),
             self.file_env.docker_socket_path.as_ref(),
+        )
+    }
+
+    fn string_value(
+        &self,
+        accessor: fn(&RawComposeProdEnv) -> Option<&String>,
+        default: &str,
+    ) -> Option<String> {
+        env_value(accessor(&self.process_env), accessor(&self.file_env))
+            .or_else(|| Some(default.to_string()))
+            .filter(|value| !value.trim().is_empty())
+    }
+
+    fn path_value(
+        &self,
+        accessor: fn(&RawComposeProdEnv) -> Option<&String>,
+        default: &str,
+    ) -> PathBuf {
+        PathBuf::from(
+            self.string_value(accessor, default)
+                .unwrap_or_else(|| default.to_string()),
         )
     }
 

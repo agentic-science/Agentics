@@ -139,7 +139,7 @@ per-phase XFS project-quota slots 支撑。DGX profile 应设置
 `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`、
 `AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime`、
 `AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts`、
-`AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096` 和
+`AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096,8192,12288,16384` 和
 `AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`。默认 platform-owned
 evaluator-visible output caps 是 `AGENTICS_RUNNER_MAX_OUTPUT_FILES=8192`、
 `AGENTICS_RUNNER_MAX_OUTPUT_DIRS=1024` 和
@@ -214,36 +214,44 @@ agentics-check-dgx-spark-host
 DGX host profile 使用以下检查：
 
 ```bash
-AGENTICS_DOCKER_HOST=unix:///var/run/docker.sock \
-AGENTICS_DOCKER_SOCKET_PATH=/var/run/docker.sock \
+AGENTICS_DOCKER_HOST=unix:///srv/agentics/docker.sock \
+AGENTICS_DOCKER_SOCKET_PATH=/srv/agentics/docker.sock \
 AGENTICS_RUNNER_SECURITY_PROFILE=production \
   AGENTICS_HOST_PROBE_MODE=warn \
   agentics-check-dgx-spark-profile
 ```
 
-配置好 Docker daemon 和 loopback XFS mounts 后，先 preload probe image，然后运行
-strict check：
+完成 storage preparation 后，启动 dedicated runner Docker daemon。Ops wrapper 会配置
+默认 Docker `bridge` network，供 network-enabled setup phases 使用：
 
 ```bash
-docker pull busybox:1.36
+sudo just compose-prod-runner-docker-up
+```
+
+配置好 runner Docker daemon 和 loopback XFS mounts 后，先把 probe image preload 到该
+daemon，然后运行 strict check：
+
+```bash
+docker --host unix:///srv/agentics/docker.sock pull busybox:1.36
 env \
-  AGENTICS_DOCKER_HOST=unix:///var/run/docker.sock \
-  AGENTICS_DOCKER_SOCKET_PATH=/var/run/docker.sock \
+  AGENTICS_DOCKER_HOST=unix:///srv/agentics/docker.sock \
+  AGENTICS_DOCKER_SOCKET_PATH=/srv/agentics/docker.sock \
   AGENTICS_HOST_PROBE_MODE=require \
   AGENTICS_RUNNER_SECURITY_PROFILE=production \
   AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
   AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime \
   AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
-  AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
+  AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096,8192,12288,16384 \
   AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB=256 \
   AGENTICS_DGX_RUN_MUTATING_PROBES=true \
   AGENTICS_DGX_DOCKER_PULL_POLICY=never \
   agentics-check-dgx-spark-profile
 ```
 
-Strict profile check 会验证 Docker writable-layer quota probe、per-phase mount
-writeability、root-prepared quota slot metadata、configured inode hard limits，
-以及使用 64 MiB slot class 的 per-phase bind-mount quota exhaustion probe。
+Strict profile check 会验证默认 Docker bridge network、Docker writable-layer quota
+probe、per-phase mount writeability、root-prepared quota slot metadata、configured
+inode hard limits，以及使用 64 MiB slot class 的 per-phase bind-mount quota
+exhaustion probe。
 
 在 DGX development host 上做本地验证时，使用由测试用户拥有的独立 test quota
 root：

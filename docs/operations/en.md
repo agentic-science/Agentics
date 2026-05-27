@@ -143,7 +143,7 @@ project-quota slots. The DGX profile should set
 `AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots`,
 `AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime`,
 `AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts`,
-`AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096`, and
+`AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096,8192,12288,16384`, and
 `AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true`. The default platform-owned
 evaluator-visible output caps are `AGENTICS_RUNNER_MAX_OUTPUT_FILES=8192`,
 `AGENTICS_RUNNER_MAX_OUTPUT_DIRS=1024`, and
@@ -220,37 +220,45 @@ such as `DOCKER_HOST` rather than a Docker CLI wrapper.
 For the DGX host profile, run:
 
 ```bash
-AGENTICS_DOCKER_HOST=unix:///var/run/docker.sock \
-AGENTICS_DOCKER_SOCKET_PATH=/var/run/docker.sock \
+AGENTICS_DOCKER_HOST=unix:///srv/agentics/docker.sock \
+AGENTICS_DOCKER_SOCKET_PATH=/srv/agentics/docker.sock \
 AGENTICS_RUNNER_SECURITY_PROFILE=production \
   AGENTICS_HOST_PROBE_MODE=warn \
   agentics-check-dgx-spark-profile
 ```
 
-After the configured Docker daemon and loopback XFS mounts are ready, preload
-the probe image, then run the strict check:
+After storage preparation, start the dedicated runner Docker daemon. The ops
+wrapper configures a default Docker `bridge` network for network-enabled setup
+phases:
 
 ```bash
-docker pull busybox:1.36
+sudo just compose-prod-runner-docker-up
+```
+
+After the configured runner Docker daemon and loopback XFS mounts are ready,
+preload the probe image into that daemon, then run the strict check:
+
+```bash
+docker --host unix:///srv/agentics/docker.sock pull busybox:1.36
 env \
-  AGENTICS_DOCKER_HOST=unix:///var/run/docker.sock \
-  AGENTICS_DOCKER_SOCKET_PATH=/var/run/docker.sock \
+  AGENTICS_DOCKER_HOST=unix:///srv/agentics/docker.sock \
+  AGENTICS_DOCKER_SOCKET_PATH=/srv/agentics/docker.sock \
   AGENTICS_HOST_PROBE_MODE=require \
   AGENTICS_RUNNER_SECURITY_PROFILE=production \
   AGENTICS_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots \
   AGENTICS_RUNNER_RUNTIME_ROOT=/srv/agentics/runtime \
   AGENTICS_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics/phase-mounts \
-  AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096 \
+  AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096,8192,12288,16384 \
   AGENTICS_DGX_PHASE_SLOT_INODES_PER_MB=256 \
   AGENTICS_DGX_RUN_MUTATING_PROBES=true \
   AGENTICS_DGX_DOCKER_PULL_POLICY=never \
   agentics-check-dgx-spark-profile
 ```
 
-The strict profile check validates the Docker writable-layer quota probe,
-per-phase mount writeability, root-prepared quota slot metadata, configured
-inode hard limits, and a per-phase bind-mount quota exhaustion probe using the
-64 MiB slot class.
+The strict profile check validates the default Docker bridge network, Docker
+writable-layer quota probe, per-phase mount writeability, root-prepared quota
+slot metadata, configured inode hard limits, and a per-phase bind-mount quota
+exhaustion probe using the 64 MiB slot class.
 
 For local verification on a DGX development host, use a separate test quota
 root owned by the test user:

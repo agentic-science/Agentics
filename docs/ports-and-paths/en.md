@@ -32,7 +32,7 @@ same production Compose env file.
 | Runner runtime root | `/srv/agentics/runtime` |
 | Production Compose storage work root | `/srv/agentics/storage-work` |
 | Production challenge review checkout inside API container | `/srv/agentics/review-checkouts/agentics-challenges` |
-| Production host Docker socket | `/var/run/docker.sock` by default |
+| Production runner Docker socket | `/srv/agentics/docker.sock` by default |
 | Docker data root prepared for quota-capable hosts | `/srv/agentics/docker-data-root` |
 | Loop image root | `/srv/agentics/loop-images` |
 | Phase mount root | `/srv/agentics/phase-mounts` |
@@ -46,8 +46,13 @@ Default DGX quota slot classes are `64`, `256`, `1024`, and `4096` MiB, with
 container bind mounts and uses Docker `storage_opt.size` for container-layer
 writes. Slots also carry inode hard limits at the default `256` inodes per MiB:
 `16384`, `65536`, `262144`, and `1048576` inodes for the default classes.
+The MVP production Compose environment extends the prepared classes with `8192`,
+`12288`, and `16384` MiB slots for setup-heavy Frontier-CS migration rehearsals.
 Evaluator-visible run trees are separately capped at `8192` files, `1024`
 directories, and depth `32`.
+Production runner containers use a dedicated Docker daemon started by
+`just compose-prod-runner-docker-up`; its default bridge network is backed by
+the host bridge `agentics0`.
 
 The `/srv/agentics-test` root is for developer-run quota-sensitive integration
 tests. It must be prepared separately with

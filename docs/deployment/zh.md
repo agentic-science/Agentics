@@ -12,7 +12,7 @@ Local 已验证目标是单机 Compose deployment：
 - Postgres、API、worker 和 web 作为 Compose services 运行。
 - Durable storage 默认使用 RustFS/S3。Local filesystem storage 只作为
   `AGENTICS_STORAGE_BACKEND=local` 的显式 escape hatch。
-- Worker 连接 host Docker daemon，并创建 sibling runner containers。
+- Worker 连接 configured runner Docker daemon，并创建 sibling runner containers。
 - Public traffic 应先进入 reverse proxy，再转发到 API 或 web 进程。
 
 Production Compose 目标是名为 `agentics-prod` 的单机 project：
@@ -29,7 +29,7 @@ ARM64 CUDA images、public TLS 或 production ingress。
 
 ## Runner Container Ownership
 
-Agentics worker 会通过配置的 host Docker daemon 创建 solution、evaluator、
+Agentics worker 会通过配置的 runner Docker daemon 创建 solution、evaluator、
 permission-repair 和 probe containers。这些 runner containers 是 host-level
 sibling containers，不是 worker container 的子容器。因此，停止一个 Compose
 project 不会自动删除 worker 创建的 runner containers。
@@ -150,6 +150,7 @@ Production Compose：
 
    ```bash
    just compose-prod-build
+   sudo just compose-prod-runner-docker-up
    just compose-prod-up
    ```
 
@@ -172,12 +173,16 @@ Production Compose：
    just compose-prod-down --runner keep
    just compose-prod-down --runner clean --dry-run
    just compose-prod-down --runner clean
+   sudo just compose-prod-runner-docker-down
    ```
 
 `--runner keep --dry-run` 和 `--runner clean --dry-run` 都不会停止 services。
 `--runner keep` 会停止 Compose services 并保留 runner containers。
 `--runner clean` 会先停止 worker services，只删除带精确 Agentics labels 的 production
 runner containers，然后停止剩余 Compose stack。
+`compose-prod-runner-docker-up` 和 `compose-prod-runner-docker-down` 管理
+`AGENTICS_DOCKER_SOCKET_PATH` 上的 dedicated runner Docker daemon；只要 workers
+还需要创建 runner containers，就保持它运行。
 
 ## Reverse Proxy 假设
 
@@ -271,7 +276,7 @@ Hosted 或 public MVP operation：
 
 Hosted MVP 在接受 public evaluation jobs 前使用 Linux-only storage profile：
 
-- 使用 `AGENTICS_DOCKER_SOCKET_PATH` 背后的 configured host Docker daemon。
+- 使用 `AGENTICS_DOCKER_SOCKET_PATH` 背后的 configured runner Docker daemon。
 - 如果需要 Docker writable-layer quotas，确保该 daemon 的 data root 和 storage
   driver 支持 Docker `storage_opt.size`。
 - 使用 Docker writable-layer quotas 约束写入 container layer 的内容。
