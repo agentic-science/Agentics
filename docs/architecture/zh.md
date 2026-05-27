@@ -139,12 +139,19 @@ worker
 agentics-cli
   CLI UX、API client、ZIP packaging、workspace generation，以及通过 contracts
   和 runner interfaces 执行 local validation。Output rendering 按 surface 拆分，
-  admin draft command handling 也已经从 submit/validate/report flows 中拆出。
+  submission/validation/report renderers 放在聚焦的 output module。Admin draft
+  command handling 也已经从 submit/validate/report flows 中拆出。
 
 web
   Typed API clients、SWR-backed data hooks、generated schema consumption，以及面向
   不同角色的 presentation components。Creator forms、admin operations 和可复用
-  status display 已经从 console shell 中拆出。
+  status display 已经从 console shell 中拆出。Admin draft review shell 把
+  mutation state 委托给 hook，把 row rendering 委托给聚焦的 table component。
+
+ops
+  Deployment、local smoke、DGX profile 和 host-check tooling。Production Compose
+  orchestration 将 runner-Docker daemon management 和 hosted-runner cleanup 放在
+  聚焦模块中，而不是把 shutdown 和 cleanup logic 都塞进一个 wrapper。
 ```
 
 依赖方向应当是：
@@ -265,7 +272,8 @@ Console shell components 负责 page state、tab selection 和 form orchestratio
 display/action surfaces 应拆成更小的可复用 panel components，这样 admin 和 creator
 workflows 可以保持可测试，同时不复制 fetch 和 refresh logic。当前 creator console
 已经把 form rendering 委托给 focused form components，admin console 也把
-operations/action rendering 委托给独立 panel。
+operations/action rendering、draft-review table 和 mutation state 委托给聚焦的
+components 与 hooks。
 
 ## Challenge Repository Boundary
 
@@ -302,8 +310,8 @@ challenge draft lifecycle、Moltbook challenge metadata updates、creator owner
 workflows、admin read aggregation，以及 public/owner projection/redaction surfaces。
 最近的清理还拆分了 grouped config structs、challenge domain models、
 submission/draft workflow modules、runner labels、storage backend options、public
-metric projection helpers、creator/admin web panels，以及 CLI output/admin draft
-renderers。
+metric projection helpers、creator/admin web panels、CLI submission output，以及
+production Compose runner cleanup。
 
 MVP 前剩余的架构工作主要是纪律要求，而不是新增 public behavior：
 

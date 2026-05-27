@@ -149,12 +149,21 @@ worker
 agentics-cli
   CLI UX, API client, ZIP packaging, workspace generation, and local validation
   through contracts and runner interfaces. Output rendering is split by surface
-  and admin draft command handling is split from submit/validate/report flows.
+  and submission/validation/report renderers live in a focused output module.
+  Admin draft command handling is split from submit/validate/report flows.
 
 web
   Typed API clients, SWR-backed data hooks, generated schema consumption, and
   role-facing presentation components. Creator forms, admin operations, and
-  reusable status display live outside the console shells.
+  reusable status display live outside the console shells. The admin draft
+  review shell delegates mutation state to a hook and row rendering to a focused
+  table component.
+
+ops
+  Deployment, local smoke, DGX profile, and host-check tooling. Production
+  Compose orchestration keeps runner-Docker daemon management and hosted-runner
+  cleanup in focused modules instead of keeping all shutdown and cleanup logic in
+  one wrapper.
 ```
 
 The dependency direction should be:
@@ -282,7 +291,8 @@ selection, and form orchestration. Large display/action surfaces should live in
 smaller reusable panel components so admin and creator workflows remain
 testable without duplicating fetch and refresh logic. The current creator
 console delegates form rendering to focused form components, and the admin
-console delegates operations/action rendering to its own panel.
+console delegates operations/action rendering and draft-review table/mutation
+state to focused components and hooks.
 
 ## Challenge Repository Boundary
 
@@ -323,7 +333,8 @@ challenge metadata updates, creator owner workflows, admin read aggregation,
 and public/owner projection and redaction surfaces. Recent cleanup also split
 grouped config structs, challenge domain models, submission/draft workflow
 modules, runner labels, storage backend options, public metric projection
-helpers, creator/admin web panels, and CLI output/admin draft renderers.
+helpers, creator/admin web panels, CLI submission output, and production Compose
+runner cleanup.
 
 The remaining architecture work before MVP is mostly discipline, not new public
 behavior:
