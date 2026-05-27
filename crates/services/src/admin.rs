@@ -5,17 +5,113 @@ use agentics_domain::models::challenge::{
     AdminChallengeListItemDto, AdminChallengeListResponse, ChallengeBundleSpec,
 };
 use agentics_domain::models::evaluation::ScoringMode;
+use agentics_domain::models::ids::AgentPioneerCodeId;
+use agentics_domain::models::pioneer_codes::{PioneerCode, PioneerCodeStatus, PioneerCodeUseKind};
 use agentics_domain::models::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto, AdminServiceHeartbeatDto,
     AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListItemDto,
-    AdminSolutionSubmissionListResponse,
+    AdminSolutionSubmissionListResponse, AgentStatus, CreatePioneerCodeRequest,
+    DisableAgentResponse, PioneerCodeDetailResponse, PioneerCodeDto, PioneerCodeListResponse,
+    PioneerCodeUseDto, RevokePioneerCodeResponse,
 };
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::{
-    AdminChallengeListItemRecord, AdminSolutionSubmissionListItemRecord, Repositories,
+    AdminChallengeListItemRecord, AdminSolutionSubmissionListItemRecord, CreatePioneerCodeInput,
+    PioneerCodeRecord, PioneerCodeUseRecord, Repositories,
 };
 
+use crate::auth;
+
 const SUBMISSION_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
+
+/// Create a pioneer code for MVP-gated agent registration.
+pub async fn create_pioneer_code(
+    pool: &sqlx::PgPool,
+    config: &Config,
+    admin_username: String,
+    body: CreatePioneerCodeRequest,
+) -> Result<PioneerCodeDetailResponse> {
+    let CreatePioneerCodeRequest {
+        label,
+        code,
+        note,
+        max_uses,
+        expires_at,
+    } = body;
+
+    if max_uses == 0 || max_uses < -1 {
+        return Err(ServiceError::BadRequest(
+            "max_uses must be a positive integer or -1 for local testing".to_string(),
+        ));
+    }
+    if max_uses == -1 && !config.allows_local_registration_testing_knobs() {
+        return Err(ServiceError::BadRequest(
+            "unlimited pioneer codes are only allowed for loopback local testing".to_string(),
+        ));
+    }
+
+    let code = resolve_pioneer_code_request(code, label.as_deref())?;
+    let record = Repositories::new(pool)
+        .pioneer_codes()
+        .create(&CreatePioneerCodeInput {
+            id: AgentPioneerCodeId::generate(),
+            code_hash: auth::hash_opaque_token(code.expose_secret()),
+            code_display: code.expose_secret().to_string(),
+            label: code.label().map(ToOwned::to_owned),
+            note: note.unwrap_or_default(),
+            max_uses,
+            expires_at: parse_optional_rfc3339(expires_at.as_deref(), "expires_at")?,
+            created_by_admin_username: admin_username,
+        })
+        .await
+        .map_err(ServiceError::unique_violation_as_conflict)?;
+
+    present_pioneer_code_detail(&record, &[])
+}
+
+/// List pioneer codes and usage counts for admins.
+pub async fn list_pioneer_codes(pool: &sqlx::PgPool) -> Result<PioneerCodeListResponse> {
+    let codes = Repositories::new(pool).pioneer_codes().list().await?;
+    present_pioneer_code_list(&codes)
+}
+
+/// Fetch one pioneer code with the agents created through it.
+pub async fn get_pioneer_code(
+    pool: &sqlx::PgPool,
+    id: &AgentPioneerCodeId,
+) -> Result<PioneerCodeDetailResponse> {
+    let (code, uses) = Repositories::new(pool).pioneer_codes().detail(id).await?;
+    present_pioneer_code_detail(&code, &uses)
+}
+
+/// Revoke a pioneer code and disable all agents created through it.
+pub async fn revoke_pioneer_code(
+    pool: &sqlx::PgPool,
+    id: AgentPioneerCodeId,
+) -> Result<RevokePioneerCodeResponse> {
+    let outcome = Repositories::new(pool).pioneer_codes().revoke(&id).await?;
+    Ok(RevokePioneerCodeResponse {
+        id,
+        status: PioneerCodeStatus::Revoked,
+        revoked_agent_count: outcome.revoked_agent_count,
+        revoked_token_count: outcome.revoked_token_count,
+    })
+}
+
+/// Disable an agent account and revoke its active tokens.
+pub async fn disable_agent(
+    pool: &sqlx::PgPool,
+    id: agentics_domain::models::ids::AgentId,
+) -> Result<DisableAgentResponse> {
+    Repositories::new(pool)
+        .agents()
+        .disable(id.as_str())
+        .await?;
+    Ok(DisableAgentResponse {
+        id,
+        status: AgentStatus::Disabled,
+    })
+}
 
 /// List challenge shells and published benchmark contracts for admins.
 pub async fn list_admin_challenges(pool: &sqlx::PgPool) -> Result<AdminChallengeListResponse> {
@@ -151,5 +247,95 @@ pub async fn get_admin_capacity(
             active_validation_jobs,
             active_official_jobs,
         },
+    })
+}
+
+/// Resolve admin-supplied or generated pioneer code text.
+fn resolve_pioneer_code_request(
+    code: Option<PioneerCode>,
+    label: Option<&str>,
+) -> Result<PioneerCode> {
+    if let Some(code) = code {
+        if let Some(label) = label
+            && code.label() != Some(label)
+        {
+            return Err(ServiceError::BadRequest(
+                "label must match the pioneer code prefix when code is supplied".to_string(),
+            ));
+        }
+        return Ok(code);
+    }
+
+    PioneerCode::generate(label).map_err(|error| ServiceError::BadRequest(error.to_string()))
+}
+
+/// Parse an optional RFC3339 timestamp from an API request field.
+fn parse_optional_rfc3339(
+    raw: Option<&str>,
+    field: &str,
+) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
+    raw.map(|value| {
+        chrono::DateTime::parse_from_rfc3339(value)
+            .map(|value| value.with_timezone(&chrono::Utc))
+            .map_err(|error| ServiceError::BadRequest(format!("{field} must be RFC3339: {error}")))
+    })
+    .transpose()
+}
+
+fn present_pioneer_code_list(codes: &[PioneerCodeRecord]) -> Result<PioneerCodeListResponse> {
+    Ok(PioneerCodeListResponse {
+        items: codes
+            .iter()
+            .map(present_pioneer_code)
+            .collect::<Result<Vec<_>>>()?,
+    })
+}
+
+fn present_pioneer_code_detail(
+    code: &PioneerCodeRecord,
+    uses: &[PioneerCodeUseRecord],
+) -> Result<PioneerCodeDetailResponse> {
+    Ok(PioneerCodeDetailResponse {
+        code: present_pioneer_code(code)?,
+        uses: uses
+            .iter()
+            .map(present_pioneer_code_use)
+            .collect::<Result<Vec<_>>>()?,
+    })
+}
+
+fn present_pioneer_code(code: &PioneerCodeRecord) -> Result<PioneerCodeDto> {
+    Ok(PioneerCodeDto {
+        id: code.id.clone(),
+        code_display: code.code_display.clone(),
+        label: code.label.clone(),
+        note: code.note.clone(),
+        max_uses: code.max_uses,
+        use_count: code.use_count,
+        status: PioneerCodeStatus::from_storage_value(&code.status).ok_or_else(|| {
+            ServiceError::Internal(format!(
+                "stored invalid pioneer-code status `{}`",
+                code.status
+            ))
+        })?,
+        expires_at: code.expires_at.map(|expires_at| expires_at.to_rfc3339()),
+        created_by_admin_username: code.created_by_admin_username.clone(),
+        created_at: code.created_at.to_rfc3339(),
+        revoked_at: code.revoked_at.map(|revoked_at| revoked_at.to_rfc3339()),
+    })
+}
+
+fn present_pioneer_code_use(use_record: &PioneerCodeUseRecord) -> Result<PioneerCodeUseDto> {
+    Ok(PioneerCodeUseDto {
+        agent_id: use_record.agent_id.clone(),
+        agent_display_name: use_record.agent_display_name.clone(),
+        registration_kind: PioneerCodeUseKind::from_storage_value(&use_record.registration_kind)
+            .ok_or_else(|| {
+                ServiceError::Internal(format!(
+                    "stored invalid pioneer-code registration kind `{}`",
+                    use_record.registration_kind
+                ))
+            })?,
+        used_at: use_record.used_at.to_rfc3339(),
     })
 }

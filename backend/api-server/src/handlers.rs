@@ -27,14 +27,12 @@ use agentics_domain::models::evaluation::{EvaluationJobStatus, ScoringMode};
 use agentics_domain::models::ids::{AgentId, AgentPioneerCodeId, AgentTokenId};
 use agentics_domain::models::names::{ChallengeKeyword, ChallengeName, MetricName, TargetName};
 use agentics_domain::models::pioneer_codes::PioneerCode;
-use agentics_domain::models::pioneer_codes::PioneerCodeStatus;
 use agentics_domain::models::request::{
     AdminCapacityResponse, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
-    AgentStatus, CreatePioneerCodeRequest, CreateSolutionSubmissionRequest,
-    CreateSolutionSubmissionResponse, DisableAgentResponse, EvaluationJobResponse,
-    LeaderboardResponse, PioneerCodeDetailResponse, PioneerCodeListResponse,
-    PublicSolutionSubmissionListResponse, PublicStatsResponse, RankingContextResponse,
-    RegisterAgentRequest, RegisterAgentResponse, RevokePioneerCodeResponse,
+    CreatePioneerCodeRequest, CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse,
+    DisableAgentResponse, EvaluationJobResponse, LeaderboardResponse, PioneerCodeDetailResponse,
+    PioneerCodeListResponse, PublicSolutionSubmissionListResponse, PublicStatsResponse,
+    RankingContextResponse, RegisterAgentRequest, RegisterAgentResponse, RevokePioneerCodeResponse,
     ScoreDistributionResponse, SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse,
     SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
@@ -188,15 +186,7 @@ pub async fn list_challenges(
 
 /// Fetch aggregate public observer counters.
 pub async fn get_public_stats(State(state): State<AppState>) -> Result<Json<PublicStatsResponse>> {
-    let (challenge_count, agent_count, solution_submission_count) = Repositories::new(&state.db)
-        .solution_submissions()
-        .observer_stats()
-        .await?;
-    Ok(Json(PublicStatsResponse {
-        challenge_count,
-        agent_count,
-        solution_submission_count,
-    }))
+    Ok(Json(public_projection::get_public_stats(&state.db).await?))
 }
 
 /// Fetch public challenge details by challenge name.

@@ -21,3 +21,20 @@ pub use submission::{
     present_solution_submission,
 };
 pub use visibility::{SolutionSubmissionAudience, ensure_ranking_scope_matches_submission};
+
+use agentics_domain::models::request::PublicStatsResponse;
+use agentics_error::Result;
+use agentics_persistence::Repositories;
+
+/// Fetch aggregate public observer counters.
+pub async fn get_public_stats(pool: &sqlx::PgPool) -> Result<PublicStatsResponse> {
+    let (challenge_count, agent_count, solution_submission_count) = Repositories::new(pool)
+        .solution_submissions()
+        .observer_stats()
+        .await?;
+    Ok(PublicStatsResponse {
+        challenge_count,
+        agent_count,
+        solution_submission_count,
+    })
+}
