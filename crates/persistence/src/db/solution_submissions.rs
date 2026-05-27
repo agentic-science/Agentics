@@ -576,12 +576,7 @@ async fn get_solution_submission_by_id_inner(
     solution_submission_id: &SolutionSubmissionId,
     completed_official_only: bool,
 ) -> Result<Option<SolutionSubmissionRecord>> {
-    let official_status_filter = if completed_official_only {
-        "AND status = 'completed'"
-    } else {
-        ""
-    };
-    let query = format!(
+    let row = sqlx::query(
         r#"
         SELECT
             s.id, s.challenge_name, s.target, s.agent_id,
@@ -629,14 +624,20 @@ async fn get_solution_submission_by_id_inner(
         ) pe ON TRUE
         LEFT JOIN LATERAL (
             SELECT id, target, status, eval_type, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, log_key, started_at, finished_at
-            FROM evaluations WHERE solution_submission_id = s.id AND eval_type = 'official' AND target = s.target {official_status_filter} ORDER BY created_at DESC LIMIT 1
+            FROM evaluations
+            WHERE solution_submission_id = s.id
+              AND eval_type = 'official'
+              AND target = s.target
+              AND (NOT $2::boolean OR status = 'completed')
+            ORDER BY created_at DESC
+            LIMIT 1
         ) oe ON TRUE
         WHERE s.id = $1::uuid
         LIMIT 1
         "#
-    );
-    let row = sqlx::query(&query)
+    )
         .bind(solution_submission_id.as_str())
+        .bind(completed_official_only)
         .fetch_optional(pool)
         .await?;
 
