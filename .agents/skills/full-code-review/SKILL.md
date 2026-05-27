@@ -103,7 +103,54 @@ Cover these project-agnostic lanes when the user asks for a complete review:
    - API contract ownership, route data loading, UI state boundaries, component
      size, visual-system consistency, admin workflow separation, tests, and CLI
      extensibility.
-6. Test quality
+6. Modularity and architecture ownership
+   - Review ownership of invariants, not only file size. Ask which layer owns
+     each truth: domain value, external contract, config policy, SQL
+     transaction, application workflow, runner behavior, or presentation. A
+     modularity finding must name the proposed owner and target shape; do not
+     write vague advice such as "decouple this" or "split this file".
+   - Use the intended backend ownership map as the baseline:
+     `agentics-domain` owns typed IDs, names, URLs, paths, DTOs, and semantic
+     values; `agentics-contracts` owns challenge specs, solution manifests,
+     target/image policy, and external contract validation; `agentics-config`
+     owns grouped operator config, field validation, and cross-field runtime
+     policy; `agentics-persistence` owns SQL, row mapping, transactions, and
+     repository facades; `agentics-services` owns workflow orchestration,
+     admission, state machines, and public projection/redaction;
+     `agentics-runner` owns execution topology, Docker/backend mechanics, and
+     runner filesystem/log/resource behavior. API, worker, CLI, and web crates
+     should stay transport, loop, command, or presentation shells.
+   - Flag API handlers that coordinate database writes, storage operations,
+     filesystem work, and contract validation directly. Prefer moving the
+     workflow to `agentics-services::...` while keeping SQL in repositories and
+     storage mechanics in `agentics-storage`.
+   - Flag worker code that decides job lifecycle outcomes such as success,
+     ordinary failure, timeout, stale claim, capacity requeue, or heartbeat
+     state instead of delegating the application decision to services. Worker
+     crates should own process startup, host probes, loop timing, shutdown, and
+     logging.
+   - Flag persistence methods that own business policy beyond guarded SQL and
+     transaction primitives. Repositories should expose narrow row/transaction
+     operations; services should decide admission, visibility, cleanup, and
+     state-machine transitions.
+   - Flag frontend components that duplicate fetch, mutation, loading, error,
+     invalidation, or i18n-label logic. Prefer shared typed API helpers, SWR
+     hooks, focused panels, and reusable console primitives when they remove
+     repeated data-flow policy.
+   - Flag public redaction, metric visibility, target selection, path/archive
+     validation, or config checks that are duplicated outside their canonical
+     boundary. Prefer centralizing projections in services, semantic parsing in
+     domain newtypes, external contract checks in `agentics-contracts`, and
+     field-local config checks in grouped config structs.
+   - Treat flat structs that mix unrelated config or request concerns as a
+     design smell when grouping would make validation ownership and call sites
+     clearer. Do not recommend wrapping every primitive; recommend a new struct,
+     crate, hook, or module only when it removes real coupling, duplicated
+     policy, or mixed ownership.
+   - For large files, diagnose why they are growing. Report the missing
+     ownership boundary, workflow split, repository facade, data hook, or
+     component boundary, rather than only restating the line count.
+7. Test quality
    - Find trivial or low-value tests and report them as P3 findings unless they
      mask a higher-risk issue. Flag tests that only restate constants, assert
      fields on freshly constructed structs, check generic library behavior,
@@ -208,6 +255,35 @@ When spawning a subagent for Rust backend, worker, or CLI review, explicitly ask
 that subagent to read `references/rust-modernization.md` before reviewing code.
 The subagent should report places where newer Rust features or APIs simplify
 Agentics code without causing churn for its own sake.
+
+For modularity and architecture review, assign at least one subagent or one
+manual pass to crate, module, struct, workflow, and frontend data-flow
+boundaries. That pass should report both findings and positive confirmation
+where the intended boundaries are respected. It should explain the current
+owner, the proposed owner, and the smallest target shape that removes the mixed
+responsibility.
+
+Use targeted searches as starting points, then inspect context manually:
+
+- API handlers coordinating too much:
+  `use agentics_persistence|use agentics_storage|use agentics_runner|std::fs|tokio::fs`
+- Services bypassed by direct repository use in API or worker paths:
+  `Repositories::new\\(&state\\.db\\)|Repositories::new\\(&pool\\)|agentics_persistence::`
+- Worker lifecycle decisions outside services:
+  `requeue|mark_.*started|mark_.*finished|heartbeat|claim_next|stale|capacity`
+- Flat or duplicated config and validation policy:
+  `pub struct Config|Raw.*Env|validate_.*config|must be set|must be positive`
+- Frontend duplicated data-flow policy:
+  `fetch\\(|useState\\(|mutate\\(|setError|setLoading|URLSearchParams|credentials:`
+- Public projection or redaction decisions outside services:
+  `official_only|validation_score|rank_score|aggregate_metrics|public_results|redact`
+
+Do not report a modularity issue only because a file is long or a helper is
+small. Report it when the code mixes ownership of invariants, duplicates policy,
+forces distant layers to know too much, or makes meaningful workflow tests hard
+to write. Prefer recommendations such as "move this workflow into
+`agentics-services::challenge_drafts` and keep the SQL operation in the draft
+repository" over generic "split this module" advice.
 
 For Rust security review, also ask subagents to scan for CVE-prone tool patterns
 near untrusted input and OS boundaries. Use targeted `rg` searches as review
