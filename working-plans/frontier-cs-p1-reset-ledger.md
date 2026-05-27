@@ -66,10 +66,16 @@ For every `pending reset` challenge:
   dedicated runner daemon were stopped.
 - Backup RustFS: 33 old private-bundle objects were found and deleted under
   `private-bundle-backups/<challenge-handle>/official-runs.zip` for the
-  `pending reset` challenges. The SQL parser P1 had no matching backup object.
-  A post-delete inventory found no remaining reset-candidate backup objects.
-  `binary-slate-machine-frontier-cs-algorithmic-81` remains present and is
-  excluded.
+  `pending reset` challenges. A later whole-bucket sweep also found and
+  deleted one legacy top-level SQL parser backup at
+  `sql-parser-coverage-frontier-cs-grammar-fuzzing-seed-sql/official-runs.zip`.
+  A final whole-bucket inventory found no remaining reset-candidate backup
+  objects. `binary-slate-machine-frontier-cs-algorithmic-81` remains present
+  and is excluded.
+- Production RustFS restore: after restoring non-reset bundles into the clean
+  production RustFS volume, a targeted production sweep removed reset-candidate
+  prefixes again. Final production inventory found no reset-candidate private
+  bundle objects and confirmed the Binary Slate reverify bundle remains.
 
 ## Issue Reset Log
 
