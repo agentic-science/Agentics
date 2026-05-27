@@ -1,11 +1,13 @@
 use agentics_contracts::validation::public_api::{self, DEFAULT_PUBLIC_LEADERBOARD_LIMIT};
+use agentics_domain::models::challenge::ChallengeBundleSpec;
+use agentics_domain::models::evaluation::MetricValue;
 use agentics_domain::models::ids::{AgentId, SolutionSubmissionId};
 use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::models::request::{
-    LeaderboardResponse, RankedLeaderboardEntryDto, RankingContextResponse,
+    LeaderboardEntryDto, LeaderboardResponse, RankedLeaderboardEntryDto, RankingContextResponse,
 };
 use agentics_error::{Result, ServiceError};
-use agentics_persistence::Repositories;
+use agentics_persistence::{LeaderboardRecord, Repositories};
 
 use super::visibility::{
     ensure_ranking_scope_matches_submission, ensure_visibility_allows_public,
@@ -62,8 +64,11 @@ pub async fn get_leaderboard(
         public_api::bounded_public_limit(limit, DEFAULT_PUBLIC_LEADERBOARD_LIMIT, "leaderboard")?;
     let items = Repositories::new(pool)
         .leaderboard()
-        .list_entries(challenge_name, &target, limit)
-        .await?;
+        .list_entries(challenge_name, &target, limit, &spec)
+        .await?
+        .into_iter()
+        .map(|record| present_leaderboard_entry(record, &spec))
+        .collect();
     Ok(LeaderboardResponse {
         challenge_name: challenge.challenge_name,
         target,
@@ -84,10 +89,15 @@ pub async fn build_ranking_context(
         .get_public(challenge_name)
         .await?
         .ok_or(ServiceError::NotFound)?;
+    let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json.clone())
+        .map_err(|e| ServiceError::Internal(format!("stored challenge spec is invalid: {e}")))?;
     let entries = repos
         .leaderboard()
-        .list_entries(challenge_name, target, 10_000)
-        .await?;
+        .list_entries(challenge_name, target, 10_000, &spec)
+        .await?
+        .into_iter()
+        .map(|record| present_leaderboard_entry(record, &spec))
+        .collect::<Vec<_>>();
     let total_ranked = i64::try_from(entries.len())
         .map_err(|_| ServiceError::Internal("leaderboard entry count overflow".to_string()))?;
     let ranked_entries = entries
@@ -153,4 +163,25 @@ pub async fn build_ranking_context(
         entry,
         nearby_entries,
     })
+}
+
+/// Project one persistence leaderboard record into the public DTO surface.
+fn present_leaderboard_entry(
+    record: LeaderboardRecord,
+    spec: &ChallengeBundleSpec,
+) -> LeaderboardEntryDto {
+    let official_primary_metric = MetricValue::find_by_name(
+        &record.official_metrics,
+        &spec.metric_schema.ranking.primary_metric_name,
+    );
+    LeaderboardEntryDto {
+        target: record.target,
+        agent_id: record.agent_id,
+        agent_display_name: record.agent_display_name,
+        best_solution_submission_id: record.best_solution_submission_id,
+        best_rank_score: record.best_rank_score,
+        rank_score: record.best_rank_score,
+        official_primary_metric,
+        updated_at: record.updated_at.to_rfc3339(),
+    }
 }

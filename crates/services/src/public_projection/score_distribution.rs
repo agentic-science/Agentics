@@ -22,7 +22,7 @@ pub async fn get_score_distribution(
     let target = public_api::resolve_required_public_target(&spec, target)?;
     let entries = Repositories::new(pool)
         .leaderboard()
-        .list_entries_with_metric_payloads(challenge_name, &target, 10_000)
+        .list_entries_with_metric_payloads(challenge_name, &target, 10_000, &spec)
         .await?;
     build_score_distribution_response(
         challenge.challenge_name,

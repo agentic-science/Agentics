@@ -1,10 +1,10 @@
 use sqlx::PgPool;
 
 use crate::db;
-use crate::repositories::LeaderboardMetricEntry;
+use crate::repositories::{LeaderboardMetricEntry, LeaderboardRecord};
+use agentics_domain::models::challenge::ChallengeBundleSpec;
 use agentics_domain::models::names::ChallengeName;
 use agentics_domain::models::names::TargetName;
-use agentics_domain::models::request::LeaderboardEntryDto;
 use agentics_error::Result;
 
 #[derive(Debug, Clone, Copy)]
@@ -18,8 +18,10 @@ impl LeaderboardRepository<'_> {
         challenge_name: &ChallengeName,
         target: &TargetName,
         limit: i64,
-    ) -> Result<Vec<LeaderboardEntryDto>> {
-        db::leaderboard::list_leaderboard_entries(self.pool, challenge_name, target, limit).await
+        spec: &ChallengeBundleSpec,
+    ) -> Result<Vec<LeaderboardRecord>> {
+        db::leaderboard::list_leaderboard_entries(self.pool, challenge_name, target, limit, spec)
+            .await
     }
 
     pub async fn list_entries_with_metric_payloads(
@@ -27,12 +29,14 @@ impl LeaderboardRepository<'_> {
         challenge_name: &ChallengeName,
         target: &TargetName,
         limit: i64,
+        spec: &ChallengeBundleSpec,
     ) -> Result<Vec<LeaderboardMetricEntry>> {
         db::leaderboard::list_leaderboard_entries_with_metric_payloads(
             self.pool,
             challenge_name,
             target,
             limit,
+            spec,
         )
         .await
     }

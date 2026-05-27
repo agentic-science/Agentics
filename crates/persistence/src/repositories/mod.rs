@@ -43,7 +43,7 @@ pub use crate::db::evaluation_jobs::{
 };
 pub use crate::db::evaluation_policy::PublishedChallengeAdmission;
 pub use crate::db::evaluations::{MarkEvaluationStartedInput, PersistedEvaluationResult};
-pub use crate::db::leaderboard::LeaderboardMetricEntry;
+pub use crate::db::leaderboard::{LeaderboardMetricEntry, LeaderboardRecord};
 pub use crate::db::maintenance::{HeartbeatPayload, StaleJobReapResult};
 pub use crate::db::pioneer_codes::{
     CreatePioneerCodeInput, PioneerCodeRecord, PioneerCodeRegistrationKind, PioneerCodeUseRecord,

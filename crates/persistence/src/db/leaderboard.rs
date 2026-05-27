@@ -6,12 +6,10 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
 
 use agentics_domain::models::challenge::{ChallengeBundleSpec, MetricDirection};
 use agentics_domain::models::evaluation::{MetricValue, PublicCaseResult};
-use agentics_domain::models::ids::SolutionSubmissionId;
+use agentics_domain::models::ids::{AgentId, SolutionSubmissionId};
 use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
-use agentics_domain::models::request::LeaderboardEntryDto;
 use agentics_error::{Result, ServiceError};
 
-use super::challenges::get_public_challenge;
 use super::ids::{agent_id_from_row, solution_submission_id_from_row, target_from_row};
 use super::json::decode_optional_json;
 
@@ -257,12 +255,9 @@ pub async fn list_leaderboard_entries(
     challenge_name: &ChallengeName,
     target: &TargetName,
     limit: i64,
-) -> Result<Vec<LeaderboardEntryDto>> {
-    let (spec, rows) = list_leaderboard_rows(pool, challenge_name, target, limit).await?;
-    Ok(rows
-        .into_iter()
-        .map(|row| row.into_public_dto(&spec))
-        .collect())
+    spec: &ChallengeBundleSpec,
+) -> Result<Vec<LeaderboardRecord>> {
+    list_leaderboard_rows(pool, challenge_name, target, limit, spec).await
 }
 
 /// List leaderboard entries with metric payloads for internal aggregate calculations.
@@ -271,12 +266,26 @@ pub async fn list_leaderboard_entries_with_metric_payloads(
     challenge_name: &ChallengeName,
     target: &TargetName,
     limit: i64,
+    spec: &ChallengeBundleSpec,
 ) -> Result<Vec<LeaderboardMetricEntry>> {
-    let (_spec, rows) = list_leaderboard_rows(pool, challenge_name, target, limit).await?;
+    let rows = list_leaderboard_rows(pool, challenge_name, target, limit, spec).await?;
     Ok(rows
         .into_iter()
-        .map(LeaderboardRow::into_metric_entry)
+        .map(LeaderboardRecord::into_metric_entry)
         .collect())
+}
+
+/// Database record for one visible leaderboard entry before public projection.
+#[derive(Debug, Clone)]
+pub struct LeaderboardRecord {
+    pub target: TargetName,
+    pub agent_id: AgentId,
+    pub agent_display_name: String,
+    pub best_solution_submission_id: SolutionSubmissionId,
+    pub best_rank_score: f64,
+    pub aggregate_metrics: Vec<MetricValue>,
+    pub official_metrics: Vec<MetricValue>,
+    pub updated_at: DateTime<Utc>,
 }
 
 /// Internal leaderboard row that keeps metric payloads out of public DTOs.
@@ -299,37 +308,7 @@ struct LeaderboardReplacementCandidate {
     official_metrics_json: Value,
 }
 
-/// Database row for one visible leaderboard entry before public projection.
-struct LeaderboardRow {
-    target: TargetName,
-    agent_id: agentics_domain::models::ids::AgentId,
-    agent_display_name: String,
-    best_solution_submission_id: SolutionSubmissionId,
-    best_rank_score: f64,
-    aggregate_metrics: Vec<MetricValue>,
-    official_metrics: Vec<MetricValue>,
-    updated_at: DateTime<Utc>,
-}
-
-impl LeaderboardRow {
-    /// Project this row into the public leaderboard DTO.
-    fn into_public_dto(self, spec: &ChallengeBundleSpec) -> LeaderboardEntryDto {
-        let official_primary_metric = MetricValue::find_by_name(
-            &self.official_metrics,
-            &spec.metric_schema.ranking.primary_metric_name,
-        );
-        LeaderboardEntryDto {
-            target: self.target,
-            agent_id: self.agent_id,
-            agent_display_name: self.agent_display_name,
-            best_solution_submission_id: self.best_solution_submission_id,
-            best_rank_score: self.best_rank_score,
-            rank_score: self.best_rank_score,
-            official_primary_metric,
-            updated_at: self.updated_at.to_rfc3339(),
-        }
-    }
-
+impl LeaderboardRecord {
     /// Project this row into the backend-only metric payload shape.
     fn into_metric_entry(self) -> LeaderboardMetricEntry {
         LeaderboardMetricEntry {
@@ -346,13 +325,9 @@ async fn list_leaderboard_rows(
     challenge_name: &ChallengeName,
     target: &TargetName,
     limit: i64,
-) -> Result<(ChallengeBundleSpec, Vec<LeaderboardRow>)> {
+    spec: &ChallengeBundleSpec,
+) -> Result<Vec<LeaderboardRecord>> {
     let requested_limit = limit.max(1);
-    let challenge = get_public_challenge(pool, challenge_name)
-        .await?
-        .ok_or(ServiceError::NotFound)?;
-    let spec = serde_json::from_value::<ChallengeBundleSpec>(challenge.spec_json)
-        .map_err(|e| ServiceError::Internal(format!("stored challenge spec is invalid: {e}")))?;
     let mut query = QueryBuilder::<Postgres>::new(
         r#"
         SELECT
@@ -418,7 +393,7 @@ async fn list_leaderboard_rows(
             .unwrap_or_default();
             let best_rank_score: f64 = r.try_get("best_rank_score")?;
 
-            Ok(LeaderboardRow {
+            Ok(LeaderboardRecord {
                 target: target_from_row(&r, "target")?,
                 agent_id: agent_id_from_row(&r, "agent_id")?,
                 agent_display_name: r.try_get("agent_display_name")?,
@@ -434,7 +409,7 @@ async fn list_leaderboard_rows(
         })
         .collect::<Result<Vec<_>>>()?;
 
-    Ok((spec, entries))
+    Ok(entries)
 }
 
 /// Handles upsert leaderboard entry for solution submission tx for this module.
