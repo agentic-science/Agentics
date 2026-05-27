@@ -1,12 +1,12 @@
 use chrono::{DateTime, Utc};
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{
     ChallengeBundleSpec, ChallengeResultDetailVisibility, ChallengeSolutionPublicationPolicy,
     ChallengeVisibility,
 };
 use agentics_domain::models::ids::SolutionSubmissionId;
 use agentics_domain::models::names::{ChallengeName, TargetName};
+use agentics_error::{Result, ServiceError};
 use agentics_persistence::{ChallengeRecord, Repositories, SolutionSubmissionRecord};
 
 /// Audience-specific projection for solution submission details.

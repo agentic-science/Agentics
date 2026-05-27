@@ -2,17 +2,13 @@
 
 mod helpers;
 
-use agentics_domain::{
-    error::ServiceError,
-    models::{
-        challenge_creation::ChallengePrivateAssetKind,
-        hashes::Sha256Digest,
-        ids::{
-            AgentId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengePrivateAssetId,
-        },
-        names::AssetName,
-    },
+use agentics_domain::models::{
+    challenge_creation::ChallengePrivateAssetKind,
+    hashes::Sha256Digest,
+    ids::{AgentId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengePrivateAssetId},
+    names::AssetName,
 };
+use agentics_error::ServiceError;
 use agentics_persistence as db;
 use agentics_storage::StorageKey;
 use base64::{Engine as _, engine::general_purpose::STANDARD};

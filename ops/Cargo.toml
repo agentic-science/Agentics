@@ -22,6 +22,7 @@ serde_json = { workspace = true }
 agentics-config = { workspace = true }
 agentics-contracts = { workspace = true }
 agentics-domain = { workspace = true }
+agentics-error = { workspace = true }
 agentics-persistence = { workspace = true }
 agentics-runner = { workspace = true }
 agentics-storage = { workspace = true }

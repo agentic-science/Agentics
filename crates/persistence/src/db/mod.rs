@@ -22,7 +22,7 @@ pub mod sessions;
 pub mod solution_submissions;
 pub mod validation_quotas;
 
-use agentics_domain::error::ServiceError;
+use agentics_error::ServiceError;
 
 /// Local database workflow failures before conversion to service errors.
 #[derive(Debug, thiserror::Error)]

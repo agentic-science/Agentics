@@ -5,9 +5,9 @@ use sqlx::{PgPool, Row};
 
 use crate::db::agents::enforce_active_agent_quota_tx;
 use crate::db::pioneer_codes::{PioneerCodeRegistrationKind, consume_pioneer_code_for_agent_tx};
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::ids::AgentId;
 use agentics_domain::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE;
+use agentics_error::{Result, ServiceError};
 
 use super::ids::agent_id_from_row;
 

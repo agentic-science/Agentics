@@ -5,13 +5,13 @@ use uuid::Uuid;
 
 use agentics_config::Config;
 use agentics_contracts::zip_project::{MAX_ZIP_PROJECT_ARTIFACT_BYTES, ZipProjectManifest};
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::{AgentId, EvaluationJobId, SolutionSubmissionId};
 use agentics_domain::models::names::TargetName;
 use agentics_domain::models::request::{
     CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse,
 };
+use agentics_error::{Result, ServiceError};
 use agentics_persistence::{
     CreateSolutionSubmissionInput, PublishedChallengeAdmission, Repositories,
     SolutionSubmissionQuotaAdmission,

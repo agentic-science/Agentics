@@ -12,6 +12,7 @@ path = "src/bin/export_web_schemas.rs"
 
 [dependencies]
 agentics-domain = { workspace = true }
+agentics-error = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

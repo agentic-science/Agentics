@@ -52,6 +52,12 @@ impl FromStr for StorageKey {
     }
 }
 
+impl From<StorageKeyError> for agentics_error::ServiceError {
+    fn from(error: StorageKeyError) -> Self {
+        agentics_error::ServiceError::BadRequest(error.to_string())
+    }
+}
+
 impl Serialize for StorageKey {
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where

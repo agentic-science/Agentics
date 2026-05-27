@@ -1,11 +1,11 @@
 use agentics_contracts::validation::public_api;
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{ChallengeBundleSpec, MetricVisibility};
 use agentics_domain::models::evaluation::MetricValue;
 use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
 use agentics_domain::models::request::{
     ScoreDistributionBucketDto, ScoreDistributionQuantileDto, ScoreDistributionResponse,
 };
+use agentics_error::{Result, ServiceError};
 use agentics_persistence::{LeaderboardMetricEntry, Repositories};
 
 use super::visibility::{ensure_visibility_allows_public, load_challenge_policy};
@@ -241,7 +241,6 @@ fn histogram_bucket_index(value: f64, min: f64, width: f64, bucket_count: usize)
 #[cfg(test)]
 mod tests {
     use agentics_contracts::zip_project::ZipProjectNetworkAccess;
-    use agentics_domain::error::ServiceError;
     use agentics_domain::models::challenge::{
         ChallengeBundleSpec, ChallengeEligibilitySpec, ChallengeEligibilityType,
         ChallengeExecutionSpec, ChallengeResultDetailVisibility,
@@ -259,6 +258,7 @@ mod tests {
         ChallengeKeyword, ChallengeName, MetricName, ResourceProfileName, TargetName,
     };
     use agentics_domain::models::paths::BundleRelativePath;
+    use agentics_error::ServiceError;
     use agentics_persistence::LeaderboardMetricEntry;
 
     use super::build_score_distribution_response;

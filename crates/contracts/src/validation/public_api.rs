@@ -1,8 +1,8 @@
 //! Shared validation for public read API query contracts.
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::ChallengeBundleSpec;
 use agentics_domain::models::names::TargetName;
+use agentics_error::{Result, ServiceError};
 
 /// Default public challenge catalog page size.
 pub const DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT: i64 = 100;

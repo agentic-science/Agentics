@@ -2,7 +2,6 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{ChallengeBundleSpec, TargetAccelerator};
 use agentics_domain::models::evaluation::{
     EvaluationDto, EvaluationJobPayload, EvaluationJobStatus, EvaluationStatus, MetricValue,
@@ -13,6 +12,7 @@ use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::models::request::AdminSolutionSubmissionListItemDto;
 use agentics_domain::models::request::PublicSolutionSubmissionListItemDto;
 use agentics_domain::storage::StorageKey;
+use agentics_error::{Result, ServiceError};
 
 use super::evaluation_policy::{
     ensure_challenge_supports_eval_type_tx, ensure_validation_uses_public_bundle,

@@ -3,9 +3,9 @@
 use std::path::{Path, PathBuf};
 
 use agentics_config::Config;
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::ChallengeBundleSpec;
 use agentics_domain::storage::StorageKey;
+use agentics_error::{Result, ServiceError};
 use agentics_persistence::{PublishChallengeInput, Repositories};
 use agentics_storage::{
     Storage, StorageError, StorageWriteIntent, pack_directory_to_tar, storage_work_root,

@@ -1,9 +1,9 @@
 //! Shared target selection and MVP target policy validation.
 
 use crate::validation::archive::ChallengeValidationError;
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{ChallengeTargetSpec, DockerPlatform, TargetAccelerator};
 use agentics_domain::models::names::{ChallengeName, TargetName};
+use agentics_error::{Result, ServiceError};
 
 /// Hosted MVP target with no accelerator.
 pub const LINUX_ARM64_NO_ACCELERATOR_TARGET: &str = "linux-arm64-cpu";

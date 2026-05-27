@@ -1,4 +1,4 @@
-use agentics_domain::error::ServiceError;
+use agentics_error::ServiceError;
 
 /// Storage-layer failures before conversion to service/API errors.
 #[derive(Debug, thiserror::Error)]

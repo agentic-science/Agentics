@@ -11,7 +11,6 @@ use uuid::Uuid;
 use agentics_config::Config;
 use agentics_contracts::validation::github::GithubPullRequestRef;
 use agentics_contracts::{challenge_bundle, challenge_creation};
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge_creation::{
     AdminChallengePrivateAssetListResponse, ChallengeCreationManifest,
     ChallengeCreationRequestKind, ChallengeDraftListResponse, ChallengeDraftResponse,
@@ -25,6 +24,7 @@ use agentics_domain::models::ids::{
 };
 use agentics_domain::models::names::ChallengeName;
 use agentics_domain::models::paths::{RepoRelativePath, RepositoryCheckoutPath};
+use agentics_error::{Result, ServiceError};
 use agentics_persistence::{self as persistence, Repositories};
 use agentics_storage::{Storage, StorageWriteIntent, storage_work_root};
 

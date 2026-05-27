@@ -1,6 +1,5 @@
 use sqlx::{PgPool, Postgres, Transaction};
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::ChallengeBundleSpec;
 use agentics_domain::models::challenge_creation::{ChallengeDraftResponse, ChallengeDraftStatus};
 use agentics_domain::models::hashes::Sha256Digest;
@@ -10,6 +9,7 @@ use agentics_domain::models::ids::{
 use agentics_domain::models::localization::LocalizedText;
 use agentics_domain::models::names::ChallengeName;
 use agentics_domain::storage::StorageKey;
+use agentics_error::{Result, ServiceError};
 
 use super::super::challenges::{
     PublishChallengeInput, add_challenge_owner_tx, publish_challenge_tx,

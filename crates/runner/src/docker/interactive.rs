@@ -13,7 +13,7 @@ use super::{
     duration_millis, kill_container_if_running, wait_container_exit,
 };
 use crate::docker::options::append_bounded_log_bytes;
-use agentics_domain::error::{Result, ServiceError};
+use agentics_error::{Result, ServiceError};
 
 /// Run two already-created containers with attached and crossed stdio streams.
 pub(super) async fn run_attached_interactive_pair(

@@ -1,8 +1,8 @@
 //! Cross-field GitHub provenance validation for challenge drafts.
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::github::GithubPullRequestNumber;
 use agentics_domain::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
+use agentics_error::{Result, ServiceError};
 
 /// Validated GitHub pull-request provenance tuple.
 #[derive(Debug, Clone)]

@@ -9,7 +9,6 @@ use crate::challenge_bundle::{
     read_challenge_bundle_spec, read_challenge_run_manifest, read_piped_stdio_session_manifest,
 };
 use crate::validation::text;
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{MAX_CHALLENGE_KEYWORDS, MIN_CHALLENGE_KEYWORDS};
 use agentics_domain::models::challenge_creation::{
     AGENTICS_CHALLENGE_MANIFEST_FILE, ChallengeCreationManifest, ChallengeCreationRequestKind,
@@ -17,6 +16,7 @@ use agentics_domain::models::challenge_creation::{
 };
 use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::paths::RepoRelativePath;
+use agentics_error::{Result, ServiceError};
 
 /// Read `agentics.challenge.json` from a proposal root.
 pub async fn read_challenge_creation_manifest(root: &Path) -> Result<ChallengeCreationManifest> {

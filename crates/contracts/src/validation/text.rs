@@ -1,6 +1,6 @@
 //! Shared text validation for public request and manifest fields.
 
-use agentics_domain::error::{Result, ServiceError};
+use agentics_error::{Result, ServiceError};
 
 /// Validate that a string field contains visible non-whitespace content.
 pub fn require_non_empty(value: &str, field: &str) -> Result<()> {

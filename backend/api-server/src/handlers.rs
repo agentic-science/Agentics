@@ -23,7 +23,6 @@ use agentics_config::AgentRegistrationMode;
 use agentics_contracts::validation::public_api::{
     self, DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT, PublicPagination,
 };
-use agentics_domain::error::ServiceError;
 use agentics_domain::models::evaluation::{EvaluationJobStatus, ScoringMode};
 use agentics_domain::models::ids::{AgentId, AgentPioneerCodeId, AgentTokenId};
 use agentics_domain::models::names::{ChallengeKeyword, ChallengeName, MetricName, TargetName};
@@ -39,6 +38,7 @@ use agentics_domain::models::request::{
     ScoreDistributionResponse, SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse,
     SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
+use agentics_error::ServiceError;
 use agentics_persistence::{
     ChallengeCatalogFilters, PioneerCodeRegistrationKind, RegisterAgentInput, Repositories,
 };

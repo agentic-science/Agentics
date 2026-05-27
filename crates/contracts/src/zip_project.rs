@@ -9,11 +9,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::validation::archive::{ArchiveEnvelopePolicy, inspect_zip_bytes};
 use crate::validation::text;
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::paths::{LogRelativePath, ScriptPath};
 pub use agentics_domain::zip_project::{
     DockerNetworkMode, ZipProjectNetworkAccess, ZipProjectPhaseLimits,
 };
+use agentics_error::{Result, ServiceError};
 
 pub const ZIP_PROJECT_MANIFEST_FILE: &str = "agentics.solution.json";
 pub const ZIP_PROJECT_PROTOCOL: &str = "zip_project";

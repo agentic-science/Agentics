@@ -4,12 +4,12 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{ChallengeBundleSpec, MetricDirection};
 use agentics_domain::models::evaluation::{MetricValue, PublicCaseResult};
 use agentics_domain::models::ids::SolutionSubmissionId;
 use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
 use agentics_domain::models::request::LeaderboardEntryDto;
+use agentics_error::{Result, ServiceError};
 
 use super::challenges::get_public_challenge;
 use super::ids::{agent_id_from_row, solution_submission_id_from_row, target_from_row};

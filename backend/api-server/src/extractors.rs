@@ -7,9 +7,9 @@ use garde::Validate;
 use secrecy::ExposeSecret;
 use serde::de::DeserializeOwned;
 
-use agentics_domain::error::ServiceError;
 use agentics_domain::models::ErrorDetail;
 use agentics_domain::models::ids::{AgentId, AgentTokenId, ChallengeDraftId, SolutionSubmissionId};
+use agentics_error::ServiceError;
 use agentics_persistence::{AuthenticatedAdminSession, AuthenticatedCreatorSession, Repositories};
 use agentics_services::auth;
 

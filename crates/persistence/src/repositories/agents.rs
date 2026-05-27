@@ -5,7 +5,7 @@ use crate::db;
 use crate::repositories::{
     AgentRecord, AuthenticatedAgent, PioneerCodeRegistrationKind, RegisterAgentInput,
 };
-use agentics_domain::error::Result;
+use agentics_error::Result;
 
 #[derive(Debug, Clone, Copy)]
 pub struct AgentsRepository<'a> {

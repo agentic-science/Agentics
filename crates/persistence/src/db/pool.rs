@@ -4,7 +4,7 @@ use secrecy::ExposeSecret;
 use sqlx::PgPool;
 
 use agentics_config::Config;
-use agentics_domain::error::Result;
+use agentics_error::Result;
 
 /// Create a Postgres connection pool from application configuration.
 pub async fn create_pool(config: &Config, max_connections: u32) -> Result<PgPool> {

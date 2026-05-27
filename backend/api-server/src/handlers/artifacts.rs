@@ -5,11 +5,11 @@ use axum::Json;
 use crate::error::ApiResult as Result;
 use agentics_contracts::validation::archive::inspect_zip_bytes;
 use agentics_contracts::zip_project::{MAX_ZIP_PROJECT_ARTIFACT_BYTES, zip_project_archive_policy};
-use agentics_domain::error::ServiceError;
 use agentics_domain::models::request::{
     SolutionSubmissionArtifactFileDto, SolutionSubmissionArtifactResponse,
     SolutionSubmissionLogsResponse,
 };
+use agentics_error::ServiceError;
 use agentics_persistence::SolutionSubmissionRecord;
 
 use crate::state::AppState;

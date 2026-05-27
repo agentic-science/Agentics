@@ -5,8 +5,8 @@ use crate::repositories::{
     AuthenticatedAdminSession, AuthenticatedCreatorSession, ConsumedGithubOauthState,
     CreateAdminSessionInput, CreateCreatorSessionInput, CreateGithubOauthStateInput,
 };
-use agentics_domain::error::Result;
 use agentics_domain::models::ids::AgentId;
+use agentics_error::Result;
 
 #[derive(Debug, Clone, Copy)]
 pub struct SessionsRepository<'a> {

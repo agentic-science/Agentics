@@ -4,8 +4,8 @@ use crate::db;
 use crate::repositories::{
     CreatePioneerCodeInput, PioneerCodeRecord, PioneerCodeUseRecord, RevokePioneerCodeOutcome,
 };
-use agentics_domain::error::Result;
 use agentics_domain::models::ids::AgentPioneerCodeId;
+use agentics_error::Result;
 
 #[derive(Debug, Clone, Copy)]
 pub struct PioneerCodesRepository<'a> {

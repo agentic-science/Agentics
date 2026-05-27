@@ -6,7 +6,6 @@ use uuid::Uuid;
 
 use agentics_config::Config;
 use agentics_contracts::challenge_bundle;
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge_creation::{
     ChallengeCreationManifest, ChallengeCreationRequestKind, ChallengeDraftResponse,
     ChallengeDraftStatus,
@@ -14,6 +13,7 @@ use agentics_domain::models::challenge_creation::{
 use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::ids::{ChallengeDraftAuditEventId, ChallengeDraftPublishClaimId};
 use agentics_domain::models::paths::RepositoryCheckoutPath;
+use agentics_error::{Result, ServiceError};
 use agentics_persistence::{self as persistence, Repositories};
 use agentics_storage::{
     Storage, StorageKey, StorageWriteIntent, pack_directory_to_tar, storage_work_root,

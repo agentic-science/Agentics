@@ -1,11 +1,11 @@
 //! Published challenge metadata workflows.
 
 use agentics_config::Config;
-use agentics_domain::error::Result;
 use agentics_domain::models::challenge::MoltbookCommunityDto;
 use agentics_domain::models::names::ChallengeName;
 use agentics_domain::models::request::ChallengeMoltbookDiscussionResponse;
 use agentics_domain::models::urls::MoltbookPostUrl;
+use agentics_error::Result;
 use agentics_persistence::{ChallengeMoltbookDiscussionRecord, Repositories};
 
 /// Attach a Moltbook discussion post to one published challenge.

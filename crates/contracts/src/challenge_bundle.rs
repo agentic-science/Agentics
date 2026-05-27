@@ -11,7 +11,6 @@ use chrono::{DateTime, Utc};
 
 use crate::validation::{archive::ChallengeValidationError, targets, text};
 use crate::zip_project::{ZIP_PROJECT_MANIFEST_FILE, ZIP_PROJECT_PROTOCOL};
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{
     ChallengeBundleSpec, ChallengeExecutionMode, ChallengeRunInputFile, ChallengeRunManifest,
     ChallengeRunSpec, ChallengeSetupSpec, ChallengeSolutionPublicationPolicy,
@@ -19,6 +18,7 @@ use agentics_domain::models::challenge::{
     PipedStdioSessionManifest, PipedStdioSetupSpec, PrivateBenchmarkPolicy,
 };
 use agentics_domain::models::paths::BundleRelativePath;
+use agentics_error::{Result, ServiceError};
 use garde::Validate;
 
 mod filesystem;

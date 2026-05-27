@@ -6,12 +6,12 @@ use super::{
     create_challenge_draft_audit_event_tx, lock_quota_scope,
 };
 use crate::db::ids::agent_id_from_row;
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge_creation::{
     ChallengeDraftStatus, ChallengePrivateAssetResponse,
 };
 use agentics_domain::models::ids::{AgentId, ChallengeDraftAuditEventId, ChallengePrivateAssetId};
 use agentics_domain::storage::StorageKey;
+use agentics_error::{Result, ServiceError};
 
 use super::CreateChallengePrivateAssetInput;
 

@@ -31,7 +31,6 @@ use agentics_config::Config;
 use agentics_contracts::zip_project::{
     ZIP_PROJECT_MANIFEST_FILE, ZipProjectManifest, ZipProjectPhaseName,
 };
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{
     ChallengeBundleSpec, ChallengeExecutionSpec, ChallengeRunManifest, ChallengeSetupSpec,
     CoexecutedBenchmarkSetupSpec, DockerPlatform, MetricSchemaSpec, PipedStdioSessionManifest,
@@ -39,6 +38,7 @@ use agentics_domain::models::challenge::{
 };
 use agentics_domain::models::evaluation::{EvaluationJobPayload, EvaluatorRunResult, ScoringMode};
 use agentics_domain::models::paths::BundleRelativePath;
+use agentics_error::{Result, ServiceError};
 use agentics_storage::{Storage, StorageKey};
 
 mod backend;

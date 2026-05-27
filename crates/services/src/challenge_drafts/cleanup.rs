@@ -1,8 +1,8 @@
 use std::time::{Duration, SystemTime};
 
 use agentics_config::Config;
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge_creation::ChallengeDraftCleanupResponse;
+use agentics_error::{Result, ServiceError};
 use agentics_persistence::Repositories;
 use agentics_storage::{Storage, StorageKey};
 

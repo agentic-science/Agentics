@@ -1,6 +1,5 @@
 use sqlx::PgPool;
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::evaluation::{
     EvaluationStatus, MetricValue, PublicCaseResult, RunMetricResult, ScoreSummary, ScoringMode,
     SolutionSubmissionStatus,
@@ -8,6 +7,7 @@ use agentics_domain::models::evaluation::{
 use agentics_domain::models::ids::{EvaluationId, EvaluationJobId, SolutionSubmissionId};
 use agentics_domain::models::names::TargetName;
 use agentics_domain::storage::StorageKey;
+use agentics_error::{Result, ServiceError};
 
 use super::leaderboard::{
     update_official_metrics_for_solution_submission_tx,

@@ -1,11 +1,11 @@
 //! Conversion helpers from database records to API DTOs.
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::pioneer_codes::{PioneerCodeStatus, PioneerCodeUseKind};
 use agentics_domain::models::request::{
     PioneerCodeDetailResponse, PioneerCodeDto, PioneerCodeListResponse, PioneerCodeUseDto,
     RegisterAgentResponse,
 };
+use agentics_error::{Result, ServiceError};
 use agentics_persistence::{AgentRecord, PioneerCodeRecord, PioneerCodeUseRecord};
 
 /// Present a newly registered agent together with its one-time bearer token.

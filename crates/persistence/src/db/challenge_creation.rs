@@ -2,7 +2,6 @@
 
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge_creation::{
     ChallengeCreationManifest, ChallengeDraftResponse, ChallengeDraftStatus,
     ChallengePrivateAssetKind,
@@ -17,6 +16,7 @@ use agentics_domain::models::names::AssetName;
 use agentics_domain::models::paths::RepoRelativePath;
 use agentics_domain::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
 use agentics_domain::storage::StorageKey;
+use agentics_error::{Result, ServiceError};
 
 mod assets;
 mod audit;

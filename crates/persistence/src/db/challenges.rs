@@ -8,7 +8,6 @@ use super::ids::{
     agent_id_from_row, challenge_name_from_row, challenge_shortlist_revision_id_from_row,
     optional_solution_submission_id_from_row,
 };
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{
     AdminChallengeListItemDto, ChallengeBundleSpec, ChallengeLifecycleStatus, ChallengeListItemDto,
     PublishChallengeResponse,
@@ -25,6 +24,7 @@ use agentics_domain::models::request::{
 };
 use agentics_domain::models::urls::MoltbookPostUrl;
 use agentics_domain::storage::StorageKey;
+use agentics_error::{Result, ServiceError};
 
 /// Published challenge list plus the unbounded count for pagination previews.
 #[derive(Debug, Clone)]

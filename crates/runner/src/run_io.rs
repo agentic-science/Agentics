@@ -8,11 +8,11 @@ use super::errors::phase_error;
 use super::filesystem::{OutputTreeLimits, validate_evaluator_visible_output_tree};
 use super::{ContainerOutcome, ScoringMode};
 use agentics_contracts::zip_project::{ZipProjectPhaseFailureReason, ZipProjectPhaseName};
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{
     ChallengeRunInputFile, ChallengeRunInterface, ChallengeRunSpec,
 };
 use agentics_domain::models::names::RunName;
+use agentics_error::{Result, ServiceError};
 
 /// Per-run metadata written by the worker for challenge-owned evaluators.
 #[derive(Debug, Clone, Serialize)]

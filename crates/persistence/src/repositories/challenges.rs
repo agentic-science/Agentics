@@ -6,7 +6,6 @@ use crate::repositories::{
     CreateChallengeShortlistRevisionInput, PublishChallengeInput, PublishedChallengeAdmission,
     PublishedChallengeList,
 };
-use agentics_domain::error::Result;
 use agentics_domain::models::challenge::AdminChallengeListItemDto;
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::AgentId;
@@ -16,6 +15,7 @@ use agentics_domain::models::request::{
     CreatorChallengeParticipantsResponse, CreatorChallengeStatsResponse,
 };
 use agentics_domain::models::urls::MoltbookPostUrl;
+use agentics_error::Result;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ChallengesRepository<'a> {

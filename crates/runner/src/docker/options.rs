@@ -6,8 +6,8 @@ use bollard::models::{DeviceRequest, HostConfigLogConfig};
 use bollard::query_parameters::LogsOptionsBuilder;
 use futures::StreamExt;
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::TargetAccelerator;
+use agentics_error::{Result, ServiceError};
 
 /// Handles docker log config for this module.
 pub(super) fn docker_log_config(limit_bytes: u64) -> HostConfigLogConfig {

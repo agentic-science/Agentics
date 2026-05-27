@@ -1,10 +1,10 @@
 use agentics_contracts::zip_project::{
     ZipProjectPhaseLimits, ZipProjectPhaseName, ZipProjectResolvedPhase,
 };
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{
     ResourceProfileSpec, StageResourceProfile, TargetAccelerator,
 };
+use agentics_error::{Result, ServiceError};
 
 use super::storage::WritablePhase;
 

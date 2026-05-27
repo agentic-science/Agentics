@@ -4,7 +4,7 @@ use std::collections::HashSet;
 use std::io::{Read, Seek};
 use std::path::{Component, Path};
 
-use agentics_domain::error::{Result, ServiceError};
+use agentics_error::{Result, ServiceError};
 
 /// Local challenge/archive validation failures before service-boundary mapping.
 #[derive(Debug, thiserror::Error)]

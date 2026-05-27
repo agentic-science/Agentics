@@ -6,9 +6,9 @@ use crate::repositories::{
     QueueEvaluationJobInput,
 };
 use agentics_config::WorkerAccelerators;
-use agentics_domain::error::Result;
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::EvaluationJobId;
+use agentics_error::Result;
 
 #[derive(Debug, Clone, Copy)]
 pub struct EvaluationJobsRepository<'a> {

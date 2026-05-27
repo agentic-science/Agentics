@@ -2,13 +2,13 @@ use sqlx::PgPool;
 
 use crate::db;
 use crate::repositories::CreateSolutionSubmissionInput;
-use agentics_domain::error::Result;
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::{AgentId, SolutionSubmissionId};
 use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::models::request::{
     AdminSolutionSubmissionListItemDto, PublicSolutionSubmissionListItemDto,
 };
+use agentics_error::Result;
 
 #[derive(Debug, Clone, Copy)]
 pub struct SolutionSubmissionsRepository<'a> {

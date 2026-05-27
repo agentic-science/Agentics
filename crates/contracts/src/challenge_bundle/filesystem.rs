@@ -4,8 +4,8 @@ use std::path::Path;
 
 use sha2::{Digest, Sha256};
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::hashes::Sha256Digest;
+use agentics_error::{Result, ServiceError};
 
 /// Return a deterministic SHA-256 digest of all files in a bundle tree.
 pub async fn challenge_bundle_tree_sha256(bundle_root: &Path) -> Result<Sha256Digest> {

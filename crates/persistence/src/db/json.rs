@@ -1,6 +1,6 @@
 use serde_json::Value;
 
-use agentics_domain::error::{Result, ServiceError};
+use agentics_error::{Result, ServiceError};
 
 /// Handles decode optional json for this module.
 pub(super) fn decode_optional_json<T>(value: Option<Value>, context: &str) -> Result<Option<T>>

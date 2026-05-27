@@ -13,7 +13,6 @@ use serde::Deserialize;
 
 use crate::error::ApiResult as Result;
 use agentics_config::AgentRegistrationMode;
-use agentics_domain::error::ServiceError;
 use agentics_domain::models::auth::{
     AdminLoginRequest, AdminSessionResponse, CreatorMeResponse, CreatorSessionResponse,
     GithubOauthCallbackRequest, GithubOauthLoginRequest, GithubOauthLoginResponse,
@@ -21,6 +20,7 @@ use agentics_domain::models::auth::{
 use agentics_domain::models::ids::AgentId;
 use agentics_domain::models::pioneer_codes::PioneerCode;
 use agentics_domain::models::urls::GithubOauthAuthorizationUrl;
+use agentics_error::ServiceError;
 use agentics_persistence::{
     ConsumedGithubOauthState, CreateAdminSessionInput, CreateCreatorSessionInput,
     CreateGithubOauthStateInput, Repositories,

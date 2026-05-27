@@ -6,8 +6,8 @@ use serde_json::Value;
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::db::pioneer_codes::{PioneerCodeRegistrationKind, consume_pioneer_code_for_agent_tx};
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::ids::{AgentId, AgentTokenId};
+use agentics_error::{Result, ServiceError};
 
 use super::ids::{agent_id_from_row, agent_token_id_from_row};
 

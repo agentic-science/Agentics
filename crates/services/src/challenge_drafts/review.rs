@@ -1,6 +1,6 @@
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge_creation::{ChallengeDraftResponse, ChallengeDraftStatus};
 use agentics_domain::models::ids::ChallengeDraftAuditEventId;
+use agentics_error::{Result, ServiceError};
 use agentics_persistence::{self as persistence, Repositories};
 
 use super::types::ReviewChallengeDraftServiceRequest;

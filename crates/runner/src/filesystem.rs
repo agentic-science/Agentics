@@ -4,7 +4,7 @@ use agentics_contracts::validation::archive::extract_zip_file_to_dir;
 use agentics_contracts::zip_project::{
     ZipProjectPhaseFailureReason, ZipProjectPhaseName, zip_project_archive_policy,
 };
-use agentics_domain::error::{Result, ServiceError};
+use agentics_error::{Result, ServiceError};
 
 use super::errors::phase_error;
 

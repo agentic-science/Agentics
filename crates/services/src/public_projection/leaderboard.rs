@@ -1,10 +1,10 @@
 use agentics_contracts::validation::public_api::{self, DEFAULT_PUBLIC_LEADERBOARD_LIMIT};
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::ids::SolutionSubmissionId;
 use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::models::request::{
     LeaderboardResponse, RankedLeaderboardEntryDto, RankingContextResponse,
 };
+use agentics_error::{Result, ServiceError};
 use agentics_persistence::Repositories;
 
 use super::visibility::{

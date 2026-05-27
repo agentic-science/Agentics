@@ -1,9 +1,9 @@
 use agentics_config::Config;
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{
     ChallengeBundleSpec, ChallengeDetailResponse, MoltbookCommunityDto,
 };
 use agentics_domain::models::names::ChallengeName;
+use agentics_error::{Result, ServiceError};
 use agentics_persistence::{ChallengeRecord, Repositories};
 use agentics_storage::{Storage, StorageWriteIntent};
 

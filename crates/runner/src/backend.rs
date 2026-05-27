@@ -7,8 +7,8 @@ use super::docker::{
     self, ContainerOutcome, ContainerRequest, InteractiveSessionOutcome,
     RunnerContainerCleanupSummary, RunnerContainerSnapshot,
 };
-use agentics_domain::error::Result;
 use agentics_domain::models::challenge::DockerPlatform;
+use agentics_error::Result;
 
 /// Captures the platform execution backend used by topology orchestration.
 #[async_trait]

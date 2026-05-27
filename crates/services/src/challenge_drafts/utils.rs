@@ -2,7 +2,7 @@ use std::path::Path;
 
 use tracing::warn;
 
-use agentics_domain::error::Result;
+use agentics_error::Result;
 use agentics_storage::{Storage, StorageKey};
 
 /// Deletes a storage object after a failed or repaired workflow path.

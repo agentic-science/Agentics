@@ -1,9 +1,9 @@
 use sqlx::PgPool;
 
-use agentics_domain::error::Result;
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::AgentId;
 use agentics_domain::models::names::{ChallengeName, TargetName};
+use agentics_error::Result;
 
 /// Count participant-created submissions that consumed quota for one agent and challenge.
 ///

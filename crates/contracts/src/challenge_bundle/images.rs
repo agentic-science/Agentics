@@ -1,11 +1,11 @@
 //! Target hardware and Docker image validation for challenge bundles.
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{
     ChallengeTargetSpec, HardwareProfileSpec, ResourceProfileSpec, StageResourceProfile,
     TargetAccelerator,
 };
 use agentics_domain::models::images::ChallengeImageReference;
+use agentics_error::{Result, ServiceError};
 use garde::Validate;
 
 use super::require_non_empty;

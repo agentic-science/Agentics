@@ -1,5 +1,4 @@
 use agentics_contracts::validation::public_api::{self, DEFAULT_PUBLIC_SUBMISSION_LIST_LIMIT};
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::evaluation::{
     EvaluationDto, EvaluationJobDto, EvaluationJobStatus, MetricValue, ScoringMode,
     SolutionSubmissionStatus,
@@ -10,6 +9,7 @@ use agentics_domain::models::request::{
     CreateSolutionSubmissionResponse, PublicSolutionSubmissionListResponse,
     SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
+use agentics_error::{Result, ServiceError};
 use agentics_persistence::{Repositories, SolutionSubmissionRecord};
 
 use super::visibility::{

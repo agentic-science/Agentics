@@ -10,7 +10,6 @@ use tracing::warn;
 
 use crate::error::ApiResult as Result;
 use agentics_contracts::challenge_creation;
-use agentics_domain::error::ServiceError;
 use agentics_domain::models::challenge::ChallengeBundleSpec;
 use agentics_domain::models::ids::{AgentId, ChallengeShortlistRevisionId};
 use agentics_domain::models::names::{ChallengeName, TargetName};
@@ -19,6 +18,7 @@ use agentics_domain::models::request::{
     CreateChallengeShortlistRevisionRequest, CreatorChallengeParticipantsResponse,
     CreatorChallengeStatsResponse,
 };
+use agentics_error::ServiceError;
 use agentics_persistence::{CreateChallengeShortlistRevisionInput, Repositories};
 use agentics_storage::StorageKey;
 

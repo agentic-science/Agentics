@@ -353,7 +353,7 @@ pub enum LocalDemoError {
     #[error(transparent)]
     Sqlx(#[from] sqlx::Error),
     #[error(transparent)]
-    Service(#[from] agentics_domain::error::ServiceError),
+    Service(#[from] agentics_error::ServiceError),
     #[error(transparent)]
     Storage(#[from] agentics_storage::StorageError),
     #[error(transparent)]

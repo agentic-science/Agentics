@@ -2,10 +2,10 @@ use sqlx::PgPool;
 
 use crate::db;
 use crate::repositories::LeaderboardMetricEntry;
-use agentics_domain::error::Result;
 use agentics_domain::models::names::ChallengeName;
 use agentics_domain::models::names::TargetName;
 use agentics_domain::models::request::LeaderboardEntryDto;
+use agentics_error::Result;
 
 #[derive(Debug, Clone, Copy)]
 pub struct LeaderboardRepository<'a> {

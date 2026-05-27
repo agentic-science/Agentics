@@ -14,9 +14,9 @@ use tokio::time::timeout;
 
 use agentics_config::{Config, RunnerNamespace};
 use agentics_contracts::zip_project::{DockerNetworkMode, ZipProjectPhaseLimits};
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{DockerPlatform, TargetAccelerator};
 use agentics_domain::models::ids::EvaluationJobId;
+use agentics_error::{Result, ServiceError};
 
 mod interactive;
 mod options;

@@ -8,13 +8,13 @@ use crate::repositories::{
     FinishChallengeDraftValidationInput, PublishArchiveChallengeDraftInput,
     PublishNewChallengeDraftInput,
 };
-use agentics_domain::error::Result;
 use agentics_domain::models::challenge_creation::{
     AdminChallengePrivateAssetResponse, ChallengeDraftResponse,
     ChallengeDraftValidationRecordResponse, ChallengePrivateAssetResponse,
 };
 use agentics_domain::models::ids::{AgentId, ChallengeDraftId, ChallengeDraftPublishClaimId};
 use agentics_domain::storage::StorageKey;
+use agentics_error::Result;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ChallengeDraftsRepository<'a> {

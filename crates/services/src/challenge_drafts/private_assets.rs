@@ -10,11 +10,11 @@ use agentics_contracts::challenge_creation;
 use agentics_contracts::validation::archive::{
     ArchiveEnvelopePolicy, extract_zip_bytes_to_dir, inspect_zip_bytes,
 };
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge_creation::{
     ChallengeDraftStatus, ChallengePrivateAssetResponse,
 };
 use agentics_domain::models::ids::{ChallengeDraftAuditEventId, ChallengePrivateAssetId};
+use agentics_error::{Result, ServiceError};
 use agentics_persistence::{self as persistence, Repositories};
 use agentics_storage::{Storage, StorageKey, StorageWriteIntent};
 

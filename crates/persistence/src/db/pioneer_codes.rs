@@ -4,9 +4,9 @@ use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::ids::{AgentId, AgentPioneerCodeId};
 use agentics_domain::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE;
+use agentics_error::{Result, ServiceError};
 
 /// Registration flow that consumed a pioneer code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

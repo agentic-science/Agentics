@@ -1,7 +1,7 @@
 use agentics_contracts::zip_project::{
     ZipProjectPhaseFailureReason, ZipProjectPhaseFailureReport, ZipProjectPhaseName,
 };
-use agentics_domain::error::{Result, ServiceError};
+use agentics_error::{Result, ServiceError};
 
 use super::docker::ContainerOutcome;
 use super::logs::append_log_excerpt;

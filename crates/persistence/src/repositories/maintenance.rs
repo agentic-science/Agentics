@@ -2,8 +2,8 @@ use sqlx::PgPool;
 
 use crate::db;
 use crate::repositories::{HeartbeatPayload, StaleJobReapResult};
-use agentics_domain::error::Result;
 use agentics_domain::models::request::AdminServiceHeartbeatDto;
+use agentics_error::Result;
 
 #[derive(Debug, Clone, Copy)]
 pub struct MaintenanceRepository<'a> {

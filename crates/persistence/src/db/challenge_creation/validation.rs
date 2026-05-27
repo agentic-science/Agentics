@@ -1,11 +1,11 @@
 use sqlx::{PgPool, Postgres, Transaction};
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge_creation::{
     ChallengeDraftStatus, ChallengeDraftValidationRecordResponse, ChallengeDraftValidationStatus,
 };
 use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::ids::{ChallengeDraftId, ChallengeDraftValidationRecordId};
+use agentics_error::{Result, ServiceError};
 
 use super::rows::row_to_validation_record_response;
 use super::{

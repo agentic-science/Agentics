@@ -1,5 +1,5 @@
-use agentics_domain::error::{ServiceError, ServiceErrorCode};
 use agentics_domain::models::{ErrorBody, ErrorResponse};
+use agentics_error::{ServiceError, ServiceErrorCode};
 use axum::{
     Json,
     http::StatusCode,
@@ -104,7 +104,7 @@ impl IntoResponse for ApiError {
 
 #[cfg(test)]
 mod tests {
-    use agentics_domain::error::{ServiceError, ServiceErrorCode};
+    use agentics_error::{ServiceError, ServiceErrorCode};
     use axum::body::to_bytes;
     use axum::response::IntoResponse;
     use serde_json::Value;

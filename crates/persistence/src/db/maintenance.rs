@@ -4,10 +4,10 @@ use sqlx::{PgPool, Row};
 
 use super::ids::{solution_submission_id_from_row, uuid_string_from_row};
 use super::leaderboard::repair_leaderboard_entry_for_solution_submission_tx;
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::{EvaluationJobId, SolutionSubmissionId};
 use agentics_domain::models::request::AdminServiceHeartbeatDto;
+use agentics_error::{Result, ServiceError};
 
 /// JSON payload stored with each service heartbeat.
 ///

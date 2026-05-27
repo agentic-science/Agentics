@@ -7,7 +7,7 @@ use axum::extract::ConnectInfo;
 use axum::http::request::Parts;
 use governor::{DefaultKeyedRateLimiter, Quota, RateLimiter};
 
-use agentics_domain::error::{Result, ServiceError};
+use agentics_error::{Result, ServiceError};
 
 const ADMIN_AUTH_FAILURES_PER_MINUTE: u32 = 5;
 

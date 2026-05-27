@@ -4,7 +4,6 @@
 mod challenge_creation_helpers;
 mod helpers;
 
-use agentics_domain::error::ServiceError;
 use agentics_domain::models::challenge_creation::ChallengeDraftValidationStatus;
 use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::ids::{
@@ -12,6 +11,7 @@ use agentics_domain::models::ids::{
 };
 use agentics_domain::models::names::ChallengeName;
 use agentics_domain::storage::StorageKey;
+use agentics_error::ServiceError;
 use agentics_storage::{StorageWriteIntent, build_storage, unpack_tar_to_directory};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use challenge_creation_helpers::*;
@@ -214,10 +214,7 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
         )
         .await;
     assert!(
-        matches!(
-            overlapping,
-            Err(agentics_domain::error::ServiceError::Conflict)
-        ),
+        matches!(overlapping, Err(agentics_error::ServiceError::Conflict)),
         "overlapping validation should conflict"
     );
 

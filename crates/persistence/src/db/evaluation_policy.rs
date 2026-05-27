@@ -2,12 +2,12 @@ use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use chrono::{DateTime, Utc};
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{ChallengeBundleSpec, ChallengeEligibilityType};
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::AgentId;
 use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::storage::StorageKey;
+use agentics_error::{Result, ServiceError};
 
 use super::challenges::{
     ChallengeRecord, agent_is_shortlisted, challenge_has_shortlist, get_published_challenge,

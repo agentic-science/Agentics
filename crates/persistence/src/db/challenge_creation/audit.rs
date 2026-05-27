@@ -1,8 +1,8 @@
 use serde_json::Value;
 use sqlx::{PgPool, Postgres, Transaction};
 
-use agentics_domain::error::Result;
 use agentics_domain::models::ids::{AgentId, ChallengeDraftAuditEventId, ChallengeDraftId};
+use agentics_error::Result;
 
 /// Input for appending a draft audit event.
 #[derive(Debug, Clone)]

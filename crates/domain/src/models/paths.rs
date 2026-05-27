@@ -8,7 +8,7 @@ use std::str::FromStr;
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::error::{Result, ServiceError};
+use agentics_error::{Result, ServiceError};
 
 /// User-facing validation message for repository-relative paths.
 pub const REPO_RELATIVE_PATH_ERROR_MESSAGE: &str =

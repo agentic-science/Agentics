@@ -10,6 +10,7 @@ workspace = true
 agentics-domain = { workspace = true }
 agentics-contracts = { workspace = true }
 agentics-config = { workspace = true }
+agentics-error = { workspace = true }
 tokio = { workspace = true }
 sqlx = { workspace = true }
 serde = { workspace = true }

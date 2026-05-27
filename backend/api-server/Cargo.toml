@@ -18,6 +18,7 @@ path = "src/main.rs"
 agentics-config = { workspace = true }
 agentics-contracts = { workspace = true }
 agentics-domain = { workspace = true }
+agentics-error = { workspace = true }
 agentics-persistence = { workspace = true }
 agentics-services = { workspace = true }
 agentics-storage = { workspace = true }

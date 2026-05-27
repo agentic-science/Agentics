@@ -2,7 +2,6 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::{PgPool, Row};
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge_creation::{
     AdminChallengePrivateAssetResponse, ChallengeCreationManifest, ChallengeCreationRequestKind,
     ChallengeDraftResponse, ChallengeDraftStatus, ChallengeDraftValidationRecordResponse,
@@ -14,6 +13,7 @@ use agentics_domain::models::hashes::{GitCommitSha, Sha256Digest};
 use agentics_domain::models::paths::RepoRelativePath;
 use agentics_domain::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
 use agentics_domain::storage::StorageKey;
+use agentics_error::{Result, ServiceError};
 
 use super::super::ids::{
     agent_id_from_row, asset_name_from_row, challenge_draft_id_from_row,

@@ -8,7 +8,7 @@ use fs2::FileExt;
 
 use agentics_config::{Config, RunnerWritableStorageMode};
 use agentics_contracts::zip_project::ZipProjectPhaseLimits;
-use agentics_domain::error::{Result, ServiceError};
+use agentics_error::{Result, ServiceError};
 
 #[derive(Debug, Clone)]
 /// Carries runner storage data across this module boundary.

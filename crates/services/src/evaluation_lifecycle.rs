@@ -11,9 +11,9 @@ use tokio::time::interval;
 use tracing::{error, info, warn};
 
 use agentics_config::Config;
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::evaluation::EvaluationStatus;
 use agentics_domain::models::ids::{EvaluationId, EvaluationJobId, SolutionSubmissionId};
+use agentics_error::{Result, ServiceError};
 use agentics_persistence::{
     EvaluationJobRecord, HeartbeatPayload, MarkEvaluationStartedInput, PersistedEvaluationResult,
     QueueEvaluationJobInput, Repositories,

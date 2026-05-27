@@ -1,12 +1,12 @@
 use sqlx::Row;
 use uuid::Uuid;
 
-use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::ids::{
     AgentId, AgentTokenId, ChallengeDraftId, ChallengeDraftValidationRecordId,
     ChallengePrivateAssetId, ChallengeShortlistRevisionId, EvaluationJobId, SolutionSubmissionId,
 };
 use agentics_domain::models::names::{AssetName, ChallengeName, TargetName};
+use agentics_error::{Result, ServiceError};
 
 /// Reads challenge name from a database row and validates its domain shape.
 pub(in crate::db) fn challenge_name_from_row(
