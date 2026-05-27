@@ -38,6 +38,8 @@ same production Compose env file.
 | Phase mount root | `/srv/agentics/phase-mounts` |
 | Runner quota slots | `/srv/agentics/phase-mounts/<phase>/slots/<size>mb/slot-NNN` |
 | Local test quota root | `/srv/agentics-test` |
+| Local test Docker socket | `/srv/agentics-test/docker.sock` |
+| Local test runtime root | `/srv/agentics-test/runtime` |
 | Local test phase mount root | `/srv/agentics-test/phase-mounts` |
 | Persistent private-bundle backup RustFS data root | `/srv/agentics/private-bundle-backups/rustfs-data` |
 
@@ -57,7 +59,10 @@ the host bridge `agentics0`.
 The `/srv/agentics-test` root is for developer-run quota-sensitive integration
 tests. It must be prepared separately with
 `agentics-prepare-dgx-spark-test-storage` and must not be used by hosted
-workers.
+workers. `just test-env-up` starts the dedicated test Docker daemon on
+`/srv/agentics-test/docker.sock`; `just test-all-cpu` uses it for CPU-only
+Compose integration tests, while `just test-all` also requires NVIDIA GPU
+support and includes ignored CUDA/GPU tests.
 
 Production Compose bind-mounts a standalone `agentics-challenges` checkout from
 `AGENTICS_CHALLENGE_REVIEW_REPOSITORY_HOST_ROOT` to

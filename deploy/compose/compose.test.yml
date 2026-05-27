@@ -75,6 +75,7 @@ services:
       AGENTICS_TEST_RUNNER_RUNTIME_ROOT: ${AGENTICS_TEST_RUNNER_RUNTIME_ROOT:?set AGENTICS_TEST_RUNNER_RUNTIME_ROOT}
       AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT: ${AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT:?set AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT}
       AGENTICS_TEST_DOCKER_HOST: ${AGENTICS_TEST_DOCKER_HOST:?set AGENTICS_TEST_DOCKER_HOST}
+      AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED: ${AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED:-false}
       TMPDIR: ${AGENTICS_TEST_TMPDIR:?set AGENTICS_TEST_TMPDIR}
     depends_on:
       postgres:
@@ -89,12 +90,14 @@ services:
       - cargo_git:/usr/local/cargo/git
       - cargo_target:/workspace/Agentics/target
     command:
-      - cargo
-      - test
-      - -p
-      - integration-tests
-      - --
-      - --include-ignored
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        if [ "$${AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED:-false}" = "true" ]; then
+          exec cargo test -p integration-tests -- --include-ignored
+        fi
+        exec cargo test -p integration-tests
 
 volumes:
   rustfs_data:

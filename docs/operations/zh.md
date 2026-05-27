@@ -253,20 +253,21 @@ probe、per-phase mount writeability、root-prepared quota slot metadata、confi
 inode hard limits，以及使用 64 MiB slot class 的 per-phase bind-mount quota
 exhaustion probe。
 
-在 DGX development host 上做本地验证时，使用由测试用户拥有的独立 test quota
-root：
+在 Linux 上做本地验证时，使用由测试用户拥有的独立 test quota root：
 
 ```bash
 sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
   agentics-prepare-dgx-spark-test-storage
-export AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
-export AGENTICS_TEST_RUNNER_RUNTIME_ROOT=/srv/agentics-test/runtime
-export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts
-export AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
+sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just test-env-up
+just test-env-status-cpu
+just test-all-cpu
 ```
 
-在 Linux 上，如果这些变量缺失、格式错误，或没有指向已准备好的 bounded test quota
-root，quota-sensitive integration tests 会 fail fast。
+在有 NVIDIA GPU support 的 Linux host 上，使用 `just test-env-status` 和
+`just test-all` 覆盖 ignored CUDA/GPU tests。Test harness 使用
+`/srv/agentics-test/docker.sock` 上的专用 Docker daemon，启动 disposable Postgres 和
+RustFS Compose services，并且只清理 test-scoped Compose projects 和 volumes。完成后用
+`sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just test-env-down` 停止专用 test daemon。
 
 不要为了让本地测试通过而修改 `/srv/agentics/phase-mounts` ownership；这些 slots
 属于 hosted worker service user。

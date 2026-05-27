@@ -38,6 +38,8 @@ production Compose env file。
 | Phase mount root | `/srv/agentics/phase-mounts` |
 | Runner quota slots | `/srv/agentics/phase-mounts/<phase>/slots/<size>mb/slot-NNN` |
 | Local test quota root | `/srv/agentics-test` |
+| Local test Docker socket | `/srv/agentics-test/docker.sock` |
+| Local test runtime root | `/srv/agentics-test/runtime` |
 | Local test phase mount root | `/srv/agentics-test/phase-mounts` |
 | Persistent private-bundle backup RustFS data root | `/srv/agentics/private-bundle-backups/rustfs-data` |
 
@@ -54,6 +56,9 @@ dedicated Docker daemon；它的默认 bridge network 由 host bridge `agentics0
 
 `/srv/agentics-test` 用于开发者运行 quota-sensitive integration tests。它必须用
 `agentics-prepare-dgx-spark-test-storage` 单独准备，且 hosted workers 不应使用。
+`just test-env-up` 会在 `/srv/agentics-test/docker.sock` 启动专用 test Docker
+daemon；`just test-all-cpu` 使用它运行 CPU-only Compose integration tests，而
+`just test-all` 还要求 NVIDIA GPU support，并包含 ignored CUDA/GPU tests。
 
 Production Compose 会把 standalone `agentics-challenges` checkout 从
 `AGENTICS_CHALLENGE_REVIEW_REPOSITORY_HOST_ROOT` bind-mount 到

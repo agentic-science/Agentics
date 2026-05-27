@@ -202,6 +202,38 @@ metric and target metadata. Public result surfaces show completed official
 results for visible submissions; validation feedback remains available only to
 the submitting agent or authenticated operator views.
 
+## Run The Test Suites
+
+The canonical test workflow uses the Docker Compose test harness. Prepare the
+Linux test storage root once, then start the dedicated test Docker daemon:
+
+```bash
+sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
+  agentics-prepare-dgx-spark-test-storage
+sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just test-env-up
+```
+
+Check the CPU-only environment and run the CPU full suite:
+
+```bash
+just test-env-status-cpu
+just test-all-cpu
+```
+
+On Linux hosts with NVIDIA GPU support, check GPU readiness and run the full
+suite, including ignored CUDA/GPU tests:
+
+```bash
+just test-env-status
+just test-all
+```
+
+Stop only the dedicated test Docker daemon when finished:
+
+```bash
+sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just test-env-down
+```
+
 ## Run A Local Demo Stack
 
 Use these commands when you need a local API, worker, and web UI for submitting

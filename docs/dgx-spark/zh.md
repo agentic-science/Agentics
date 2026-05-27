@@ -234,25 +234,25 @@ do
 done
 ```
 
-在 DGX host 上由开发者运行 integration tests 时，应准备一个由测试用户拥有的独立
-quota root，不复用 production runner slots：
+在 Linux 上由开发者运行 integration tests 时，应准备一个由测试用户拥有的独立 quota
+root，不复用 production runner slots：
 
 ```bash
 sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
   agentics-prepare-dgx-spark-test-storage
 ```
 
-运行 quota-sensitive integration tests 时设置：
+运行 CPU-only full suite：
 
 ```bash
-export AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
-export AGENTICS_TEST_RUNNER_RUNTIME_ROOT=/srv/agentics-test/runtime
-export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts
-export AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
+sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just test-env-up
+just test-env-status-cpu
+just test-all-cpu
 ```
 
-在 Linux 上，如果这些变量缺失、格式错误，或没有指向已准备好的
-`/srv/agentics-test` quota root，quota-sensitive integration tests 会 fail fast。
+在有 NVIDIA GPU support 的 Linux host 上，使用 `just test-env-status` 和
+`just test-all` 覆盖 ignored CUDA/GPU tests。这些命令使用专用 test Docker daemon
+以及 disposable Compose Postgres/RustFS services。
 
 ## Smoke Evidence
 

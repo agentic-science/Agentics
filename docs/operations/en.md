@@ -260,20 +260,23 @@ writable-layer quota probe, per-phase mount writeability, root-prepared quota
 slot metadata, configured inode hard limits, and a per-phase bind-mount quota
 exhaustion probe using the 64 MiB slot class.
 
-For local verification on a DGX development host, use a separate test quota
-root owned by the test user:
+For local verification on Linux, use a separate test quota root owned by the
+test user:
 
 ```bash
 sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
   agentics-prepare-dgx-spark-test-storage
-export AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
-export AGENTICS_TEST_RUNNER_RUNTIME_ROOT=/srv/agentics-test/runtime
-export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts
-export AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
+sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just test-env-up
+just test-env-status-cpu
+just test-all-cpu
 ```
 
-On Linux, quota-sensitive integration tests fail fast when these variables are
-missing, malformed, or do not point at a prepared bounded test quota root.
+On Linux hosts with NVIDIA GPU support, use `just test-env-status` and
+`just test-all` to include the ignored CUDA/GPU tests. The test harness uses the
+dedicated Docker daemon at `/srv/agentics-test/docker.sock`, starts disposable
+Postgres and RustFS Compose services, and tears down only test-scoped Compose
+projects and volumes. Stop only the dedicated test daemon with
+`sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just test-env-down`.
 
 Do not change `/srv/agentics/phase-mounts` ownership to make local tests pass;
 those slots belong to the hosted worker service user.

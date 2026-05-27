@@ -99,26 +99,40 @@ just compose-dev-down
 just compose-dev-logs
 ```
 
-本地 integration-test 迭代可以在容器中运行现有 Rust integration suite：
+项目验证使用 Docker Compose test harness。先准备一次 Linux test storage root，然后启动专用
+test Docker daemon：
 
 ```bash
-sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just compose-test-docker-up
-just compose-test-integration
+sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
+  agentics-prepare-dgx-spark-test-storage
+sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just test-env-up
 ```
 
-该命令会启动 test-scoped Postgres 和 RustFS services，初始化 test S3 bucket，
-并在 Rust container 内运行：
+CPU-only full suite：
 
 ```bash
-cargo test -p integration-tests -- --include-ignored
+just test-env-status-cpu
+just test-all-cpu
 ```
 
-它使用 `unix:///srv/agentics-test/docker.sock` 上的专用 test Docker daemon，
-其 data root 是 `/srv/agentics-test/docker-data-root`，因此 Docker layer quota
-会在 overlay2 on XFS with `prjquota` 上测试，而不是依赖 workstation daemon。
-先用 `agentics-prepare-dgx-spark-test-storage` 准备 Linux quota test root，再用上面的
-rootful command 启动专用 daemon。Wrapper 会为每次运行使用唯一的 Compose project
-和 runner namespace，并在 tests service 退出后删除 test-scoped Compose volumes。
+在有 NVIDIA GPU support 的 Linux host 上运行 full suite，包括 ignored CUDA/GPU tests：
+
+```bash
+just test-env-status
+just test-all
+```
+
+这两个 suite 都会启动 test-scoped Postgres 和 RustFS services，初始化 test S3
+bucket，并在 Rust container 内运行 Rust integration crate。它们使用
+`unix:///srv/agentics-test/docker.sock` 上的专用 test Docker daemon，其 data root 是
+`/srv/agentics-test/docker-data-root`，因此 Docker layer quota 会在 overlay2 on XFS
+with `prjquota` 上测试，而不是依赖 workstation daemon。Wrapper 会为每次运行使用唯一的
+Compose project 和 runner namespace，并在 tests service 退出后删除 test-scoped
+Compose volumes。完成后只停止专用 test daemon：
+
+```bash
+sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just test-env-down
+```
 
 任何通过 host Docker socket 创建 runner containers 的 container，都必须使用
 host-visible paths。Runner runtime roots、storage work roots、challenge
@@ -168,11 +182,13 @@ test -x target/release/agentics-check-dgx-spark-profile
 `agentics-pre-commit` ops binary，并发运行相互独立的检查，并在每次非空 commit
 前检查 human/agent docs policy 和 large-file threshold。
 
-提交代码改动前运行：
+提交代码改动前运行 canonical full suite。仅当任务或环境明确不能覆盖 GPU tests 时，
+才使用 CPU-only suite：
 
 ```bash
-cargo fmt --all
-DATABASE_URL="$AGENTICS_DATABASE_URL" cargo test --workspace
+just test-all-cpu
+# 在有 NVIDIA GPU support 的 Linux host 上：
+just test-all
 ```
 
 如果 SQLx 报告 migration version 或 checksum mismatch，说明这个本地数据库来自旧的
@@ -231,31 +247,21 @@ AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics_test
 ```
 
 `rust-risk-integration` 会先运行完整 Rust test set，包括 `#[ignore]` hardware
-tests，然后再生成 CRAP report。它不跳过 quota-root 或 DGX CUDA smoke tests，
-因此需要先准备 quota-sensitive 和 hardware test environment。设置
+tests，然后再生成 CRAP report。它不跳过 quota-root 或 CUDA smoke tests，
+因此需要先准备 quota-sensitive 和 Linux/NVIDIA hardware test environment。设置
 `AGENTICS_CRAP_TOP` 可以调整输出的 ranked functions 数量。
 
-在 Linux DGX development hosts 上，quota-sensitive runner tests 需要一个由
-测试用户拥有的 XFS quota root。使用与 production `/srv/agentics` runtime tree
-分离的 test root：
+在 Linux hosts 上，quota-sensitive runner tests 需要一个由测试用户拥有的 XFS quota
+root。使用与 production `/srv/agentics` runtime tree 分离的 test root：
 
 ```bash
 sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
   agentics-prepare-dgx-spark-test-storage
 ```
 
-然后用以下环境变量运行 quota-sensitive integration tests：
-
-```bash
-export AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
-export AGENTICS_TEST_RUNNER_RUNTIME_ROOT=/srv/agentics-test/runtime
-export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts
-export AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
-```
-
-在 Linux 上，如果这些变量缺失、格式错误，或没有指向已准备好的 bounded test quota
-root，quota-sensitive integration tests 会 fail fast。非 Linux hosts 会跳过这些
-Linux-only quota probes。
+Canonical `just test-all-cpu` 和 `just test-all` 会为 Compose harness 设置匹配的
+test runner paths。在 Linux 上，如果已准备好的 bounded test quota root 缺失或格式错误，
+quota-sensitive integration tests 会 fail fast。
 
 这些 test variables 故意指向 `/srv/agentics-test`，这样本地验证不会改变
 production runner slot ownership。

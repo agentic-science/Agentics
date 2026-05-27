@@ -239,26 +239,25 @@ do
 done
 ```
 
-For developer-run integration tests on the DGX host, prepare a separate
-test-owned quota root instead of reusing production runner slots:
+For developer-run integration tests on Linux, prepare a separate test-owned
+quota root instead of reusing production runner slots:
 
 ```bash
 sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
   agentics-prepare-dgx-spark-test-storage
 ```
 
-Run quota-sensitive integration tests with:
+Run the CPU-only full suite with:
 
 ```bash
-export AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
-export AGENTICS_TEST_RUNNER_RUNTIME_ROOT=/srv/agentics-test/runtime
-export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts
-export AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
+sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just test-env-up
+just test-env-status-cpu
+just test-all-cpu
 ```
 
-On Linux, quota-sensitive integration tests fail fast when these variables are
-missing, malformed, or do not point at the prepared `/srv/agentics-test` quota
-root.
+On Linux hosts with NVIDIA GPU support, use `just test-env-status` and
+`just test-all` to include ignored CUDA/GPU tests. These commands use the
+dedicated test Docker daemon and disposable Compose Postgres/RustFS services.
 
 ## Smoke Evidence
 

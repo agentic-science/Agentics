@@ -103,29 +103,42 @@ Follow logs with:
 just compose-dev-logs
 ```
 
-For local integration-test iteration, run the existing Rust integration suite in
-a container:
+For project verification, use the Docker Compose test harness. Prepare the
+Linux test storage root once, then start the dedicated test Docker daemon:
 
 ```bash
-sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just compose-test-docker-up
-just compose-test-integration
+sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
+  agentics-prepare-dgx-spark-test-storage
+sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just test-env-up
 ```
 
-This starts test-scoped Postgres and RustFS services, initializes the test S3
-bucket, and runs:
+Run the CPU-only full suite with:
 
 ```bash
-cargo test -p integration-tests -- --include-ignored
+just test-env-status-cpu
+just test-all-cpu
 ```
 
-inside a Rust container. It uses a dedicated test Docker daemon at
-`unix:///srv/agentics-test/docker.sock`, backed by
-`/srv/agentics-test/docker-data-root`, so Docker layer quotas are tested against
-overlay2 on XFS with `prjquota` instead of the workstation daemon. Prepare the
-Linux quota test root first with `agentics-prepare-dgx-spark-test-storage`, then
-start the dedicated daemon with the rootful command above. The wrapper uses a
-unique Compose project and runner namespace for each run, then removes
-test-scoped Compose volumes after the test service exits.
+On Linux hosts with NVIDIA GPU support, run the full suite, including ignored
+CUDA/GPU tests, with:
+
+```bash
+just test-env-status
+just test-all
+```
+
+Both suites start test-scoped Postgres and RustFS services, initialize the test
+S3 bucket, and run the Rust integration crate inside a Rust container. They use a
+dedicated test Docker daemon at `unix:///srv/agentics-test/docker.sock`, backed
+by `/srv/agentics-test/docker-data-root`, so Docker layer quotas are tested
+against overlay2 on XFS with `prjquota` instead of the workstation daemon. The
+wrapper uses a unique Compose project and runner namespace for each run, then
+removes test-scoped Compose volumes after the test service exits. Stop only the
+dedicated test daemon with:
+
+```bash
+sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just test-env-down
+```
 
 Any container that creates runner containers through the host Docker socket must
 use host-visible paths. Mount runner runtime roots, storage work roots,
@@ -178,11 +191,13 @@ the Rust `agentics-pre-commit` ops binary, runs independent checks concurrently,
 and always checks the human/agent docs policy and large-file threshold before a
 non-empty commit.
 
-Run checks before committing code changes:
+Run the canonical full suite before committing code changes. Use the CPU-only
+suite only when the task or environment explicitly cannot exercise GPU tests:
 
 ```bash
-cargo fmt --all
-DATABASE_URL="$AGENTICS_DATABASE_URL" cargo test --workspace
+just test-all-cpu
+# On Linux hosts with NVIDIA GPU support:
+just test-all
 ```
 
 If SQLx reports a migration version or checksum mismatch, the local database
@@ -244,31 +259,22 @@ AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics_test
 
 `rust-risk-integration` runs the full Rust test set, including `#[ignore]`
 hardware tests, before the CRAP report is produced. It does not skip quota-root
-or DGX CUDA smoke tests, so prepare the quota-sensitive and hardware test
+or CUDA smoke tests, so prepare the quota-sensitive and Linux/NVIDIA hardware test
 environment first. Set `AGENTICS_CRAP_TOP` to change how many ranked functions
 are printed.
 
-On Linux DGX development hosts, quota-sensitive runner tests need a test-owned
-XFS quota root. Prepare it separately from the production `/srv/agentics`
-runtime tree:
+On Linux hosts, quota-sensitive runner tests need a test-owned XFS quota root.
+Prepare it separately from the production `/srv/agentics` runtime tree:
 
 ```bash
 sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
   agentics-prepare-dgx-spark-test-storage
 ```
 
-Then run quota-sensitive integration tests with:
-
-```bash
-export AGENTICS_TEST_RUNNER_WRITABLE_STORAGE_MODE=xfs-project-quota-slots
-export AGENTICS_TEST_RUNNER_RUNTIME_ROOT=/srv/agentics-test/runtime
-export AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT=/srv/agentics-test/phase-mounts
-export AGENTICS_TEST_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096
-```
-
-On Linux, quota-sensitive integration tests fail fast when these variables are
-missing, malformed, or do not point at a prepared bounded test quota root.
-Non-Linux hosts skip the Linux-only quota probes.
+The canonical `just test-all-cpu` and `just test-all` commands set the matching
+test runner paths for the Compose harness. On Linux, quota-sensitive integration
+tests fail fast when the prepared bounded test quota root is missing or
+malformed.
 
 These test variables intentionally point at `/srv/agentics-test` so local
 verification does not change production runner slot ownership.

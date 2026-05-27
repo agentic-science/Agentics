@@ -123,4 +123,6 @@ Use a multiline body for any commit that changes public APIs, DB schema, runner 
 
 - Always assume `uv` for managing Python environments and `bun` for JS/TS environments, unless you are explicitly told to use other tools.
 - Only run lint, check and format tools (e.g., `cargo clippy`, `cargo check`, `cargo fmt`, `bunx biome`, `ruff`) before committing, not during iteration. Skip these when fixing bugs/issues to accelerate iteration speed.
+- A full project test pass means `just test-all`, which uses the Docker Compose test harness and includes ignored GPU/CUDA tests. If the user explicitly asks for CPU-only verification, use `just test-all-cpu`. Manual command-by-command runs are not equivalent unless they cover the same Compose harness mode.
+- Before running the full suites, use `just test-env-status-cpu` for CPU-only verification or `just test-env-status` for GPU verification. Use `just test-env-up` and `just test-env-down` to manage only the dedicated test Docker daemon after `/srv/agentics-test` has been prepared.
 - NO unsafe fixes should be applied even if a linter provides them. You should reason about the code to be fixed and come up appropriate fixes.
