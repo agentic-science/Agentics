@@ -45,7 +45,7 @@ use agentics_persistence::{
 use agentics_services::auth;
 use agentics_services::challenge_metadata;
 use agentics_services::evaluation_lifecycle::{self, QueueEvaluationJobRequest};
-use agentics_services::public_projection::{self, SolutionSubmissionAudience};
+use agentics_services::public_projection;
 use agentics_services::solution_submissions::{self, CreateSolutionSubmissionServiceRequest};
 
 use crate::extractors::{AdminAuth, AgentAuth, SolutionSubmissionPath, ValidatedJson};
@@ -385,18 +385,9 @@ pub async fn get_solution_submission(
     State(state): State<AppState>,
     agent: AgentAuth,
 ) -> Result<Json<SolutionSubmissionResponse>> {
-    let solution_submission = Repositories::new(&state.db)
-        .solution_submissions()
-        .get_by_id(&id)
-        .await?;
-    let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
-    if solution_submission.agent_id != agent.agent_id {
-        return Err(ServiceError::NotFound.into());
-    }
-    Ok(Json(public_projection::present_solution_submission(
-        &solution_submission,
-        SolutionSubmissionAudience::Owner,
-    )?))
+    Ok(Json(
+        public_projection::get_owner_solution_submission(&state.db, &id, &agent.agent_id).await?,
+    ))
 }
 
 /// Fetch an authenticated validation run view owned by the caller.
@@ -414,20 +405,14 @@ pub async fn get_solution_submission_result_report(
     State(state): State<AppState>,
     agent: AgentAuth,
 ) -> Result<Json<SolutionSubmissionResultReportResponse>> {
-    let solution_submission = Repositories::new(&state.db)
-        .solution_submissions()
-        .get_by_id(&id)
-        .await?;
-    let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
-    if solution_submission.agent_id != agent.agent_id {
-        return Err(ServiceError::NotFound.into());
-    }
-    Ok(Json(SolutionSubmissionResultReportResponse {
-        solution_submission: public_projection::present_solution_submission(
-            &solution_submission,
-            SolutionSubmissionAudience::Owner,
-        )?,
-    }))
+    Ok(Json(
+        public_projection::get_owner_solution_submission_result_report(
+            &state.db,
+            &id,
+            &agent.agent_id,
+        )
+        .await?,
+    ))
 }
 
 /// Fetch owner-visible runner logs for one solution submission.
@@ -436,14 +421,9 @@ pub async fn get_solution_submission_logs(
     State(state): State<AppState>,
     agent: AgentAuth,
 ) -> Result<Json<SolutionSubmissionLogsResponse>> {
-    let solution_submission = Repositories::new(&state.db)
-        .solution_submissions()
-        .get_by_id(&id)
-        .await?;
-    let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
-    if solution_submission.agent_id != agent.agent_id {
-        return Err(ServiceError::NotFound.into());
-    }
+    let solution_submission =
+        public_projection::get_owner_solution_submission_record(&state.db, &id, &agent.agent_id)
+            .await?;
     artifacts::read_solution_submission_logs(&state, &solution_submission).await
 }
 
@@ -454,27 +434,16 @@ pub async fn get_solution_submission_ranking_context(
     agent: AgentAuth,
     Query(query): Query<RankingContextQuery>,
 ) -> Result<Json<RankingContextResponse>> {
-    let solution_submission = Repositories::new(&state.db)
-        .solution_submissions()
-        .get_by_id(&id)
-        .await?;
-    let solution_submission = solution_submission.ok_or(ServiceError::NotFound)?;
-    if solution_submission.agent_id != agent.agent_id {
-        return Err(ServiceError::NotFound.into());
-    }
-    public_projection::ensure_ranking_scope_matches_submission(
-        &solution_submission,
-        &query.challenge_name,
-        &query.target,
-    )?;
-    let response = public_projection::build_ranking_context(
-        &state.db,
-        &query.challenge_name,
-        &query.target,
-        &solution_submission.id,
-    )
-    .await?;
-    Ok(Json(response))
+    Ok(Json(
+        public_projection::get_owner_solution_submission_ranking_context(
+            &state.db,
+            &id,
+            &agent.agent_id,
+            &query.challenge_name,
+            &query.target,
+        )
+        .await?,
+    ))
 }
 
 // ---------------------------------------------------------------------------

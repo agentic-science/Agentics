@@ -1,5 +1,5 @@
 use agentics_contracts::validation::public_api::{self, DEFAULT_PUBLIC_LEADERBOARD_LIMIT};
-use agentics_domain::models::ids::SolutionSubmissionId;
+use agentics_domain::models::ids::{AgentId, SolutionSubmissionId};
 use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::models::request::{
     LeaderboardResponse, RankedLeaderboardEntryDto, RankingContextResponse,
@@ -11,6 +11,26 @@ use super::visibility::{
     ensure_ranking_scope_matches_submission, ensure_visibility_allows_public,
     load_challenge_policy, public_visible_solution_submission,
 };
+
+/// Fetch a submission's owner-visible ranking context in an explicit scope.
+pub async fn get_owner_solution_submission_ranking_context(
+    pool: &sqlx::PgPool,
+    id: &SolutionSubmissionId,
+    agent_id: &AgentId,
+    challenge_name: &ChallengeName,
+    target: &TargetName,
+) -> Result<RankingContextResponse> {
+    let solution_submission = Repositories::new(pool)
+        .solution_submissions()
+        .get_by_id(id)
+        .await?
+        .ok_or(ServiceError::NotFound)?;
+    if solution_submission.agent_id != *agent_id {
+        return Err(ServiceError::NotFound);
+    }
+    ensure_ranking_scope_matches_submission(&solution_submission, challenge_name, target)?;
+    build_ranking_context(pool, challenge_name, target, &solution_submission.id).await
+}
 
 /// Fetch public ranking context for a visible submission when the challenge allows it.
 pub async fn get_public_solution_submission_ranking_context(

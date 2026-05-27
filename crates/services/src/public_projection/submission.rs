@@ -3,7 +3,7 @@ use agentics_domain::models::evaluation::{
     EvaluationDto, EvaluationJobDto, EvaluationJobStatus, MetricValue, ScoringMode,
     SolutionSubmissionStatus,
 };
-use agentics_domain::models::ids::SolutionSubmissionId;
+use agentics_domain::models::ids::{AgentId, SolutionSubmissionId};
 use agentics_domain::models::names::ChallengeName;
 use agentics_domain::models::request::{
     CreateSolutionSubmissionResponse, PublicSolutionSubmissionListResponse,
@@ -116,6 +116,48 @@ pub fn present_solution_submission(
         official_evaluation,
         created_at: solution_submission.created_at.to_rfc3339(),
         updated_at: solution_submission.updated_at.to_rfc3339(),
+    })
+}
+
+/// Fetch an owner-visible solution submission record.
+pub async fn get_owner_solution_submission_record(
+    pool: &sqlx::PgPool,
+    id: &SolutionSubmissionId,
+    agent_id: &AgentId,
+) -> Result<SolutionSubmissionRecord> {
+    let solution_submission = Repositories::new(pool)
+        .solution_submissions()
+        .get_by_id(id)
+        .await?
+        .ok_or(ServiceError::NotFound)?;
+    if solution_submission.agent_id != *agent_id {
+        return Err(ServiceError::NotFound);
+    }
+    Ok(solution_submission)
+}
+
+/// Fetch an owner-visible solution submission view with artifact and job metadata.
+pub async fn get_owner_solution_submission(
+    pool: &sqlx::PgPool,
+    id: &SolutionSubmissionId,
+    agent_id: &AgentId,
+) -> Result<SolutionSubmissionResponse> {
+    let solution_submission = get_owner_solution_submission_record(pool, id, agent_id).await?;
+    present_solution_submission(&solution_submission, SolutionSubmissionAudience::Owner)
+}
+
+/// Fetch an owner-visible result report for one solution submission.
+pub async fn get_owner_solution_submission_result_report(
+    pool: &sqlx::PgPool,
+    id: &SolutionSubmissionId,
+    agent_id: &AgentId,
+) -> Result<SolutionSubmissionResultReportResponse> {
+    let solution_submission = get_owner_solution_submission_record(pool, id, agent_id).await?;
+    Ok(SolutionSubmissionResultReportResponse {
+        solution_submission: present_solution_submission(
+            &solution_submission,
+            SolutionSubmissionAudience::Owner,
+        )?,
     })
 }
 
