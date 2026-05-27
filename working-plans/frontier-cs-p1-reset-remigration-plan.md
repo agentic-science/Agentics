@@ -235,9 +235,12 @@ affected challenge.
   prefix without first making source keys relative to that same logical prefix.
 - Fix: normalize source keys by stripping an existing destination prefix before
   building the production destination key.
-- Verification: targeted `agentics-ops` tests cover stripping an existing
-  prefix and preserving already-relative keys; production RustFS will be swept
-  and restored again after this fix.
+- Verification: `cargo fmt --check` and `cargo test -p agentics-ops
+  private_bundle_backups` passed. After rebuilding the production image,
+  production RustFS was swept and restored again; the resulting inventory had
+  no nested `private-bundle-backups/private-bundle-backups/...` objects, no
+  reset-candidate objects, and the Binary Slate reverify bundle remained at the
+  canonical key.
 - Affected challenge: migration-wide production setup and rehearsal restore,
   before individual challenge remigration.
 
