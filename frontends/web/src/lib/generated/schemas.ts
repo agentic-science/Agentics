@@ -267,10 +267,10 @@ export const adminChallengeListResponseSchema = z
                         .object({
                           setup: z
                             .object({
-                              timeout_sec: z.number().int().gte(0),
-                              memory_limit_mb: z.number().int().gte(0),
-                              cpu_limit_millis: z.number().int().gte(0),
-                              disk_limit_mb: z.number().int().gte(0),
+                              timeout_sec: z.number().int().gte(1),
+                              memory_limit_mb: z.number().int().gte(1),
+                              cpu_limit_millis: z.number().int().gte(1),
+                              disk_limit_mb: z.number().int().gte(1),
                               network_access: z
                                 .enum(["disabled", "loopback", "enabled"])
                                 .describe(
@@ -283,10 +283,10 @@ export const adminChallengeListResponseSchema = z
                             ),
                           build: z
                             .object({
-                              timeout_sec: z.number().int().gte(0),
-                              memory_limit_mb: z.number().int().gte(0),
-                              cpu_limit_millis: z.number().int().gte(0),
-                              disk_limit_mb: z.number().int().gte(0),
+                              timeout_sec: z.number().int().gte(1),
+                              memory_limit_mb: z.number().int().gte(1),
+                              cpu_limit_millis: z.number().int().gte(1),
+                              disk_limit_mb: z.number().int().gte(1),
                               network_access: z
                                 .enum(["disabled", "loopback", "enabled"])
                                 .describe(
@@ -299,10 +299,10 @@ export const adminChallengeListResponseSchema = z
                             ),
                           run: z
                             .object({
-                              timeout_sec: z.number().int().gte(0),
-                              memory_limit_mb: z.number().int().gte(0),
-                              cpu_limit_millis: z.number().int().gte(0),
-                              disk_limit_mb: z.number().int().gte(0),
+                              timeout_sec: z.number().int().gte(1),
+                              memory_limit_mb: z.number().int().gte(1),
+                              cpu_limit_millis: z.number().int().gte(1),
+                              disk_limit_mb: z.number().int().gte(1),
                               network_access: z
                                 .enum(["disabled", "loopback", "enabled"])
                                 .describe(
@@ -323,10 +323,10 @@ export const adminChallengeListResponseSchema = z
                         .object({
                           setup: z
                             .object({
-                              timeout_sec: z.number().int().gte(0),
-                              memory_limit_mb: z.number().int().gte(0),
-                              cpu_limit_millis: z.number().int().gte(0),
-                              disk_limit_mb: z.number().int().gte(0),
+                              timeout_sec: z.number().int().gte(1),
+                              memory_limit_mb: z.number().int().gte(1),
+                              cpu_limit_millis: z.number().int().gte(1),
+                              disk_limit_mb: z.number().int().gte(1),
                               network_access: z
                                 .enum(["disabled", "loopback", "enabled"])
                                 .describe(
@@ -339,10 +339,10 @@ export const adminChallengeListResponseSchema = z
                             ),
                           run: z
                             .object({
-                              timeout_sec: z.number().int().gte(0),
-                              memory_limit_mb: z.number().int().gte(0),
-                              cpu_limit_millis: z.number().int().gte(0),
-                              disk_limit_mb: z.number().int().gte(0),
+                              timeout_sec: z.number().int().gte(1),
+                              memory_limit_mb: z.number().int().gte(1),
+                              cpu_limit_millis: z.number().int().gte(1),
+                              disk_limit_mb: z.number().int().gte(1),
                               network_access: z
                                 .enum(["disabled", "loopback", "enabled"])
                                 .describe(
@@ -362,8 +362,8 @@ export const adminChallengeListResponseSchema = z
                         .object({
                           kind: z.string(),
                           gpu_model: z.string().optional(),
-                          gpu_count: z.number().int().gte(0).optional(),
-                          gpu_memory_gb: z.number().int().gte(0).optional(),
+                          gpu_count: z.number().int().gte(1).optional(),
+                          gpu_memory_gb: z.number().int().gte(1).optional(),
                           cuda_variant: z.string().optional(),
                           cuda_version: z.string().optional(),
                           driver_minimum: z.string().optional(),
@@ -959,10 +959,10 @@ export const challengeDetailResponseSchema = z
                     .object({
                       setup: z
                         .object({
-                          timeout_sec: z.number().int().gte(0),
-                          memory_limit_mb: z.number().int().gte(0),
-                          cpu_limit_millis: z.number().int().gte(0),
-                          disk_limit_mb: z.number().int().gte(0),
+                          timeout_sec: z.number().int().gte(1),
+                          memory_limit_mb: z.number().int().gte(1),
+                          cpu_limit_millis: z.number().int().gte(1),
+                          disk_limit_mb: z.number().int().gte(1),
                           network_access: z
                             .enum(["disabled", "loopback", "enabled"])
                             .describe(
@@ -975,10 +975,10 @@ export const challengeDetailResponseSchema = z
                         ),
                       build: z
                         .object({
-                          timeout_sec: z.number().int().gte(0),
-                          memory_limit_mb: z.number().int().gte(0),
-                          cpu_limit_millis: z.number().int().gte(0),
-                          disk_limit_mb: z.number().int().gte(0),
+                          timeout_sec: z.number().int().gte(1),
+                          memory_limit_mb: z.number().int().gte(1),
+                          cpu_limit_millis: z.number().int().gte(1),
+                          disk_limit_mb: z.number().int().gte(1),
                           network_access: z
                             .enum(["disabled", "loopback", "enabled"])
                             .describe(
@@ -991,10 +991,10 @@ export const challengeDetailResponseSchema = z
                         ),
                       run: z
                         .object({
-                          timeout_sec: z.number().int().gte(0),
-                          memory_limit_mb: z.number().int().gte(0),
-                          cpu_limit_millis: z.number().int().gte(0),
-                          disk_limit_mb: z.number().int().gte(0),
+                          timeout_sec: z.number().int().gte(1),
+                          memory_limit_mb: z.number().int().gte(1),
+                          cpu_limit_millis: z.number().int().gte(1),
+                          disk_limit_mb: z.number().int().gte(1),
                           network_access: z
                             .enum(["disabled", "loopback", "enabled"])
                             .describe(
@@ -1015,10 +1015,10 @@ export const challengeDetailResponseSchema = z
                     .object({
                       setup: z
                         .object({
-                          timeout_sec: z.number().int().gte(0),
-                          memory_limit_mb: z.number().int().gte(0),
-                          cpu_limit_millis: z.number().int().gte(0),
-                          disk_limit_mb: z.number().int().gte(0),
+                          timeout_sec: z.number().int().gte(1),
+                          memory_limit_mb: z.number().int().gte(1),
+                          cpu_limit_millis: z.number().int().gte(1),
+                          disk_limit_mb: z.number().int().gte(1),
                           network_access: z
                             .enum(["disabled", "loopback", "enabled"])
                             .describe(
@@ -1031,10 +1031,10 @@ export const challengeDetailResponseSchema = z
                         ),
                       run: z
                         .object({
-                          timeout_sec: z.number().int().gte(0),
-                          memory_limit_mb: z.number().int().gte(0),
-                          cpu_limit_millis: z.number().int().gte(0),
-                          disk_limit_mb: z.number().int().gte(0),
+                          timeout_sec: z.number().int().gte(1),
+                          memory_limit_mb: z.number().int().gte(1),
+                          cpu_limit_millis: z.number().int().gte(1),
+                          disk_limit_mb: z.number().int().gte(1),
                           network_access: z
                             .enum(["disabled", "loopback", "enabled"])
                             .describe(
@@ -1054,8 +1054,8 @@ export const challengeDetailResponseSchema = z
                     .object({
                       kind: z.string(),
                       gpu_model: z.string().optional(),
-                      gpu_count: z.number().int().gte(0).optional(),
-                      gpu_memory_gb: z.number().int().gte(0).optional(),
+                      gpu_count: z.number().int().gte(1).optional(),
+                      gpu_memory_gb: z.number().int().gte(1).optional(),
                       cuda_variant: z.string().optional(),
                       cuda_version: z.string().optional(),
                       driver_minimum: z.string().optional(),
@@ -1119,7 +1119,7 @@ export const challengeDetailResponseSchema = z
                 .object({
                   separated_evaluator: z
                     .object({
-                      command: z.array(z.string()),
+                      command: z.array(z.string()).min(1),
                       result_file: z
                         .string()
                         .regex(
@@ -1138,7 +1138,7 @@ export const challengeDetailResponseSchema = z
                     .optional(),
                   validation_setup: z
                     .object({
-                      command: z.array(z.string()),
+                      command: z.array(z.string()).min(1),
                       result_runs_file: z
                         .string()
                         .regex(
@@ -1167,7 +1167,7 @@ export const challengeDetailResponseSchema = z
                 .object({
                   interactive_evaluator: z
                     .object({
-                      command: z.array(z.string()),
+                      command: z.array(z.string()).min(1),
                       result_file: z
                         .string()
                         .regex(
@@ -1186,7 +1186,7 @@ export const challengeDetailResponseSchema = z
                     .optional(),
                   validation_setup: z
                     .object({
-                      command: z.array(z.string()),
+                      command: z.array(z.string()).min(1),
                       result_session_file: z
                         .string()
                         .regex(
@@ -1215,7 +1215,7 @@ export const challengeDetailResponseSchema = z
                 .object({
                   coexecuted_evaluator: z
                     .object({
-                      command: z.array(z.string()),
+                      command: z.array(z.string()).min(1),
                       result_file: z
                         .string()
                         .regex(
@@ -1229,7 +1229,7 @@ export const challengeDetailResponseSchema = z
                   acknowledge_danger: z.boolean(),
                   validation_setup: z
                     .object({
-                      command: z.array(z.string()),
+                      command: z.array(z.string()).min(1),
                       reproducibility_notes: z
                         .string()
                         .describe(
@@ -2210,7 +2210,7 @@ export const createChallengeDraftRequestSchema = z
       .regex(
         /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
       ),
-    pr_author_github_user_id: z.number().int(),
+    pr_author_github_user_id: z.number().int().gte(1),
     manifest: z
       .object({
         schema_version: z.number().int(),
@@ -2315,14 +2315,16 @@ export const createChallengeDraftRequestSchema = z
 
 export const createChallengeShortlistRevisionRequestSchema = z
   .object({
-    agent_ids_to_add: z.array(
-      z
-        .string()
-        .uuid()
-        .regex(
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-        ),
-    ),
+    agent_ids_to_add: z
+      .array(
+        z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
+      )
+      .min(1),
   })
   .strict()
   .describe("Delta-only shortlist upload request.");
