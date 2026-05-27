@@ -308,6 +308,39 @@ affected challenge.
   completed with `status: passed`, score `34.132534`, and zero protocol errors.
 - Affected challenge: `ink-pen-selection-frontier-cs-algorithmic-68`.
 
+### 2026-05-28: Manual Prepared Root Had API-Unreadable Permissions
+
+- Symptom: after staging a private-overlaid production challenge root under
+  `/srv/agentics/review-checkouts/frontier-cs-prepared`, the API restarted but
+  could not seed challenges from that root because files were not readable by
+  the API container user.
+- Cause: the manual staging copy used host-side ownership and restrictive file
+  modes, while the API container reads the reviewed challenge root through the
+  production bind mount.
+- Fix or decision: normalize staged directories to `0755` and files to `0644`
+  after extracting private overlays.
+- Verification: the API health check passed, the public catalog listed the
+  expected prepared challenges, and the final production smoke completed all 35
+  official submissions.
+- Affected challenge: migration-wide production rehearsal setup.
+
+### 2026-05-28: Binary Slate Reverify Bundle Was Missing From Prepared Root
+
+- Symptom: the prepared production root initially contained 34 candidates while
+  the reset ledger expected 35 reset/reverify candidates.
+- Cause: `binary-slate-machine-frontier-cs-algorithmic-81` was intentionally
+  excluded from the reset deletion because it had already been faithfully
+  remigrated, but the final production prepared root was assembled from the
+  reset-candidate staging output and omitted the reverify-only bundle.
+- Fix or decision: add Binary Slate to the prepared production root from its
+  existing public bundle and private official-run ZIP, inspect the ZIP for
+  traversal and symlinks, normalize permissions, and restart the API to seed the
+  challenge.
+- Verification: the public catalog listed 35 challenges, Binary Slate had a
+  fake Moltbook discussion URL attached, and its official production submission
+  completed.
+- Affected challenge: `binary-slate-machine-frontier-cs-algorithmic-81`.
+
 ## Assumptions
 
 - Scope is P1 only; P2 issues remain for a separate targeted-fix/private-bundle

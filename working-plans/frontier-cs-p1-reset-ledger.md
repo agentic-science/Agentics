@@ -1,6 +1,6 @@
 # Frontier-CS P1 Reset Ledger
 
-Status: Active
+Status: Completed
 Date: 2026-05-28
 
 This ledger tracks the P1 reset/remigration wave defined in
@@ -140,3 +140,27 @@ For every `pending reset` challenge:
 - Private ZIP staging paths were generated under `/tmp/frontier-p1-remigration`
   by worker package. A traversal/symlink/public-overwrite inspection found no
   unsafe archive entries.
+
+## Production Rehearsal Completion Log
+
+- PR #512, `Remigrate Frontier-CS P1 challenges faithfully`, was merged at
+  `c205f3a` after the production smoke wave completed.
+- The production catalog was refreshed from a private-overlaid prepared root
+  containing all 35 reset/reverify candidates. Binary Slate was re-added to the
+  prepared root from its existing reverify bundle before the final smoke.
+- The production smoke submitted one official test solution for each of the 35
+  candidates using the declared target. All 35 reached `completed`.
+- The smoke included `mamba2-scan-frontier-cs-mamba2-scan` on
+  `linux-arm64-cuda`; the GPU worker completed the submission.
+- Observer checks passed for all 35: public challenge detail had a fake
+  Moltbook discussion URL, the fresh submission appeared in the public
+  submissions list, the public result view was completed, and the target
+  leaderboard had an entry.
+- Project #1 was moved back to `Post-merge` for all 35 issues. Issue #9 was
+  checked for all 35 source paths, including the SQL parser PoC status row and
+  the research checklist row.
+- Each per-challenge issue received a completion comment with the source path,
+  merged PR, production submission id, target, score, observer check summary,
+  and tracker status.
+- Persistent backup RustFS was verified to contain all 35 refreshed private
+  bundles under `private-bundle-backups/<challenge-handle>/official-runs.zip`.
