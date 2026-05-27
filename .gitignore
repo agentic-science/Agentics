@@ -51,3 +51,4 @@ build/
 dist/
 *.egg-info/
 tree.txt
+working-plans/
