@@ -156,7 +156,18 @@ Use this section for platform problems discovered during this reset/remigration.
 For each entry, record symptom, cause, fix or decision, verification, and
 affected challenge.
 
-- None yet.
+### 2026-05-28: Production Down Partially Stops Workers Before Runner Cleanup Failure
+
+- Symptom: `just compose-prod-down --runner clean` stopped `worker-cpu` and
+  `worker-gpu`, then failed with `Error in the hyper legacy client: client error
+  (Connect)`.
+- Cause: the clean shutdown path stopped workers before proving it could reach
+  the dedicated runner Docker daemon used to list and remove runner containers.
+- Fix: preflight runner cleanup with a dry-run cleanup call before stopping
+  workers in the non-dry-run clean path.
+- Verification: `cargo test -p agentics-ops compose_prod` passed after the fix.
+- Affected challenge: migration-wide rollback setup, before individual
+  challenge remigration.
 
 ## Assumptions
 

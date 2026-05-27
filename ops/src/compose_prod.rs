@@ -359,8 +359,9 @@ async fn down(
             Ok(print_reports(PREFIX, &reports))
         }
         (RunnerDownPolicy::Clean, false) => {
-            stop_running_workers(context).await?;
             let namespace = context.resolve_namespace(None)?;
+            drop(clean_runners(context, &namespace, RunnerCleanupScope::HostedWorker, true).await?);
+            stop_running_workers(context).await?;
             let reports =
                 clean_runners(context, &namespace, RunnerCleanupScope::HostedWorker, false).await?;
             let cleanup_code = print_reports(PREFIX, &reports);
