@@ -47,6 +47,7 @@ mod docker;
 mod errors;
 mod execution;
 mod filesystem;
+mod labels;
 mod limits;
 mod logs;
 mod run_io;
@@ -59,6 +60,11 @@ pub use context::RunnerContainerScope;
 pub use docker::{
     RunnerContainerCleanupSummary, RunnerContainerIdentity, RunnerContainerRuntimeState,
     RunnerContainerSnapshot, connect_docker,
+};
+pub use labels::{
+    RUNNER_ATTEMPT_COUNT_LABEL, RUNNER_JOB_ID_LABEL, RUNNER_KIND_LABEL, RUNNER_KIND_ZIP_PROJECT,
+    RUNNER_NAMESPACE_LABEL, RUNNER_PHASE_LABEL, RUNNER_SCOPE_HOSTED_WORKER, RUNNER_SCOPE_LABEL,
+    RUNNER_SCOPE_LOCAL_VALIDATION, RUNNER_WORKER_ID_LABEL,
 };
 
 use backend::{DockerRunnerBackend, RunnerBackend};
@@ -86,27 +92,6 @@ use run_io::{
     run_interface, write_run_metadata,
 };
 use storage::{RunnerStorage, WritablePhase};
-
-/// Docker label marking an Agentics-owned runner container.
-pub const RUNNER_KIND_LABEL: &str = "agentics.runner";
-/// Docker label value for `zip_project` runner containers.
-pub const RUNNER_KIND_ZIP_PROJECT: &str = "zip_project";
-/// Docker label storing the runner namespace.
-pub const RUNNER_NAMESPACE_LABEL: &str = "agentics.runner_namespace";
-/// Docker label storing the runner ownership scope.
-pub const RUNNER_SCOPE_LABEL: &str = "agentics.runner_scope";
-/// Docker label value for hosted worker runner containers.
-pub const RUNNER_SCOPE_HOSTED_WORKER: &str = "hosted-worker";
-/// Docker label value for local validation runner containers.
-pub const RUNNER_SCOPE_LOCAL_VALIDATION: &str = "local-validation";
-/// Docker label storing the evaluation job id.
-pub const RUNNER_JOB_ID_LABEL: &str = "agentics.job_id";
-/// Docker label storing the worker id that created a runner container.
-pub const RUNNER_WORKER_ID_LABEL: &str = "agentics.worker_id";
-/// Docker label storing the evaluation attempt count.
-pub const RUNNER_ATTEMPT_COUNT_LABEL: &str = "agentics.attempt_count";
-/// Docker label storing the execution phase.
-pub const RUNNER_PHASE_LABEL: &str = "agentics.phase";
 
 /// Validated evaluator result plus the persisted runner log location.
 #[derive(Debug, Clone)]
