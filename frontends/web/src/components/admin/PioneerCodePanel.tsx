@@ -3,8 +3,9 @@
 import { KeyRound } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type FormEvent, useState } from "react";
+import { adminErrorMessage } from "@/components/admin/errors";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { AdminApiError, adminFetchJson } from "@/lib/adminApi";
+import { adminFetchJson } from "@/lib/adminApi";
 import { formatDate } from "@/lib/format";
 import {
   type CreatePioneerCodeRequest,
@@ -390,21 +391,4 @@ function LocalizedStatusBadge({ status }: { status: string }) {
     revoked: t("revoked"),
   };
   return <StatusBadge status={status}>{labels[status] ?? status}</StatusBadge>;
-}
-
-/** Normalizes unknown pioneer-code admin errors into a displayable message. */
-function adminErrorMessage(
-  error: unknown,
-  fallback: { accessDenied: string; unknown: string },
-): string {
-  if (error instanceof AdminApiError) {
-    if (error.status === 401) {
-      return fallback.accessDenied;
-    }
-    return error.message;
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return fallback.unknown;
 }

@@ -5,7 +5,6 @@ import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
 import {
   type AdminRefresh,
-  adminErrorMessage,
   CapacityPanel,
   ChallengeAdminPanel,
   OperationsPanel,
@@ -13,6 +12,7 @@ import {
 } from "@/components/admin/AdminPanels";
 import { ChallengeDraftReviewPanel } from "@/components/admin/ChallengeDraftReviewPanel";
 import { CredentialPanel } from "@/components/admin/CredentialPanel";
+import { adminErrorMessage } from "@/components/admin/errors";
 import { PioneerCodePanel } from "@/components/admin/PioneerCodePanel";
 import {
   AdminApiError,

@@ -13,9 +13,10 @@ import {
 } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type ReactNode, useState } from "react";
+import { adminErrorMessage } from "@/components/admin/errors";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ConsoleSectionTitle as SectionTitle } from "@/components/ConsolePrimitives";
-import { AdminApiError, adminFetchJson } from "@/lib/adminApi";
+import { adminFetchJson } from "@/lib/adminApi";
 import type { AdminData } from "@/lib/adminData";
 import { formatDate, formatScore } from "@/lib/format";
 import {
@@ -644,21 +645,4 @@ function LocalizedStatusBadge({ status }: { status: string }) {
     validated: t("validated"),
   };
   return <StatusBadge status={status}>{labels[status] ?? status}</StatusBadge>;
-}
-
-/** Normalizes unknown errors into a displayable message. */
-export function adminErrorMessage(
-  error: unknown,
-  fallback: { accessDenied: string; unknown: string },
-): string {
-  if (error instanceof AdminApiError) {
-    if (error.status === 401) {
-      return fallback.accessDenied;
-    }
-    return error.message;
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return fallback.unknown;
 }

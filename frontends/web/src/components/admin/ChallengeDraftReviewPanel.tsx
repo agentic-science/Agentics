@@ -12,6 +12,7 @@ import {
 import { useTranslations } from "next-intl";
 import { Fragment, type ReactNode, useState } from "react";
 import type { ZodType } from "zod";
+import { adminErrorMessage } from "@/components/admin/errors";
 import {
   ConsoleSectionTitle as SectionTitle,
   ConsoleTextInput as TextInput,
@@ -95,7 +96,7 @@ export function ChallengeDraftReviewPanel({
       );
       setAssetRowsByDraftId((current) => ({ ...current, [draftId]: rows }));
     } catch (e) {
-      onError(adminErrorMessage(e, t("unknown")));
+      onError(adminErrorMessage(e, { unknown: t("unknown") }));
     } finally {
       setLoadingAssetsDraftId(null);
     }
@@ -157,7 +158,7 @@ export function ChallengeDraftReviewPanel({
       );
       await onRefresh({ quiet: true });
     } catch (e) {
-      onError(adminErrorMessage(e, t("unknown")));
+      onError(adminErrorMessage(e, { unknown: t("unknown") }));
     } finally {
       setBusyDraftId(null);
     }
@@ -191,7 +192,7 @@ export function ChallengeDraftReviewPanel({
       );
       await onRefresh({ quiet: true });
     } catch (e) {
-      onError(adminErrorMessage(e, t("unknown")));
+      onError(adminErrorMessage(e, { unknown: t("unknown") }));
     } finally {
       setBusyDraftId(null);
     }
@@ -646,15 +647,4 @@ function LocalizedStatusBadge({ status }: { status: string }) {
     validated: t("validated"),
   };
   return <StatusBadge status={status}>{labels[status] ?? status}</StatusBadge>;
-}
-
-/** Normalizes unknown errors into a displayable message. */
-function adminErrorMessage(error: unknown, unknownMessage: string): string {
-  if (error instanceof AdminApiError) {
-    return error.message;
-  }
-  if (error instanceof Error) {
-    return error.message;
-  }
-  return unknownMessage;
 }
