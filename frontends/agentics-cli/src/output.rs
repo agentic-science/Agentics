@@ -1,35 +1,35 @@
 use std::path::PathBuf;
 
 use agentics_domain::models::challenge::ChallengeDetailResponse;
-use agentics_domain::models::challenge_creation::{
-    ChallengeDraftCleanupResponse, ChallengeDraftResponse,
-};
 use agentics_domain::models::evaluation::{EvaluationDto, EvaluatorRunResult, MetricValue};
 use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
 use agentics_domain::models::request::{
     CreateSolutionSubmissionResponse, LeaderboardResponse, PublicSolutionSubmissionListResponse,
-    RankingContextResponse, RegisterAgentResponse, ScoreDistributionResponse,
-    SolutionSubmissionLogsResponse, SolutionSubmissionResponse,
-    SolutionSubmissionResultReportResponse,
+    RankingContextResponse, ScoreDistributionResponse, SolutionSubmissionLogsResponse,
+    SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
 use anyhow::Result;
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 
 use crate::cli::OutputFormat;
-use crate::config::ResolvedSettings;
 use crate::package::SolutionPackage;
-use crate::workspace::InitSolutionSummary;
 
+mod auth;
 mod challenges;
+mod drafts;
 mod format;
+mod workspace;
 
+pub(crate) use auth::{render_auth_status, render_config_set, render_register_agent};
 use challenges::{best_challenge_score, median_and_p90};
 pub(crate) use challenges::{render_challenge_detail, render_challenge_list};
+pub(crate) use drafts::{render_challenge_draft, render_challenge_draft_cleanup};
 use format::{
     first_aggregate_metric, format_optional_metric, format_score, pretty_json, render_table,
     status_label,
 };
+pub(crate) use workspace::render_init_solution;
 
 #[derive(Debug, Clone, Serialize)]
 /// Carries local validation package report data across this module boundary.
@@ -57,154 +57,6 @@ pub(crate) struct LocalValidationReport {
     pub storage_root: PathBuf,
     pub package: LocalValidationPackageReport,
     pub targets: Vec<LocalValidationTargetReport>,
-}
-
-/// Renders register agent for user-facing output.
-pub(crate) fn render_register_agent(
-    response: &RegisterAgentResponse,
-    saved_token: bool,
-    settings: &ResolvedSettings,
-    format: OutputFormat,
-) -> Result<String> {
-    match format {
-        OutputFormat::Json => {
-            let mut body = Map::new();
-            body.insert("agent_id".to_string(), json!(response.agent_id));
-            body.insert("display_name".to_string(), json!(response.display_name));
-            if !saved_token {
-                body.insert("token".to_string(), json!(response.token));
-            }
-            body.insert("created_at".to_string(), json!(response.created_at));
-            body.insert("saved_token".to_string(), json!(saved_token));
-            body.insert("config_path".to_string(), json!(settings.config_path));
-            body.insert(
-                "api_base_url".to_string(),
-                json!(settings.api_base_url.to_string()),
-            );
-            pretty_json(&Value::Object(body))
-        }
-        OutputFormat::Table => {
-            let mut lines = vec![
-                format!("Registered agent {}", response.display_name),
-                format!("agent_id: {}", response.agent_id),
-            ];
-            if !saved_token {
-                lines.push(format!("token: {}", response.token));
-            }
-            lines.push(format!("saved_token: {saved_token}"));
-            lines.push(format!("config: {}", settings.config_path.display()));
-            Ok(lines.join("\n"))
-        }
-    }
-}
-
-/// Renders auth status for user-facing output.
-pub(crate) fn render_auth_status(
-    settings: &ResolvedSettings,
-    format: OutputFormat,
-) -> Result<String> {
-    match format {
-        OutputFormat::Json => pretty_json(&json!({
-            "api_base_url": settings.api_base_url.to_string(),
-            "api_base_url_source": settings.api_base_url_source.to_string(),
-            "token_configured": settings.token_configured(),
-            "token_source": settings.token_source.to_string(),
-            "config_path": settings.config_path,
-        })),
-        OutputFormat::Table => Ok(format!(
-            "api_base_url: {} ({})\ntoken: {}\ntoken_source: {}\nconfig: {}",
-            settings.api_base_url,
-            settings.api_base_url_source,
-            if settings.token_configured() {
-                "configured"
-            } else {
-                "missing"
-            },
-            settings.token_source,
-            settings.config_path.display()
-        )),
-    }
-}
-
-/// Renders config set for user-facing output.
-pub(crate) fn render_config_set(
-    key: &str,
-    settings: &ResolvedSettings,
-    format: OutputFormat,
-) -> Result<String> {
-    match format {
-        OutputFormat::Json => pretty_json(&json!({
-            "updated": key,
-            "config_path": settings.config_path,
-        })),
-        OutputFormat::Table => Ok(format!(
-            "updated: {key}\nconfig: {}",
-            settings.config_path.display()
-        )),
-    }
-}
-
-/// Renders challenge draft for user-facing output.
-pub(crate) fn render_challenge_draft(
-    response: &ChallengeDraftResponse,
-    format: OutputFormat,
-) -> Result<String> {
-    match format {
-        OutputFormat::Json => pretty_json(response),
-        OutputFormat::Table => Ok(format!(
-            "challenge_draft: {}\nchallenge: {}\nrequest: {}\nstatus: {}\nrepo: {}#{}\npath: {}\ncommit: {}\nmanifest_sha256: {}\npublished_challenge: {}\nprivate_assets: {}\nvalidation_records: {}",
-            response.id,
-            response.challenge_name,
-            status_label(&response.request),
-            status_label(&response.status),
-            response.repo_url,
-            response.pr_number,
-            response.challenge_path,
-            response.commit_sha,
-            response.manifest_sha256,
-            response
-                .published_challenge_name
-                .as_ref()
-                .map_or("none", ChallengeName::as_str),
-            response.private_assets.len(),
-            response.validation_records.len()
-        )),
-    }
-}
-
-/// Renders challenge draft cleanup for user-facing output.
-pub(crate) fn render_challenge_draft_cleanup(
-    response: &ChallengeDraftCleanupResponse,
-    format: OutputFormat,
-) -> Result<String> {
-    match format {
-        OutputFormat::Json => pretty_json(response),
-        OutputFormat::Table => Ok(format!(
-            "abandoned_drafts: {}\npurged_private_assets: {}\npurged_temporary_storage_objects: {}",
-            response.abandoned_drafts,
-            response.purged_private_assets,
-            response.purged_temporary_storage_objects
-        )),
-    }
-}
-
-/// Renders init solution for user-facing output.
-pub(crate) fn render_init_solution(
-    summary: &InitSolutionSummary,
-    format: OutputFormat,
-) -> Result<String> {
-    match format {
-        OutputFormat::Json => pretty_json(summary),
-        OutputFormat::Table => Ok(format!(
-            "Initialized solution workspace: {}\nchallenge_name: {}\nchallenge: {} ({})\nruntime_profile: {}\ninterface: {}",
-            summary.workspace_dir.display(),
-            summary.challenge_name,
-            summary.challenge_title,
-            summary.challenge_name,
-            summary.runtime_profile,
-            summary.interface
-        )),
-    }
 }
 
 /// Renders create solution submission for user-facing output.
