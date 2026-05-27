@@ -258,7 +258,7 @@ async fn private_temp_files_use_owner_only_permissions() {
 
     let root = temp_storage_root("private-temp-file");
     let path = root.join("scratch");
-    let file = super::create_private_file(&path)
+    let file = crate::fs_utils::create_private_file(&path)
         .await
         .expect("private temp file should create");
     drop(file);
@@ -280,7 +280,7 @@ async fn storage_work_root_is_tightened_to_owner_only() {
     fs::create_dir_all(&root).expect("work root");
     fs::set_permissions(&root, fs::Permissions::from_mode(0o755)).expect("work root permissions");
 
-    super::ensure_private_directory(&root)
+    crate::fs_utils::ensure_private_directory(&root)
         .await
         .expect("work root should tighten");
 
