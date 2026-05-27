@@ -4,10 +4,8 @@ use std::{
     collections::HashSet,
     path::{Path, PathBuf},
     process::Command,
-    time::{Duration, SystemTime},
 };
 
-use tracing::warn;
 use uuid::Uuid;
 
 use agentics_config::Config;
@@ -16,35 +14,40 @@ use agentics_contracts::{challenge_bundle, challenge_creation};
 use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge_creation::{
     AdminChallengePrivateAssetListResponse, ChallengeCreationManifest,
-    ChallengeCreationRequestKind, ChallengeDraftCleanupResponse, ChallengeDraftListResponse,
-    ChallengeDraftResponse, ChallengeDraftStatus, ChallengeDraftValidationStatus,
-    ChallengePrivateAssetKind, ChallengePrivateAssetResponse, CreatorChallengeDraftResponse,
+    ChallengeCreationRequestKind, ChallengeDraftListResponse, ChallengeDraftResponse,
+    ChallengeDraftStatus, ChallengeDraftValidationStatus, ChallengePrivateAssetKind,
+    CreatorChallengeDraftResponse,
 };
 use agentics_domain::models::hashes::{GitCommitSha, Sha256Digest};
 use agentics_domain::models::ids::{
     AgentId, ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftPublishClaimId,
-    ChallengeDraftValidationRecordId, ChallengePrivateAssetId,
+    ChallengeDraftValidationRecordId,
 };
 use agentics_domain::models::names::ChallengeName;
 use agentics_domain::models::paths::{RepoRelativePath, RepositoryCheckoutPath};
 use agentics_persistence::{self as persistence, Repositories};
-use agentics_storage::{Storage, StorageKey, StorageWriteIntent, storage_work_root};
+use agentics_storage::{Storage, StorageWriteIntent, storage_work_root};
 
 const CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 
+mod cleanup;
 mod private_assets;
 mod publishing;
+mod review;
 mod types;
 mod utils;
 
-use private_assets::{extract_private_asset_overlay, validate_private_asset_zip_upload};
+pub use cleanup::cleanup_challenge_drafts;
+use private_assets::extract_private_asset_overlay;
+pub use private_assets::upload_challenge_private_asset;
 pub use publishing::publish_challenge_draft;
+pub use review::{abandon_challenge_draft, approve_challenge_draft, reject_challenge_draft};
 pub use types::{
     ChallengeDraftAdmin, ChallengeDraftCreator, CreateChallengeDraftServiceRequest,
     PublishChallengeDraftServiceRequest, ReviewChallengeDraftServiceRequest,
     UploadChallengePrivateAssetServiceRequest, ValidateChallengeDraftServiceRequest,
 };
-use utils::{base64_decode, cleanup_runtime_bundle, cleanup_storage_key, non_empty_message};
+use utils::cleanup_runtime_bundle;
 
 /// Create a challenge draft bound to a public GitHub PR and manifest.
 pub async fn create_challenge_draft(
@@ -124,200 +127,6 @@ pub async fn get_challenge_draft(
         return Err(ServiceError::NotFound);
     }
     Ok(draft.into())
-}
-
-/// Upload a private benchmark asset for a draft owned by the authenticated agent.
-pub async fn upload_challenge_private_asset(
-    pool: &sqlx::PgPool,
-    storage: &dyn Storage,
-    config: &Config,
-    request: UploadChallengePrivateAssetServiceRequest,
-) -> Result<ChallengePrivateAssetResponse> {
-    let UploadChallengePrivateAssetServiceRequest {
-        creator_agent_id,
-        draft_id,
-        body,
-    } = request;
-    let repos = Repositories::new(pool);
-    let draft = repos
-        .challenge_drafts()
-        .get(draft_id.as_str())
-        .await?
-        .ok_or(ServiceError::NotFound)?;
-    if draft.creator_agent_id != creator_agent_id {
-        return Err(ServiceError::NotFound);
-    }
-    if matches!(
-        draft.status,
-        ChallengeDraftStatus::Rejected
-            | ChallengeDraftStatus::Approved
-            | ChallengeDraftStatus::Publishing
-            | ChallengeDraftStatus::Published
-            | ChallengeDraftStatus::Abandoned
-    ) {
-        return Err(ServiceError::Conflict);
-    }
-
-    let requirement = draft
-        .manifest
-        .private_assets
-        .iter()
-        .find(|asset| asset.asset_name == body.asset_name)
-        .ok_or_else(|| {
-            ServiceError::BadRequest(format!(
-                "private asset `{}` is not declared in the challenge manifest",
-                body.asset_name
-            ))
-        })?;
-    if requirement.kind != body.kind {
-        return Err(ServiceError::BadRequest(format!(
-            "private asset `{}` kind mismatch",
-            body.asset_name
-        )));
-    }
-
-    let asset_bytes = base64_decode(&body.asset_base64).ok_or(ServiceError::Base64)?;
-    let asset_size_bytes = u64::try_from(asset_bytes.len()).map_err(|_| {
-        ServiceError::BadRequest("private asset size exceeds supported range".to_string())
-    })?;
-    if asset_size_bytes > config.quotas.challenge_private_asset_bytes_per_draft {
-        return Err(ServiceError::BadRequest(format!(
-            "private asset must be at most {} bytes",
-            config.quotas.challenge_private_asset_bytes_per_draft
-        )));
-    }
-    let asset_size_bytes_i64 = i64::try_from(asset_size_bytes).map_err(|_| {
-        ServiceError::BadRequest("private asset size exceeds supported database range".to_string())
-    })?;
-    validate_private_asset_zip_upload(
-        &asset_bytes,
-        body.asset_name.as_str(),
-        config.quotas.challenge_private_asset_bytes_per_draft,
-    )
-    .await?;
-    let sha256 = challenge_creation::sha256_digest(&asset_bytes);
-    let storage_key = StorageKey::try_new(format!(
-        "challenge-drafts/{}/private-assets/{}-{}.bin",
-        draft.id, body.asset_name, sha256
-    ))?;
-    let temporary_asset_key = StorageKey::try_new(format!(
-        "_tmp/challenge-private-assets/{}-{}-{}.bin",
-        draft.id,
-        body.asset_name,
-        Uuid::new_v4()
-    ))?;
-    let asset_row_id = ChallengePrivateAssetId::generate();
-    repos
-        .challenge_drafts()
-        .reserve_private_asset(
-            &persistence::CreateChallengePrivateAssetInput {
-                asset_row_id: asset_row_id.clone(),
-                draft_id: draft.id.clone(),
-                asset_name: body.asset_name.clone(),
-                kind: body.kind,
-                required: requirement.required,
-                size_bytes: asset_size_bytes_i64,
-                sha256,
-                storage_key: storage_key.clone(),
-                temporary_storage_key: temporary_asset_key.clone(),
-                uploader_agent_id: creator_agent_id.clone(),
-            },
-            config.quotas.challenge_private_asset_bytes_per_draft,
-            config.quotas.challenge_draft_validation_timeout_minutes,
-            config
-                .quotas
-                .challenge_private_asset_pending_timeout_minutes,
-        )
-        .await
-        .map_err(ServiceError::unique_violation_as_conflict)?;
-
-    let temporary_storage_key = match storage
-        .put(
-            &temporary_asset_key,
-            &asset_bytes,
-            StorageWriteIntent::new(
-                "challenge private asset ZIP",
-                config.quotas.challenge_private_asset_bytes_per_draft,
-            ),
-        )
-        .await
-    {
-        Ok(key) => key,
-        Err(error) => {
-            fail_challenge_private_asset_record(pool, &asset_row_id, &error.to_string()).await;
-            cleanup_storage_key(storage, &temporary_asset_key).await;
-            return Err(error.into());
-        }
-    };
-
-    if let Err(error) = cleanup_unreferenced_private_asset_object(pool, storage, &storage_key).await
-    {
-        fail_challenge_private_asset_record(pool, &asset_row_id, &error.to_string()).await;
-        cleanup_storage_key(storage, &temporary_storage_key).await;
-        return Err(error);
-    }
-
-    if let Err(error) = storage.promote(&temporary_storage_key, &storage_key).await {
-        fail_challenge_private_asset_record(pool, &asset_row_id, &error.to_string()).await;
-        cleanup_storage_key(storage, &temporary_storage_key).await;
-        return Err(error.into());
-    }
-    let asset = match Repositories::new(pool)
-        .challenge_drafts()
-        .activate_private_asset_with_audit(
-            &asset_row_id,
-            ChallengeDraftAuditEventId::generate(),
-            &creator_agent_id,
-        )
-        .await
-    {
-        Ok(asset) => asset,
-        Err(error) => {
-            cleanup_storage_key(storage, &storage_key).await;
-            return Err(error);
-        }
-    };
-
-    Ok(asset)
-}
-
-/// Marks the pending private asset failed when storage writes cannot complete.
-async fn fail_challenge_private_asset_record(
-    pool: &sqlx::PgPool,
-    asset_row_id: &ChallengePrivateAssetId,
-    message: &str,
-) {
-    if let Err(error) = Repositories::new(pool)
-        .challenge_drafts()
-        .fail_private_asset(asset_row_id, message)
-        .await
-    {
-        warn!(
-            asset_row_id = %asset_row_id,
-            error = %error,
-            "failed to mark private asset upload failed after storage error"
-        );
-    }
-}
-
-/// Remove an unreferenced durable object left by a stale pending private asset.
-async fn cleanup_unreferenced_private_asset_object(
-    pool: &sqlx::PgPool,
-    storage: &dyn Storage,
-    storage_key: &StorageKey,
-) -> Result<()> {
-    if !storage.exists(storage_key).await? {
-        return Ok(());
-    }
-    if Repositories::new(pool)
-        .challenge_drafts()
-        .private_asset_storage_key_has_active_reference(storage_key)
-        .await?
-    {
-        return Err(ServiceError::Conflict);
-    }
-    cleanup_storage_key(storage, storage_key).await;
-    Ok(())
 }
 
 /// List GitHub-backed challenge drafts for admin review.
@@ -451,192 +260,6 @@ pub async fn validate_challenge_draft(
             Err(error)
         }
     }
-}
-
-/// Mark a draft abandoned when the backing PR is closed without merge or the
-/// creator withdraws the request.
-pub async fn abandon_challenge_draft(
-    pool: &sqlx::PgPool,
-    request: ReviewChallengeDraftServiceRequest,
-) -> Result<ChallengeDraftResponse> {
-    let ReviewChallengeDraftServiceRequest {
-        admin,
-        draft_id,
-        body,
-    } = request;
-    let repos = Repositories::new(pool);
-    let audit_event = persistence::CreateChallengeDraftAuditEventInput {
-        event_id: ChallengeDraftAuditEventId::generate(),
-        draft_id: draft_id.clone(),
-        actor_agent_id: None,
-        actor_admin_username: Some(admin.username),
-        action: "draft_abandoned".to_string(),
-        message: body.message.trim().to_string(),
-        metadata: serde_json::json!({}),
-    };
-    repos
-        .challenge_drafts()
-        .abandon_with_audit(&draft_id, non_empty_message(&body.message), &audit_event)
-        .await?;
-
-    repos
-        .challenge_drafts()
-        .get(draft_id.as_str())
-        .await?
-        .ok_or(ServiceError::NotFound)
-}
-
-/// Expire stale drafts and purge private assets for rejected or abandoned
-/// unpublished drafts after the configured grace period.
-pub async fn cleanup_challenge_drafts(
-    pool: &sqlx::PgPool,
-    storage: &dyn Storage,
-    config: &Config,
-) -> Result<ChallengeDraftCleanupResponse> {
-    let repos = Repositories::new(pool);
-    let abandoned = repos
-        .challenge_drafts()
-        .abandon_stale(config.quotas.challenge_draft_ttl_days)
-        .await?;
-    let purge_candidates = repos
-        .challenge_drafts()
-        .list_unpublished_private_assets_for_purge(
-            config.quotas.unpublished_challenge_asset_grace_days,
-        )
-        .await?;
-
-    let mut purged = 0_i64;
-    for asset in purge_candidates {
-        let Some(asset) = repos
-            .challenge_drafts()
-            .mark_private_asset_purging(&asset.id)
-            .await?
-        else {
-            continue;
-        };
-        storage.delete(&asset.storage_key).await?;
-        if let Some(temporary_storage_key) = &asset.temporary_storage_key {
-            storage.delete(temporary_storage_key).await?;
-        }
-        repos
-            .challenge_drafts()
-            .delete_private_asset(asset.id.as_str())
-            .await?;
-        purged = purged.checked_add(1).ok_or_else(|| {
-            ServiceError::Internal("private asset purge count overflow".to_string())
-        })?;
-    }
-    let tmp_cutoff = temporary_storage_cleanup_cutoff(config)?;
-    let purged_temporary_storage_objects = storage
-        .delete_prefix_older_than(&StorageKey::try_new("_tmp")?, tmp_cutoff)
-        .await?;
-    let purged_temporary_storage_objects = i64::try_from(purged_temporary_storage_objects)
-        .map_err(|_| {
-            ServiceError::Internal(
-                "temporary storage cleanup count exceeds supported range".to_string(),
-            )
-        })?;
-
-    Ok(ChallengeDraftCleanupResponse {
-        abandoned_drafts: abandoned,
-        purged_private_assets: purged,
-        purged_temporary_storage_objects,
-    })
-}
-
-fn temporary_storage_cleanup_cutoff(config: &Config) -> Result<SystemTime> {
-    let seconds = config
-        .storage
-        .tmp_object_grace_hours
-        .checked_mul(60 * 60)
-        .ok_or_else(|| {
-            ServiceError::Internal("temporary storage grace window overflow".to_string())
-        })?;
-    SystemTime::now()
-        .checked_sub(Duration::from_secs(seconds))
-        .ok_or_else(|| {
-            ServiceError::Internal("temporary storage cleanup cutoff underflow".to_string())
-        })
-}
-
-/// Approve a validated draft for publishing.
-pub async fn approve_challenge_draft(
-    pool: &sqlx::PgPool,
-    request: ReviewChallengeDraftServiceRequest,
-) -> Result<ChallengeDraftResponse> {
-    let ReviewChallengeDraftServiceRequest {
-        admin,
-        draft_id,
-        body,
-    } = request;
-    let expected_validation_bundle_sha256 = body
-        .expected_validation_bundle_sha256
-        .as_ref()
-        .ok_or_else(|| {
-            ServiceError::BadRequest(
-                "expected_validation_bundle_sha256 is required when approving a draft".to_string(),
-            )
-        })?;
-    let repos = Repositories::new(pool);
-    repos
-        .challenge_drafts()
-        .approve_validated_with_audit(
-            &draft_id,
-            expected_validation_bundle_sha256,
-            non_empty_message(&body.message),
-            admin.username,
-            ChallengeDraftAuditEventId::generate(),
-        )
-        .await?;
-    repos
-        .challenge_drafts()
-        .get(draft_id.as_str())
-        .await?
-        .ok_or(ServiceError::NotFound)
-}
-
-/// Reject a draft with reviewer feedback.
-pub async fn reject_challenge_draft(
-    pool: &sqlx::PgPool,
-    request: ReviewChallengeDraftServiceRequest,
-) -> Result<ChallengeDraftResponse> {
-    let ReviewChallengeDraftServiceRequest {
-        admin,
-        draft_id,
-        body,
-    } = request;
-    let repos = Repositories::new(pool);
-    let draft = repos
-        .challenge_drafts()
-        .get(draft_id.as_str())
-        .await?
-        .ok_or(ServiceError::NotFound)?;
-    if draft.status == ChallengeDraftStatus::Published {
-        return Err(ServiceError::Conflict);
-    }
-    let audit_event = persistence::CreateChallengeDraftAuditEventInput {
-        event_id: ChallengeDraftAuditEventId::generate(),
-        draft_id: draft.id.clone(),
-        actor_agent_id: None,
-        actor_admin_username: Some(admin.username),
-        action: "draft_rejected".to_string(),
-        message: body.message.trim().to_string(),
-        metadata: serde_json::json!({}),
-    };
-    repos
-        .challenge_drafts()
-        .update_status_with_audit(
-            &draft.id,
-            ChallengeDraftStatus::Rejected,
-            non_empty_message(&body.message),
-            &audit_event,
-        )
-        .await?;
-    repos
-        .challenge_drafts()
-        .get(draft.id.as_str())
-        .await?
-        .ok_or(ServiceError::NotFound)
 }
 
 /// Ensures a draft path follows the canonical `challenges/{challenge_name}` repository layout.
