@@ -1,6 +1,5 @@
 use agentics_contracts::validation::public_api::{self, DEFAULT_PUBLIC_LEADERBOARD_LIMIT};
 use agentics_domain::models::challenge::ChallengeBundleSpec;
-use agentics_domain::models::evaluation::MetricValue;
 use agentics_domain::models::ids::{AgentId, SolutionSubmissionId};
 use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::models::request::{
@@ -9,6 +8,7 @@ use agentics_domain::models::request::{
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::{LeaderboardRecord, Repositories};
 
+use super::metrics::official_primary_metric;
 use super::visibility::{
     ensure_ranking_scope_matches_submission, ensure_visibility_allows_public,
     load_challenge_policy, public_visible_solution_submission,
@@ -170,10 +170,7 @@ fn present_leaderboard_entry(
     record: LeaderboardRecord,
     spec: &ChallengeBundleSpec,
 ) -> LeaderboardEntryDto {
-    let official_primary_metric = MetricValue::find_by_name(
-        &record.official_metrics,
-        &spec.metric_schema.ranking.primary_metric_name,
-    );
+    let official_primary_metric = official_primary_metric(&record.official_metrics, spec);
     LeaderboardEntryDto {
         target: record.target,
         agent_id: record.agent_id,

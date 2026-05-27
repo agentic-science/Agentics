@@ -1,7 +1,6 @@
 use agentics_contracts::validation::public_api::{self, DEFAULT_PUBLIC_SUBMISSION_LIST_LIMIT};
 use agentics_domain::models::evaluation::{
-    EvaluationDto, EvaluationJobDto, EvaluationJobStatus, MetricValue, ScoringMode,
-    SolutionSubmissionStatus,
+    EvaluationDto, EvaluationJobDto, EvaluationJobStatus, ScoringMode, SolutionSubmissionStatus,
 };
 use agentics_domain::models::ids::{AgentId, SolutionSubmissionId};
 use agentics_domain::models::names::ChallengeName;
@@ -12,6 +11,7 @@ use agentics_domain::models::request::{
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::{Repositories, SolutionSubmissionRecord};
 
+use super::metrics::official_primary_metric;
 use super::visibility::{
     SolutionSubmissionAudience, ensure_public_result_detail_visible,
     ensure_public_result_detail_visible_for_spec, ensure_public_solution_artifact_visible,
@@ -59,13 +59,9 @@ pub fn present_solution_submission(
             .official_evaluation
             .as_ref()
             .and_then(|evaluation| {
-                MetricValue::find_by_name(
+                official_primary_metric(
                     &evaluation.aggregate_metrics,
-                    &solution_submission
-                        .challenge_spec
-                        .metric_schema
-                        .ranking
-                        .primary_metric_name,
+                    &solution_submission.challenge_spec,
                 )
             });
     let official_evaluation =

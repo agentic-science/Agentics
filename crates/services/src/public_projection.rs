@@ -2,6 +2,7 @@
 
 mod challenge;
 mod leaderboard;
+mod metrics;
 mod score_distribution;
 mod submission;
 mod visibility;

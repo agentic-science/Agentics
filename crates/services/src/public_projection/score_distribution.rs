@@ -1,14 +1,17 @@
+mod stats;
+
 use agentics_contracts::validation::public_api;
-use agentics_domain::models::challenge::{ChallengeBundleSpec, MetricVisibility};
-use agentics_domain::models::evaluation::MetricValue;
+use agentics_domain::models::challenge::ChallengeBundleSpec;
 use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
-use agentics_domain::models::request::{
-    ScoreDistributionBucketDto, ScoreDistributionQuantileDto, ScoreDistributionResponse,
-};
+use agentics_domain::models::request::ScoreDistributionResponse;
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::{LeaderboardMetricEntry, Repositories};
 
+use super::metrics::{
+    ensure_metric_is_publicly_distributable, metric_value_from_leaderboard_entry,
+};
 use super::visibility::{ensure_visibility_allows_public, load_challenge_policy};
+use stats::{build_histogram, build_quantiles};
 
 /// Fetch a visible score distribution for a metric in one explicit target scope.
 pub async fn get_score_distribution(
@@ -81,161 +84,6 @@ pub(super) fn build_score_distribution_response(
         quantiles,
         histogram,
     })
-}
-
-/// Select the metric value that participates in one distribution.
-fn metric_value_from_leaderboard_entry(
-    entry: &LeaderboardMetricEntry,
-    metric_name: &MetricName,
-    spec: &ChallengeBundleSpec,
-) -> Option<f64> {
-    match metric_name.as_str() {
-        "rank_score" | "best_rank_score" => Some(entry.best_rank_score),
-        _ if metric_name == &spec.metric_schema.ranking.primary_metric_name => {
-            metric_value_by_name(&entry.official_metrics, metric_name)
-                .or_else(|| metric_value_by_name(&entry.aggregate_metrics, metric_name))
-        }
-        _ => None,
-    }
-}
-
-/// Find one metric by name in an evaluator aggregate metric payload.
-fn metric_value_by_name(metrics: &[MetricValue], metric_name: &MetricName) -> Option<f64> {
-    metrics
-        .iter()
-        .find(|metric| &metric.metric_name == metric_name)
-        .map(|metric| metric.value)
-}
-
-/// Reject distribution requests that would require private aggregate metrics.
-fn ensure_metric_is_publicly_distributable(
-    metric_name: &MetricName,
-    spec: &ChallengeBundleSpec,
-) -> Result<()> {
-    if matches!(metric_name.as_str(), "rank_score" | "best_rank_score") {
-        return Ok(());
-    }
-
-    if metric_name == &spec.metric_schema.ranking.primary_metric_name
-        && spec
-            .metric_schema
-            .metric(metric_name)
-            .is_some_and(|metric| metric.visibility == MetricVisibility::Public)
-    {
-        return Ok(());
-    }
-
-    Err(ServiceError::Forbidden(
-        "score distribution is available only for rank_score, best_rank_score, or the public primary ranking metric"
-            .to_string(),
-    ))
-}
-
-/// Build nearest-rank quantiles used by the public distribution API.
-fn build_quantiles(values: &[f64]) -> Result<Vec<ScoreDistributionQuantileDto>> {
-    [
-        (0.0, 0usize, 4usize),
-        (0.25, 1usize, 4usize),
-        (0.5, 2usize, 4usize),
-        (0.75, 3usize, 4usize),
-        (0.9, 9usize, 10usize),
-        (1.0, 4usize, 4usize),
-    ]
-    .into_iter()
-    .map(|(quantile, numerator, denominator)| {
-        Ok(ScoreDistributionQuantileDto {
-            quantile,
-            value: nearest_rank_quantile(values, numerator, denominator)?,
-        })
-    })
-    .collect()
-}
-
-/// Select one nearest-rank quantile from already-sorted finite values.
-fn nearest_rank_quantile(values: &[f64], numerator: usize, denominator: usize) -> Result<f64> {
-    let max_index = values.len().saturating_sub(1);
-    let rounded_index = max_index
-        .checked_mul(numerator)
-        .and_then(|value| value.checked_add(denominator / 2))
-        .and_then(|value| value.checked_div(denominator))
-        .ok_or_else(|| ServiceError::Internal("quantile index overflow".to_string()))?
-        .min(max_index);
-    values
-        .get(rounded_index)
-        .copied()
-        .ok_or_else(|| ServiceError::Internal("quantile index out of range".to_string()))
-}
-
-/// Build at most ten histogram buckets for already-sorted finite values.
-fn build_histogram(values: &[f64]) -> Result<Vec<ScoreDistributionBucketDto>> {
-    let min = values
-        .first()
-        .copied()
-        .ok_or_else(|| ServiceError::Internal("histogram values unexpectedly empty".to_string()))?;
-    let max = values
-        .last()
-        .copied()
-        .ok_or_else(|| ServiceError::Internal("histogram values unexpectedly empty".to_string()))?;
-    if min == max {
-        return Ok(vec![ScoreDistributionBucketDto {
-            lower: min,
-            upper: max,
-            count: i64::try_from(values.len())
-                .map_err(|_| ServiceError::Internal("histogram count overflow".to_string()))?,
-        }]);
-    }
-
-    let bucket_count = values.len().min(10);
-    let width = (max - min) / bucket_count as f64;
-    let mut counts = vec![0i64; bucket_count];
-    for value in values {
-        let index = histogram_bucket_index(*value, min, width, bucket_count)?;
-        let count = counts
-            .get_mut(index)
-            .ok_or_else(|| ServiceError::Internal("histogram bucket index invalid".to_string()))?;
-        *count = count
-            .checked_add(1)
-            .ok_or_else(|| ServiceError::Internal("histogram count overflow".to_string()))?;
-    }
-
-    let mut buckets = Vec::with_capacity(counts.len());
-    for (index, count) in counts.into_iter().enumerate() {
-        let lower = min + width * index as f64;
-        let upper = match index.checked_add(1) {
-            Some(next_index) if next_index == bucket_count => max,
-            Some(next_index) => min + width * next_index as f64,
-            None => {
-                return Err(ServiceError::Internal(
-                    "histogram bucket index overflow".to_string(),
-                ));
-            }
-        };
-        buckets.push(ScoreDistributionBucketDto {
-            lower,
-            upper,
-            count,
-        });
-    }
-    Ok(buckets)
-}
-
-/// Locate the histogram bucket for a value without using unchecked indexing.
-fn histogram_bucket_index(value: f64, min: f64, width: f64, bucket_count: usize) -> Result<usize> {
-    for index in 0..bucket_count {
-        let next_index = index
-            .checked_add(1)
-            .ok_or_else(|| ServiceError::Internal("histogram bucket index overflow".to_string()))?;
-        if next_index == bucket_count {
-            return Ok(index);
-        }
-        let upper = min + width * next_index as f64;
-        if value < upper {
-            return Ok(index);
-        }
-    }
-    bucket_count
-        .checked_sub(1)
-        .ok_or_else(|| ServiceError::Internal("histogram bucket count invalid".to_string()))
 }
 
 #[cfg(test)]
