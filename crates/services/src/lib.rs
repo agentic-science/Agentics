@@ -19,6 +19,7 @@ pub mod admin;
 pub mod auth;
 pub mod challenge_drafts;
 pub mod challenge_metadata;
+pub mod creator;
 pub mod evaluation_lifecycle;
 pub mod maintenance;
 pub mod public_projection;

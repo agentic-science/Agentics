@@ -1,0 +1,191 @@
+//! Creator-owned challenge statistics, participants, and shortlist workflows.
+
+use tracing::warn;
+
+use agentics_config::Config;
+use agentics_contracts::challenge_creation;
+use agentics_domain::models::challenge::ChallengeBundleSpec;
+use agentics_domain::models::ids::{AgentId, ChallengeShortlistRevisionId};
+use agentics_domain::models::names::{ChallengeName, TargetName};
+use agentics_domain::models::request::{
+    ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
+    CreateChallengeShortlistRevisionRequest, CreatorChallengeParticipantsResponse,
+    CreatorChallengeStatsResponse,
+};
+use agentics_domain::storage::StorageKey;
+use agentics_error::{Result, ServiceError};
+use agentics_persistence::{CreateChallengeShortlistRevisionInput, Repositories};
+use agentics_storage::{Storage, StorageWriteIntent};
+
+use crate::storage_errors::storage_error_to_service_error;
+
+/// Fetch owner-visible aggregate challenge statistics for shortlist decisions.
+pub async fn get_creator_challenge_stats(
+    pool: &sqlx::PgPool,
+    agent_id: &AgentId,
+    challenge_name: &ChallengeName,
+    requested_target: Option<&str>,
+) -> Result<CreatorChallengeStatsResponse> {
+    let (challenge_name, target) =
+        resolve_creator_challenge_scope(pool, agent_id, challenge_name, requested_target).await?;
+    Repositories::new(pool)
+        .challenges()
+        .creator_stats(&challenge_name, target.as_ref())
+        .await
+}
+
+/// Fetch owner-visible participant rows for shortlist decisions.
+pub async fn list_creator_challenge_participants(
+    pool: &sqlx::PgPool,
+    agent_id: &AgentId,
+    challenge_name: &ChallengeName,
+    requested_target: Option<&str>,
+) -> Result<CreatorChallengeParticipantsResponse> {
+    let (challenge_name, target) =
+        resolve_creator_challenge_scope(pool, agent_id, challenge_name, requested_target).await?;
+    Repositories::new(pool)
+        .challenges()
+        .creator_participants(&challenge_name, target.as_ref())
+        .await
+}
+
+/// Append a delta-only owner-managed shortlist revision.
+pub async fn create_challenge_shortlist_revision(
+    pool: &sqlx::PgPool,
+    storage: &dyn Storage,
+    config: &Config,
+    agent_id: &AgentId,
+    challenge_name: &ChallengeName,
+    body: CreateChallengeShortlistRevisionRequest,
+) -> Result<ChallengeShortlistRevisionResponse> {
+    let (challenge_name, _) =
+        resolve_creator_challenge_scope(pool, agent_id, challenge_name, None).await?;
+    let requested_count = i64::try_from(body.agent_ids_to_add.len())
+        .map_err(|_| ServiceError::BadRequest("shortlist payload is too large".to_string()))?;
+    let raw_json = serde_json::to_vec(&body)
+        .map_err(|e| ServiceError::Internal(format!("failed to encode shortlist revision: {e}")))?;
+    let agent_ids_to_add = normalize_shortlist_agent_ids(&body.agent_ids_to_add)?;
+
+    let revision_id = ChallengeShortlistRevisionId::generate();
+    let sha256 = challenge_creation::sha256_digest(&raw_json);
+    let storage_key = StorageKey::try_new(format!(
+        "challenge-shortlists/{challenge_name}/{revision_id}.json"
+    ))?;
+    let stored_key = storage
+        .put(
+            &storage_key,
+            &raw_json,
+            StorageWriteIntent::new(
+                "challenge shortlist JSON",
+                config.storage.max_json_artifact_bytes,
+            ),
+        )
+        .await
+        .map_err(storage_error_to_service_error)?;
+
+    let response = Repositories::new(pool)
+        .challenges()
+        .create_shortlist_revision(&CreateChallengeShortlistRevisionInput {
+            revision_id,
+            challenge_name,
+            uploader_agent_id: agent_id.clone(),
+            storage_key: stored_key.clone(),
+            sha256,
+            requested_count,
+            agent_ids_to_add,
+        })
+        .await;
+
+    match response {
+        Ok(response) => Ok(response),
+        Err(error) => {
+            cleanup_storage_key(storage, &stored_key).await;
+            Err(error)
+        }
+    }
+}
+
+/// Fetch the effective owner-managed shortlist union.
+pub async fn get_challenge_shortlist(
+    pool: &sqlx::PgPool,
+    agent_id: &AgentId,
+    challenge_name: &ChallengeName,
+) -> Result<ChallengeShortlistResponse> {
+    let (challenge_name, _) =
+        resolve_creator_challenge_scope(pool, agent_id, challenge_name, None).await?;
+    Repositories::new(pool)
+        .challenges()
+        .list_shortlist(&challenge_name)
+        .await
+}
+
+/// Resolve and authorize a creator-owned challenge plus optional target filter.
+async fn resolve_creator_challenge_scope(
+    pool: &sqlx::PgPool,
+    agent_id: &AgentId,
+    challenge_name: &ChallengeName,
+    requested_target: Option<&str>,
+) -> Result<(ChallengeName, Option<TargetName>)> {
+    let repos = Repositories::new(pool);
+    let challenge = repos.challenges().get_published(challenge_name).await?;
+    let challenge = challenge.ok_or(ServiceError::NotFound)?;
+    if !repos
+        .challenges()
+        .agent_owns(&challenge.challenge_name, agent_id)
+        .await?
+    {
+        return Err(ServiceError::Forbidden(
+            "agent is not an owner of this challenge".to_string(),
+        ));
+    }
+
+    let target = resolve_target_from_spec(&challenge.spec_json, requested_target)?;
+    Ok((challenge.challenge_name, target))
+}
+
+/// Validate an optional target query against a published challenge spec.
+fn resolve_target_from_spec(
+    spec_json: &serde_json::Value,
+    requested_target: Option<&str>,
+) -> Result<Option<TargetName>> {
+    let Some(target) = requested_target else {
+        return Ok(None);
+    };
+
+    let spec: ChallengeBundleSpec = serde_json::from_value(spec_json.clone())
+        .map_err(|e| ServiceError::Internal(e.to_string()))?;
+    let target = target
+        .parse::<TargetName>()
+        .map_err(|e| ServiceError::BadRequest(e.to_string()))?;
+    if spec.target(&target).is_some() {
+        return Ok(Some(target));
+    }
+    Err(ServiceError::BadRequest(format!(
+        "challenge does not support target `{target}`"
+    )))
+}
+
+/// Deduplicate a shortlist delta and reject empty uploads before persistence.
+fn normalize_shortlist_agent_ids(agent_ids: &[AgentId]) -> Result<Vec<AgentId>> {
+    let mut unique = std::collections::BTreeSet::new();
+    for agent_id in agent_ids {
+        unique.insert(agent_id.clone());
+    }
+    if unique.is_empty() {
+        return Err(ServiceError::BadRequest(
+            "agent_ids_to_add must contain at least one agent id".to_string(),
+        ));
+    }
+    Ok(unique.into_iter().collect())
+}
+
+/// Removes a staged shortlist object after shortlist persistence fails.
+async fn cleanup_storage_key(storage: &dyn Storage, storage_key: &StorageKey) {
+    if let Err(error) = storage.delete(storage_key).await {
+        warn!(
+            storage_key = %storage_key,
+            error = %error,
+            "failed to clean up staged shortlist storage object"
+        );
+    }
+}
