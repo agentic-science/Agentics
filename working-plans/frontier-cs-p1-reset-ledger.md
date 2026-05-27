@@ -64,8 +64,12 @@ For every `pending reset` challenge:
 - Production/rehearsal RustFS: reset by removing the disposable
   `agentics-prod_rustfs_data` Compose volume after production services and the
   dedicated runner daemon were stopped.
-- Backup RustFS: pending targeted deletion for the 34 `pending reset`
-  challenges. `binary-slate-machine-frontier-cs-algorithmic-81` is excluded.
+- Backup RustFS: 33 old private-bundle objects were found and deleted under
+  `private-bundle-backups/<challenge-handle>/official-runs.zip` for the
+  `pending reset` challenges. The SQL parser P1 had no matching backup object.
+  A post-delete inventory found no remaining reset-candidate backup objects.
+  `binary-slate-machine-frontier-cs-algorithmic-81` remains present and is
+  excluded.
 
 ## Issue Reset Log
 
