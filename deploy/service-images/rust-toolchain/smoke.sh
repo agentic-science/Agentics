@@ -2,6 +2,7 @@
 set -euo pipefail
 
 llvm_major="${LLVM_MAJOR:-22}"
+wild_linker_version="${WILD_LINKER_VERSION:-0.9.0}"
 cargo_config="${CARGO_HOME:-/opt/cargo}/config.toml"
 
 require_command() {
@@ -12,7 +13,7 @@ require_command() {
   fi
 }
 
-for command_name in brew clang clang++ llvm-config lld ld.lld cargo rustc wild jq; do
+for command_name in brew clang clang++ llvm-config ld.lld cargo cargo-binstall rustc wild jq; do
   require_command "$command_name"
 done
 
@@ -28,9 +29,18 @@ if [[ "${llvm_config_major}" != "${llvm_major}" ]]; then
   exit 1
 fi
 
-wild_version="$(wild --version | head -n 1)"
-if [[ "${wild_version}" != *"0.9.0"* ]]; then
-  printf 'wild version mismatch: expected 0.9.0, got %s\n' "${wild_version}" >&2
+if ! wild --help >/dev/null 2>&1; then
+  printf 'wild binary is installed but did not accept --help\n' >&2
+  exit 1
+fi
+
+if ! cargo-binstall --help >/dev/null 2>&1; then
+  printf 'cargo-binstall binary is installed but did not accept --help\n' >&2
+  exit 1
+fi
+
+if ! jq -e --arg expected "${wild_linker_version}" '.wild_linker_version == $expected' /opt/agentics/toolchain-info.json >/dev/null; then
+  printf 'wild linker metadata mismatch: expected %s\n' "${wild_linker_version}" >&2
   exit 1
 fi
 
@@ -65,11 +75,11 @@ CARGO_TARGET_DIR="${tmpdir}/target" cargo build --manifest-path "${tmpdir}/Cargo
 
 printf 'Agentics Rust toolchain smoke check passed.\n'
 printf '\nTool versions:\n'
-brew --version | head -n 1
+su linuxbrew -c "${HOMEBREW_PREFIX:-/home/linuxbrew/.linuxbrew}/bin/brew --version" | head -n 1
 clang --version | head -n 1
 llvm-config --version
-cargo binstall --version
-wild --version
+su linuxbrew -c "${HOMEBREW_PREFIX:-/home/linuxbrew/.linuxbrew}/bin/brew list --versions cargo-binstall"
+printf 'wild-linker %s (%s)\n' "${wild_linker_version}" "$(command -v wild)"
 rustc --version
 cargo --version
 

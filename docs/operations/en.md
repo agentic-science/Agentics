@@ -69,7 +69,7 @@ Rebuild and smoke the image manually with:
 ```bash
 docker build --network host -t agentics-rust-toolchain:bookworm-llvm22-local \
   deploy/service-images/rust-toolchain
-docker run --rm agentics-rust-toolchain:bookworm-llvm22-local \
+docker run --rm --network none agentics-rust-toolchain:bookworm-llvm22-local \
   /opt/agentics/smoke-rust-toolchain.sh
 ```
 

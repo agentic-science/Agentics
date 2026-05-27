@@ -13,8 +13,9 @@ fi
 export DEBIAN_FRONTEND=noninteractive
 export HOMEBREW_PREFIX=/home/linuxbrew/.linuxbrew
 export HOMEBREW_NO_ANALYTICS=1
+export HOMEBREW_NO_ENV_HINTS=1
 export CARGO_HOME=/opt/cargo
-export PATH="${HOMEBREW_PREFIX}/opt/llvm/bin:${HOMEBREW_PREFIX}/bin:${HOMEBREW_PREFIX}/sbin:${CARGO_HOME}/bin:/usr/local/cargo/bin:${PATH}"
+export PATH="${HOMEBREW_PREFIX}/opt/llvm/bin:${HOMEBREW_PREFIX}/opt/lld/bin:${HOMEBREW_PREFIX}/bin:${HOMEBREW_PREFIX}/sbin:${CARGO_HOME}/bin:/usr/local/cargo/bin:${PATH}"
 
 apt-get update
 apt-get install -y --no-install-recommends \
@@ -30,13 +31,16 @@ rm -rf /var/lib/apt/lists/*
 if ! id linuxbrew >/dev/null 2>&1; then
   useradd --create-home --home-dir /home/linuxbrew --shell /bin/bash linuxbrew
 fi
-install -d -m 0755 -o linuxbrew -g linuxbrew "${HOMEBREW_PREFIX}"
+install -d -m 0755 "${HOMEBREW_PREFIX}/Homebrew" "${HOMEBREW_PREFIX}/bin"
+chown -R linuxbrew:linuxbrew "${HOMEBREW_PREFIX}"
 
 if [[ ! -x "${HOMEBREW_PREFIX}/bin/brew" ]]; then
-  su linuxbrew -c 'NONINTERACTIVE=1 CI=1 HOMEBREW_NO_ANALYTICS=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
+  su linuxbrew -c "git clone --depth=1 https://github.com/Homebrew/brew ${HOMEBREW_PREFIX}/Homebrew"
+  ln -s ../Homebrew/bin/brew "${HOMEBREW_PREFIX}/bin/brew"
+  chown -h linuxbrew:linuxbrew "${HOMEBREW_PREFIX}/bin/brew"
 fi
 
-su linuxbrew -c "HOMEBREW_NO_ANALYTICS=1 ${HOMEBREW_PREFIX}/bin/brew install llvm cargo-binstall"
+su linuxbrew -c "HOMEBREW_NO_ANALYTICS=1 HOMEBREW_NO_ENV_HINTS=1 ${HOMEBREW_PREFIX}/bin/brew install llvm lld cargo-binstall"
 
 install -d -m 0755 "${CARGO_HOME}"
 cargo binstall --no-confirm "wild-linker@${wild_linker_version}"
@@ -60,15 +64,19 @@ if [[ "${clang_major}" != "${llvm_major}" ]]; then
 fi
 
 install -d -m 0755 /opt/agentics
+homebrew_version="$(su linuxbrew -c "HOMEBREW_NO_ANALYTICS=1 HOMEBREW_NO_ENV_HINTS=1 ${HOMEBREW_PREFIX}/bin/brew --version" | head -n 1)"
+cargo_binstall_version="$(su linuxbrew -c "HOMEBREW_NO_ANALYTICS=1 HOMEBREW_NO_ENV_HINTS=1 ${HOMEBREW_PREFIX}/bin/brew list --versions cargo-binstall" | awk '{print $2}')"
 cat > /opt/agentics/toolchain-info.json <<EOF
 {
   "rust_base_image": "${rust_base_image}",
   "homebrew_prefix": "${HOMEBREW_PREFIX}",
+  "homebrew_version": "${homebrew_version}",
   "llvm_major": "${llvm_major}",
   "clang_version": "$(clang --version | head -n 1)",
   "llvm_config_version": "$(llvm-config --version)",
-  "cargo_binstall_version": "$(cargo binstall --version | head -n 1)",
-  "wild_version": "$(wild --version | head -n 1)",
+  "cargo_binstall_version": "${cargo_binstall_version}",
+  "wild_linker_version": "${wild_linker_version}",
+  "wild_path": "$(command -v wild)",
   "rustc_version": "$(rustc --version)",
   "cargo_version": "$(cargo --version)",
   "cargo_home": "${CARGO_HOME}",
