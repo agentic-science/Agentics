@@ -192,6 +192,22 @@ affected challenge.
 - Affected challenge: migration-wide rollback setup, before individual
   challenge remigration.
 
+### 2026-05-28: Stale Runner Socket Directory Blocks Runner Startup
+
+- Symptom: after resetting production data and restarting production Compose,
+  `runner-docker-up` failed with `Is a directory (os error 21)`.
+- Cause: `/srv/agentics/docker.sock`, which should be a Unix socket, existed
+  as a stale empty directory. The runner startup cleanup path only attempted
+  `remove_file`, so it surfaced a low-context OS error instead of repairing the
+  stale socket path.
+- Fix: the runner Docker cleanup path now removes an empty stale directory at
+  the socket or pidfile path and returns a clear invalid-config error if such a
+  directory is non-empty.
+- Verification: targeted `agentics-ops` tests cover empty-directory cleanup and
+  non-empty-directory rejection.
+- Affected challenge: migration-wide production setup, before individual
+  challenge remigration.
+
 ## Assumptions
 
 - Scope is P1 only; P2 issues remain for a separate targeted-fix/private-bundle

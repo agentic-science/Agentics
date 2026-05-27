@@ -99,7 +99,7 @@ pub(super) async fn runner_docker_down(
     }
     require_root_for_runner_docker()?;
     let Some(pid) = read_runner_docker_pid(&config)? else {
-        let _ignored = fs::remove_file(&config.socket_path);
+        let _ignored = remove_stale_runner_docker_path(&config.socket_path, "socket");
         return Ok(print_reports(
             PREFIX,
             &[ReportLine::pass(
@@ -112,8 +112,8 @@ pub(super) async fn runner_docker_down(
     run_process_output("kill", [pid.to_string()], Duration::from_secs(10)).await?;
     for _ in 0..20 {
         if !process_exists(pid).await? {
-            let _ignored = fs::remove_file(&config.pidfile);
-            let _ignored = fs::remove_file(&config.socket_path);
+            let _ignored = remove_stale_runner_docker_path(&config.pidfile, "pidfile");
+            let _ignored = remove_stale_runner_docker_path(&config.socket_path, "socket");
             return Ok(print_reports(
                 PREFIX,
                 &[ReportLine::pass(
@@ -268,25 +268,43 @@ fn create_runner_docker_dirs(config: &RunnerDockerConfig) -> Result<(), ComposeP
 }
 
 fn remove_stale_runner_docker_files(config: &RunnerDockerConfig) -> Result<(), ComposeProdError> {
-    fs::remove_file(&config.socket_path)
-        .or_else(|error| {
-            if error.kind() == std::io::ErrorKind::NotFound {
-                Ok(())
-            } else {
-                Err(error)
-            }
-        })
-        .map_err(|error| ComposeProdError::Process(error.to_string()))?;
-    fs::remove_file(&config.pidfile)
-        .or_else(|error| {
-            if error.kind() == std::io::ErrorKind::NotFound {
-                Ok(())
-            } else {
-                Err(error)
-            }
-        })
-        .map_err(|error| ComposeProdError::Process(error.to_string()))?;
+    remove_stale_runner_docker_path(&config.socket_path, "socket")?;
+    remove_stale_runner_docker_path(&config.pidfile, "pidfile")?;
     Ok(())
+}
+
+fn remove_stale_runner_docker_path(path: &Path, label: &str) -> Result<(), ComposeProdError> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => {
+            return Err(ComposeProdError::Process(format!(
+                "failed to inspect stale runner Docker {label} {}: {error}",
+                path.display()
+            )));
+        }
+    };
+    if metadata.file_type().is_dir() {
+        return fs::remove_dir(path).map_err(|error| {
+            if error.kind() == std::io::ErrorKind::DirectoryNotEmpty {
+                ComposeProdError::InvalidConfig(format!(
+                    "stale runner Docker {label} path {} is a non-empty directory; remove it manually before starting the runner daemon",
+                    path.display()
+                ))
+            } else {
+                ComposeProdError::Process(format!(
+                    "failed to remove stale runner Docker {label} directory {}: {error}",
+                    path.display()
+                ))
+            }
+        });
+    }
+    fs::remove_file(path).map_err(|error| {
+        ComposeProdError::Process(format!(
+            "failed to remove stale runner Docker {label} {}: {error}",
+            path.display()
+        ))
+    })
 }
 
 fn spawn_runner_dockerd(config: &RunnerDockerConfig) -> Result<(), ComposeProdError> {
@@ -450,4 +468,36 @@ where
     crate::support::run_process(program, args, Some(timeout), DEFAULT_OUTPUT_LIMIT_BYTES)
         .await
         .map_err(ComposeProdError::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use super::remove_stale_runner_docker_path;
+    use crate::compose_prod::ComposeProdError;
+
+    #[test]
+    fn remove_stale_runner_docker_path_removes_empty_directory() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let stale_socket = tempdir.path().join("docker.sock");
+        fs::create_dir(&stale_socket).expect("stale socket dir");
+
+        remove_stale_runner_docker_path(&stale_socket, "socket").expect("remove stale socket dir");
+
+        assert!(!stale_socket.exists());
+    }
+
+    #[test]
+    fn remove_stale_runner_docker_path_rejects_non_empty_directory() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let stale_socket = tempdir.path().join("docker.sock");
+        fs::create_dir(&stale_socket).expect("stale socket dir");
+        fs::write(stale_socket.join("child"), b"not empty").expect("stale child");
+
+        let error = remove_stale_runner_docker_path(&stale_socket, "socket")
+            .expect_err("non-empty directory should fail");
+
+        assert!(matches!(error, ComposeProdError::InvalidConfig(_)));
+    }
 }
