@@ -2,7 +2,10 @@ use agentics_domain::models::challenge::{
     ChallengeDetailResponse, ChallengeListResponse, ChallengeTargetSpec, MetricDirection,
     PublicChallengeExecutionSpec,
 };
-use agentics_domain::models::names::ChallengeKeyword;
+use agentics_domain::models::names::{ChallengeKeyword, MetricName};
+use agentics_domain::models::request::{
+    LeaderboardResponse, PublicSolutionSubmissionListResponse, ScoreDistributionResponse,
+};
 use anyhow::Result;
 
 use super::OutputFormat;
@@ -216,4 +219,164 @@ pub(crate) fn median_and_p90(
         .map(format_score)
         .unwrap_or_else(|| "none".to_string());
     (median, p90)
+}
+
+/// Renders a target-scoped challenge statistics summary for agent iteration.
+pub(crate) fn render_challenge_stats(
+    challenge: &ChallengeDetailResponse,
+    leaderboard: &LeaderboardResponse,
+    distribution: &ScoreDistributionResponse,
+    submissions: Option<&PublicSolutionSubmissionListResponse>,
+    metric_name: &MetricName,
+    format: OutputFormat,
+) -> Result<String> {
+    let visible_submission_count = submissions.map(|submission_list| submission_list.total_count);
+    match format {
+        OutputFormat::Json => pretty_json(&serde_json::json!({
+            "challenge": challenge,
+            "target": leaderboard.target,
+            "metric_name": metric_name,
+            "visible_submission_count": visible_submission_count,
+            "ranked_agent_count": distribution.count,
+            "leaderboard": leaderboard,
+            "score_distribution": distribution,
+        })),
+        OutputFormat::Table => {
+            let top_rows = leaderboard
+                .items
+                .iter()
+                .take(5)
+                .enumerate()
+                .map(|(index, entry)| {
+                    let rank = index
+                        .checked_add(1)
+                        .ok_or_else(|| anyhow::anyhow!("leaderboard rank overflow"))?;
+                    Ok(vec![
+                        rank.to_string(),
+                        entry.agent_display_name.clone(),
+                        entry.best_solution_submission_id.to_string(),
+                        format_score(entry.best_rank_score),
+                        entry.updated_at.clone(),
+                    ])
+                })
+                .collect::<Result<Vec<_>>>()?;
+            let (median, p90) = median_and_p90(distribution);
+            let best_score = best_challenge_score(challenge, metric_name, distribution);
+            Ok(format!(
+                "challenge: {} ({})\ntarget: {}\nstatus: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nranking_metric: {}\nranked_agents: {}\nvisible_submissions: {}\nbest_score: {}\nmean_score: {}\nmedian_score: {}\np90_score: {}\ntop:\n{}",
+                challenge.challenge_name,
+                challenge.title,
+                leaderboard.target,
+                "published",
+                challenge.spec.starts_at.as_str(),
+                challenge.spec.closes_at.as_deref().unwrap_or("none"),
+                status_label(&challenge.spec.eligibility.eligibility_type),
+                metric_name,
+                distribution.count,
+                visible_submission_count
+                    .map(|count| count.to_string())
+                    .unwrap_or_else(|| "unavailable".to_string()),
+                best_score,
+                distribution
+                    .mean
+                    .map(format_score)
+                    .unwrap_or_else(|| "none".to_string()),
+                median,
+                p90,
+                render_table(
+                    &["RANK", "AGENT", "SUBMISSION", "SCORE", "UPDATED"],
+                    &top_rows
+                )
+            ))
+        }
+    }
+}
+
+/// Renders leaderboard for user-facing output.
+pub(crate) fn render_leaderboard(
+    response: &LeaderboardResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => {
+            let rows = response
+                .items
+                .iter()
+                .enumerate()
+                .map(|(index, entry)| {
+                    let rank = index
+                        .checked_add(1)
+                        .ok_or_else(|| anyhow::anyhow!("leaderboard rank overflow"))?;
+                    Ok(vec![
+                        rank.to_string(),
+                        entry.agent_display_name.clone(),
+                        entry.best_solution_submission_id.to_string(),
+                        format_score(entry.best_rank_score),
+                        entry.updated_at.clone(),
+                    ])
+                })
+                .collect::<Result<Vec<_>>>()?;
+            Ok(format!(
+                "challenge: {}\ntarget: {}\n{}",
+                response.challenge_name,
+                response.target,
+                render_table(&["RANK", "AGENT", "SUBMISSION", "SCORE", "UPDATED"], &rows)
+            ))
+        }
+    }
+}
+
+/// Renders score distribution for user-facing output.
+pub(crate) fn render_score_distribution(
+    response: &ScoreDistributionResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => {
+            let quantiles = response
+                .quantiles
+                .iter()
+                .map(|quantile| {
+                    vec![
+                        format_score(quantile.quantile),
+                        format_score(quantile.value),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            let buckets = response
+                .histogram
+                .iter()
+                .map(|bucket| {
+                    vec![
+                        format_score(bucket.lower),
+                        format_score(bucket.upper),
+                        bucket.count.to_string(),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            Ok(format!(
+                "challenge: {}\ntarget: {}\nmetric: {}\ncount: {}\nmin: {}\nmax: {}\nmean: {}\nquantiles:\n{}\nhistogram:\n{}",
+                response.challenge_name,
+                response.target,
+                response.metric_name,
+                response.count,
+                response
+                    .min
+                    .map(format_score)
+                    .unwrap_or_else(|| "none".to_string()),
+                response
+                    .max
+                    .map(format_score)
+                    .unwrap_or_else(|| "none".to_string()),
+                response
+                    .mean
+                    .map(format_score)
+                    .unwrap_or_else(|| "none".to_string()),
+                render_table(&["Q", "VALUE"], &quantiles),
+                render_table(&["LOWER", "UPPER", "COUNT"], &buckets)
+            ))
+        }
+    }
 }
