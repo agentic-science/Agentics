@@ -157,18 +157,8 @@ pub async fn list_agent_challenges(
     let query = ChallengeCatalogQuery::from_raw(raw_query.as_deref())?;
     let page = query.page()?;
     let filters = query.filters()?;
-    let challenges = Repositories::new(&state.db)
-        .challenges()
-        .list_published(page.limit, page.offset, &filters)
-        .await?;
     Ok(Json(
-        agentics_domain::models::challenge::ChallengeListResponse {
-            items: challenges.items,
-            total_count: challenges.total_count,
-            limit: challenges.limit,
-            offset: challenges.offset,
-            has_more: challenges.has_more,
-        },
+        public_projection::list_challenges(&state.db, page.limit, page.offset, &filters).await?,
     ))
 }
 
@@ -193,18 +183,8 @@ pub async fn list_challenges(
     let query = ChallengeCatalogQuery::from_raw(raw_query.as_deref())?;
     let page = query.page()?;
     let filters = query.filters()?;
-    let challenges = Repositories::new(&state.db)
-        .challenges()
-        .list_published(page.limit, page.offset, &filters)
-        .await?;
     Ok(Json(
-        agentics_domain::models::challenge::ChallengeListResponse {
-            items: challenges.items,
-            total_count: challenges.total_count,
-            limit: challenges.limit,
-            offset: challenges.offset,
-            has_more: challenges.has_more,
-        },
+        public_projection::list_challenges(&state.db, page.limit, page.offset, &filters).await?,
     ))
 }
 

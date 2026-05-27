@@ -9,7 +9,7 @@ use super::ids::{
     optional_solution_submission_id_from_row,
 };
 use agentics_domain::models::challenge::{
-    AdminChallengeListItemDto, ChallengeBundleSpec, ChallengeLifecycleStatus, ChallengeListItemDto,
+    AdminChallengeListItemDto, ChallengeBundleSpec, ChallengeLifecycleStatus,
     PublishChallengeResponse,
 };
 use agentics_domain::models::evaluation::SolutionSubmissionStatus;
@@ -29,11 +29,21 @@ use agentics_error::{Result, ServiceError};
 /// Published challenge list plus the unbounded count for pagination previews.
 #[derive(Debug, Clone)]
 pub struct PublishedChallengeList {
-    pub items: Vec<ChallengeListItemDto>,
+    pub items: Vec<PublishedChallengeListItemRecord>,
     pub total_count: i64,
     pub limit: i64,
     pub offset: i64,
     pub has_more: bool,
+}
+
+/// Published challenge catalog record before public API projection.
+#[derive(Debug, Clone)]
+pub struct PublishedChallengeListItemRecord {
+    pub challenge_name: ChallengeName,
+    pub title: String,
+    pub summary: LocalizedText,
+    pub spec_json: Value,
+    pub moltbook_discussion_url: Option<MoltbookPostUrl>,
 }
 
 /// Search and keyword filters applied before public challenge pagination.
@@ -879,16 +889,11 @@ pub async fn list_published_challenges(
     let items = rows
         .into_iter()
         .map(|r| {
-            let spec: ChallengeBundleSpec = serde_json::from_value(r.try_get("spec_json")?)
-                .map_err(|e| ServiceError::Internal(e.to_string()))?;
-            Ok(ChallengeListItemDto {
+            Ok(PublishedChallengeListItemRecord {
                 challenge_name: challenge_name_from_row(&r, "challenge_name")?,
                 title: r.try_get("title")?,
                 summary: localized_text_from_row(&r, "summary")?,
-                keywords: spec.keywords,
-                starts_at: spec.starts_at,
-                closes_at: spec.closes_at,
-                eligibility: spec.eligibility,
+                spec_json: r.try_get("spec_json")?,
                 moltbook_discussion_url: optional_moltbook_post_url_from_row(
                     &r,
                     "moltbook_discussion_url",

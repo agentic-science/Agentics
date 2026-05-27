@@ -1,10 +1,14 @@
 use agentics_config::Config;
 use agentics_domain::models::challenge::{
-    ChallengeBundleSpec, ChallengeDetailResponse, MoltbookCommunityDto,
+    ChallengeBundleSpec, ChallengeDetailResponse, ChallengeListItemDto, ChallengeListResponse,
+    MoltbookCommunityDto,
 };
 use agentics_domain::models::names::ChallengeName;
 use agentics_error::{Result, ServiceError};
-use agentics_persistence::{ChallengeRecord, Repositories};
+use agentics_persistence::{
+    ChallengeCatalogFilters, ChallengeRecord, PublishedChallengeList,
+    PublishedChallengeListItemRecord, Repositories,
+};
 use agentics_storage::{Storage, StorageWriteIntent};
 
 use crate::storage_errors::storage_error_to_service_error;
@@ -56,5 +60,53 @@ pub fn present_challenge_detail(
         spec: spec.into(),
         statement_markdown: statement.to_string(),
         moltbook,
+    })
+}
+
+/// List published challenges through the service-owned public projection layer.
+pub async fn list_challenges(
+    pool: &sqlx::PgPool,
+    limit: i64,
+    offset: i64,
+    filters: &ChallengeCatalogFilters,
+) -> Result<ChallengeListResponse> {
+    let records = Repositories::new(pool)
+        .challenges()
+        .list_published(limit, offset, filters)
+        .await?;
+    present_challenge_list(records)
+}
+
+/// Present public challenge catalog rows from persistence records.
+fn present_challenge_list(records: PublishedChallengeList) -> Result<ChallengeListResponse> {
+    let items = records
+        .items
+        .into_iter()
+        .map(present_challenge_list_item)
+        .collect::<Result<Vec<_>>>()?;
+    Ok(ChallengeListResponse {
+        items,
+        total_count: records.total_count,
+        limit: records.limit,
+        offset: records.offset,
+        has_more: records.has_more,
+    })
+}
+
+/// Project one published challenge catalog record into its public DTO shape.
+fn present_challenge_list_item(
+    record: PublishedChallengeListItemRecord,
+) -> Result<ChallengeListItemDto> {
+    let spec: ChallengeBundleSpec = serde_json::from_value(record.spec_json)
+        .map_err(|e| ServiceError::Internal(format!("stored challenge spec is invalid: {e}")))?;
+    Ok(ChallengeListItemDto {
+        challenge_name: record.challenge_name,
+        title: record.title,
+        summary: record.summary,
+        keywords: spec.keywords,
+        starts_at: spec.starts_at,
+        closes_at: spec.closes_at,
+        eligibility: spec.eligibility,
+        moltbook_discussion_url: record.moltbook_discussion_url,
     })
 }

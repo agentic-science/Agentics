@@ -37,6 +37,7 @@ pub use crate::db::challenge_creation::{
 pub use crate::db::challenges::{
     ChallengeCatalogFilters, ChallengeMoltbookDiscussionRecord, ChallengeRecord,
     CreateChallengeShortlistRevisionInput, PublishChallengeInput, PublishedChallengeList,
+    PublishedChallengeListItemRecord,
 };
 pub use crate::db::evaluation_jobs::{
     EvaluationJobRecord, QueueEvaluationJobInput, RunnerJobClaimRecord,
