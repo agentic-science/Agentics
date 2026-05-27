@@ -234,7 +234,7 @@ Stop only the dedicated test Docker daemon when finished:
 sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just test-env-down
 ```
 
-## Run A Local Demo Stack
+## Run A Local Dev Stack
 
 Use these commands when you need a local API, worker, and web UI for submitting
 or observing migrated challenges. The containerized dev stack runs Postgres,
@@ -250,7 +250,7 @@ Prerequisites:
 - Docker with a running Docker daemon.
 
 ```bash
-just compose-dev-up
+just dev::up
 ```
 
 Open:
@@ -262,13 +262,13 @@ http://127.0.0.1:3001
 Follow logs from another terminal:
 
 ```bash
-just compose-dev-logs
+just dev::logs
 ```
 
 Stop the stack when finished:
 
 ```bash
-just compose-dev-down
+just dev::down
 ```
 
 ## Documentation

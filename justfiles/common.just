@@ -1,0 +1,11 @@
+repo := justfile_directory()
+compose_dev := "docker compose --env-file deploy/compose/env/dev.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.dev.yml"
+compose_test := "docker compose --env-file deploy/compose/env/test.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.test.yml"
+compose_rustfs_private_backup := "docker compose --env-file deploy/compose/env/rustfs-private-backup.env -f deploy/compose/compose.rustfs-private-backup.yml"
+compose_prod := "cargo run -p agentics-ops --bin agentics-compose-prod --"
+crap_lcov_unit := "target/llvm-cov/agentics-workspace.lcov"
+crap_lcov_integration := "target/llvm-cov/agentics-workspace-with-integration.lcov"
+rustfs_container := "agentics-rustfs-test"
+rustfs_volume := "agentics-rustfs-test-data"
+cpu_runner_image := "agentics-linux-arm64-cpu:ubuntu26.04-local"
+cuda_runner_image := "ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.2.5@sha256:8e3da4a65e297e3b1e9800da001fa2bbac9ed48453a6972117a0c3ad1d1eef13"

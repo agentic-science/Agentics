@@ -43,7 +43,7 @@ if new Python tooling is added.
 The easiest way to run the platform for development is the Compose dev stack:
 
 ```bash
-just compose-dev-up
+just dev::up
 ```
 
 This starts the persistent private-bundle backup RustFS service if needed, then
@@ -61,7 +61,7 @@ containers. Those containers are labeled with `AGENTICS_RUNNER_NAMESPACE`;
 override it only when you intentionally want a different cleanup namespace:
 
 ```bash
-AGENTICS_RUNNER_NAMESPACE=agentics-dev-$USER just compose-dev-up
+AGENTICS_RUNNER_NAMESPACE=agentics-dev-$USER just dev::up
 ```
 
 The Compose project name isolates Compose-owned containers, networks, and
@@ -84,7 +84,7 @@ AGENTICS_COMPOSE_BIND_IP=100.x.y.z \
 AGENTICS_WEB_BASE_URL=http://your-host.tailnet.ts.net:3001 \
 AGENTICS_CORS_ALLOWED_ORIGINS=http://127.0.0.1:3001,http://localhost:3001,http://your-host.tailnet.ts.net:3001 \
 AGENTICS_WEB_ALLOWED_DEV_ORIGINS=your-host.tailnet.ts.net \
-just compose-dev-up
+just dev::up
 ```
 
 Use HTTPS, for example with Tailscale Serve, when testing auth flows over a
@@ -94,13 +94,13 @@ from another machine.
 Stop the dev stack with:
 
 ```bash
-just compose-dev-down
+just dev::down
 ```
 
 Follow logs with:
 
 ```bash
-just compose-dev-logs
+just dev::logs
 ```
 
 For project verification, use the Docker Compose test harness. Prepare the
@@ -157,7 +157,7 @@ asset overlays, and stages any matching workspace in
 test-solution submission:
 
 ```bash
-just compose-dev-up
+just dev::up
 ```
 
 Open the frontend at:
@@ -186,7 +186,7 @@ Build the web frontend:
 
 ## Checks Before Commit
 
-Install the repository hook once with `just setup-hooks`. The hook delegates to
+Install the repository hook once with `just maintenance::setup-hooks`. The hook delegates to
 the Rust `agentics-pre-commit` ops binary, runs independent checks concurrently,
 and always checks the human/agent docs policy and large-file threshold before a
 non-empty commit.
@@ -228,9 +228,9 @@ For S3-compatible storage changes, run the RustFS-backed storage test through
 Docker:
 
 ```bash
-just rustfs-up
-just test-storage-s3
-just rustfs-down
+just storage::rustfs-up
+just storage::s3-test
+just storage::rustfs-down
 ```
 
 The test uses the official `rustfs/rustfs` image and a Docker named volume.
@@ -242,7 +242,7 @@ For Rust change-risk coverage, use `cargo llvm-cov` to write LCOV and
 `cargo crap` to rank complex, under-covered functions:
 
 ```bash
-just rust-risk-unit
+just risk::unit
 ```
 
 This unit/package workflow excludes the `integration-tests` crate so it does
@@ -254,10 +254,10 @@ explicit disposable PostgreSQL database URL and run:
 
 ```bash
 AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics_test' \
-  just rust-risk-integration
+  just risk::integration
 ```
 
-`rust-risk-integration` runs the full Rust test set, including `#[ignore]`
+`just risk::integration` runs the full Rust test set, including `#[ignore]`
 hardware tests, before the CRAP report is produced. It does not skip quota-root
 or CUDA smoke tests, so prepare the quota-sensitive and Linux/NVIDIA hardware test
 environment first. Set `AGENTICS_CRAP_TOP` to change how many ranked functions
@@ -315,7 +315,7 @@ Keep multilingual documents aligned at the feature level.
 ## Shutdown
 
 ```bash
-just compose-dev-down
+just dev::down
 ```
 
 ## References

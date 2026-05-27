@@ -51,7 +51,7 @@ slots，并使用 Docker `storage_opt.size` 约束 container-layer writes。Slot
 会为 setup-heavy Frontier-CS migration rehearsals 额外准备 `8192`、`12288` 和
 `16384` MiB slots。Evaluator-visible run trees 另行限制为
 `8192` 个 files、`1024` 个 directories 和 `32` 层 depth。
-Production runner containers 使用由 `just compose-prod-runner-docker-up` 启动的
+Production runner containers 使用由 `just prod::runner-docker-up` 启动的
 dedicated Docker daemon；它的默认 bridge network 由 host bridge `agentics0` 支撑。
 
 `/srv/agentics-test` 用于开发者运行 quota-sensitive integration tests。它必须用
@@ -92,9 +92,9 @@ bundle archives、unpacked bundles 和 S3 downloads。Stale `_tmp/` durable obje
 RustFS local testing 只通过 Docker：
 
 ```bash
-just rustfs-up
-just test-storage-s3
-just rustfs-down
+just storage::rustfs-up
+just storage::s3-test
+just storage::rustfs-down
 ```
 
 RustFS container 使用官方 `rustfs/rustfs` image 和 Docker named volume。`just
@@ -111,16 +111,16 @@ Agentics durable storage backend：
 
 ```bash
 cp deploy/compose/env/rustfs-private-backup.env.example deploy/compose/env/rustfs-private-backup.env
-just rustfs-private-backup-up
+just storage::backup-up
 ```
 
 它使用 `deploy/compose/compose.rustfs-private-backup.yml`，将 object data 保存在
-`AGENTICS_RUSTFS_BACKUP_DATA_DIR` 下，并且 `just rustfs-private-backup-down` 停止时不会
+`AGENTICS_RUSTFS_BACKUP_DATA_DIR` 下，并且 `just storage::backup-down` 停止时不会
 删除 data。如果 production rehearsal 需要复用备份的 private challenge bundles，需要将
 objects 从这个 backup bucket 复制到该 rehearsal 使用的 storage bucket：
 
 ```bash
-just compose-prod-restore-private-bundles
+just prod::restore-private-bundles
 ```
 
 restore service 会写入 production bucket 中配置的 `AGENTICS_S3_PREFIX` 下，并使用

@@ -225,7 +225,7 @@ AGENTICS_RUNNER_SECURITY_PROFILE=production \
 默认 Docker `bridge` network，供 network-enabled setup phases 使用：
 
 ```bash
-sudo just compose-prod-runner-docker-up
+sudo just prod::runner-docker-up
 ```
 
 配置好 runner Docker daemon 和 loopback XFS mounts 后，先把 probe image preload 到该
@@ -276,7 +276,7 @@ Production Compose 下，请通过 wrapper 运行检查，这样 check 会使用
 相同的 env file 和 Compose project name：
 
 ```bash
-just compose-prod-check
+just prod::check
 ```
 
 Check service 会有意挂载 host Docker socket。API、web、Postgres 和 RustFS 不挂载它。
@@ -303,13 +303,13 @@ MVP rehearsal 最小日志保留策略：
 1. 检查 local Compose services：
 
    ```bash
-   just compose-dev-ps
+   just dev::ps
    ```
 
 2. 检查 migration 和 API logs：
 
    ```bash
-   just compose-dev-logs
+   just dev::logs
    ```
 
 3. 检查 API logs 中的 config validation failures，尤其是非 loopback bind 时使用默认 admin credentials。
@@ -370,13 +370,13 @@ Actions：
 
 Production Compose shutdown 中，runner handling 必须显式选择：
 
-- `just compose-prod-down --runner keep --dry-run` 只报告会被停止的 Compose services，
+- `just prod::down --runner keep --dry-run` 只报告会被停止的 Compose services，
   不做任何修改。
-- `just compose-prod-down --runner keep` 会停止 Compose services，并保留 runner
+- `just prod::down --runner keep` 会停止 Compose services，并保留 runner
   containers。
-- `just compose-prod-down --runner clean --dry-run` 会报告会受影响的 Compose services
+- `just prod::down --runner clean --dry-run` 会报告会受影响的 Compose services
   和精确匹配的 production runner containers，不做任何修改。
-- `just compose-prod-down --runner clean` 会先停止 worker services，只删除带
+- `just prod::down --runner clean` 会先停止 worker services，只删除带
   `agentics.runner=zip_project`、`agentics.runner_scope=hosted-worker` 和
   `agentics.runner_namespace=agentics-prod` labels 的 containers，然后停止剩余 stack。
 

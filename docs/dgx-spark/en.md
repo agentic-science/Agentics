@@ -16,7 +16,7 @@ The DGX Spark hosted target is Linux-only and supports the MVP hosted targets:
 Linux deployment capacity exists.
 
 The production service graph lives in `deploy/compose/compose.prod.yml` and is
-operated through `agentics-compose-prod` or the `compose-prod-*` just recipes.
+operated through `agentics-compose-prod` or the `just prod ...` recipes.
 
 ## Host Inventory
 
@@ -136,10 +136,10 @@ Set `AGENTICS_DGX_PERSIST_FSTAB=true` to append idempotent `/etc/fstab` entries.
 
 Production Compose uses a dedicated runner Docker socket by default. Start it
 with the production ops wrapper after storage preparation and before
-`compose-prod-up`:
+`just prod::up`:
 
 ```bash
-sudo just compose-prod-runner-docker-up
+sudo just prod::runner-docker-up
 ```
 
 The wrapper starts `dockerd` with `/srv/agentics/docker-data-root`, the
@@ -150,7 +150,7 @@ declare `network_access: enabled`, such as CUDA or PyTorch/Triton dependency
 setup. Stop it explicitly when needed:
 
 ```bash
-sudo just compose-prod-runner-docker-down
+sudo just prod::runner-docker-down
 ```
 
 The worker container usually does not need direct GPU access. It needs Docker
@@ -204,20 +204,20 @@ mutating quota-exhaustion probes.
 Start the services through Compose:
 
 ```bash
-just compose-prod-build
-sudo just compose-prod-runner-docker-up
-just compose-prod-up
-just compose-prod-check
+just prod::build
+sudo just prod::runner-docker-up
+just prod::up
+just prod::check
 ```
 
 Stop the stack with an explicit runner policy:
 
 ```bash
-just compose-prod-down --runner keep --dry-run
-just compose-prod-down --runner keep
-just compose-prod-down --runner clean --dry-run
-just compose-prod-down --runner clean
-sudo just compose-prod-runner-docker-down
+just prod::down --runner keep --dry-run
+just prod::down --runner keep
+just prod::down --runner clean --dry-run
+just prod::down --runner clean
+sudo just prod::runner-docker-down
 ```
 
 `--runner clean` removes only matching production runner containers with exact
@@ -280,7 +280,7 @@ Remaining cutover work before public traffic:
   access is intentionally allowed;
 - use Cloudflare edge controls for TLS, routing, and unauthenticated route rate
   limits;
-- use `just compose-prod-down --runner clean --dry-run` before destructive
+- use `just prod::down --runner clean --dry-run` before destructive
   runner cleanup.
 
 Use NVIDIA's DGX Spark documentation as the host and GPU operational reference:

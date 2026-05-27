@@ -16,7 +16,7 @@ DGX Spark hosted target 仅适用于 Linux，并支持 MVP hosted targets：
 前仍是 post-MVP targets。
 
 Production service graph 位于 `deploy/compose/compose.prod.yml`，并通过
-`agentics-compose-prod` 或 `compose-prod-*` just recipes 运维。
+`agentics-compose-prod` 或 `just prod ...` recipes 运维。
 
 ## Host Inventory
 
@@ -133,10 +133,10 @@ writable roots chown 给 `AGENTICS_RUNTIME_UID:AGENTICS_RUNTIME_GID`。设置
 `AGENTICS_DGX_PERSIST_FSTAB=true` 后，它会追加 idempotent `/etc/fstab` entries。
 
 Production Compose 默认使用 dedicated runner Docker socket。在完成 storage
-preparation 后、`compose-prod-up` 前，用 production ops wrapper 启动它：
+preparation 后、`just prod::up` 前，用 production ops wrapper 启动它：
 
 ```bash
-sudo just compose-prod-runner-docker-up
+sudo just prod::runner-docker-up
 ```
 
 Wrapper 会用 `/srv/agentics/docker-data-root`、dedicated
@@ -146,7 +146,7 @@ Wrapper 会用 `/srv/agentics/docker-data-root`、dedicated
 phases 所必需的，例如 CUDA 或 PyTorch/Triton dependency setup。需要时显式停止：
 
 ```bash
-sudo just compose-prod-runner-docker-down
+sudo just prod::runner-docker-down
 ```
 
 Worker container 通常不需要直接获得 GPU access。它需要 Docker socket access，
@@ -199,20 +199,20 @@ quota-exhaustion probes。
 通过 Compose 启动 services：
 
 ```bash
-just compose-prod-build
-sudo just compose-prod-runner-docker-up
-just compose-prod-up
-just compose-prod-check
+just prod::build
+sudo just prod::runner-docker-up
+just prod::up
+just prod::check
 ```
 
 停止 stack 时必须显式选择 runner policy：
 
 ```bash
-just compose-prod-down --runner keep --dry-run
-just compose-prod-down --runner keep
-just compose-prod-down --runner clean --dry-run
-just compose-prod-down --runner clean
-sudo just compose-prod-runner-docker-down
+just prod::down --runner keep --dry-run
+just prod::down --runner keep
+just prod::down --runner clean --dry-run
+just prod::down --runner clean
+sudo just prod::runner-docker-down
 ```
 
 `--runner clean` 只会删除带精确 Agentics labels 的 matching production runner
@@ -275,7 +275,7 @@ Public traffic 前剩余的 cutover work：
   operator-restricted；
 - 使用 Cloudflare edge controls 处理 TLS、routing 和 unauthenticated route rate
   limits；
-- destructive runner cleanup 前先运行 `just compose-prod-down --runner clean --dry-run`。
+- destructive runner cleanup 前先运行 `just prod::down --runner clean --dry-run`。
 
 DGX Spark host 和 GPU 运维应以 NVIDIA 官方文档为准：
 

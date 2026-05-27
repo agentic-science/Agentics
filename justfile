@@ -1,407 +1,52 @@
 set fallback := true
 
-compose_dev := "docker compose --env-file deploy/compose/env/dev.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.dev.yml"
-compose_test := "docker compose --env-file deploy/compose/env/test.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.test.yml"
-compose_rustfs_private_backup := "docker compose --env-file deploy/compose/env/rustfs-private-backup.env -f deploy/compose/compose.rustfs-private-backup.yml"
-compose_prod := "cargo run -p agentics-ops --bin agentics-compose-prod --"
-crap_lcov_unit := "target/llvm-cov/agentics-workspace.lcov"
-crap_lcov_integration := "target/llvm-cov/agentics-workspace-with-integration.lcov"
-rustfs_container := "agentics-rustfs-test"
-rustfs_volume := "agentics-rustfs-test-data"
-cpu_runner_image := "agentics-linux-arm64-cpu:ubuntu26.04-local"
-cuda_runner_image := "ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.2.5@sha256:8e3da4a65e297e3b1e9800da001fa2bbac9ed48453a6972117a0c3ad1d1eef13"
+# Canonical full-suite test workflows.
+mod test 'justfiles/test.just'
 
-# Install Git pre-commit hooks
-setup-hooks:
-    chmod +x .commit-hooks/pre-commit
-    git config core.hooksPath .commit-hooks
-    @echo "Pre-commit hooks installed."
+# Containerized local development stack.
+mod dev 'justfiles/dev.just'
 
-# Start RustFS S3-compatible object storage for local storage tests
-rustfs-up:
-    docker volume create {{rustfs_volume}}
-    docker rm -f {{rustfs_container}} >/dev/null 2>&1 || true
-    @requested_network="${AGENTICS_RUSTFS_DOCKER_NETWORK:-}"; \
-    custom_ports=0; \
-    if [ -n "${AGENTICS_RUSTFS_PORT:-}" ] && [ "${AGENTICS_RUSTFS_PORT}" != "9000" ]; then custom_ports=1; fi; \
-    if [ -n "${AGENTICS_RUSTFS_CONSOLE_PORT:-}" ] && [ "${AGENTICS_RUSTFS_CONSOLE_PORT}" != "9001" ]; then custom_ports=1; fi; \
-    if [ "$requested_network" = "host" ] && [ "$custom_ports" = "1" ]; then \
-      echo "AGENTICS_RUSTFS_DOCKER_NETWORK=host cannot honor custom RustFS ports; unset it or set it to bridge" >&2; \
-      exit 2; \
-    fi; \
-    if [ -z "$requested_network" ] && [ "$custom_ports" = "1" ]; then requested_network="bridge"; fi; \
-    if [ "${requested_network:-host}" = "host" ]; then \
-      network_args="--network host"; \
-    elif [ "$requested_network" = "bridge" ]; then \
-      network_args="-p ${AGENTICS_RUSTFS_PORT:-9000}:9000 -p ${AGENTICS_RUSTFS_CONSOLE_PORT:-9001}:9001"; \
-    else \
-      echo "AGENTICS_RUSTFS_DOCKER_NETWORK must be host or bridge" >&2; \
-      exit 2; \
-    fi; \
-    docker run -d --name {{rustfs_container}} $network_args -v {{rustfs_volume}}:/data -e RUSTFS_ACCESS_KEY="${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}" -e RUSTFS_SECRET_KEY="${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}" -e RUSTFS_CONSOLE_ENABLE=true rustfs/rustfs:latest /data
+# Production Compose operations.
+mod prod 'justfiles/prod.just'
 
-# Stop RustFS test service
-rustfs-down:
-    docker rm -f {{rustfs_container}} >/dev/null 2>&1 || true
+# RustFS, S3, and private-bundle backup helpers.
+mod storage 'justfiles/storage.just'
 
-# Stop RustFS test service and remove its named volume
-rustfs-purge: rustfs-down
-    docker volume rm {{rustfs_volume}} >/dev/null 2>&1 || true
+# Rust component checks.
+mod rust 'justfiles/rust.just'
 
-# Start the persistent RustFS backup store for migrated challenge private bundles
-rustfs-private-backup-up:
-    test -f deploy/compose/env/rustfs-private-backup.env
-    {{compose_rustfs_private_backup}} up -d --remove-orphans
+# Web component checks.
+mod web 'justfiles/web.just'
 
-# Stop the persistent RustFS private bundle backup store without deleting data
-rustfs-private-backup-down:
-    test -f deploy/compose/env/rustfs-private-backup.env
-    {{compose_rustfs_private_backup}} down --remove-orphans
+# Database maintenance helpers.
+mod db 'justfiles/db.just'
 
-# Show persistent RustFS private bundle backup store status
-rustfs-private-backup-ps:
-    test -f deploy/compose/env/rustfs-private-backup.env
-    {{compose_rustfs_private_backup}} ps
+# Rust risk and coverage reports.
+mod risk 'justfiles/risk.just'
 
-# Follow persistent RustFS private bundle backup store logs
-rustfs-private-backup-logs:
-    test -f deploy/compose/env/rustfs-private-backup.env
-    {{compose_rustfs_private_backup}} logs -f
+# Repository maintenance helpers.
+mod maintenance 'justfiles/maintenance.just'
 
-# Run S3 storage tests against the local RustFS service
-test-storage-s3:
-    AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}}" AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}}" AGENTICS_S3_TEST_ENDPOINT="${AGENTICS_S3_TEST_ENDPOINT:-http://127.0.0.1:${AGENTICS_RUSTFS_PORT:-9000}}" AGENTICS_S3_TEST_BUCKET="${AGENTICS_S3_TEST_BUCKET:-agentics-test}" AGENTICS_S3_FORCE_PATH_STYLE="${AGENTICS_S3_FORCE_PATH_STYLE:-true}" cargo test -p agentics-storage rustfs_s3_storage_round_trips_when_configured -- --nocapture
+# CPU-only full test suite
+test-all-cpu:
+    @just test::all-cpu
 
-# Start the containerized development stack with migrated Frontier-CS dev data
-compose-dev-up:
-    test -f deploy/compose/env/rustfs-private-backup.env
-    {{compose_rustfs_private_backup}} up -d --remove-orphans
-    @root="${AGENTICS_DEV_ROOT:-$PWD/.agentics-compose/dev}"; \
-      project="${AGENTICS_COMPOSE_DEV_PROJECT:-agentics-dev-${USER:-local}}"; \
-      namespace="${AGENTICS_RUNNER_NAMESPACE:-$project}"; \
-      mkdir -p "$root/runtime" "$root/phase-mounts" "$root/storage-work" "$root/tmp"; \
-      AGENTICS_REPO_ROOT="$PWD" AGENTICS_DEV_ROOT="$root" AGENTICS_RUNNER_NAMESPACE="$namespace" {{compose_dev}} -p "$project" up --remove-orphans
-
-# Stop the containerized development stack
-compose-dev-down:
-    @root="${AGENTICS_DEV_ROOT:-$PWD/.agentics-compose/dev}"; \
-      project="${AGENTICS_COMPOSE_DEV_PROJECT:-agentics-dev-${USER:-local}}"; \
-      namespace="${AGENTICS_RUNNER_NAMESPACE:-$project}"; \
-      AGENTICS_REPO_ROOT="$PWD" AGENTICS_DEV_ROOT="$root" AGENTICS_RUNNER_NAMESPACE="$namespace" {{compose_dev}} -p "$project" down --remove-orphans
-
-# Show the containerized development stack status
-compose-dev-ps:
-    @root="${AGENTICS_DEV_ROOT:-$PWD/.agentics-compose/dev}"; \
-      project="${AGENTICS_COMPOSE_DEV_PROJECT:-agentics-dev-${USER:-local}}"; \
-      namespace="${AGENTICS_RUNNER_NAMESPACE:-$project}"; \
-      AGENTICS_REPO_ROOT="$PWD" AGENTICS_DEV_ROOT="$root" AGENTICS_RUNNER_NAMESPACE="$namespace" {{compose_dev}} -p "$project" ps
-
-# Follow logs from the containerized development stack
-compose-dev-logs:
-    @root="${AGENTICS_DEV_ROOT:-$PWD/.agentics-compose/dev}"; \
-      project="${AGENTICS_COMPOSE_DEV_PROJECT:-agentics-dev-${USER:-local}}"; \
-      namespace="${AGENTICS_RUNNER_NAMESPACE:-$project}"; \
-      AGENTICS_REPO_ROOT="$PWD" AGENTICS_DEV_ROOT="$root" AGENTICS_RUNNER_NAMESPACE="$namespace" {{compose_dev}} -p "$project" logs -f
-
-# Alias for the old local demo workflow; dev is the single local rehearsal path.
-demo-up: compose-dev-up
-
-# Alias for the old local demo workflow; dev is the single local rehearsal path.
-demo-down: compose-dev-down
-
-# Alias for the old local demo workflow; dev is the single local rehearsal path.
-demo-logs: compose-dev-logs
-
-# Build production Compose images
-compose-prod-build:
-    {{compose_prod}} build
-
-# Start the production Compose stack
-compose-prod-up:
-    {{compose_prod}} up
-
-# Start the dedicated production runner Docker daemon
-compose-prod-runner-docker-up *args:
-    {{compose_prod}} runner-docker-up {{args}}
-
-# Stop the dedicated production runner Docker daemon
-compose-prod-runner-docker-down *args:
-    {{compose_prod}} runner-docker-down {{args}}
-
-# Stop the production Compose stack; requires --runner keep or --runner clean
-compose-prod-down *args:
-    {{compose_prod}} down {{args}}
-
-# Follow production Compose logs
-compose-prod-logs:
-    {{compose_prod}} logs
-
-# Show production Compose status
-compose-prod-ps:
-    {{compose_prod}} ps
-
-# Run production checks from the Compose check service
-compose-prod-check:
-    {{compose_prod}} check
-
-# Copy backed-up migrated challenge private bundles into production RustFS
-compose-prod-restore-private-bundles:
-    {{compose_prod}} restore-private-bundles
-
-# Clean production runner containers by exact namespace labels
-compose-prod-clean-runners *args:
-    {{compose_prod}} clean-runners {{args}}
+# Full test suite, including ignored GPU/CUDA tests
+test-all:
+    @just test::all
 
 # Start the dedicated Docker daemon used by containerized integration tests
-_compose-test-docker-up:
-    @set -eu; \
-      root="${AGENTICS_TEST_ROOT:-/srv/agentics-test}"; \
-      socket="${AGENTICS_TEST_DOCKER_SOCKET_PATH:-$root/docker.sock}"; \
-      host="${AGENTICS_TEST_DOCKER_HOST:-unix://$socket}"; \
-      data_root="${AGENTICS_TEST_DOCKER_DATA_ROOT:-$root/docker-data-root}"; \
-      exec_root="${AGENTICS_TEST_DOCKER_EXEC_ROOT:-$root/docker-exec}"; \
-      pidfile="${AGENTICS_TEST_DOCKER_PIDFILE:-$root/docker.pid}"; \
-      logfile="${AGENTICS_TEST_DOCKER_LOG:-$root/dockerd.log}"; \
-      if docker --host "$host" info >/dev/null 2>&1; then \
-        printf 'Dedicated test Docker daemon is already reachable at %s.\n' "$host"; \
-        exit 0; \
-      fi; \
-      if [ "$(id -u)" -ne 0 ]; then \
-        printf 'Starting the dedicated test Docker daemon requires root. Run: sudo env AGENTICS_TEST_ROOT=%s just test-env-up\n' "$root" >&2; \
-        exit 2; \
-      fi; \
-      if [ ! -d "$data_root" ]; then \
-        printf 'Prepared Docker data root is required at %s. Run agentics-prepare-dgx-spark-test-storage as root first.\n' "$data_root" >&2; \
-        exit 2; \
-      fi; \
-      socket_dir="$(dirname "$socket")"; \
-      mkdir -p "$socket_dir" "$exec_root"; \
-      rm -f "$socket" "$pidfile"; \
-      group="${AGENTICS_TEST_DOCKER_GROUP:-$(id -gn "${SUDO_USER:-$(id -un)}")}"; \
-      nohup dockerd \
-        --data-root "$data_root" \
-        --exec-root "$exec_root" \
-        --host "unix://$socket" \
-        --pidfile "$pidfile" \
-        --storage-driver overlay2 \
-        --bridge none \
-        --iptables=true \
-        --live-restore=false \
-        --log-driver json-file \
-        --log-opt max-file=3 \
-        --log-opt max-size=10m \
-        --containerd-namespace agentics-test \
-        --containerd-plugins-namespace agentics-test-plugins \
-        --group "$group" \
-        >"$logfile" 2>&1 & \
-      for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
-        if docker --host "$host" info >/dev/null 2>&1; then \
-          printf 'Dedicated test Docker daemon is ready at %s.\n' "$host"; \
-          exit 0; \
-        fi; \
-        sleep 1; \
-      done; \
-      printf 'Dedicated test Docker daemon did not become ready. Last log lines from %s:\n' "$logfile" >&2; \
-      tail -n 40 "$logfile" >&2 || true; \
-      exit 1
+test-env-up:
+    @just test::env-up
 
 # Stop the dedicated Docker daemon used by containerized integration tests
-_compose-test-docker-down:
-    @set -eu; \
-      root="${AGENTICS_TEST_ROOT:-/srv/agentics-test}"; \
-      socket="${AGENTICS_TEST_DOCKER_SOCKET_PATH:-$root/docker.sock}"; \
-      pidfile="${AGENTICS_TEST_DOCKER_PIDFILE:-$root/docker.pid}"; \
-      if [ "$(id -u)" -ne 0 ]; then \
-        printf 'Stopping the dedicated test Docker daemon requires root. Run: sudo env AGENTICS_TEST_ROOT=%s just test-env-down\n' "$root" >&2; \
-        exit 2; \
-      fi; \
-      if [ ! -f "$pidfile" ]; then \
-        rm -f "$socket"; \
-        printf 'No dedicated test Docker pidfile found at %s.\n' "$pidfile"; \
-        exit 0; \
-      fi; \
-      pid="$(cat "$pidfile")"; \
-      if kill -0 "$pid" >/dev/null 2>&1; then \
-        kill "$pid"; \
-        for _ in 1 2 3 4 5 6 7 8 9 10; do \
-          if ! kill -0 "$pid" >/dev/null 2>&1; then break; fi; \
-          sleep 1; \
-        done; \
-        if kill -0 "$pid" >/dev/null 2>&1; then \
-          printf 'Dedicated test Docker daemon pid %s did not stop; inspect it before retrying.\n' "$pid" >&2; \
-          exit 1; \
-        fi; \
-      fi; \
-      rm -f "$pidfile" "$socket"; \
-      printf 'Dedicated test Docker daemon stopped.\n'
-
-# Start the dedicated Docker daemon used by containerized integration tests
-test-env-up: _compose-test-docker-up
-
-# Stop the dedicated Docker daemon used by containerized integration tests
-test-env-down: _compose-test-docker-down
+test-env-down:
+    @just test::env-down
 
 # Check the CPU-only full-suite test environment
 test-env-status-cpu:
-    @set -eu; \
-      root="${AGENTICS_TEST_ROOT:-/srv/agentics-test}"; \
-      socket="${AGENTICS_TEST_DOCKER_SOCKET_PATH:-$root/docker.sock}"; \
-      host="${AGENTICS_TEST_DOCKER_HOST:-unix://$socket}"; \
-      runner_image="${AGENTICS_TEST_RUNNER_IMAGE:-{{cpu_runner_image}}}"; \
-      status=0; \
-      pass() { printf 'PASS %s - %s\n' "$1" "$2"; }; \
-      fail() { printf 'FAIL %s - %s\n' "$1" "$2" >&2; status=1; }; \
-      if [ "$(uname -s)" = "Linux" ]; then pass "Linux host" "$(uname -srm)"; else fail "Linux host" "test-all-cpu requires Linux"; fi; \
-      if docker compose version >/dev/null 2>&1; then pass "Docker Compose" "$(docker compose version --short 2>/dev/null || docker compose version)"; else fail "Docker Compose" "install Docker Compose"; fi; \
-      if [ -d "$root/runtime" ] && [ -d "$root/phase-mounts" ] && [ -d "$root/docker-data-root" ]; then pass "test storage" "$root is prepared"; else fail "test storage" "run: sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage agentics-prepare-dgx-spark-test-storage"; fi; \
-      if docker --host "$host" info >/dev/null 2>&1; then pass "dedicated test Docker" "$host is reachable"; else fail "dedicated test Docker" "run: sudo env AGENTICS_TEST_ROOT=$root just test-env-up"; fi; \
-      if docker --host "$host" image inspect "$runner_image" >/dev/null 2>&1; then \
-        pass "CPU runner image" "$runner_image is loaded in dedicated test Docker"; \
-      elif docker image inspect "$runner_image" >/dev/null 2>&1; then \
-        pass "CPU runner image" "$runner_image is available on the default daemon and will be loaded"; \
-      elif [ -d docker/runner-images/linux-arm64-cpu ]; then \
-        pass "CPU runner image" "$runner_image can be built from docker/runner-images/linux-arm64-cpu"; \
-      else \
-        fail "CPU runner image" "$runner_image is missing and no build context was found"; \
-      fi; \
-      exit "$status"
+    @just test::env-status-cpu
 
 # Check the full GPU test environment
-test-env-status: test-env-status-cpu
-    @set -eu; \
-      root="${AGENTICS_TEST_ROOT:-/srv/agentics-test}"; \
-      socket="${AGENTICS_TEST_DOCKER_SOCKET_PATH:-$root/docker.sock}"; \
-      host="${AGENTICS_TEST_DOCKER_HOST:-unix://$socket}"; \
-      cuda_image="${AGENTICS_TEST_CUDA_IMAGE:-{{cuda_runner_image}}}"; \
-      status=0; \
-      pass() { printf 'PASS %s - %s\n' "$1" "$2"; }; \
-      fail() { printf 'FAIL %s - %s\n' "$1" "$2" >&2; status=1; }; \
-      if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then pass "NVIDIA GPU" "$(nvidia-smi -L | head -n 1)"; else fail "NVIDIA GPU" "nvidia-smi must see at least one GPU"; fi; \
-      if ! docker --host "$host" image inspect "$cuda_image" >/dev/null 2>&1; then \
-        if docker image inspect "$cuda_image" >/dev/null 2>&1; then \
-          tmpdir="$root/runtime/test-env-status"; \
-          mkdir -p "$tmpdir"; \
-          image_tar="$tmpdir/cuda-runner-image.tar"; \
-          docker image save -o "$image_tar" "$cuda_image"; \
-          docker --host "$host" image load -i "$image_tar" >/dev/null; \
-          rm -f "$image_tar"; \
-        else \
-          if ! docker --host "$host" pull "$cuda_image" >/dev/null; then \
-            fail "CUDA runner image" "$cuda_image is not loaded locally and could not be pulled by the dedicated test Docker daemon"; \
-          fi; \
-        fi; \
-      fi; \
-      if docker --host "$host" image inspect "$cuda_image" >/dev/null 2>&1; then pass "CUDA runner image" "$cuda_image is loaded in dedicated test Docker"; else fail "CUDA runner image" "$cuda_image is not available"; fi; \
-      if docker --host "$host" run --rm --gpus 1 --platform linux/arm64 -e AGENTICS_GPU_SMOKE_REQUIRE_DEVICE=1 "$cuda_image" /opt/agentics/smoke.sh >/dev/null; then pass "Docker GPU runtime" "device request smoke passed"; else fail "Docker GPU runtime" "dedicated test Docker cannot run the CUDA smoke image with --gpus 1"; fi; \
-      exit "$status"
-
-# Run non-ignored integration tests in the containerized test harness
-compose-test-integration-cpu:
-    @just _compose-test-integration false
-
-# Run all integration tests, including ignored GPU/CUDA tests, in the containerized test harness
-compose-test-integration:
-    @just _compose-test-integration true
-
-_compose-test-integration include_ignored:
-    @set -eu; \
-      run_id="${AGENTICS_COMPOSE_TEST_RUN_ID:-$(date +%Y%m%d%H%M%S)-$$}"; \
-      project="${AGENTICS_COMPOSE_TEST_PROJECT:-agentics-test-$run_id}"; \
-      root="${AGENTICS_TEST_ROOT:-/srv/agentics-test}"; \
-      runtime_root="${AGENTICS_TEST_RUNNER_RUNTIME_ROOT:-$root/runtime/$run_id}"; \
-      phase_root="${AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT:-$root/phase-mounts}"; \
-      tmpdir="${AGENTICS_TEST_TMPDIR:-$runtime_root/tmp}"; \
-      docker_socket="${AGENTICS_TEST_DOCKER_SOCKET_PATH:-$root/docker.sock}"; \
-      docker_host="${AGENTICS_TEST_DOCKER_HOST:-unix://$docker_socket}"; \
-      runner_image="${AGENTICS_TEST_RUNNER_IMAGE:-{{cpu_runner_image}}}"; \
-      cuda_image="${AGENTICS_TEST_CUDA_IMAGE:-{{cuda_runner_image}}}"; \
-      if [ ! -d "$root/runtime" ] || [ ! -d "$phase_root" ]; then \
-        printf 'Prepared test root is required at %s. Run agentics-prepare-dgx-spark-test-storage as root before compose-test-integration.\n' "$root" >&2; \
-        exit 2; \
-      fi; \
-      case "$docker_host" in unix://*) ;; *) printf 'compose-test-integration requires a Unix AGENTICS_TEST_DOCKER_HOST, got %s.\n' "$docker_host" >&2; exit 2 ;; esac; \
-      if ! docker --host "$docker_host" info >/dev/null 2>&1; then \
-        printf 'Dedicated test Docker daemon is required at %s. Run sudo env AGENTICS_TEST_ROOT=%s just test-env-up first.\n' "$docker_host" "$root" >&2; \
-        exit 2; \
-      fi; \
-      mkdir -p "$runtime_root" "$tmpdir"; \
-      if ! docker --host "$docker_host" image inspect "$runner_image" >/dev/null 2>&1; then \
-        if ! docker image inspect "$runner_image" >/dev/null 2>&1; then \
-          docker build --platform linux/arm64 -t "$runner_image" docker/runner-images/linux-arm64-cpu; \
-        fi; \
-        image_tar="$runtime_root/runner-image.tar"; \
-        docker image save -o "$image_tar" "$runner_image"; \
-        docker --host "$docker_host" image load -i "$image_tar" >/dev/null; \
-        rm -f "$image_tar"; \
-      fi; \
-      if [ "{{include_ignored}}" = "true" ] && ! docker --host "$docker_host" image inspect "$cuda_image" >/dev/null 2>&1; then \
-        if docker image inspect "$cuda_image" >/dev/null 2>&1; then \
-          image_tar="$runtime_root/cuda-runner-image.tar"; \
-          docker image save -o "$image_tar" "$cuda_image"; \
-          docker --host "$docker_host" image load -i "$image_tar" >/dev/null; \
-          rm -f "$image_tar"; \
-        else \
-          docker --host "$docker_host" pull "$cuda_image" >/dev/null; \
-        fi; \
-      fi; \
-      status=0; \
-      AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" AGENTICS_COMPOSE_TEST_RUN_ID="$run_id" AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED="{{include_ignored}}" AGENTICS_S3_PREFIX="test/$run_id" {{compose_test}} -p "$project" up --abort-on-container-exit --exit-code-from tests || status=$?; \
-      AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" AGENTICS_COMPOSE_TEST_RUN_ID="$run_id" AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED="{{include_ignored}}" AGENTICS_S3_PREFIX="test/$run_id" {{compose_test}} -p "$project" down -v --remove-orphans; \
-      exit "$status"
-
-# Rust package tests excluding the Compose-backed integration harness
-_rust-package-tests:
-    cargo test --workspace --exclude integration-tests
-
-# Rust coverage + CRAP report from unit and package tests only
-rust-risk-unit:
-    mkdir -p target/llvm-cov
-    cargo llvm-cov --workspace --exclude integration-tests --lcov --output-path {{crap_lcov_unit}}
-    cargo crap --workspace --lcov {{crap_lcov_unit}} --top "${AGENTICS_CRAP_TOP:-30}"
-
-# Rust coverage + CRAP report including all integration tests
-rust-risk-integration:
-    mkdir -p target/llvm-cov
-    @database_url="${DATABASE_URL:-${AGENTICS_DATABASE_URL:-}}"; \
-      if [ -z "$database_url" ]; then \
-        printf 'DATABASE_URL or AGENTICS_DATABASE_URL must be set for integration coverage.\n' >&2; \
-        exit 2; \
-      fi; \
-      DATABASE_URL="$database_url" cargo llvm-cov --workspace --lcov --output-path {{crap_lcov_integration}} -- --include-ignored
-    cargo crap --workspace --lcov {{crap_lcov_integration}} --top "${AGENTICS_CRAP_TOP:-30}"
-
-# Frontend schema, lint, typecheck, and unit tests
-_web-check:
-    cd frontends/web && bun run generate:schemas:check && bun run lint && bunx tsc --noEmit && bun test
-
-# CPU-only full test suite
-test-all-cpu: test-env-status-cpu cargo-fmt-check cargo-clippy _rust-package-tests _web-check compose-test-integration-cpu
-
-# Full test suite, including ignored GPU/CUDA tests
-test-all: test-env-status cargo-fmt-check cargo-clippy _rust-package-tests _web-check compose-test-integration
-
-# Check Rust formatting
-cargo-fmt-check:
-    cargo fmt --all -- --check
-
-cargo-clippy:
-    cargo clippy --workspace --all-targets -- -D warnings
-
-# Lint frontend
-web-lint:
-    cd frontends/web && bun run lint
-
-web-schema-check:
-    cd frontends/web && bun run generate:schemas:check
-
-web-format:
-    cd frontends/web && bun run format
-
-# Prepare sqlx offline queries
-sqlx-prepare:
-    cargo sqlx prepare --workspace
-
-# Clean build artifacts
-clean:
-    cd backend && cargo clean
-    cd frontends/web && rm -rf .next
+test-env-status:
+    @just test::env-status

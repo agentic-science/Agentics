@@ -53,11 +53,11 @@ Production Compose defaults and placeholders live in
 
 | Service | Command | Default port |
 | --- | --- | --- |
-| Postgres | `just compose-dev-up` service `postgres` | `55432` host port in `dev.env.example` |
-| API | `just compose-dev-up` service `api` | `${AGENTICS_API_PORT:-3100}` |
-| Worker | `just compose-dev-up` service `worker` | none |
-| Web | `just compose-dev-up` service `web` | `${AGENTICS_WEB_PORT:-3001}` |
-| RustFS | `just compose-dev-up` and `just compose-prod-up` service `rustfs` | dev host ports `9000`/`9001`; production internal `9000`/`9001` |
+| Postgres | `just dev::up` service `postgres` | `55432` host port in `dev.env.example` |
+| API | `just dev::up` service `api` | `${AGENTICS_API_PORT:-3100}` |
+| Worker | `just dev::up` service `worker` | none |
+| Web | `just dev::up` service `web` | `${AGENTICS_WEB_PORT:-3001}` |
+| RustFS | `just dev::up` and `just prod::up` service `rustfs` | dev host ports `9000`/`9001`; production internal `9000`/`9001` |
 
 ## Environment
 
@@ -107,7 +107,7 @@ For local development:
 1. Start the Compose dev stack:
 
    ```bash
-   just compose-dev-up
+   just dev::up
    ```
 
    The recipe also starts the persistent private-bundle backup RustFS service
@@ -118,13 +118,13 @@ For local development:
 2. Follow logs from another terminal:
 
    ```bash
-   just compose-dev-logs
+   just dev::logs
    ```
 
 3. Open `http://127.0.0.1:3001`.
 4. Run `agentics-check-local-mvp` with `AGENTICS_WEB_BASE_URL` and admin
    credentials when you want web and admin checks.
-5. Stop the stack with `just compose-dev-down`.
+5. Stop the stack with `just dev::down`.
 
 For production Compose:
 
@@ -157,9 +157,9 @@ For production Compose:
 3. Build and start:
 
    ```bash
-   just compose-prod-build
-   sudo just compose-prod-runner-docker-up
-   just compose-prod-up
+   just prod::build
+   sudo just prod::runner-docker-up
+   just prod::up
    ```
 
    Pre-MVP migration history may be squashed. When a deployment picks up a new
@@ -171,25 +171,25 @@ For production Compose:
 4. Run production checks and inspect logs:
 
    ```bash
-   just compose-prod-check
-   just compose-prod-logs
+   just prod::check
+   just prod::logs
    ```
 
 5. Stop explicitly:
 
    ```bash
-   just compose-prod-down --runner keep --dry-run
-   just compose-prod-down --runner keep
-   just compose-prod-down --runner clean --dry-run
-   just compose-prod-down --runner clean
-   sudo just compose-prod-runner-docker-down
+   just prod::down --runner keep --dry-run
+   just prod::down --runner keep
+   just prod::down --runner clean --dry-run
+   just prod::down --runner clean
+   sudo just prod::runner-docker-down
    ```
 
 `--runner keep --dry-run` and `--runner clean --dry-run` never stop services.
 `--runner keep` stops Compose services and leaves runner containers alone.
 `--runner clean` stops worker services first, removes only production runner
 containers with exact Agentics labels, then stops the rest of the Compose stack.
-`compose-prod-runner-docker-up` and `compose-prod-runner-docker-down` manage the
+`just prod::runner-docker-up` and `just prod::runner-docker-down` manage the
 dedicated runner Docker daemon at `AGENTICS_DOCKER_SOCKET_PATH`; keep it running
 while workers need to create runner containers.
 
@@ -247,7 +247,7 @@ compose service:
 
 ```bash
 cp deploy/compose/env/rustfs-private-backup.env.example deploy/compose/env/rustfs-private-backup.env
-just rustfs-private-backup-up
+just storage::backup-up
 ```
 
 The default store listens on `9100` for S3 and `9101` for the RustFS console,
@@ -259,7 +259,7 @@ this backup store into the rehearsal storage before reusing previously migrated
 challenge metadata:
 
 ```bash
-just compose-prod-restore-private-bundles
+just prod::restore-private-bundles
 ```
 
 The restore command temporarily joins the backup RustFS container to the
@@ -267,7 +267,7 @@ production Compose network, then runs a one-shot production Compose service
 with access to both private RustFS endpoints. It copies objects into the
 production bucket under `AGENTICS_S3_PREFIX` and the logical
 `private-bundle-backups/` prefix, skips existing byte-identical objects, and
-verifies SHA-256 after each upload. `just rustfs-private-backup-down` stops the
+verifies SHA-256 after each upload. `just storage::backup-down` stops the
 backup container without deleting objects.
 
 Credentials come only from the AWS SDK provider chain, for example environment
@@ -345,9 +345,9 @@ migration is explicitly reversible and the storage snapshot is from the same
 point in time. The project does not maintain down migrations; rollback is a
 database and durable-storage snapshot restore.
 
-For production Compose, use `just compose-prod-down --runner keep` for ordinary
+For production Compose, use `just prod::down --runner keep` for ordinary
 binary or image rollback when running evaluations can be allowed to reconcile
-later. Use `just compose-prod-down --runner clean` only when the operator has
+later. Use `just prod::down --runner clean` only when the operator has
 chosen to terminate matching production runner containers. Dry-run forms do not
 stop services.
 
@@ -362,7 +362,7 @@ agentics-check-local-mvp
 For production Compose, run:
 
 ```bash
-just compose-prod-check
+just prod::check
 ```
 
 Then perform a CLI smoke path using the root `README.md` submitter flow or

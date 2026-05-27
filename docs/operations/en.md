@@ -232,7 +232,7 @@ wrapper configures a default Docker `bridge` network for network-enabled setup
 phases:
 
 ```bash
-sudo just compose-prod-runner-docker-up
+sudo just prod::runner-docker-up
 ```
 
 After the configured runner Docker daemon and loopback XFS mounts are ready,
@@ -285,7 +285,7 @@ For production Compose, use the wrapper so checks run with the same env file and
 Compose project name as the deployed stack:
 
 ```bash
-just compose-prod-check
+just prod::check
 ```
 
 The check service mounts the host Docker socket intentionally. API, web,
@@ -315,13 +315,13 @@ Minimum log retention for MVP rehearsal:
 1. Check the local Compose services:
 
    ```bash
-   just compose-dev-ps
+   just dev::ps
    ```
 
 2. Check migration and API logs:
 
    ```bash
-   just compose-dev-logs
+   just dev::logs
    ```
 
 3. Check API logs for config validation failures, especially default admin credentials on non-loopback binds.
@@ -385,14 +385,14 @@ Actions:
 
 For production Compose shutdown, runner handling is explicit:
 
-- `just compose-prod-down --runner keep --dry-run` reports Compose services
+- `just prod::down --runner keep --dry-run` reports Compose services
   that would be stopped and changes nothing.
-- `just compose-prod-down --runner keep` stops Compose services and keeps
+- `just prod::down --runner keep` stops Compose services and keeps
   runner containers.
-- `just compose-prod-down --runner clean --dry-run` reports Compose services
+- `just prod::down --runner clean --dry-run` reports Compose services
   and exact production runner containers that would be affected and changes
   nothing.
-- `just compose-prod-down --runner clean` stops worker services first, removes
+- `just prod::down --runner clean` stops worker services first, removes
   only containers labelled `agentics.runner=zip_project`,
   `agentics.runner_scope=hosted-worker`, and
   `agentics.runner_namespace=agentics-prod`, then stops the rest of the stack.

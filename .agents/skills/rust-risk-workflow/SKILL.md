@@ -16,7 +16,7 @@ integration workflow, including tests marked `#[ignore]`.
 2. For a fast local signal that needs no database or DGX quota root, run:
 
    ```bash
-   just rust-risk-unit
+   just risk::unit
    ```
 
    The LCOV output is `target/llvm-cov/agentics-workspace.lcov`.
@@ -27,7 +27,7 @@ integration workflow, including tests marked `#[ignore]`.
 
    ```bash
    AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics_test' \
-     just rust-risk-integration
+     just risk::integration
    ```
 
    If the user or environment already provides `DATABASE_URL` or
@@ -39,7 +39,7 @@ integration workflow, including tests marked `#[ignore]`.
 4. Use `AGENTICS_CRAP_TOP=<n>` to limit or expand the ranked report:
 
    ```bash
-   AGENTICS_CRAP_TOP=20 just rust-risk-integration
+   AGENTICS_CRAP_TOP=20 just risk::integration
    ```
 
 ## Direct Commands
@@ -79,7 +79,7 @@ that failure directly instead of dropping `--include-ignored`.
 
 ## Interpretation
 
-- Prefer `rust-risk-integration` for API, DB, worker, and runner decisions. The
+- Prefer `just risk::integration` for API, DB, worker, and runner decisions. The
   unit-only report can mark integration-covered production code as 0% covered.
 - Report the top offenders with CRAP score, cyclomatic complexity, coverage
   percentage, function name, and file/line.

@@ -53,7 +53,7 @@ The MVP production Compose environment extends the prepared classes with `8192`,
 Evaluator-visible run trees are separately capped at `8192` files, `1024`
 directories, and depth `32`.
 Production runner containers use a dedicated Docker daemon started by
-`just compose-prod-runner-docker-up`; its default bridge network is backed by
+`just prod::runner-docker-up`; its default bridge network is backed by
 the host bridge `agentics0`.
 
 The `/srv/agentics-test` root is for developer-run quota-sensitive integration
@@ -98,13 +98,13 @@ Current object-key prefixes:
 RustFS local testing uses Docker only:
 
 ```bash
-just rustfs-up
-just test-storage-s3
-just rustfs-down
+just storage::rustfs-up
+just storage::s3-test
+just storage::rustfs-down
 ```
 
 The RustFS container uses the official `rustfs/rustfs` image and a Docker named
-volume. The `just rustfs-up` helper defaults to `--network host` because some
+volume. The `just storage::rustfs-up` helper defaults to `--network host` because some
 DGX Docker bridge profiles are intentionally disabled. If
 `AGENTICS_RUSTFS_PORT` or `AGENTICS_RUSTFS_CONSOLE_PORT` is set to a non-default
 port and `AGENTICS_RUSTFS_DOCKER_NETWORK` is unset, the helper switches to
@@ -118,17 +118,17 @@ helper and is not the Agentics durable storage backend:
 
 ```bash
 cp deploy/compose/env/rustfs-private-backup.env.example deploy/compose/env/rustfs-private-backup.env
-just rustfs-private-backup-up
+just storage::backup-up
 ```
 
 It uses `deploy/compose/compose.rustfs-private-backup.yml`, keeps object data
 under `AGENTICS_RUSTFS_BACKUP_DATA_DIR`, and stops without deleting data through
-`just rustfs-private-backup-down`. Copy objects from this backup bucket into the
+`just storage::backup-down`. Copy objects from this backup bucket into the
 storage bucket used by a production rehearsal when you want to reuse backed-up
 private challenge bundles:
 
 ```bash
-just compose-prod-restore-private-bundles
+just prod::restore-private-bundles
 ```
 
 The restore service writes into the production bucket under the configured
