@@ -13,7 +13,7 @@
     "generate:schemas:check": "bun scripts/generate-api-schemas.mjs --check"
   },
   "dependencies": {
-    "framer-motion": "^12.39.0",
+    "framer-motion": "^12.40.0",
     "geist": "^1.7.1",
     "gifenc": "^1.0.3",
     "lucide-react": "^1.16.0",
