@@ -91,11 +91,11 @@ fs2 = "0.4"
 nutype = { version = "0.7", features = ["serde"] }
 garde = { version = "0.23.0", default-features = false, features = ["derive"] }
 gix-hash = { version = "0.25", features = ["sha1", "sha256"] }
-oci-spec = { version = "0.9", default-features = false, features = ["distribution", "image"] }
+oci-spec = { version = "0.10", default-features = false, features = ["distribution", "image"] }
 governor = "0.10"
 futures = "0.3"
 tempfile = "3"
-nix = { version = "0.30", features = ["fs", "process", "signal", "user"] }
+nix = { version = "0.31", features = ["fs", "process", "signal", "user"] }
 sha2 = "0.11"
 rand = "0.10"
 hex = "0.4"
