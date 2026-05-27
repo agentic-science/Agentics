@@ -29,12 +29,12 @@ use agentics_domain::models::names::{ChallengeKeyword, ChallengeName, MetricName
 use agentics_domain::models::pioneer_codes::PioneerCode;
 use agentics_domain::models::pioneer_codes::PioneerCodeStatus;
 use agentics_domain::models::request::{
-    AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
-    AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse, AgentStatus,
-    CreatePioneerCodeRequest, CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse,
-    DisableAgentResponse, EvaluationJobResponse, LeaderboardResponse, PioneerCodeDetailResponse,
-    PioneerCodeListResponse, PublicSolutionSubmissionListResponse, PublicStatsResponse,
-    RankingContextResponse, RegisterAgentRequest, RegisterAgentResponse, RevokePioneerCodeResponse,
+    AdminCapacityResponse, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
+    AgentStatus, CreatePioneerCodeRequest, CreateSolutionSubmissionRequest,
+    CreateSolutionSubmissionResponse, DisableAgentResponse, EvaluationJobResponse,
+    LeaderboardResponse, PioneerCodeDetailResponse, PioneerCodeListResponse,
+    PublicSolutionSubmissionListResponse, PublicStatsResponse, RankingContextResponse,
+    RegisterAgentRequest, RegisterAgentResponse, RevokePioneerCodeResponse,
     ScoreDistributionResponse, SolutionSubmissionArtifactResponse, SolutionSubmissionLogsResponse,
     SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
@@ -52,8 +52,6 @@ use crate::extractors::{AdminAuth, AgentAuth, SolutionSubmissionPath, ValidatedJ
 use crate::pioneer_code_security::{is_invalid_pioneer_code, reject_failed_pioneer_code};
 use crate::presenters;
 use crate::state::AppState;
-
-const SUBMISSION_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 
 /// Parses a boundary string into a domain type and converts validation failures to API errors.
 fn parse_request_value<T>(raw: &str) -> Result<T>

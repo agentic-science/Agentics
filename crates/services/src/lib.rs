@@ -15,6 +15,7 @@
     )
 )]
 
+pub mod admin;
 pub mod auth;
 pub mod challenge_drafts;
 pub mod challenge_metadata;

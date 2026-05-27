@@ -3,19 +3,20 @@
 use chrono::{DateTime, Utc};
 
 use super::{
-    AdminAuth, AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto,
-    AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse, AgentId,
-    AgentPioneerCodeId, AgentStatus, AppState, ChallengeName, CreatePioneerCodeRequest,
-    DisableAgentResponse, EvaluationJobResponse, EvaluationJobStatus, Json, Path, PioneerCode,
-    PioneerCodeDetailResponse, PioneerCodeListResponse, PioneerCodeStatus,
-    QueueEvaluationJobRequest, Result, RevokePioneerCodeResponse, SUBMISSION_QUOTA_WINDOW_SECONDS,
-    ScoringMode, ServiceError, SolutionSubmissionPath, State, StatusCode, ValidatedJson, auth,
-    challenge_metadata, evaluation_lifecycle, parse_request_value, presenters,
+    AdminAuth, AdminCapacityResponse, AdminServiceHeartbeatListResponse,
+    AdminSolutionSubmissionListResponse, AgentId, AgentPioneerCodeId, AgentStatus, AppState,
+    ChallengeName, CreatePioneerCodeRequest, DisableAgentResponse, EvaluationJobResponse,
+    EvaluationJobStatus, Json, Path, PioneerCode, PioneerCodeDetailResponse,
+    PioneerCodeListResponse, PioneerCodeStatus, QueueEvaluationJobRequest, Result,
+    RevokePioneerCodeResponse, ScoringMode, ServiceError, SolutionSubmissionPath, State,
+    StatusCode, ValidatedJson, auth, challenge_metadata, evaluation_lifecycle, parse_request_value,
+    presenters,
 };
 use agentics_domain::models::request::{
     ChallengeMoltbookDiscussionResponse, SetChallengeMoltbookDiscussionRequest,
 };
 use agentics_persistence::{CreatePioneerCodeInput, Repositories};
+use agentics_services::admin as admin_service;
 
 // ---------------------------------------------------------------------------
 // Admin routes
@@ -159,13 +160,7 @@ pub async fn list_admin_challenges(
     _admin: AdminAuth,
     State(state): State<AppState>,
 ) -> Result<Json<agentics_domain::models::challenge::AdminChallengeListResponse>> {
-    let items = Repositories::new(&state.db)
-        .challenges()
-        .list_admin()
-        .await?;
-    Ok(Json(
-        agentics_domain::models::challenge::AdminChallengeListResponse { items },
-    ))
+    Ok(Json(admin_service::list_admin_challenges(&state.db).await?))
 }
 
 /// Attach a Moltbook discussion post to a published challenge.
@@ -209,11 +204,9 @@ pub async fn list_admin_solution_submissions(
     _admin: AdminAuth,
     State(state): State<AppState>,
 ) -> Result<Json<AdminSolutionSubmissionListResponse>> {
-    let items = Repositories::new(&state.db)
-        .solution_submissions()
-        .list_admin(100)
-        .await?;
-    Ok(Json(AdminSolutionSubmissionListResponse { items }))
+    Ok(Json(
+        admin_service::list_admin_solution_submissions(&state.db).await?,
+    ))
 }
 
 /// List latest service heartbeats for admin operations.
@@ -221,11 +214,9 @@ pub async fn list_admin_service_heartbeats(
     _admin: AdminAuth,
     State(state): State<AppState>,
 ) -> Result<Json<AdminServiceHeartbeatListResponse>> {
-    let items = Repositories::new(&state.db)
-        .maintenance()
-        .list_service_heartbeats()
-        .await?;
-    Ok(Json(AdminServiceHeartbeatListResponse { items }))
+    Ok(Json(
+        admin_service::list_admin_service_heartbeats(&state.db).await?,
+    ))
 }
 
 /// Show configured quota limits and current queue usage for admin capacity review.
@@ -233,37 +224,9 @@ pub async fn get_admin_capacity(
     _admin: AdminAuth,
     State(state): State<AppState>,
 ) -> Result<Json<AdminCapacityResponse>> {
-    let repos = Repositories::new(&state.db);
-    let active_agents = repos.agents().count_active().await?;
-    let active_validation_jobs = repos
-        .evaluation_jobs()
-        .count_active(ScoringMode::Validation)
-        .await?;
-    let active_official_jobs = repos
-        .evaluation_jobs()
-        .count_active(ScoringMode::Official)
-        .await?;
-
-    Ok(Json(AdminCapacityResponse {
-        quota_window_seconds: SUBMISSION_QUOTA_WINDOW_SECONDS,
-        quotas: AdminQuotaSettingsDto {
-            validation_runs_per_agent_challenge_day: state
-                .config
-                .quotas
-                .validation_runs_per_agent_challenge_day,
-            official_runs_per_agent_challenge_day: state
-                .config
-                .quotas
-                .official_runs_per_agent_challenge_day,
-            max_active_official_jobs: state.config.quotas.max_active_official_jobs,
-            max_active_agents: state.config.quotas.max_active_agents,
-        },
-        usage: AdminCapacityUsageDto {
-            active_agents,
-            active_validation_jobs,
-            active_official_jobs,
-        },
-    }))
+    Ok(Json(
+        admin_service::get_admin_capacity(&state.db, &state.config).await?,
+    ))
 }
 
 /// Queue an official rejudge for an existing solution submission.
