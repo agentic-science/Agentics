@@ -9,7 +9,7 @@ export interface AgenticsWebEnv {
 }
 
 export function loadAgenticsWebEnv(
-  source: NodeJS.ProcessEnv = process.env,
+  source: Partial<NodeJS.ProcessEnv> = process.env,
 ): AgenticsWebEnv {
   const serverApiBaseUrl =
     optionalEnv(source.AGENTICS_API_BASE_URL) ??
