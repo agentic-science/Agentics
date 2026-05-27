@@ -85,9 +85,11 @@ it `already fixed` in the reset ledger and update the issue/tracker instead.
 6. In `agentics-challenges`, delete only reset candidates:
    `challenges/<handle>/` and `test-solutions/<handle>/`. Do not delete QA logs
    under `migrations/`.
-7. Delete backup RustFS keys under `<handle>/...` for each reset candidate, and
-   delete production/rehearsal RustFS keys under
-   `<AGENTICS_S3_PREFIX>/private-bundle-backups/<handle>/...` if present.
+7. Delete backup RustFS keys under `private-bundle-backups/<handle>/...` for
+   each reset candidate, and delete production/rehearsal RustFS keys under the
+   same logical prefix if present. Production/rehearsal RustFS can also be
+   cleared by removing the disposable production Compose RustFS volume before
+   restarting services.
 8. Dry-run or list object deletions before deleting and save the object
    inventory in the reset ledger.
 9. For each reset candidate, comment on the issue:
@@ -166,6 +168,27 @@ affected challenge.
 - Fix: preflight runner cleanup with a dry-run cleanup call before stopping
   workers in the non-dry-run clean path.
 - Verification: `cargo test -p agentics-ops compose_prod` passed after the fix.
+- Affected challenge: migration-wide rollback setup, before individual
+  challenge remigration.
+
+### 2026-05-28: Runner Daemon Stop Requires Built Binary Under Sudo
+
+- Symptom: after the partial `compose-prod-down --runner clean` failure, the
+  dedicated production runner daemon still needed to be stopped. Running
+  `sudo just compose-prod-runner-docker-down` was not reliable on this host
+  because root does not have the same Rust toolchain setup as the user, while
+  non-sudo Docker API access to `/srv/agentics/docker.sock` was denied by Unix
+  socket permissions.
+- Cause: the ops workflow mixes a root-owned runner daemon/socket with a
+  source-build `cargo run` style command. The built binary works under sudo,
+  but invoking the just recipe under sudo can fail before reaching the ops code.
+- Fix or decision: use the already-built
+  `target/debug/agentics-compose-prod runner-docker-down` under sudo for this
+  reset. A follow-up ops improvement should make privileged runner daemon
+  lifecycle commands reproducible without depending on root's Rustup state.
+- Verification: `sudo target/debug/agentics-compose-prod runner-docker-down`
+  stopped the runner daemon, and production Compose `postgres_data` and
+  `rustfs_data` volumes were removed afterward.
 - Affected challenge: migration-wide rollback setup, before individual
   challenge remigration.
 

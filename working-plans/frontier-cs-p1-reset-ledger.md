@@ -55,13 +55,17 @@ that verification finds a remaining faithfulness break.
 
 For every `pending reset` challenge:
 
-- Backup RustFS prefix: `<challenge-handle>/`
+- Backup RustFS prefix: `private-bundle-backups/<challenge-handle>/`
 - Production/rehearsal RustFS prefix:
-  `<AGENTICS_S3_PREFIX>/private-bundle-backups/<challenge-handle>/`
+  `private-bundle-backups/<challenge-handle>/`
 
 ## Object Deletion Inventory
 
-Not collected yet.
+- Production/rehearsal RustFS: reset by removing the disposable
+  `agentics-prod_rustfs_data` Compose volume after production services and the
+  dedicated runner daemon were stopped.
+- Backup RustFS: pending targeted deletion for the 34 `pending reset`
+  challenges. `binary-slate-machine-frontier-cs-algorithmic-81` is excluded.
 
 ## Issue Reset Log
 
@@ -71,3 +75,7 @@ Not started yet.
 
 - `binary-slate-machine-frontier-cs-algorithmic-81` remains in the work package
   as a reverify item so its issue/tracker state can be corrected if needed.
+- Public challenge directories and test-solution directories for the 34
+  `pending reset` candidates were removed in
+  `agentics-challenges` commit `1b67b3a`. Challenge repository validation after
+  the reset reported `validated 213 challenge(s)`.
