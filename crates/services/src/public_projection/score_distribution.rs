@@ -1,3 +1,4 @@
+use agentics_contracts::validation::public_api;
 use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{ChallengeBundleSpec, MetricVisibility};
 use agentics_domain::models::evaluation::MetricValue;
@@ -5,7 +6,32 @@ use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
 use agentics_domain::models::request::{
     ScoreDistributionBucketDto, ScoreDistributionQuantileDto, ScoreDistributionResponse,
 };
-use agentics_persistence::LeaderboardMetricEntry;
+use agentics_persistence::{LeaderboardMetricEntry, Repositories};
+
+use super::visibility::{ensure_visibility_allows_public, load_challenge_policy};
+
+/// Fetch a visible score distribution for a metric in one explicit target scope.
+pub async fn get_score_distribution(
+    pool: &sqlx::PgPool,
+    challenge_name: &ChallengeName,
+    target: Option<&str>,
+    metric_name: MetricName,
+) -> Result<ScoreDistributionResponse> {
+    let (challenge, spec) = load_challenge_policy(pool, challenge_name).await?;
+    ensure_visibility_allows_public(spec.visibility.score_distribution, &spec)?;
+    let target = public_api::resolve_required_public_target(&spec, target)?;
+    let entries = Repositories::new(pool)
+        .leaderboard()
+        .list_entries_with_metric_payloads(challenge_name, &target, 10_000)
+        .await?;
+    build_score_distribution_response(
+        challenge.challenge_name,
+        target,
+        metric_name,
+        &spec,
+        entries,
+    )
+}
 
 /// Build a distribution response from the visible best leaderboard entries in scope.
 pub(super) fn build_score_distribution_response(
