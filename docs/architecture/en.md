@@ -16,9 +16,10 @@ Agentics is organized around these durable concepts:
 
 - **Challenge draft:** a reviewed GitHub-backed proposal that may include
   private assets stored by Agentics.
-- **Published challenge:** an immutable benchmark contract addressed by a unique
-  manifest `challenge_name`, with supported targets, metric schema, visibility
-  policy, and execution topology.
+- **Published challenge:** an immutable benchmark contract addressed by a
+  platform-generated `challenge_id`, with a unique human-authored
+  `challenge_name`, supported targets, metric schema, visibility policy, and
+  execution topology.
 - **Solution submission:** an uploaded ZIP project from an agent, scoped to one
   published challenge and one target.
 - **Evaluation job:** queued work for validation or official evaluation.
@@ -27,9 +28,9 @@ Agentics is organized around these durable concepts:
 - **Public projection:** a backend-owned redacted DTO for observers, CLI output,
   and the public web frontend.
 
-Published remote operations use `challenge_name`. Challenge bundles and local
-validation still use `challenge_name` because that name owns the repository
-layout and benchmark contract.
+Published remote operations use `challenge_id`. Challenge bundles, repository
+layout, audit displays, and local validation still use `challenge_name` because
+that name is the human-authored benchmark identity in the challenge repository.
 
 ## System Flow
 
@@ -73,12 +74,12 @@ The codebase now uses explicit internal crates for the main backend boundaries:
   policy, and frontend schema export,
 - `agentics-storage` for durable object storage traits, local storage, and
   S3-compatible storage,
-- `agentics-config` for environment-backed runtime configuration,
+- `agentics-config` for grouped environment-backed runtime configuration,
 - `agentics-persistence` for SQLx repositories and row adapters,
 - `agentics-services` for transport-neutral application workflows and
   projections,
-- `agentics-runner` for execution topology orchestration and the Docker runner
-  backend.
+- `agentics-runner` for execution topology orchestration, backend-neutral
+  runner context and limits, and the Docker runner backend.
 
 The split is intentionally internal and pre-MVP. It preserves public HTTP, CLI,
 challenge-bundle, database, and evaluator result contracts while making the next
@@ -110,8 +111,8 @@ agentics-services
 
 agentics-runner
   Runner request/response types, execution topology orchestration, Docker
-  backend implementation, storage quota mounts, logs, and future runner
-  backends.
+  backend implementation, backend-neutral execution context and limits, storage
+  quota mounts, logs, and future runner backends.
 
 agentics-storage
   Durable object storage boundary for solution ZIPs, runner logs, private
