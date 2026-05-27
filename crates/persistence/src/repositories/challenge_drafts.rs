@@ -2,15 +2,12 @@ use sqlx::PgPool;
 
 use crate::db;
 use crate::repositories::{
-    BeginChallengeDraftValidationInput, ChallengePrivateAssetPurgeRecord,
+    AdminChallengePrivateAssetRecord, BeginChallengeDraftValidationInput, ChallengeDraftRecord,
+    ChallengeDraftValidationRecord, ChallengePrivateAssetPurgeRecord, ChallengePrivateAssetRecord,
     ClaimedChallengeDraftForPublish, CreateChallengeDraftAuditEventInput,
     CreateChallengeDraftInput, CreateChallengePrivateAssetInput,
     FinishChallengeDraftValidationInput, PublishArchiveChallengeDraftInput,
     PublishNewChallengeDraftInput,
-};
-use agentics_domain::models::challenge_creation::{
-    AdminChallengePrivateAssetResponse, ChallengeDraftResponse,
-    ChallengeDraftValidationRecordResponse, ChallengePrivateAssetResponse,
 };
 use agentics_domain::models::ids::{AgentId, ChallengeDraftId, ChallengeDraftPublishClaimId};
 use agentics_domain::storage::StorageKey;
@@ -26,22 +23,22 @@ impl ChallengeDraftsRepository<'_> {
         &self,
         input: &CreateChallengeDraftInput,
         audit_event: &CreateChallengeDraftAuditEventInput,
-    ) -> Result<ChallengeDraftResponse> {
+    ) -> Result<ChallengeDraftRecord> {
         db::challenge_creation::create_challenge_draft(self.pool, input, audit_event).await
     }
 
-    pub async fn get(&self, draft_id: &str) -> Result<Option<ChallengeDraftResponse>> {
+    pub async fn get(&self, draft_id: &str) -> Result<Option<ChallengeDraftRecord>> {
         db::challenge_creation::get_challenge_draft(self.pool, draft_id).await
     }
 
-    pub async fn list(&self, limit: i64) -> Result<Vec<ChallengeDraftResponse>> {
+    pub async fn list(&self, limit: i64) -> Result<Vec<ChallengeDraftRecord>> {
         db::challenge_creation::list_challenge_drafts(self.pool, limit).await
     }
 
     pub async fn list_private_asset_states(
         &self,
         draft_id: &str,
-    ) -> Result<Vec<AdminChallengePrivateAssetResponse>> {
+    ) -> Result<Vec<AdminChallengePrivateAssetRecord>> {
         db::challenge_creation::list_challenge_private_asset_states(self.pool, draft_id).await
     }
 
@@ -51,7 +48,7 @@ impl ChallengeDraftsRepository<'_> {
         max_bytes_per_draft: u64,
         validation_timeout_minutes: i32,
         pending_timeout_minutes: i32,
-    ) -> Result<ChallengePrivateAssetResponse> {
+    ) -> Result<ChallengePrivateAssetRecord> {
         db::challenge_creation::reserve_challenge_private_asset(
             self.pool,
             input,
@@ -67,7 +64,7 @@ impl ChallengeDraftsRepository<'_> {
         asset_row_id: &agentics_domain::models::ids::ChallengePrivateAssetId,
         audit_event_id: agentics_domain::models::ids::ChallengeDraftAuditEventId,
         uploader_agent_id: &AgentId,
-    ) -> Result<ChallengePrivateAssetResponse> {
+    ) -> Result<ChallengePrivateAssetRecord> {
         db::challenge_creation::activate_challenge_private_asset_with_audit(
             self.pool,
             asset_row_id,
@@ -80,7 +77,7 @@ impl ChallengeDraftsRepository<'_> {
     pub async fn activate_private_asset(
         &self,
         asset_row_id: &agentics_domain::models::ids::ChallengePrivateAssetId,
-    ) -> Result<ChallengePrivateAssetResponse> {
+    ) -> Result<ChallengePrivateAssetRecord> {
         db::challenge_creation::activate_challenge_private_asset(self.pool, asset_row_id).await
     }
 
@@ -109,7 +106,7 @@ impl ChallengeDraftsRepository<'_> {
         window_seconds: i64,
         validation_limit: i64,
         validation_timeout_minutes: i32,
-    ) -> Result<ChallengeDraftValidationRecordResponse> {
+    ) -> Result<ChallengeDraftValidationRecord> {
         db::challenge_creation::begin_challenge_draft_validation(
             self.pool,
             input,
@@ -124,7 +121,7 @@ impl ChallengeDraftsRepository<'_> {
         &self,
         input: &FinishChallengeDraftValidationInput,
         audit_event: &CreateChallengeDraftAuditEventInput,
-    ) -> Result<ChallengeDraftValidationRecordResponse> {
+    ) -> Result<ChallengeDraftValidationRecord> {
         db::challenge_creation::finish_challenge_draft_validation(self.pool, input, audit_event)
             .await
     }

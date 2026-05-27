@@ -8,9 +8,7 @@ use super::ids::{
     agent_id_from_row, challenge_name_from_row, challenge_shortlist_revision_id_from_row,
     optional_solution_submission_id_from_row,
 };
-use agentics_domain::models::challenge::{
-    ChallengeBundleSpec, ChallengeLifecycleStatus, PublishChallengeResponse,
-};
+use agentics_domain::models::challenge::{ChallengeBundleSpec, ChallengeLifecycleStatus};
 use agentics_domain::models::evaluation::SolutionSubmissionStatus;
 use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::ids::{AgentId, ChallengeShortlistRevisionId};
@@ -90,6 +88,16 @@ pub struct PublishChallengeInput<'a> {
     pub spec: &'a ChallengeBundleSpec,
     pub title: &'a str,
     pub summary: &'a LocalizedText,
+}
+
+/// Published challenge storage row returned by publish primitives.
+#[derive(Debug, Clone)]
+pub struct PublishChallengeRecord {
+    pub challenge_name: ChallengeName,
+    pub title: String,
+    pub bundle_key: StorageKey,
+    pub public_bundle_key: StorageKey,
+    pub statement_key: StorageKey,
 }
 
 /// List all challenge shells for admin review.
@@ -174,7 +182,7 @@ async fn update_challenge_moltbook_discussion(
 pub async fn publish_challenge(
     pool: &PgPool,
     input: &PublishChallengeInput<'_>,
-) -> Result<PublishChallengeResponse> {
+) -> Result<PublishChallengeRecord> {
     let mut tx = pool.begin().await?;
     let response = publish_challenge_tx(&mut tx, input).await?;
     tx.commit().await?;
@@ -185,7 +193,7 @@ pub async fn publish_challenge(
 pub async fn publish_challenge_tx(
     tx: &mut Transaction<'_, Postgres>,
     input: &PublishChallengeInput<'_>,
-) -> Result<PublishChallengeResponse> {
+) -> Result<PublishChallengeRecord> {
     let spec_json =
         serde_json::to_value(input.spec).map_err(|e| ServiceError::Internal(e.to_string()))?;
     let summary_json = localized_text_to_json(input.summary)?;
@@ -248,7 +256,7 @@ pub async fn publish_challenge_tx(
         error => ServiceError::Database(error),
     })?;
 
-    Ok(PublishChallengeResponse {
+    Ok(PublishChallengeRecord {
         challenge_name: challenge_name_from_row(&row, "challenge_name")?,
         title: row.try_get("title")?,
         bundle_key: storage_key_from_row(&row, "bundle_key")?,

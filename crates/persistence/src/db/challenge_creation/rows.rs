@@ -3,13 +3,15 @@ use serde_json::Value;
 use sqlx::{PgPool, Row};
 
 use agentics_domain::models::challenge_creation::{
-    AdminChallengePrivateAssetResponse, ChallengeCreationManifest, ChallengeCreationRequestKind,
-    ChallengeDraftResponse, ChallengeDraftStatus, ChallengeDraftValidationRecordResponse,
-    ChallengeDraftValidationStatus, ChallengePrivateAssetKind, ChallengePrivateAssetResponse,
-    ChallengePrivateAssetStatus,
+    ChallengeCreationManifest, ChallengeCreationRequestKind, ChallengeDraftStatus,
+    ChallengeDraftValidationStatus, ChallengePrivateAssetKind, ChallengePrivateAssetStatus,
 };
 use agentics_domain::models::github::GithubPullRequestNumber;
 use agentics_domain::models::hashes::{GitCommitSha, Sha256Digest};
+use agentics_domain::models::ids::{
+    AgentId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengePrivateAssetId,
+};
+use agentics_domain::models::names::{AssetName, ChallengeName};
 use agentics_domain::models::paths::RepoRelativePath;
 use agentics_domain::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
 use agentics_domain::storage::StorageKey;
@@ -21,11 +23,87 @@ use super::super::ids::{
     challenge_private_asset_id_from_row, optional_challenge_name_from_row,
 };
 
+/// Draft validation record before DTO projection.
+#[derive(Debug, Clone)]
+pub struct ChallengeDraftValidationRecord {
+    pub id: ChallengeDraftValidationRecordId,
+    pub draft_id: ChallengeDraftId,
+    pub status: ChallengeDraftValidationStatus,
+    pub message: String,
+    pub repository_path: String,
+    pub manifest_sha256: Sha256Digest,
+    pub bundle_sha256: Option<Sha256Digest>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Active private asset row before DTO projection.
+#[derive(Debug, Clone)]
+pub struct ChallengePrivateAssetRecord {
+    pub id: ChallengePrivateAssetId,
+    pub draft_id: ChallengeDraftId,
+    pub asset_name: AssetName,
+    pub kind: ChallengePrivateAssetKind,
+    pub required: bool,
+    pub size_bytes: i64,
+    pub sha256: Sha256Digest,
+    pub storage_key: StorageKey,
+    pub uploader_agent_id: AgentId,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Private asset lifecycle row before admin DTO projection.
+#[derive(Debug, Clone)]
+pub struct AdminChallengePrivateAssetRecord {
+    pub id: ChallengePrivateAssetId,
+    pub draft_id: ChallengeDraftId,
+    pub asset_name: AssetName,
+    pub kind: ChallengePrivateAssetKind,
+    pub required: bool,
+    pub status: ChallengePrivateAssetStatus,
+    pub size_bytes: i64,
+    pub sha256: Sha256Digest,
+    pub storage_key: StorageKey,
+    pub temporary_storage_key: Option<StorageKey>,
+    pub uploader_agent_id: AgentId,
+    pub created_at: DateTime<Utc>,
+    pub activated_at: Option<DateTime<Utc>>,
+    pub failed_at: Option<DateTime<Utc>>,
+    pub failure_message: Option<String>,
+}
+
+/// Challenge draft row plus active assets and validation records before DTO projection.
+#[derive(Debug, Clone)]
+pub struct ChallengeDraftRecord {
+    pub id: ChallengeDraftId,
+    pub challenge_name: ChallengeName,
+    pub request: ChallengeCreationRequestKind,
+    pub status: ChallengeDraftStatus,
+    pub creator_agent_id: AgentId,
+    pub creator_github_user_id: i64,
+    pub creator_github_login: String,
+    pub repo_url: GithubRepoRemote,
+    pub pr_number: GithubPullRequestNumber,
+    pub pr_url: GithubPullRequestUrl,
+    pub commit_sha: GitCommitSha,
+    pub challenge_path: RepoRelativePath,
+    pub manifest_sha256: Sha256Digest,
+    pub manifest: ChallengeCreationManifest,
+    pub validation_bundle_sha256: Option<Sha256Digest>,
+    pub approved_bundle_sha256: Option<Sha256Digest>,
+    pub validation_message: Option<String>,
+    pub validation_repository_path: Option<String>,
+    pub published_challenge_name: Option<ChallengeName>,
+    pub private_assets: Vec<ChallengePrivateAssetRecord>,
+    pub validation_records: Vec<ChallengeDraftValidationRecord>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// List all private asset lifecycle records for an admin draft review.
 pub async fn list_challenge_private_asset_states(
     pool: &PgPool,
     draft_id: &str,
-) -> Result<Vec<AdminChallengePrivateAssetResponse>> {
+) -> Result<Vec<AdminChallengePrivateAssetRecord>> {
     let rows = sqlx::query(
         r#"
         SELECT *
@@ -39,7 +117,7 @@ pub async fn list_challenge_private_asset_states(
     .await?;
 
     rows.into_iter()
-        .map(row_to_admin_private_asset_response)
+        .map(row_to_admin_private_asset_record)
         .collect()
 }
 
@@ -47,7 +125,7 @@ pub async fn list_challenge_private_asset_states(
 pub(super) async fn list_private_assets_for_draft(
     pool: &PgPool,
     draft_id: &str,
-) -> Result<Vec<ChallengePrivateAssetResponse>> {
+) -> Result<Vec<ChallengePrivateAssetRecord>> {
     let rows = sqlx::query(
         r#"
         SELECT *
@@ -61,16 +139,14 @@ pub(super) async fn list_private_assets_for_draft(
     .fetch_all(pool)
     .await?;
 
-    rows.into_iter()
-        .map(row_to_private_asset_response)
-        .collect()
+    rows.into_iter().map(row_to_private_asset_record).collect()
 }
 
 /// Lists validation records for draft using the configured query scope.
 pub(super) async fn list_validation_records_for_draft(
     pool: &PgPool,
     draft_id: &str,
-) -> Result<Vec<ChallengeDraftValidationRecordResponse>> {
+) -> Result<Vec<ChallengeDraftValidationRecord>> {
     let rows = sqlx::query(
         r#"
         SELECT *
@@ -83,24 +159,22 @@ pub(super) async fn list_validation_records_for_draft(
     .fetch_all(pool)
     .await?;
 
-    rows.into_iter()
-        .map(row_to_validation_record_response)
-        .collect()
+    rows.into_iter().map(row_to_validation_record).collect()
 }
 
-/// Converts a database row into the draft response model.
-pub(super) fn row_to_draft_response(
+/// Converts a database row into the draft record model.
+pub(super) fn row_to_draft_record(
     row: sqlx::postgres::PgRow,
-    private_assets: Vec<ChallengePrivateAssetResponse>,
-    validation_records: Vec<ChallengeDraftValidationRecordResponse>,
-) -> Result<ChallengeDraftResponse> {
+    private_assets: Vec<ChallengePrivateAssetRecord>,
+    validation_records: Vec<ChallengeDraftValidationRecord>,
+) -> Result<ChallengeDraftRecord> {
     let manifest_json: Value = row.try_get("manifest_json")?;
     let manifest: ChallengeCreationManifest =
         serde_json::from_value(manifest_json).map_err(|e| ServiceError::Internal(e.to_string()))?;
     let published_challenge_name =
         optional_challenge_name_from_row(&row, "published_challenge_name")?;
 
-    Ok(ChallengeDraftResponse {
+    Ok(ChallengeDraftRecord {
         id: challenge_draft_id_from_row(&row, "id")?,
         challenge_name: challenge_name_from_row(&row, "challenge_name")?,
         request: request_kind_from_row(&row, "request_kind")?,
@@ -125,16 +199,16 @@ pub(super) fn row_to_draft_response(
         published_challenge_name,
         private_assets,
         validation_records,
-        created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
-        updated_at: row.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
+        created_at: row.try_get("created_at")?,
+        updated_at: row.try_get("updated_at")?,
     })
 }
 
-/// Converts a database row into the private asset response model.
-pub(super) fn row_to_private_asset_response(
+/// Converts a database row into the private asset record model.
+pub(super) fn row_to_private_asset_record(
     row: sqlx::postgres::PgRow,
-) -> Result<ChallengePrivateAssetResponse> {
-    Ok(ChallengePrivateAssetResponse {
+) -> Result<ChallengePrivateAssetRecord> {
+    Ok(ChallengePrivateAssetRecord {
         id: challenge_private_asset_id_from_row(&row, "id")?,
         draft_id: challenge_draft_id_from_row(&row, "draft_id")?,
         asset_name: asset_name_from_row(&row, "asset_name")?,
@@ -144,21 +218,15 @@ pub(super) fn row_to_private_asset_response(
         sha256: sha256_digest_from_row(&row, "sha256")?,
         storage_key: storage_key_from_row(&row, "storage_key")?,
         uploader_agent_id: agent_id_from_row(&row, "uploader_agent_id")?,
-        created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
+        created_at: row.try_get("created_at")?,
     })
 }
 
-/// Converts a database row into the admin private asset lifecycle response model.
-fn row_to_admin_private_asset_response(
+/// Converts a database row into the admin private asset lifecycle record model.
+fn row_to_admin_private_asset_record(
     row: sqlx::postgres::PgRow,
-) -> Result<AdminChallengePrivateAssetResponse> {
-    let activated_at = row
-        .try_get::<Option<DateTime<Utc>>, _>("activated_at")?
-        .map(|value| value.to_rfc3339());
-    let failed_at = row
-        .try_get::<Option<DateTime<Utc>>, _>("failed_at")?
-        .map(|value| value.to_rfc3339());
-    Ok(AdminChallengePrivateAssetResponse {
+) -> Result<AdminChallengePrivateAssetRecord> {
+    Ok(AdminChallengePrivateAssetRecord {
         id: challenge_private_asset_id_from_row(&row, "id")?,
         draft_id: challenge_draft_id_from_row(&row, "draft_id")?,
         asset_name: asset_name_from_row(&row, "asset_name")?,
@@ -170,9 +238,9 @@ fn row_to_admin_private_asset_response(
         storage_key: storage_key_from_row(&row, "storage_key")?,
         temporary_storage_key: optional_storage_key_from_row(&row, "temporary_storage_key")?,
         uploader_agent_id: agent_id_from_row(&row, "uploader_agent_id")?,
-        created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
-        activated_at,
-        failed_at,
+        created_at: row.try_get("created_at")?,
+        activated_at: row.try_get("activated_at")?,
+        failed_at: row.try_get("failed_at")?,
         failure_message: row.try_get("failure_message")?,
     })
 }
@@ -267,11 +335,11 @@ fn repo_relative_path_from_row(
         .map_err(|e| ServiceError::Internal(format!("invalid stored {column}: {e}")))
 }
 
-/// Converts a database row into the validation record response model.
-pub(super) fn row_to_validation_record_response(
+/// Converts a database row into the validation record model.
+pub(super) fn row_to_validation_record(
     row: sqlx::postgres::PgRow,
-) -> Result<ChallengeDraftValidationRecordResponse> {
-    Ok(ChallengeDraftValidationRecordResponse {
+) -> Result<ChallengeDraftValidationRecord> {
+    Ok(ChallengeDraftValidationRecord {
         id: challenge_draft_validation_record_id_from_row(&row, "id")?,
         draft_id: challenge_draft_id_from_row(&row, "draft_id")?,
         status: validation_status_from_row(&row, "status")?,
@@ -279,7 +347,7 @@ pub(super) fn row_to_validation_record_response(
         repository_path: row.try_get("repository_path")?,
         manifest_sha256: sha256_digest_from_row(&row, "manifest_sha256")?,
         bundle_sha256: optional_sha256_digest_from_row(&row, "bundle_sha256")?,
-        created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
+        created_at: row.try_get("created_at")?,
     })
 }
 

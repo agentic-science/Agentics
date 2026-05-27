@@ -5,8 +5,8 @@ use crate::repositories::{
     AdminChallengeListItemRecord, ChallengeCatalogFilters, ChallengeMoltbookDiscussionRecord,
     ChallengeRecord, ChallengeShortlistRecord, ChallengeShortlistRevisionRecord,
     CreateChallengeShortlistRevisionInput, CreatorChallengeParticipantsRecord,
-    CreatorChallengeStatsRecord, PublishChallengeInput, PublishedChallengeAdmission,
-    PublishedChallengeList,
+    CreatorChallengeStatsRecord, PublishChallengeInput, PublishChallengeRecord,
+    PublishedChallengeAdmission, PublishedChallengeList,
 };
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::AgentId;
@@ -43,7 +43,7 @@ impl ChallengesRepository<'_> {
     pub async fn publish(
         &self,
         input: &PublishChallengeInput<'_>,
-    ) -> Result<agentics_domain::models::challenge::PublishChallengeResponse> {
+    ) -> Result<PublishChallengeRecord> {
         db::challenges::publish_challenge(self.pool, input).await
     }
 

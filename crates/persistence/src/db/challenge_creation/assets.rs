@@ -1,14 +1,14 @@
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
-use super::rows::{draft_status_from_row, row_to_private_asset_response};
+use super::rows::{
+    ChallengePrivateAssetRecord, draft_status_from_row, row_to_private_asset_record,
+};
 use super::{
     CreateChallengeDraftAuditEventInput, clear_stale_active_validation_tx,
     create_challenge_draft_audit_event_tx, lock_quota_scope,
 };
 use crate::db::ids::agent_id_from_row;
-use agentics_domain::models::challenge_creation::{
-    ChallengeDraftStatus, ChallengePrivateAssetResponse,
-};
+use agentics_domain::models::challenge_creation::ChallengeDraftStatus;
 use agentics_domain::models::ids::{AgentId, ChallengeDraftAuditEventId, ChallengePrivateAssetId};
 use agentics_domain::storage::StorageKey;
 use agentics_error::{Result, ServiceError};
@@ -22,7 +22,7 @@ pub async fn reserve_challenge_private_asset(
     max_bytes_per_draft: u64,
     validation_timeout_minutes: i32,
     pending_timeout_minutes: i32,
-) -> Result<ChallengePrivateAssetResponse> {
+) -> Result<ChallengePrivateAssetRecord> {
     let max_bytes_per_draft = i64::try_from(max_bytes_per_draft).map_err(|_| {
         ServiceError::Internal("private asset quota limit exceeds supported range".to_string())
     })?;
@@ -98,7 +98,7 @@ pub async fn reserve_challenge_private_asset(
     .execute(&mut *tx)
     .await?;
 
-    let response = row_to_private_asset_response(row)?;
+    let response = row_to_private_asset_record(row)?;
     tx.commit().await?;
     Ok(response)
 }
@@ -107,7 +107,7 @@ pub async fn reserve_challenge_private_asset(
 pub async fn activate_challenge_private_asset(
     pool: &PgPool,
     asset_row_id: &ChallengePrivateAssetId,
-) -> Result<ChallengePrivateAssetResponse> {
+) -> Result<ChallengePrivateAssetRecord> {
     let mut tx = pool.begin().await?;
     let response = activate_challenge_private_asset_tx(&mut tx, asset_row_id).await?;
     tx.commit().await?;
@@ -120,7 +120,7 @@ pub async fn activate_challenge_private_asset_with_audit(
     asset_row_id: &ChallengePrivateAssetId,
     audit_event_id: ChallengeDraftAuditEventId,
     actor_agent_id: &AgentId,
-) -> Result<ChallengePrivateAssetResponse> {
+) -> Result<ChallengePrivateAssetRecord> {
     let mut tx = pool.begin().await?;
     let response = activate_challenge_private_asset_tx(&mut tx, asset_row_id).await?;
     create_challenge_draft_audit_event_tx(
@@ -149,7 +149,7 @@ pub async fn activate_challenge_private_asset_with_audit(
 async fn activate_challenge_private_asset_tx(
     tx: &mut Transaction<'_, Postgres>,
     asset_row_id: &ChallengePrivateAssetId,
-) -> Result<ChallengePrivateAssetResponse> {
+) -> Result<ChallengePrivateAssetRecord> {
     let row = sqlx::query(
         r#"
         UPDATE challenge_private_assets
@@ -181,7 +181,7 @@ async fn activate_challenge_private_asset_tx(
     .bind(asset_row_id.as_str())
     .execute(&mut **tx)
     .await?;
-    row_to_private_asset_response(row)
+    row_to_private_asset_record(row)
 }
 
 /// Mark a pending private asset failed after storage write or promote failed.

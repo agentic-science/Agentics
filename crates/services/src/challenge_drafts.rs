@@ -22,6 +22,7 @@ const CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 
 mod cleanup;
 mod create;
+mod presentation;
 mod private_assets;
 mod publishing;
 mod read;

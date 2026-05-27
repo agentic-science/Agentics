@@ -28,7 +28,8 @@ pub use solution_submissions::SolutionSubmissionsRepository;
 
 pub use crate::db::agents::{AgentRecord, AuthenticatedAgent, RegisterAgentInput};
 pub use crate::db::challenge_creation::{
-    BeginChallengeDraftValidationInput, ChallengePrivateAssetPurgeRecord,
+    AdminChallengePrivateAssetRecord, BeginChallengeDraftValidationInput, ChallengeDraftRecord,
+    ChallengeDraftValidationRecord, ChallengePrivateAssetPurgeRecord, ChallengePrivateAssetRecord,
     ClaimedChallengeDraftForPublish, CreateChallengeDraftAuditEventInput,
     CreateChallengeDraftInput, CreateChallengePrivateAssetInput,
     FinishChallengeDraftValidationInput, PublishArchiveChallengeDraftInput,
@@ -39,8 +40,8 @@ pub use crate::db::challenges::{
     ChallengeRecord, ChallengeShortlistRecord, ChallengeShortlistRevisionRecord,
     ChallengeShortlistedAgentRecord, CreateChallengeShortlistRevisionInput,
     CreatorChallengeParticipantRecord, CreatorChallengeParticipantsRecord,
-    CreatorChallengeStatsRecord, PublishChallengeInput, PublishedChallengeList,
-    PublishedChallengeListItemRecord,
+    CreatorChallengeStatsRecord, PublishChallengeInput, PublishChallengeRecord,
+    PublishedChallengeList, PublishedChallengeListItemRecord,
 };
 pub use crate::db::evaluation_jobs::{
     EvaluationJobRecord, QueueEvaluationJobInput, RunnerJobClaimRecord,

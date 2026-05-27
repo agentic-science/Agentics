@@ -17,6 +17,7 @@ use agentics_error::{Result, ServiceError};
 use agentics_persistence::{self as persistence, Repositories};
 use agentics_storage::{Storage, StorageKey, StorageWriteIntent, pack_directory_to_tar};
 
+use super::presentation::draft_response;
 use super::types::PublishChallengeDraftServiceRequest;
 use super::utils::{
     challenge_bundle_storage_key, cleanup_file, cleanup_runtime_bundle, cleanup_storage_key,
@@ -48,7 +49,7 @@ pub async fn publish_challenge_draft(
             config.quotas.challenge_draft_publish_timeout_minutes,
         )
         .await?;
-    let draft = claim.draft;
+    let draft = draft_response(claim.draft);
     if draft.status == ChallengeDraftStatus::Published {
         return Ok(draft);
     }
@@ -77,6 +78,7 @@ pub async fn publish_challenge_draft(
         .challenge_drafts()
         .get(draft.id.as_str())
         .await?
+        .map(draft_response)
         .ok_or(ServiceError::NotFound)
 }
 

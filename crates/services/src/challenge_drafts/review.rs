@@ -3,6 +3,7 @@ use agentics_domain::models::ids::ChallengeDraftAuditEventId;
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::{self as persistence, Repositories};
 
+use super::presentation::draft_response;
 use super::types::ReviewChallengeDraftServiceRequest;
 use super::utils::non_empty_message;
 
@@ -36,6 +37,7 @@ pub async fn abandon_challenge_draft(
         .challenge_drafts()
         .get(draft_id.as_str())
         .await?
+        .map(draft_response)
         .ok_or(ServiceError::NotFound)
 }
 
@@ -72,6 +74,7 @@ pub async fn approve_challenge_draft(
         .challenge_drafts()
         .get(draft_id.as_str())
         .await?
+        .map(draft_response)
         .ok_or(ServiceError::NotFound)
 }
 
@@ -116,5 +119,6 @@ pub async fn reject_challenge_draft(
         .challenge_drafts()
         .get(draft.id.as_str())
         .await?
+        .map(draft_response)
         .ok_or(ServiceError::NotFound)
 }

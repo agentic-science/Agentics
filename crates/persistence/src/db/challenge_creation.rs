@@ -3,8 +3,7 @@
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use agentics_domain::models::challenge_creation::{
-    ChallengeCreationManifest, ChallengeDraftResponse, ChallengeDraftStatus,
-    ChallengePrivateAssetKind,
+    ChallengeCreationManifest, ChallengeDraftStatus, ChallengePrivateAssetKind,
 };
 use agentics_domain::models::github::GithubPullRequestNumber;
 use agentics_domain::models::hashes::GitCommitSha;
@@ -36,10 +35,13 @@ pub use publishing::{
     PublishNewChallengeDraftInput, claim_challenge_draft_for_publish, fail_challenge_draft_publish,
     mark_challenge_draft_published, publish_archive_challenge_draft, publish_new_challenge_draft,
 };
-pub use rows::list_challenge_private_asset_states;
+pub use rows::{
+    AdminChallengePrivateAssetRecord, ChallengeDraftRecord, ChallengeDraftValidationRecord,
+    ChallengePrivateAssetRecord, list_challenge_private_asset_states,
+};
 use rows::{
     list_private_assets_for_draft, list_validation_records_for_draft,
-    optional_storage_key_from_row, row_to_draft_response, storage_key_from_row,
+    optional_storage_key_from_row, row_to_draft_record, storage_key_from_row,
 };
 pub use validation::{
     BeginChallengeDraftValidationInput, FinishChallengeDraftValidationInput,
@@ -93,7 +95,7 @@ pub async fn create_challenge_draft(
     pool: &PgPool,
     input: &CreateChallengeDraftInput,
     audit_event: &CreateChallengeDraftAuditEventInput,
-) -> Result<ChallengeDraftResponse> {
+) -> Result<ChallengeDraftRecord> {
     if audit_event.draft_id != input.draft_id {
         return Err(ServiceError::Internal(
             "draft creation audit event targets a different draft".to_string(),
@@ -159,14 +161,14 @@ pub async fn create_challenge_draft(
     create_challenge_draft_audit_event_tx(&mut tx, audit_event).await?;
     tx.commit().await?;
 
-    row_to_draft_response(row, Vec::new(), Vec::new())
+    row_to_draft_record(row, Vec::new(), Vec::new())
 }
 
 /// Get one draft with its private assets and validation records.
 pub async fn get_challenge_draft(
     pool: &PgPool,
     draft_id: &str,
-) -> Result<Option<ChallengeDraftResponse>> {
+) -> Result<Option<ChallengeDraftRecord>> {
     let row = sqlx::query("SELECT * FROM challenge_drafts WHERE id = $1::uuid")
         .bind(draft_id)
         .fetch_optional(pool)
@@ -178,14 +180,11 @@ pub async fn get_challenge_draft(
 
     let assets = list_private_assets_for_draft(pool, draft_id).await?;
     let validation_records = list_validation_records_for_draft(pool, draft_id).await?;
-    row_to_draft_response(row, assets, validation_records).map(Some)
+    row_to_draft_record(row, assets, validation_records).map(Some)
 }
 
 /// List recent drafts for admin review.
-pub async fn list_challenge_drafts(
-    pool: &PgPool,
-    limit: i64,
-) -> Result<Vec<ChallengeDraftResponse>> {
+pub async fn list_challenge_drafts(pool: &PgPool, limit: i64) -> Result<Vec<ChallengeDraftRecord>> {
     let rows = sqlx::query(
         r#"
         SELECT *
@@ -203,7 +202,7 @@ pub async fn list_challenge_drafts(
         let draft_id = challenge_draft_id_from_row(&row, "id")?;
         let assets = list_private_assets_for_draft(pool, draft_id.as_str()).await?;
         let validation_records = list_validation_records_for_draft(pool, draft_id.as_str()).await?;
-        drafts.push(row_to_draft_response(row, assets, validation_records)?);
+        drafts.push(row_to_draft_record(row, assets, validation_records)?);
     }
     Ok(drafts)
 }

@@ -18,6 +18,7 @@ use agentics_error::{Result, ServiceError};
 use agentics_persistence::{self as persistence, Repositories};
 use agentics_storage::{Storage, StorageKey, StorageWriteIntent};
 
+use super::presentation::{draft_response, private_asset_response};
 use super::types::UploadChallengePrivateAssetServiceRequest;
 use super::utils::{base64_decode, cleanup_storage_key};
 use crate::storage_errors::storage_error_to_service_error;
@@ -42,6 +43,7 @@ pub async fn upload_challenge_private_asset(
         .get(draft_id.as_str())
         .await?
         .ok_or(ServiceError::NotFound)?;
+    let draft = draft_response(draft);
     if draft.creator_agent_id != creator_agent_id {
         return Err(ServiceError::NotFound);
     }
@@ -169,7 +171,7 @@ pub async fn upload_challenge_private_asset(
         )
         .await
     {
-        Ok(asset) => asset,
+        Ok(asset) => private_asset_response(asset),
         Err(error) => {
             cleanup_storage_key(storage, &storage_key).await;
             return Err(error);

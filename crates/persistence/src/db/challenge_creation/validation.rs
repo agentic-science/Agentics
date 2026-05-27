@@ -1,13 +1,13 @@
 use sqlx::{PgPool, Postgres, Transaction};
 
 use agentics_domain::models::challenge_creation::{
-    ChallengeDraftStatus, ChallengeDraftValidationRecordResponse, ChallengeDraftValidationStatus,
+    ChallengeDraftStatus, ChallengeDraftValidationStatus,
 };
 use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::ids::{ChallengeDraftId, ChallengeDraftValidationRecordId};
 use agentics_error::{Result, ServiceError};
 
-use super::rows::row_to_validation_record_response;
+use super::rows::{ChallengeDraftValidationRecord, row_to_validation_record};
 use super::{
     CreateChallengeDraftAuditEventInput, clear_stale_active_validation_tx,
     create_challenge_draft_audit_event_tx, lock_quota_scope,
@@ -39,7 +39,7 @@ pub async fn begin_challenge_draft_validation(
     window_seconds: i64,
     validation_limit: i64,
     validation_timeout_minutes: i32,
-) -> Result<ChallengeDraftValidationRecordResponse> {
+) -> Result<ChallengeDraftValidationRecord> {
     let mut tx = pool.begin().await?;
     let scope = format!("challenge-draft:{}:validations", input.draft_id);
     lock_quota_scope(&mut tx, &scope).await?;
@@ -136,7 +136,7 @@ pub async fn begin_challenge_draft_validation(
     }
 
     tx.commit().await?;
-    row_to_validation_record_response(row)
+    row_to_validation_record(row)
 }
 
 /// Count validation attempts for one draft inside a rolling window under a quota lock.
@@ -166,7 +166,7 @@ pub async fn finish_challenge_draft_validation(
     pool: &PgPool,
     input: &FinishChallengeDraftValidationInput,
     audit_event: &CreateChallengeDraftAuditEventInput,
-) -> Result<ChallengeDraftValidationRecordResponse> {
+) -> Result<ChallengeDraftValidationRecord> {
     let mut tx = pool.begin().await?;
     let next_status = match input.status {
         ChallengeDraftValidationStatus::Passed => ChallengeDraftStatus::Validated,
@@ -234,5 +234,5 @@ pub async fn finish_challenge_draft_validation(
     create_challenge_draft_audit_event_tx(&mut tx, audit_event).await?;
 
     tx.commit().await?;
-    row_to_validation_record_response(row)
+    row_to_validation_record(row)
 }

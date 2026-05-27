@@ -1,7 +1,7 @@
 use sqlx::{PgPool, Postgres, Transaction};
 
 use agentics_domain::models::challenge::ChallengeBundleSpec;
-use agentics_domain::models::challenge_creation::{ChallengeDraftResponse, ChallengeDraftStatus};
+use agentics_domain::models::challenge_creation::ChallengeDraftStatus;
 use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::ids::{
     AgentId, ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftPublishClaimId,
@@ -14,6 +14,7 @@ use agentics_error::{Result, ServiceError};
 use super::super::challenges::{
     PublishChallengeInput, add_challenge_owner_tx, publish_challenge_tx,
 };
+use super::ChallengeDraftRecord;
 use super::{
     CreateChallengeDraftAuditEventInput, create_challenge_draft_audit_event_tx,
     get_challenge_draft, lock_quota_scope,
@@ -54,7 +55,7 @@ pub struct PublishArchiveChallengeDraftInput {
 /// Draft record claimed for a single publish attempt.
 #[derive(Debug, Clone)]
 pub struct ClaimedChallengeDraftForPublish {
-    pub draft: ChallengeDraftResponse,
+    pub draft: ChallengeDraftRecord,
     pub publish_claim_id: Option<ChallengeDraftPublishClaimId>,
 }
 

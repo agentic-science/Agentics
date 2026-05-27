@@ -14,6 +14,7 @@ use agentics_error::{Result, ServiceError};
 use agentics_persistence::{self as persistence, Repositories};
 use agentics_storage::Storage;
 
+use super::presentation::draft_response;
 use super::types::ValidateChallengeDraftServiceRequest;
 use super::utils::cleanup_runtime_bundle;
 use super::{
@@ -38,6 +39,7 @@ pub async fn validate_challenge_draft(
         .get(draft_id.as_str())
         .await?
         .ok_or(ServiceError::NotFound)?;
+    let draft = draft_response(draft);
     if !matches!(
         draft.status,
         ChallengeDraftStatus::Draft | ChallengeDraftStatus::Validated
@@ -97,7 +99,7 @@ pub async fn validate_challenge_draft(
                 .get(draft.id.as_str())
                 .await?
                 .ok_or(ServiceError::NotFound)?;
-            Ok(draft)
+            Ok(draft_response(draft))
         }
         Err(error) => {
             let message = error.to_string();

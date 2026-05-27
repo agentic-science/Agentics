@@ -8,6 +8,7 @@ use agentics_domain::models::paths::RepoRelativePath;
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::{self as persistence, Repositories};
 
+use super::presentation::draft_response;
 use super::types::CreateChallengeDraftServiceRequest;
 
 /// Create a challenge draft bound to a public GitHub PR and manifest.
@@ -70,7 +71,7 @@ pub async fn create_challenge_draft(
         .await
         .map_err(ServiceError::unique_violation_as_conflict)?;
 
-    Ok(draft.into())
+    Ok(draft_response(draft).into())
 }
 
 /// Ensures a draft path follows the canonical `challenges/{challenge_name}` repository layout.
