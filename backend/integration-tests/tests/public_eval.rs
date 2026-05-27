@@ -45,9 +45,13 @@ async fn store_challenge_bundle_objects(
     private_bundle: &Path,
     public_bundle: &Path,
 ) -> (StorageKey, StorageKey, StorageKey) {
-    let storage = build_storage(config)
-        .await
-        .expect("storage backend should initialize");
+    let storage = build_storage(
+        config
+            .storage_factory_options()
+            .expect("valid storage options"),
+    )
+    .await
+    .expect("storage backend should initialize");
     let temp = tempfile::tempdir().expect("bundle archive tempdir");
     let private_archive = temp.path().join("private.tar");
     let public_archive = temp.path().join("public.tar");
@@ -111,7 +115,9 @@ async fn store_challenge_bundle_objects(
 /// Read a runner log through configured storage for assertion diagnostics.
 async fn runner_log_text(config: &Config, log_key: Option<&str>) -> Option<String> {
     let log_key = log_key?;
-    let storage = build_storage(config).await.ok()?;
+    let storage = build_storage(config.storage_factory_options().ok()?)
+        .await
+        .ok()?;
     let key = StorageKey::try_new(log_key).ok()?;
     storage
         .get(

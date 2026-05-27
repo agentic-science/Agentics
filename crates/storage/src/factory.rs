@@ -1,28 +1,30 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use agentics_config::{Config, StorageBackend};
+use crate::{
+    LocalStorage, LocalStorageOptions, Result, S3Storage, S3StorageOptions, Storage, StorageError,
+};
 
-use crate::{LocalStorage, Result, S3Storage, Storage, StorageError};
+/// Backend-specific durable storage construction options.
+#[derive(Debug, Clone)]
+pub enum StorageFactoryOptions {
+    Local(LocalStorageOptions),
+    S3(S3StorageOptions),
+}
 
 /// Build the configured durable storage backend.
-pub async fn build_storage(config: &Config) -> anyhow::Result<Arc<dyn Storage>> {
-    config.validate_object_storage_config()?;
-    match config.storage.backend {
-        StorageBackend::Local => Ok(Arc::new(LocalStorage::new(&config.storage.root))),
-        StorageBackend::S3 => Ok(Arc::new(S3Storage::from_config(config).await?)),
+pub async fn build_storage(options: StorageFactoryOptions) -> anyhow::Result<Arc<dyn Storage>> {
+    match options {
+        StorageFactoryOptions::Local(options) => Ok(Arc::new(LocalStorage::from_options(options))),
+        StorageFactoryOptions::S3(options) => Ok(Arc::new(S3Storage::from_options(options).await?)),
     }
 }
 
 /// Return the host-local work root for object storage staging and materialization.
-pub fn storage_work_root(config: &Config) -> Result<PathBuf> {
-    let root = config
-        .storage
-        .work_root
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
+pub fn storage_work_root(work_root: Option<&Path>) -> Result<PathBuf> {
+    let root = work_root
+        .filter(|value| !value.as_os_str().is_empty())
+        .map(Path::to_path_buf)
         .unwrap_or_else(|| std::env::temp_dir().join("agentics-storage-work"));
     if !root.is_absolute() {
         return Err(StorageError::InvalidKey(

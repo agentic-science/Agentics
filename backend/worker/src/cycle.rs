@@ -55,7 +55,7 @@ impl Worker {
                 "reconciled runner containers from previous attempts"
             );
         }
-        let storage = build_storage(&config).await?;
+        let storage = build_storage(config.storage_factory_options()?).await?;
         let worker_id = worker_instance_id();
 
         Ok(Self {

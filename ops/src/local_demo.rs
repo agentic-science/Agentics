@@ -459,9 +459,14 @@ mod tests {
         .expect("manifest");
         std::fs::write(solution_root.join("run.sh"), "#!/usr/bin/env sh\n").expect("run");
 
-        let storage = agentics_storage::build_storage(config.storage_config())
-            .await
-            .expect("storage");
+        let storage = agentics_storage::build_storage(
+            config
+                .storage_config()
+                .storage_factory_options()
+                .expect("valid storage options"),
+        )
+        .await
+        .expect("storage");
         let key = super::local_demo_seed::upload_test_solution_artifact_for_test(
             storage.as_ref(),
             config.storage_config(),

@@ -8,7 +8,6 @@ workspace = true
 
 [dependencies]
 agentics-domain = { workspace = true }
-agentics-config = { workspace = true }
 tokio = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }

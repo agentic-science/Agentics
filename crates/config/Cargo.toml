@@ -9,6 +9,7 @@ workspace = true
 [dependencies]
 agentics-domain = { workspace = true }
 agentics-contracts = { workspace = true }
+agentics-storage = { workspace = true }
 anyhow = { workspace = true }
 envy = { workspace = true }
 garde = { workspace = true }

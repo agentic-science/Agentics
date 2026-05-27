@@ -12,7 +12,9 @@ use agentics_config::{
     ENV_AGENTICS_S3_REGION, RunnerWritableStorageMode, StorageBackend,
 };
 use agentics_runner::connect_docker;
-use agentics_storage::{S3Storage, StorageKey, StorageWriteIntent, build_storage};
+use agentics_storage::{
+    S3Storage, StorageFactoryOptions, StorageKey, StorageWriteIntent, build_storage,
+};
 use api_server::admin_auth_throttle::AdminAuthThrottle;
 use api_server::router;
 use api_server::state::AppState;
@@ -65,9 +67,13 @@ pub async fn spawn_app(pool: PgPool) -> TestApp {
 /// directories while exercising the real router and startup seeding path.
 pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
     ensure_test_storage_bucket(&config).await;
-    let storage = build_storage(&config)
-        .await
-        .expect("failed to initialize test storage");
+    let storage = build_storage(
+        config
+            .storage_factory_options()
+            .expect("valid storage options"),
+    )
+    .await
+    .expect("failed to initialize test storage");
     if std::fs::exists(&config.storage.challenges_root).expect("failed to inspect challenge root") {
         agentics_services::maintenance::ensure_challenges_seeded_from_root(
             &pool,
@@ -223,9 +229,15 @@ async fn ensure_test_storage_bucket(config: &Config) {
     if config.storage.backend != StorageBackend::S3 {
         return;
     }
-    let storage = S3Storage::from_config(config)
-        .await
-        .expect("failed to initialize S3 test storage for bucket setup");
+    let storage = match config
+        .storage_factory_options()
+        .expect("valid S3 test storage options")
+    {
+        StorageFactoryOptions::S3(options) => S3Storage::from_options(options)
+            .await
+            .expect("failed to initialize S3 test storage for bucket setup"),
+        StorageFactoryOptions::Local(_) => return,
+    };
     storage
         .create_bucket_if_missing_for_tests()
         .await
@@ -234,27 +246,39 @@ async fn ensure_test_storage_bucket(config: &Config) {
 
 /// Return whether a configured test-storage key exists.
 pub async fn storage_key_exists(config: &Config, key: &str) -> bool {
-    let storage = build_storage(config)
-        .await
-        .expect("failed to initialize test storage");
+    let storage = build_storage(
+        config
+            .storage_factory_options()
+            .expect("valid storage options"),
+    )
+    .await
+    .expect("failed to initialize test storage");
     let key = StorageKey::try_new(key).expect("test storage key should be valid");
     storage.exists(&key).await.expect("storage exists check")
 }
 
 /// Read bytes through the configured test-storage backend.
 pub async fn read_storage_key(config: &Config, key: &str, intent: StorageWriteIntent) -> Vec<u8> {
-    let storage = build_storage(config)
-        .await
-        .expect("failed to initialize test storage");
+    let storage = build_storage(
+        config
+            .storage_factory_options()
+            .expect("valid storage options"),
+    )
+    .await
+    .expect("failed to initialize test storage");
     let key = StorageKey::try_new(key).expect("test storage key should be valid");
     storage.get(&key, intent).await.expect("storage read")
 }
 
 /// Store test bytes through the configured test-storage backend.
 pub async fn put_storage_key(config: &Config, key: &StorageKey, bytes: &[u8]) {
-    let storage = build_storage(config)
-        .await
-        .expect("failed to initialize test storage");
+    let storage = build_storage(
+        config
+            .storage_factory_options()
+            .expect("valid storage options"),
+    )
+    .await
+    .expect("failed to initialize test storage");
     let max_bytes = u64::try_from(bytes.len()).expect("test bytes length fits u64");
     storage
         .put(
@@ -268,9 +292,13 @@ pub async fn put_storage_key(config: &Config, key: &StorageKey, bytes: &[u8]) {
 
 /// Return whether a configured durable-storage prefix has no objects.
 pub async fn storage_prefix_is_empty(config: &Config, prefix: &str) -> bool {
-    let storage = build_storage(config)
-        .await
-        .expect("failed to initialize test storage");
+    let storage = build_storage(
+        config
+            .storage_factory_options()
+            .expect("valid storage options"),
+    )
+    .await
+    .expect("failed to initialize test storage");
     let prefix = StorageKey::try_new(prefix).expect("test storage prefix should be valid");
     storage
         .list_prefix(&prefix)
@@ -544,9 +572,13 @@ pub fn sample_sum_solution(expression: &str) -> String {
 /// Execute one production worker cycle against the integration-test database.
 pub async fn run_worker_once(pool: &PgPool, config: &Config) {
     let docker = connect_docker(config).expect("failed to connect to Docker");
-    let storage = build_storage(config)
-        .await
-        .expect("failed to initialize worker storage");
+    let storage = build_storage(
+        config
+            .storage_factory_options()
+            .expect("valid storage options"),
+    )
+    .await
+    .expect("failed to initialize worker storage");
 
     worker::cycle::run_worker_cycle(
         pool,

@@ -1,7 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use agentics_config::Config;
 use async_trait::async_trait;
 use aws_config::BehaviorVersion;
 use aws_sdk_s3::config::Region;
@@ -36,26 +35,6 @@ pub struct S3StorageOptions {
 }
 
 impl S3Storage {
-    /// Build an S3 storage client from runtime configuration.
-    pub async fn from_config(config: &Config) -> anyhow::Result<Self> {
-        Self::from_options(S3StorageOptions {
-            bucket: config
-                .storage
-                .s3_bucket
-                .as_deref()
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .ok_or_else(|| anyhow::anyhow!("AGENTICS_S3_BUCKET must be set"))?
-                .to_string(),
-            prefix: config.storage.s3_prefix.clone(),
-            region: config.storage.s3_region.clone(),
-            endpoint_url: config.storage.s3_endpoint_url.clone(),
-            force_path_style: config.storage.s3_force_path_style,
-            work_root: Some(storage_work_root(config)?),
-        })
-        .await
-    }
-
     /// Build an S3 storage client from explicit options.
     pub async fn from_options(options: S3StorageOptions) -> anyhow::Result<Self> {
         let bucket = options.bucket.trim().to_string();
@@ -76,9 +55,7 @@ impl S3Storage {
             client: aws_sdk_s3::Client::from_conf(s3_config.build()),
             bucket,
             prefix: normalized_s3_prefix(options.prefix.as_deref())?,
-            work_root: options
-                .work_root
-                .unwrap_or_else(|| std::env::temp_dir().join("agentics-storage-work")),
+            work_root: storage_work_root(options.work_root.as_deref())?,
         })
     }
 

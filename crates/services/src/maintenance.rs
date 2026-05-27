@@ -7,9 +7,7 @@ use agentics_domain::models::challenge::ChallengeBundleSpec;
 use agentics_domain::storage::StorageKey;
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::{PublishChallengeInput, Repositories};
-use agentics_storage::{
-    Storage, StorageError, StorageWriteIntent, pack_directory_to_tar, storage_work_root,
-};
+use agentics_storage::{Storage, StorageError, StorageWriteIntent, pack_directory_to_tar};
 use sqlx::PgPool;
 
 use crate::storage_errors::storage_error_to_service_error;
@@ -146,7 +144,8 @@ async fn seeded_public_bundle_dir(
         return Ok(bundle_dir.to_path_buf());
     }
 
-    let target = storage_work_root(config)
+    let target = config
+        .storage_work_root()
         .map_err(storage_error_to_service_error)?
         .join("seeded-public-bundles")
         .join(spec.challenge_name.as_str())
@@ -181,7 +180,8 @@ async fn put_bundle_archive_if_missing(
     {
         return Ok(());
     }
-    let archive_path = storage_work_root(config)
+    let archive_path = config
+        .storage_work_root()
         .map_err(storage_error_to_service_error)?
         .join("_tmp")
         .join(format!("{label}-{}.tar", uuid::Uuid::new_v4()));

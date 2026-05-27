@@ -51,6 +51,7 @@ version = "0.2.5"
 dependencies = [
  "agentics-contracts",
  "agentics-domain",
+ "agentics-storage",
  "anyhow",
  "envy",
  "garde",
@@ -226,7 +227,6 @@ dependencies = [
 name = "agentics-storage"
 version = "0.2.5"
 dependencies = [
- "agentics-config",
  "agentics-domain",
  "anyhow",
  "async-trait",

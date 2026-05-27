@@ -187,9 +187,13 @@ async fn publish_cuda_smoke_challenge(
     let spec = agentics_contracts::challenge_bundle::read_challenge_bundle_spec(private_bundle)
         .await
         .expect("failed to read CUDA smoke spec");
-    let storage = build_storage(config)
-        .await
-        .expect("storage should initialize");
+    let storage = build_storage(
+        config
+            .storage_factory_options()
+            .expect("valid storage options"),
+    )
+    .await
+    .expect("storage should initialize");
     let private_key = StorageKey::try_new("challenge-bundles/cuda-smoke/manual-private.tar")
         .expect("valid private key");
     let public_key = StorageKey::try_new("challenge-public-bundles/cuda-smoke/manual-public.tar")

@@ -14,7 +14,7 @@ use agentics_domain::models::challenge_creation::{
 };
 use agentics_domain::models::ids::ChallengeDraftPublishClaimId;
 use agentics_error::{Result, ServiceError};
-use agentics_storage::{Storage, StorageWriteIntent, storage_work_root};
+use agentics_storage::{Storage, StorageWriteIntent};
 
 use crate::storage_errors::storage_error_to_service_error;
 
@@ -114,7 +114,8 @@ pub(super) fn temporary_runtime_bundle_path(
     draft: &ChallengeDraftResponse,
     publish_claim_id: &ChallengeDraftPublishClaimId,
 ) -> Result<PathBuf> {
-    Ok(storage_work_root(config)
+    Ok(config
+        .storage_work_root()
         .map_err(storage_error_to_service_error)?
         .join("_tmp")
         .join("challenge-bundles")
@@ -132,7 +133,8 @@ pub(super) fn temporary_public_runtime_bundle_path(
     draft: &ChallengeDraftResponse,
     publish_claim_id: &ChallengeDraftPublishClaimId,
 ) -> Result<PathBuf> {
-    Ok(storage_work_root(config)
+    Ok(config
+        .storage_work_root()
         .map_err(storage_error_to_service_error)?
         .join("_tmp")
         .join("challenge-public-bundles")

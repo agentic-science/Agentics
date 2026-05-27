@@ -35,9 +35,9 @@ mod tar_archive;
 
 pub use backend::Storage;
 pub use error::{Result, StorageError};
-pub use factory::{build_storage, storage_work_root};
+pub use factory::{StorageFactoryOptions, build_storage, storage_work_root};
 pub use intent::StorageWriteIntent;
-pub use local::LocalStorage;
+pub use local::{LocalStorage, LocalStorageOptions};
 pub use s3::{S3Storage, S3StorageOptions};
 pub use tar_archive::{pack_directory_to_tar, unpack_tar_to_directory};
 

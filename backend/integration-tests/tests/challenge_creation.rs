@@ -912,7 +912,13 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
             .expect("existing public bundle key");
     let existing_statement_key = StorageKey::try_new("challenge-statements/sample-sum/existing.md")
         .expect("existing statement key");
-    let storage_backend = build_storage(&config).await.expect("storage backend");
+    let storage_backend = build_storage(
+        config
+            .storage_factory_options()
+            .expect("valid storage options"),
+    )
+    .await
+    .expect("storage backend");
     storage_backend
         .put(
             &existing_statement_key,
@@ -1087,7 +1093,13 @@ async fn materialize_bundle_key(
     bundle_key: &str,
     label: &str,
 ) -> (tempfile::TempDir, std::path::PathBuf) {
-    let storage_backend = build_storage(config).await.expect("storage backend");
+    let storage_backend = build_storage(
+        config
+            .storage_factory_options()
+            .expect("valid storage options"),
+    )
+    .await
+    .expect("storage backend");
     let materialized = tempfile::tempdir().expect("materialized bundle tempdir");
     let archive = materialized.path().join(format!("{label}.tar"));
     storage_backend

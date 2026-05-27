@@ -9,6 +9,7 @@ use agentics_domain::models::urls::{
     GithubApiUserUrl, GithubOauthAuthorizeUrl, GithubOauthRedirectUrl, GithubOauthTokenUrl,
     MoltbookSubmoltUrl,
 };
+use agentics_storage::{LocalStorageOptions, S3StorageOptions, StorageFactoryOptions};
 pub use local_urls::{local_api_base_url, local_web_base_url};
 pub use runtime_modes::{
     AgentRegistrationMode, HostProbeMode, RunnerNamespace, RunnerSecurityProfile,
@@ -438,6 +439,46 @@ impl Config {
     /// Validate durable object storage configuration.
     pub fn validate_object_storage_config(&self) -> anyhow::Result<()> {
         storage_config::validate_object_storage_config(self)
+    }
+
+    /// Build backend-specific durable storage options from validated runtime config.
+    pub fn storage_factory_options(&self) -> anyhow::Result<StorageFactoryOptions> {
+        self.validate_object_storage_config()?;
+        match self.storage.backend {
+            StorageBackend::Local => Ok(StorageFactoryOptions::Local(LocalStorageOptions {
+                root: PathBuf::from(&self.storage.root),
+            })),
+            StorageBackend::S3 => {
+                let bucket = self
+                    .storage
+                    .s3_bucket
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .ok_or_else(|| anyhow::anyhow!("AGENTICS_S3_BUCKET must be set"))?
+                    .to_string();
+                Ok(StorageFactoryOptions::S3(S3StorageOptions {
+                    bucket,
+                    prefix: self.storage.s3_prefix.clone(),
+                    region: self.storage.s3_region.clone(),
+                    endpoint_url: self.storage.s3_endpoint_url.clone(),
+                    force_path_style: self.storage.s3_force_path_style,
+                    work_root: Some(self.storage_work_root()?),
+                }))
+            }
+        }
+    }
+
+    /// Resolve the host-local work root for storage staging and materialization.
+    pub fn storage_work_root(&self) -> agentics_storage::Result<PathBuf> {
+        let work_root = self
+            .storage
+            .work_root
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from);
+        agentics_storage::storage_work_root(work_root.as_deref())
     }
 
     /// Validate Moltbook platform-community configuration.

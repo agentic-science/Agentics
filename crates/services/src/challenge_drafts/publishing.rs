@@ -15,9 +15,7 @@ use agentics_domain::models::ids::{ChallengeDraftAuditEventId, ChallengeDraftPub
 use agentics_domain::models::paths::RepositoryCheckoutPath;
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::{self as persistence, Repositories};
-use agentics_storage::{
-    Storage, StorageKey, StorageWriteIntent, pack_directory_to_tar, storage_work_root,
-};
+use agentics_storage::{Storage, StorageKey, StorageWriteIntent, pack_directory_to_tar};
 
 use super::types::PublishChallengeDraftServiceRequest;
 use super::utils::{
@@ -210,11 +208,13 @@ async fn prepare_and_publish_new_challenge_draft(
         "challenge-statements/{}/{}-{}.md",
         ctx.manifest.challenge_name, ctx.draft.id, ctx.publish_claim_id
     ))?;
-    let private_archive_path = storage_work_root(config)
+    let private_archive_path = config
+        .storage_work_root()
         .map_err(storage_error_to_service_error)?
         .join("_tmp")
         .join(format!("bundle-{}.tar", Uuid::new_v4()));
-    let public_archive_path = storage_work_root(config)
+    let public_archive_path = config
+        .storage_work_root()
         .map_err(storage_error_to_service_error)?
         .join("_tmp")
         .join(format!("public-bundle-{}.tar", Uuid::new_v4()));

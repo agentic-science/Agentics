@@ -17,12 +17,23 @@ pub struct LocalStorage {
     root: PathBuf,
 }
 
+/// Local filesystem durable storage settings.
+#[derive(Debug, Clone)]
+pub struct LocalStorageOptions {
+    pub root: PathBuf,
+}
+
 impl LocalStorage {
     /// Create local storage rooted at `root`.
     pub fn new(root: impl AsRef<Path>) -> Self {
         Self {
             root: root.as_ref().to_path_buf(),
         }
+    }
+
+    /// Create local storage from explicit options.
+    pub fn from_options(options: LocalStorageOptions) -> Self {
+        Self::new(options.root)
     }
 
     fn resolve(&self, key: &StorageKey) -> (PathBuf, PathBuf) {

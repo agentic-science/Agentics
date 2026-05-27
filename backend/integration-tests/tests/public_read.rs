@@ -394,9 +394,13 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
 
 /// Confirms runner scratch work is cleaned instead of persisting private I/O trees.
 async fn assert_runner_persisted_only_intended_artifacts(config: &Config, job_id: &str) {
-    let storage = build_storage(config)
-        .await
-        .expect("failed to initialize test storage");
+    let storage = build_storage(
+        config
+            .storage_factory_options()
+            .expect("valid storage options"),
+    )
+    .await
+    .expect("failed to initialize test storage");
     let prefix = StorageKey::try_new(format!("eval-artifacts/{job_id}"))
         .expect("test job artifact prefix is valid");
     let keys = storage

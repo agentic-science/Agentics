@@ -17,7 +17,7 @@ use agentics_domain::storage::StorageKey;
 use agentics_persistence::{
     CreateSolutionSubmissionInput, Repositories, SolutionSubmissionQuotaAdmission,
 };
-use agentics_storage::{Storage, StorageWriteIntent, storage_work_root};
+use agentics_storage::{Storage, StorageWriteIntent};
 use secrecy::ExposeSecret;
 use sqlx::PgPool;
 use sqlx::postgres::PgPoolOptions;
@@ -63,9 +63,14 @@ pub(super) async fn prepare_challenge_root(
     let source_root = challenge_repository_root(config.repo_root()).join(CHALLENGES_DIR);
     let destination_root = PathBuf::from(&config.storage_config().storage.challenges_root);
     let challenges = discover_frontier_challenges(&source_root).await?;
-    let storage = agentics_storage::build_storage(config.storage_config())
-        .await
-        .map_err(|error| LocalDemoError::StorageInit(error.to_string()))?;
+    let storage = agentics_storage::build_storage(
+        config
+            .storage_config()
+            .storage_factory_options()
+            .map_err(|error| LocalDemoError::StorageInit(error.to_string()))?,
+    )
+    .await
+    .map_err(|error| LocalDemoError::StorageInit(error.to_string()))?;
     replace_dir(&destination_root)?;
     for challenge in &challenges {
         let destination = destination_root.join(challenge.name.as_str());
@@ -120,9 +125,14 @@ pub(super) async fn seed_database(
         .max_connections(3)
         .connect(config.database_url_secret().expose_secret())
         .await?;
-    let storage = agentics_storage::build_storage(config.storage_config())
-        .await
-        .map_err(|error| LocalDemoError::StorageInit(error.to_string()))?;
+    let storage = agentics_storage::build_storage(
+        config
+            .storage_config()
+            .storage_factory_options()
+            .map_err(|error| LocalDemoError::StorageInit(error.to_string()))?,
+    )
+    .await
+    .map_err(|error| LocalDemoError::StorageInit(error.to_string()))?;
     let challenges = discover_frontier_challenges(&PathBuf::from(
         &config.storage_config().storage.challenges_root,
     ))
@@ -437,7 +447,7 @@ async fn upload_test_solution_artifact(
     if storage.exists(&artifact_key).await? {
         storage.delete(&artifact_key).await?;
     }
-    let archive_path = storage_work_root(config)?.join("_tmp").join(format!(
+    let archive_path = config.storage_work_root()?.join("_tmp").join(format!(
         "frontier-dev-solution-{challenge_name}-{}.zip",
         uuid::Uuid::new_v4()
     ));

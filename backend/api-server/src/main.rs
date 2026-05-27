@@ -42,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
     let db = create_pool(&config, 10)
         .await
         .context("create database pool")?;
-    let storage = build_storage(&config)
+    let storage = build_storage(config.storage_factory_options()?)
         .await
         .context("build storage backend")?;
 
