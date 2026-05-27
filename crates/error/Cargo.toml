@@ -1,0 +1,14 @@
+[package]
+name = "agentics-error"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+schemars = { workspace = true }
+thiserror = { workspace = true }
+sqlx = { workspace = true }
+zip = { workspace = true }

@@ -7,6 +7,7 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
+agentics-error = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 secrecy = { workspace = true }
@@ -19,7 +20,5 @@ nutype = { workspace = true }
 garde = { workspace = true }
 gix-hash = { workspace = true }
 oci-spec = { workspace = true }
-sqlx = { workspace = true }
-zip = { workspace = true }
 rand = { workspace = true }
 hex = { workspace = true }

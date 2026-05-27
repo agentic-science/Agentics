@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/error",
     "crates/domain",
     "crates/contracts",
     "crates/storage",
@@ -58,6 +59,7 @@ unwrap_used = "warn"
 wildcard_imports = "warn"
 
 [workspace.dependencies]
+agentics-error = { path = "crates/error" }
 agentics-domain = { path = "crates/domain" }
 agentics-contracts = { path = "crates/contracts" }
 agentics-storage = { path = "crates/storage" }

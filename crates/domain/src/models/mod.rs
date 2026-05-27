@@ -27,7 +27,9 @@ mod contract_tests;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::ServiceErrorCode;
+use agentics_error::ServiceErrorCode;
+
+pub use agentics_error::ErrorDetail;
 
 /// Standard error response shape used by all API extractors and handlers.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
@@ -42,14 +44,6 @@ pub struct ErrorBody {
     pub message: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub details: Vec<ErrorDetail>,
-}
-
-/// Optional structured validation detail for one request problem.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct ErrorDetail {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub field: Option<String>,
-    pub message: String,
 }
 
 /// Health-check response returned by the API server.

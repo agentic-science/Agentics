@@ -68,8 +68,10 @@ concurrency boundaries.
 
 The codebase now uses explicit internal crates for the main backend boundaries:
 
-- `agentics-domain` for IDs, names, URLs, storage keys, DTOs, and shared error
-  vocabulary,
+- `agentics-error` for the shared service error type, stable API error codes,
+  and structured validation details,
+- `agentics-domain` for IDs, names, URLs, storage keys, DTOs, and semantic
+  models,
 - `agentics-contracts` for challenge bundles, solution manifests, validation
   policy, and frontend schema export,
 - `agentics-storage` for durable object storage traits, local storage, and
@@ -90,8 +92,14 @@ service-layer migrations less tangled.
 The current crate boundaries are:
 
 ```text
+agentics-error
+  Shared service error type, stable API error codes, structured validation
+  details, and infrastructure error adaptation.
+
 agentics-domain
-  IDs, names, URLs, DTOs, redacted projection types, shared error vocabulary.
+  IDs, names, URLs, DTOs, redacted projection types, and semantic models. It
+  should not depend directly on SQLx, ZIP readers, Docker, or storage
+  implementations.
 
 agentics-contracts
   Challenge bundle schema, solution manifest schema, target/image policy,
@@ -136,11 +144,11 @@ agentics-cli
 The dependency direction should be:
 
 ```text
-domain <- contracts <- services <- api-server
-domain <- contracts <- services <- worker
-domain <- contracts <- agentics-cli
-domain <- contracts <- agentics-runner
-domain <- persistence <- services
+error <- domain <- contracts <- services <- api-server
+error <- domain <- contracts <- services <- worker
+error <- domain <- contracts <- agentics-cli
+error <- domain <- contracts <- agentics-runner
+error <- domain <- persistence <- services
 ```
 
 The runner should not own durable database state. Persistence should not know
