@@ -7,23 +7,25 @@ use agentics_domain::models::ids::{AgentId, EvaluationJobId, SolutionSubmissionI
 use agentics_domain::models::request::{
     CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse,
 };
-use agentics_error::{Result, ServiceError};
+use agentics_error::Result;
 use agentics_persistence::{CreateSolutionSubmissionInput, Repositories};
 use agentics_storage::Storage;
 
-use crate::evaluation_lifecycle;
-use crate::public_projection;
 use crate::storage_errors::storage_error_to_service_error;
 
 mod admission;
 mod artifact_staging;
 mod cleanup;
+mod job_staging;
+mod presentation;
 
 use admission::{challenge_lifetime_limit, ensure_submission_quota_available, quota_admission};
 use artifact_staging::{
     decode_solution_artifact, solution_artifact_keys, stage_temporary_solution_artifact,
 };
 use cleanup::{cleanup_solution_submission_record, cleanup_storage_key};
+use job_staging::mark_initial_job_ready_or_cleanup;
+use presentation::present_created_solution_submission;
 
 /// Authenticated request to create one official submission or validation run.
 #[derive(Debug, Clone)]
@@ -119,22 +121,15 @@ pub async fn create_solution_submission(
         return Err(storage_error_to_service_error(error));
     }
 
-    if let Err(error) = evaluation_lifecycle::mark_staged_evaluation_job_ready(pool, &job_id).await
-    {
-        cleanup_solution_submission_record(pool, &solution_submission.id).await;
-        cleanup_storage_key(storage, &artifact_keys.durable).await;
-        cleanup_storage_key(storage, &temporary_artifact_key).await;
-        return Err(error);
-    }
-    let solution_submission = repos
-        .solution_submissions()
-        .get_by_id(&solution_submission.id)
-        .await?
-        .ok_or_else(|| {
-            ServiceError::Internal(
-                "solution submission disappeared after staged job was marked ready".to_string(),
-            )
-        })?;
+    mark_initial_job_ready_or_cleanup(
+        pool,
+        storage,
+        &solution_submission.id,
+        &job_id,
+        &artifact_keys.durable,
+        &temporary_artifact_key,
+    )
+    .await?;
 
-    public_projection::present_create_solution_submission(&solution_submission)
+    present_created_solution_submission(pool, &solution_submission.id).await
 }
