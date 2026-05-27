@@ -1,20 +1,19 @@
 "use client";
 
-import {
-  BarChart3,
-  FileArchive,
-  GitPullRequest,
-  ListPlus,
-  RefreshCw,
-  UploadCloud,
-  Users,
-} from "lucide-react";
+import { GitPullRequest } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type FormEvent, useEffect, useState } from "react";
 import {
-  ConsoleSectionTitle as SectionTitle,
-  ConsoleTextInput as TextInput,
-} from "@/components/ConsolePrimitives";
+  type CreatorDraftFormState,
+  type CreatorOwnerFormState,
+  type CreatorPrivateAssetFormState,
+  DraftCreateForm,
+  DraftInspectForm,
+  defaultCreatorManifest,
+  OwnerStatsForm,
+  PrivateAssetUploadForm,
+  ShortlistUploadForm,
+} from "@/components/creator/CreatorForms";
 import {
   CreatorIdentityPanel,
   DraftDetail,
@@ -22,7 +21,6 @@ import {
 } from "@/components/creator/CreatorPanels";
 import {
   type ChallengeCreationManifest,
-  type ChallengePrivateAssetKind,
   type CreateChallengeDraftRequest,
   CreatorApiError,
   createChallengeDraft,
@@ -54,43 +52,6 @@ import type {
 
 const LAST_DRAFT_STORAGE_KEY = "agentics.creator.last_draft_id";
 
-const defaultManifest = JSON.stringify(
-  {
-    schema_version: 1,
-    request: "new_challenge",
-    challenge_name: "frontier-cs-example-challenge",
-    title: "Frontier-CS Example Challenge",
-    summary: {
-      en: "Benchmark a small Frontier-CS style task.",
-      zh: "评测一个小型 Frontier-CS 风格任务。",
-    },
-    keywords: ["frontier-cs", "benchmark", "migration"],
-    readme_path: "README.md",
-    bundle_path: "v1",
-    private_assets: [
-      {
-        asset_name: "official-seed-config",
-        kind: "private_seeds",
-        required: true,
-      },
-    ],
-    ci: {
-      validate_manifest: true,
-      validate_public_bundle: true,
-      smoke_test_public_validation: true,
-    },
-  },
-  null,
-  2,
-);
-
-const assetKinds: ChallengePrivateAssetKind[] = [
-  "private_benchmark_data",
-  "private_evaluator_package",
-  "private_seeds",
-  "private_reference_outputs",
-];
-
 /** Renders the creator console component. */
 export function CreatorConsole() {
   const t = useTranslations("creator");
@@ -100,28 +61,22 @@ export function CreatorConsole() {
     null,
   );
   const [draftLookupId, setDraftLookupId] = useState("");
-  const [draftForm, setDraftForm] = useState({
+  const [draftForm, setDraftForm] = useState<CreatorDraftFormState>({
     repoUrl: "https://github.com/agentics-reifying/agentics-challenges",
     prNumber: "",
     prUrl: "",
     commitSha: "",
     challengePath: "challenges/frontier-cs-example-challenge",
-    manifestText: defaultManifest,
+    manifestText: defaultCreatorManifest,
   });
-  const [assetForm, setAssetForm] = useState<{
-    draftId: string;
-    assetName: string;
-    kind: ChallengePrivateAssetKind;
-    required: boolean;
-    file: File | null;
-  }>({
+  const [assetForm, setAssetForm] = useState<CreatorPrivateAssetFormState>({
     draftId: "",
     assetName: "official-seed-config",
     kind: "private_seeds",
     required: true,
     file: null,
   });
-  const [ownerForm, setOwnerForm] = useState({
+  const [ownerForm, setOwnerForm] = useState<CreatorOwnerFormState>({
     challengeName: "",
     target: "linux-arm64-cpu",
     shortlistText: JSON.stringify(
@@ -486,164 +441,26 @@ export function CreatorConsole() {
 
       <section className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-6">
         <div className="flex flex-col gap-5">
-          <form className="card flex flex-col gap-4" onSubmit={submitDraft}>
-            <SectionTitle
-              icon={<GitPullRequest className="w-4 h-4" />}
-              title={t("draft.create")}
-            />
-            <TextInput
-              label={t("draft.repositoryUrl")}
-              value={draftForm.repoUrl}
-              onChange={(repoUrl) => setDraftForm({ ...draftForm, repoUrl })}
-              required
-            />
-            <TextInput
-              label={t("draft.prNumber")}
-              value={draftForm.prNumber}
-              onChange={(prNumber) => setDraftForm({ ...draftForm, prNumber })}
-              required
-            />
-            <TextInput
-              label={t("draft.prUrl")}
-              value={draftForm.prUrl}
-              onChange={(prUrl) => setDraftForm({ ...draftForm, prUrl })}
-              required
-            />
-            <TextInput
-              label={t("draft.commitSha")}
-              value={draftForm.commitSha}
-              onChange={(commitSha) =>
-                setDraftForm({ ...draftForm, commitSha })
-              }
-              required
-            />
-            <TextInput
-              label={t("draft.challengePath")}
-              value={draftForm.challengePath}
-              onChange={(challengePath) =>
-                setDraftForm({ ...draftForm, challengePath })
-              }
-              required
-            />
-            <label className="flex flex-col gap-1">
-              <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-                {t("draft.manifestJson")}
-              </span>
-              <textarea
-                className="min-h-80 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 font-mono text-[var(--text-caption)] leading-relaxed outline-none focus:border-[var(--accent-primary-500)]"
-                value={draftForm.manifestText}
-                onChange={(event) =>
-                  setDraftForm({
-                    ...draftForm,
-                    manifestText: event.target.value,
-                  })
-                }
-                required
-              />
-            </label>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading}
-            >
-              <GitPullRequest className="w-4 h-4" />
-              {t("draft.create")}
-            </button>
-          </form>
+          <DraftCreateForm
+            draftForm={draftForm}
+            setDraftForm={setDraftForm}
+            loading={loading}
+            onSubmit={submitDraft}
+          />
 
-          <form className="card flex flex-col gap-4" onSubmit={inspectDraft}>
-            <SectionTitle
-              icon={<RefreshCw className="w-4 h-4" />}
-              title={t("draft.inspect")}
-            />
-            <TextInput
-              label={t("draft.draftId")}
-              value={draftLookupId}
-              onChange={setDraftLookupId}
-              required
-            />
-            <button
-              type="submit"
-              className="btn btn-secondary"
-              disabled={loading}
-            >
-              {t("draft.load")}
-            </button>
-          </form>
+          <DraftInspectForm
+            draftLookupId={draftLookupId}
+            setDraftLookupId={setDraftLookupId}
+            loading={loading}
+            onSubmit={inspectDraft}
+          />
 
-          <form className="card flex flex-col gap-4" onSubmit={uploadAsset}>
-            <SectionTitle
-              icon={<UploadCloud className="w-4 h-4" />}
-              title={t("draft.uploadPrivateAsset")}
-            />
-            <TextInput
-              label={t("draft.draftId")}
-              value={assetForm.draftId}
-              onChange={(draftId) => setAssetForm({ ...assetForm, draftId })}
-              required
-            />
-            <TextInput
-              label={t("draft.assetName")}
-              value={assetForm.assetName}
-              onChange={(assetName) =>
-                setAssetForm({ ...assetForm, assetName })
-              }
-              required
-            />
-            <label className="flex flex-col gap-1">
-              <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-                {t("draft.assetKind")}
-              </span>
-              <select
-                className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
-                value={assetForm.kind}
-                onChange={(event) =>
-                  setAssetForm({
-                    ...assetForm,
-                    kind: event.target.value as ChallengePrivateAssetKind,
-                  })
-                }
-              >
-                {assetKinds.map((kind) => (
-                  <option key={kind} value={kind}>
-                    {kind}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex items-center gap-2 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
-              <input
-                type="checkbox"
-                checked={assetForm.required}
-                onChange={(event) =>
-                  setAssetForm({
-                    ...assetForm,
-                    required: event.target.checked,
-                  })
-                }
-              />
-              {t("draft.requiredForPublish")}
-            </label>
-            <input
-              type="file"
-              className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)]"
-              onChange={(event) =>
-                setAssetForm({
-                  ...assetForm,
-                  file: event.target.files?.[0] ?? null,
-                })
-              }
-              required
-            />
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading}
-            >
-              <FileArchive className="w-4 h-4" />
-              {t("draft.uploadAsset")}
-            </button>
-          </form>
+          <PrivateAssetUploadForm
+            assetForm={assetForm}
+            setAssetForm={setAssetForm}
+            loading={loading}
+            onSubmit={uploadAsset}
+          />
         </div>
 
         <DraftDetail draft={draft} />
@@ -651,65 +468,19 @@ export function CreatorConsole() {
 
       <section className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-6">
         <div className="flex flex-col gap-5">
-          <div className="card flex flex-col gap-4">
-            <SectionTitle
-              icon={<BarChart3 className="w-4 h-4" />}
-              title={t("owner.statisticsForm")}
-            />
-            <TextInput
-              label={t("owner.publishedChallengeName")}
-              value={ownerForm.challengeName}
-              onChange={(challengeName) =>
-                setOwnerForm({ ...ownerForm, challengeName })
-              }
-              required
-            />
-            <TextInput
-              label={t("owner.target")}
-              value={ownerForm.target}
-              onChange={(target) => setOwnerForm({ ...ownerForm, target })}
-            />
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={loading}
-              onClick={() => void loadOwnerSurfaces()}
-            >
-              <Users className="w-4 h-4" />
-              {t("owner.load")}
-            </button>
-          </div>
+          <OwnerStatsForm
+            ownerForm={ownerForm}
+            setOwnerForm={setOwnerForm}
+            loading={loading}
+            onLoad={loadOwnerSurfaces}
+          />
 
-          <form className="card flex flex-col gap-4" onSubmit={uploadShortlist}>
-            <SectionTitle
-              icon={<ListPlus className="w-4 h-4" />}
-              title={t("owner.uploadShortlist")}
-            />
-            <label className="flex flex-col gap-1">
-              <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
-                {t("owner.deltaJson")}
-              </span>
-              <textarea
-                className="min-h-40 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 font-mono text-[var(--text-caption)] leading-relaxed outline-none focus:border-[var(--accent-primary-500)]"
-                value={ownerForm.shortlistText}
-                onChange={(event) =>
-                  setOwnerForm({
-                    ...ownerForm,
-                    shortlistText: event.target.value,
-                  })
-                }
-                required
-              />
-            </label>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading}
-            >
-              <ListPlus className="w-4 h-4" />
-              {t("owner.uploadDelta")}
-            </button>
-          </form>
+          <ShortlistUploadForm
+            ownerForm={ownerForm}
+            setOwnerForm={setOwnerForm}
+            loading={loading}
+            onSubmit={uploadShortlist}
+          />
         </div>
 
         <OwnerSurfaces
