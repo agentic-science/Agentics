@@ -1,8 +1,6 @@
 use std::path::PathBuf;
 
-use agentics_domain::models::challenge::{
-    ChallengeDetailResponse, ChallengeListResponse, MetricDirection, PublicChallengeExecutionSpec,
-};
+use agentics_domain::models::challenge::ChallengeDetailResponse;
 use agentics_domain::models::challenge_creation::{
     ChallengeDraftCleanupResponse, ChallengeDraftResponse,
 };
@@ -22,6 +20,16 @@ use crate::cli::OutputFormat;
 use crate::config::ResolvedSettings;
 use crate::package::SolutionPackage;
 use crate::workspace::InitSolutionSummary;
+
+mod challenges;
+mod format;
+
+use challenges::{best_challenge_score, median_and_p90};
+pub(crate) use challenges::{render_challenge_detail, render_challenge_list};
+use format::{
+    first_aggregate_metric, format_optional_metric, format_score, pretty_json, render_table,
+    status_label,
+};
 
 #[derive(Debug, Clone, Serialize)]
 /// Carries local validation package report data across this module boundary.
@@ -177,132 +185,6 @@ pub(crate) fn render_challenge_draft_cleanup(
             response.purged_private_assets,
             response.purged_temporary_storage_objects
         )),
-    }
-}
-
-/// Renders challenge list for user-facing output.
-pub(crate) fn render_challenge_list(
-    response: &ChallengeListResponse,
-    format: OutputFormat,
-) -> Result<String> {
-    match format {
-        OutputFormat::Json => pretty_json(response),
-        OutputFormat::Table => {
-            if response.items.is_empty() {
-                return Ok("No published challenges found.".to_string());
-            }
-
-            let rows = response
-                .items
-                .iter()
-                .map(|challenge| {
-                    vec![
-                        challenge.challenge_name.to_string(),
-                        status_label(&challenge.eligibility.eligibility_type),
-                        format_keywords(&challenge.keywords),
-                        challenge.title.clone(),
-                    ]
-                })
-                .collect::<Vec<_>>();
-            Ok(render_table(
-                &["NAME", "ELIGIBILITY", "KEYWORDS", "TITLE"],
-                &rows,
-            ))
-        }
-    }
-}
-
-/// Renders challenge detail for user-facing output.
-pub(crate) fn render_challenge_detail(
-    response: &ChallengeDetailResponse,
-    format: OutputFormat,
-) -> Result<String> {
-    validate_challenge_detail_topology(response)?;
-    match format {
-        OutputFormat::Json => pretty_json(response),
-        OutputFormat::Table => {
-            let private_benchmark = if response.spec.datasets.private_benchmark_enabled {
-                "<configured>"
-            } else {
-                "disabled"
-            };
-            let execution = &response.spec.execution;
-            let trusted_executor_label = match execution {
-                PublicChallengeExecutionSpec::SeparatedEvaluator(_) => "separated-evaluator",
-                PublicChallengeExecutionSpec::PipedStdio(_) => "interactive-evaluator",
-                PublicChallengeExecutionSpec::CoexecutedBenchmark(_) => "coexecuted-evaluator",
-            };
-            let trust_boundary_note = coexecuted_trust_boundary_note(execution);
-            let discussion_url = response
-                .moltbook
-                .discussion_url
-                .as_ref()
-                .map(|url| url.as_str())
-                .unwrap_or("none");
-            Ok(format!(
-                "{} ({})\nsummary: {}\nkeywords: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nmoltbook_submolt: {} ({})\nmoltbook_discussion: {}\nleaderboard_visibility: {}\nscore_distribution_visibility: {}\nresult_detail_visibility: {}\nsolution_publication: {}\nsolution_protocol: {} ({})\nexecution_mode: {}\n{}: command={}, result_file={}{}targets:\n{}\ndatasets: public={}, private_benchmark={}\nranking_metric: {}\n\n{}",
-                response.title,
-                response.challenge_name,
-                response.summary.en,
-                format_keywords(&response.keywords),
-                response.spec.starts_at.as_str(),
-                response.spec.closes_at.as_deref().unwrap_or("none"),
-                status_label(&response.spec.eligibility.eligibility_type),
-                response.moltbook.submolt_name,
-                response.moltbook.submolt_url,
-                discussion_url,
-                status_label(&response.spec.visibility.leaderboard),
-                status_label(&response.spec.visibility.score_distribution),
-                status_label(&response.spec.visibility.result_detail),
-                status_label(&response.spec.solution_publication),
-                response.spec.solution.protocol,
-                response.spec.solution.manifest_file,
-                execution_mode_label(execution),
-                trusted_executor_label,
-                execution.trusted_evaluator().command.join(" "),
-                execution.trusted_evaluator().result_file,
-                trust_boundary_note,
-                format_targets(&response.spec.targets),
-                response.spec.datasets.public_dir,
-                private_benchmark,
-                response.spec.metric_schema.ranking.primary_metric_name,
-                response.statement_markdown.trim()
-            ))
-        }
-    }
-}
-
-/// Validate mode-specific public challenge DTO invariants before rendering.
-fn validate_challenge_detail_topology(response: &ChallengeDetailResponse) -> Result<()> {
-    let coexecuted = matches!(
-        response.spec.execution,
-        PublicChallengeExecutionSpec::CoexecutedBenchmark(_)
-    );
-    for target in &response.spec.targets {
-        let has_solution_run = target.resource_profile.solution.run.is_some();
-        if coexecuted && has_solution_run {
-            anyhow::bail!(
-                "invalid challenge DTO: solution.run is forbidden for coexecuted_benchmark execution"
-            );
-        }
-        if !coexecuted && !has_solution_run {
-            anyhow::bail!(
-                "invalid challenge DTO: solution.run is required for {} execution",
-                execution_mode_label(&response.spec.execution)
-            );
-        }
-    }
-    Ok(())
-}
-
-/// Render coexecuted-evaluator trust-boundary metadata for CLI users.
-fn coexecuted_trust_boundary_note(execution: &PublicChallengeExecutionSpec) -> &'static str {
-    match execution {
-        PublicChallengeExecutionSpec::CoexecutedBenchmark(_) => {
-            "\ntrust_boundary: coexecuted-evaluator and participant workspace share the evaluator container; official private data shares that boundary\n"
-        }
-        PublicChallengeExecutionSpec::SeparatedEvaluator(_)
-        | PublicChallengeExecutionSpec::PipedStdio(_) => "\n",
     }
 }
 
@@ -903,23 +785,8 @@ pub(crate) fn render_challenge_stats(
                     ])
                 })
                 .collect::<Result<Vec<_>>>()?;
-            let median = quantile_value(distribution, 0.5)
-                .map(format_score)
-                .unwrap_or_else(|| "none".to_string());
-            let p90 = quantile_value(distribution, 0.9)
-                .map(format_score)
-                .unwrap_or_else(|| "none".to_string());
-            let best_score = challenge
-                .spec
-                .metric_schema
-                .metric(metric_name)
-                .map(|metric| metric.direction)
-                .map_or(distribution.min, |direction| match direction {
-                    MetricDirection::Maximize => distribution.max,
-                    MetricDirection::Minimize => distribution.min,
-                })
-                .map(format_score)
-                .unwrap_or_else(|| "none".to_string());
+            let (median, p90) = median_and_p90(distribution);
+            let best_score = best_challenge_score(challenge, metric_name, distribution);
             Ok(format!(
                 "challenge: {} ({})\ntarget: {}\nstatus: {}\nstarts_at: {}\ncloses_at: {}\neligibility: {}\nranking_metric: {}\nranked_agents: {}\nvisible_submissions: {}\nbest_score: {}\nmean_score: {}\nmedian_score: {}\np90_score: {}\ntop:\n{}",
                 challenge.challenge_name,
@@ -1037,156 +904,6 @@ pub(crate) fn render_score_distribution(
             ))
         }
     }
-}
-
-/// Handles format targets for this module.
-fn format_targets(targets: &[agentics_domain::models::challenge::ChallengeTargetSpec]) -> String {
-    if targets.is_empty() {
-        return "  <none>".to_string();
-    }
-
-    targets
-        .iter()
-        .map(|target| {
-            let solution_run = &target.resource_profile.solution.run;
-            let evaluator_run = &target.resource_profile.evaluator.run;
-            let solution_run_summary = solution_run
-                .as_ref()
-                .map(|limits| format!("{} sec/{} MB", limits.timeout_sec, limits.memory_limit_mb))
-                .unwrap_or_else(|| "not used".to_string());
-            format!(
-                "  - {}: {} {}, profile={}, solution_image={}, evaluator_image={}, solution_run={}, evaluator_run={} sec/{} MB, validation={}",
-                target.name,
-                target.docker_platform.as_str(),
-                target.accelerator.as_str(),
-                target.resource_profile.name,
-                target.resource_profile.solution_image,
-                target.resource_profile.evaluator_image,
-                solution_run_summary,
-                evaluator_run.timeout_sec,
-                evaluator_run.memory_limit_mb,
-                if target.validation_enabled {
-                    "enabled"
-                } else {
-                    "disabled"
-                }
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
-/// Format public challenge keywords for compact CLI output.
-fn format_keywords(keywords: &[agentics_domain::models::names::ChallengeKeyword]) -> String {
-    if keywords.is_empty() {
-        "none".to_string()
-    } else {
-        keywords
-            .iter()
-            .map(agentics_domain::models::names::ChallengeKeyword::as_str)
-            .collect::<Vec<_>>()
-            .join(", ")
-    }
-}
-
-/// Format the public execution topology mode.
-fn execution_mode_label(execution: &PublicChallengeExecutionSpec) -> &'static str {
-    match execution {
-        PublicChallengeExecutionSpec::SeparatedEvaluator(_) => "separated_evaluator",
-        PublicChallengeExecutionSpec::PipedStdio(_) => "piped_stdio",
-        PublicChallengeExecutionSpec::CoexecutedBenchmark(_) => "coexecuted_benchmark",
-    }
-}
-
-/// Handles pretty json for this module.
-fn pretty_json<T: Serialize>(value: &T) -> Result<String> {
-    Ok(serde_json::to_string_pretty(value)?)
-}
-
-/// Handles status label for this module.
-fn status_label<T: Serialize>(status: &T) -> String {
-    serde_json::to_value(status)
-        .ok()
-        .and_then(|value| value.as_str().map(ToOwned::to_owned))
-        .unwrap_or_else(|| "unknown".to_string())
-}
-
-/// Handles format score for this module.
-fn format_score(score: f64) -> String {
-    if score.fract() == 0.0 {
-        format!("{score:.0}")
-    } else {
-        format!("{score:.4}")
-    }
-}
-
-/// Format a named metric value for compact CLI output.
-fn format_metric(metric: &MetricValue) -> String {
-    format!("{}={}", metric.metric_name, format_score(metric.value))
-}
-
-/// Format an optional named metric value.
-fn format_optional_metric(metric: Option<&MetricValue>) -> String {
-    metric
-        .map(format_metric)
-        .unwrap_or_else(|| "none".to_string())
-}
-
-/// Select the first aggregate metric for validation-only displays without a challenge spec.
-fn first_aggregate_metric(evaluation: &EvaluationDto) -> Option<&MetricValue> {
-    evaluation.aggregate_metrics.first()
-}
-
-/// Looks up an exact quantile value when the API returned it.
-fn quantile_value(response: &ScoreDistributionResponse, expected: f64) -> Option<f64> {
-    response
-        .quantiles
-        .iter()
-        .find(|quantile| (quantile.quantile - expected).abs() < f64::EPSILON)
-        .map(|quantile| quantile.value)
-}
-
-/// Renders table for user-facing output.
-fn render_table(headers: &[&str], rows: &[Vec<String>]) -> String {
-    let widths = headers
-        .iter()
-        .enumerate()
-        .map(|(index, header)| {
-            rows.iter()
-                .filter_map(|row| row.get(index))
-                .map(|value| value.len())
-                .max()
-                .unwrap_or(0)
-                .max(header.len())
-        })
-        .collect::<Vec<_>>();
-
-    let mut lines = Vec::new();
-    lines.push(render_table_row(
-        &headers
-            .iter()
-            .map(|header| header.to_string())
-            .collect::<Vec<_>>(),
-        &widths,
-    ));
-    for row in rows {
-        lines.push(render_table_row(row, &widths));
-    }
-    lines.join("\n")
-}
-
-/// Renders table row for user-facing output.
-fn render_table_row(row: &[String], widths: &[usize]) -> String {
-    row.iter()
-        .enumerate()
-        .map(|(index, value)| {
-            let width = widths.get(index).copied().unwrap_or(value.len());
-            format!("{value:<width$}")
-        })
-        .collect::<Vec<_>>()
-        .join("  ")
-        .trim_end()
-        .to_string()
 }
 
 #[cfg(test)]
