@@ -226,6 +226,21 @@ affected challenge.
 - Affected challenge: migration-wide production setup, before individual
   challenge remigration.
 
+### 2026-05-28: Private Bundle Restore Doubles Backup Prefix
+
+- Symptom: `compose-prod-restore-private-bundles` restored backup objects whose
+  source keys already started with `private-bundle-backups/` into production
+  keys under `prod/private-bundle-backups/private-bundle-backups/...`.
+- Cause: the backup-copy command always prepended the destination logical
+  prefix without first making source keys relative to that same logical prefix.
+- Fix: normalize source keys by stripping an existing destination prefix before
+  building the production destination key.
+- Verification: targeted `agentics-ops` tests cover stripping an existing
+  prefix and preserving already-relative keys; production RustFS will be swept
+  and restored again after this fix.
+- Affected challenge: migration-wide production setup and rehearsal restore,
+  before individual challenge remigration.
+
 ## Assumptions
 
 - Scope is P1 only; P2 issues remain for a separate targeted-fix/private-bundle

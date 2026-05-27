@@ -135,7 +135,10 @@ async fn run(cli: Cli) -> anyhow::Result<Vec<ReportLine>> {
         let destination_key = destination_key(
             destination.root_prefix.as_deref(),
             destination_logical_prefix.as_deref(),
-            source_storage_key.as_str(),
+            backup_relative_key(
+                destination_logical_prefix.as_deref(),
+                source_storage_key.as_str(),
+            ),
         )?;
         copy_one_object(
             &source_client,
@@ -392,6 +395,18 @@ fn destination_key(
     }
     parts.push(source_key.trim_matches('/'));
     StorageKey::try_new(parts.join("/")).map_err(|error| anyhow!(error))
+}
+
+fn backup_relative_key<'a>(destination_prefix: Option<&str>, source_key: &'a str) -> &'a str {
+    let Some(destination_prefix) = destination_prefix else {
+        return source_key;
+    };
+    let prefix = destination_prefix.trim_matches('/');
+    source_key
+        .trim_matches('/')
+        .strip_prefix(prefix)
+        .and_then(|suffix| suffix.strip_prefix('/'))
+        .unwrap_or(source_key)
 }
 
 struct CopyObjectRequest<'a> {
@@ -740,6 +755,24 @@ mod tests {
             .expect("destination key")
             .as_str(),
             "prod/private-bundle-backups/sample-sum/official-runs.zip"
+        );
+    }
+
+    #[test]
+    fn backup_relative_key_strips_existing_destination_prefix() {
+        assert_eq!(
+            backup_relative_key(
+                Some("private-bundle-backups"),
+                "private-bundle-backups/sample-sum/official-runs.zip"
+            ),
+            "sample-sum/official-runs.zip"
+        );
+        assert_eq!(
+            backup_relative_key(
+                Some("private-bundle-backups"),
+                "sample-sum/official-runs.zip"
+            ),
+            "sample-sum/official-runs.zip"
         );
     }
 }
