@@ -73,7 +73,15 @@ For every `pending reset` challenge:
 
 ## Issue Reset Log
 
-Not started yet.
+- Commented on all 34 `pending reset` per-challenge issues with the reset
+  reason and remigration requirements.
+- Moved all 34 corresponding Project #1 items from `Post-merge` back to
+  `Todo`.
+- Edited tracker issue #9 to uncheck the 34 reset candidates. The SQL parser
+  challenge is unchecked in both the PoC status list and the research-problem
+  checklist.
+- Verification after the GitHub updates reported: all reset issues are `Todo`,
+  and tracker reset items are unchecked.
 
 ## Notes
 
