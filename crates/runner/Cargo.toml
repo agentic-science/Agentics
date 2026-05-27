@@ -24,7 +24,6 @@ zip = { workspace = true }
 async-trait = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-sqlx = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

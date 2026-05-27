@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use agentics_config::Config;
 use agentics_persistence::pool::create_pool;
-use agentics_runner::connect_docker;
+use agentics_runner::{DockerRunner, connect_docker};
 use agentics_services::evaluation_lifecycle::{
     EvaluationWorkerService, reconcile_worker_containers,
 };
@@ -40,8 +40,9 @@ impl Worker {
         let db = create_pool(&config, 2).await?;
         let docker = connect_docker(&config)?;
         enforce_worker_gpu_probe(&config, &docker).await?;
+        let runner = DockerRunner::new(&docker);
         let cleanup = reconcile_worker_containers(
-            &docker,
+            &runner,
             &db,
             config.worker.stale_job_minutes.max(1),
             &config,
@@ -146,7 +147,8 @@ pub async fn run_worker_cycle(
     storage: &dyn agentics_storage::Storage,
     worker_id: &str,
 ) -> anyhow::Result<()> {
-    EvaluationWorkerService::new(db, docker, config, storage)
+    let runner = DockerRunner::new(docker);
+    EvaluationWorkerService::new(db, &runner, config, storage)
         .run_one_cycle(worker_id)
         .await?;
     Ok(())

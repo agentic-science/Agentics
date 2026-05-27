@@ -18,7 +18,7 @@
 use std::sync::Arc;
 
 use agentics_config::Config;
-use agentics_persistence::{Repositories, pool::create_pool};
+use agentics_persistence::pool::create_pool;
 use agentics_storage::build_storage;
 use anyhow::Context;
 use api_server::admin_auth_throttle::AdminAuthThrottle;
@@ -51,15 +51,14 @@ async fn main() -> anyhow::Result<()> {
         .await
         .is_ok()
     {
-        Repositories::new(&db)
-            .maintenance()
-            .ensure_challenges_seeded_from_root(
-                &config,
-                storage.as_ref(),
-                &config.storage.challenges_root,
-            )
-            .await
-            .context("seed challenges from configured root")?;
+        agentics_services::maintenance::ensure_challenges_seeded_from_root(
+            &db,
+            &config,
+            storage.as_ref(),
+            &config.storage.challenges_root,
+        )
+        .await
+        .context("seed challenges from configured root")?;
     }
 
     let state = AppState {

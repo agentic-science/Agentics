@@ -31,6 +31,15 @@ pub struct EvaluationJobRecord {
     pub payload: EvaluationJobPayload,
 }
 
+/// Current durable claim state for runner container reconciliation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunnerJobClaimRecord {
+    pub status: String,
+    pub worker_id: Option<String>,
+    pub attempt_count: i32,
+    pub claim_is_fresh: bool,
+}
+
 /// Claim the next queued job using `FOR UPDATE SKIP LOCKED`.
 ///
 /// Claimed jobs move their solution submission into `running` so public visibility can be
@@ -106,6 +115,39 @@ pub async fn claim_next_evaluation_job(
         attempt_count: r.try_get("attempt_count")?,
         payload,
     }))
+}
+
+/// Load the durable job claim corresponding to one runner container label set.
+pub async fn get_runner_job_claim(
+    pool: &PgPool,
+    job_id: &EvaluationJobId,
+    stale_minutes: i32,
+) -> Result<Option<RunnerJobClaimRecord>> {
+    let row: Option<(String, Option<String>, i32, bool)> = sqlx::query_as(
+        r#"
+        SELECT
+            status,
+            worker_id,
+            attempt_count,
+            claimed_at IS NOT NULL
+              AND claimed_at >= NOW() - INTERVAL '1 minute' * $2 AS claim_is_fresh
+        FROM evaluation_jobs
+        WHERE id = $1::uuid
+        "#,
+    )
+    .bind(job_id.as_str())
+    .bind(stale_minutes.max(1))
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(row.map(
+        |(status, worker_id, attempt_count, claim_is_fresh)| RunnerJobClaimRecord {
+            status,
+            worker_id,
+            attempt_count,
+            claim_is_fresh,
+        },
+    ))
 }
 
 /// Refresh a running job lease owned by one worker.

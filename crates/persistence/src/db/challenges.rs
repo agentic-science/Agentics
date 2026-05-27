@@ -256,6 +256,43 @@ pub async fn publish_challenge_tx(
     })
 }
 
+/// Refresh an existing seeded challenge from a local bundle root.
+///
+/// This intentionally preserves the historical startup seeding behavior: only
+/// the display metadata, bundle keys, statement key, stored spec, and active
+/// status are refreshed. Draft-driven publication continues to use the guarded
+/// publish/archive state machines.
+pub async fn refresh_seeded_challenge(
+    pool: &PgPool,
+    input: &PublishChallengeInput<'_>,
+) -> Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE challenges
+        SET title = $2,
+            summary = $3,
+            bundle_key = $4,
+            public_bundle_key = $5,
+            statement_key = $6,
+            spec_json = $7,
+            status = 'active',
+            updated_at = NOW()
+        WHERE challenge_name = $1
+        "#,
+    )
+    .bind(input.challenge_name.as_str())
+    .bind(input.title)
+    .bind(serde_json::to_value(input.summary).map_err(|e| ServiceError::Internal(e.to_string()))?)
+    .bind(input.bundle_key.as_str())
+    .bind(input.public_bundle_key.as_str())
+    .bind(input.statement_key.as_str())
+    .bind(serde_json::to_value(input.spec).map_err(|e| ServiceError::Internal(e.to_string()))?)
+    .execute(pool)
+    .await?;
+
+    Ok(())
+}
+
 /// Parses required time from an external boundary string.
 fn parse_required_time(value: &str) -> Result<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(value)

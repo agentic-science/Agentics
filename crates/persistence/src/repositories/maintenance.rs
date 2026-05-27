@@ -23,21 +23,6 @@ impl MaintenanceRepository<'_> {
         db::maintenance::list_service_heartbeats(self.pool).await
     }
 
-    pub async fn ensure_challenges_seeded_from_root(
-        &self,
-        config: &agentics_config::Config,
-        storage: &dyn agentics_storage::Storage,
-        challenges_root: &str,
-    ) -> Result<usize> {
-        db::maintenance::ensure_challenges_seeded_from_root(
-            self.pool,
-            config,
-            storage,
-            challenges_root,
-        )
-        .await
-    }
-
     pub async fn reap_stuck_jobs(&self, timeout_minutes: i32) -> Result<StaleJobReapResult> {
         db::maintenance::reap_stuck_jobs(self.pool, timeout_minutes).await
     }

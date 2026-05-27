@@ -50,6 +50,10 @@ impl ChallengesRepository<'_> {
         db::challenges::publish_challenge(self.pool, input).await
     }
 
+    pub async fn refresh_seeded(&self, input: &PublishChallengeInput<'_>) -> Result<()> {
+        db::challenges::refresh_seeded_challenge(self.pool, input).await
+    }
+
     pub async fn archive(&self, challenge_name: &ChallengeName) -> Result<()> {
         db::challenges::archive_challenge(self.pool, challenge_name).await
     }

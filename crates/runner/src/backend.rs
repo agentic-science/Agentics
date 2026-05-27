@@ -1,12 +1,11 @@
 use async_trait::async_trait;
 use bollard::Docker;
-use sqlx::PgPool;
 
 use agentics_config::RunnerNamespace;
 
 use super::docker::{
     self, ContainerOutcome, ContainerRequest, InteractiveSessionOutcome,
-    RunnerContainerCleanupSummary,
+    RunnerContainerCleanupSummary, RunnerContainerSnapshot,
 };
 use agentics_domain::error::Result;
 use agentics_domain::models::challenge::DockerPlatform;
@@ -26,11 +25,11 @@ pub(super) trait RunnerBackend: Sync {
         shutdown_grace_secs: u64,
     ) -> Result<InteractiveSessionOutcome>;
 
-    async fn reconcile_containers(
-        &self,
-        pool: &PgPool,
-        stale_minutes: i32,
-    ) -> Result<RunnerContainerCleanupSummary>;
+    async fn list_hosted_worker_containers(&self) -> Result<Vec<RunnerContainerSnapshot>>;
+
+    async fn remove_runner_container(&self, container_id: &str) -> Result<()>;
+
+    async fn kill_runner_container(&self, container_id: &str) -> Result<()>;
 
     async fn remove_stopped_runner_containers(&self) -> Result<u64>;
 
@@ -81,13 +80,16 @@ impl RunnerBackend for DockerRunnerBackend<'_> {
         .await
     }
 
-    async fn reconcile_containers(
-        &self,
-        pool: &PgPool,
-        stale_minutes: i32,
-    ) -> Result<RunnerContainerCleanupSummary> {
-        docker::reconcile_runner_containers(self.docker, pool, stale_minutes, self.runner_namespace)
-            .await
+    async fn list_hosted_worker_containers(&self) -> Result<Vec<RunnerContainerSnapshot>> {
+        docker::list_hosted_worker_runner_containers(self.docker, self.runner_namespace).await
+    }
+
+    async fn remove_runner_container(&self, container_id: &str) -> Result<()> {
+        docker::remove_runner_container(self.docker, container_id).await
+    }
+
+    async fn kill_runner_container(&self, container_id: &str) -> Result<()> {
+        docker::kill_runner_container(self.docker, container_id).await
     }
 
     async fn remove_stopped_runner_containers(&self) -> Result<u64> {

@@ -39,6 +39,14 @@ impl EvaluationJobsRepository<'_> {
         .await
     }
 
+    pub async fn runner_claim(
+        &self,
+        job_id: &EvaluationJobId,
+        stale_minutes: i32,
+    ) -> Result<Option<crate::repositories::RunnerJobClaimRecord>> {
+        db::evaluation_jobs::get_runner_job_claim(self.pool, job_id, stale_minutes).await
+    }
+
     pub async fn requeue_for_capacity(
         &self,
         job_id: &EvaluationJobId,

@@ -104,65 +104,6 @@ fn permission_repair_host_config_is_hardened() {
     );
 }
 
-/// Verifies fresh matching claims keep their runner containers.
-#[test]
-fn runner_container_action_keeps_fresh_matching_claim() {
-    let labels = runner_labels("worker-a", 2);
-    let claim = RunnerJobClaim {
-        status: "running".to_string(),
-        worker_id: Some("worker-a".to_string()),
-        attempt_count: 2,
-        claim_is_fresh: true,
-    };
-
-    assert_eq!(
-        runner_container_action(&labels, Some(&claim)),
-        RunnerContainerAction::Keep
-    );
-}
-
-/// Verifies stale or superseded claims remove running runner containers.
-#[test]
-fn runner_container_action_removes_stale_or_superseded_claims() {
-    let labels = runner_labels("worker-a", 2);
-
-    for claim in [
-        RunnerJobClaim {
-            status: "queued".to_string(),
-            worker_id: Some("worker-a".to_string()),
-            attempt_count: 2,
-            claim_is_fresh: true,
-        },
-        RunnerJobClaim {
-            status: "running".to_string(),
-            worker_id: Some("worker-b".to_string()),
-            attempt_count: 2,
-            claim_is_fresh: true,
-        },
-        RunnerJobClaim {
-            status: "running".to_string(),
-            worker_id: Some("worker-a".to_string()),
-            attempt_count: 3,
-            claim_is_fresh: true,
-        },
-        RunnerJobClaim {
-            status: "running".to_string(),
-            worker_id: Some("worker-a".to_string()),
-            attempt_count: 2,
-            claim_is_fresh: false,
-        },
-    ] {
-        assert_eq!(
-            runner_container_action(&labels, Some(&claim)),
-            RunnerContainerAction::RemoveRunning
-        );
-    }
-    assert_eq!(
-        runner_container_action(&labels, None),
-        RunnerContainerAction::RemoveRunning
-    );
-}
-
 /// Verifies runner labels reject malformed claim identities.
 #[test]
 fn runner_container_labels_reject_malformed_identity() {
@@ -226,15 +167,6 @@ fn runner_container_scope_filter_matches_requested_scope() {
         &container,
         &test_namespace("compose-test"),
     ));
-}
-
-/// Build valid runner labels for classification tests.
-fn runner_labels(worker_id: &str, attempt_count: i32) -> RunnerContainerLabels {
-    RunnerContainerLabels {
-        job_id: EvaluationJobId::generate(),
-        worker_id: worker_id.to_string(),
-        attempt_count,
-    }
 }
 
 fn test_namespace(value: &str) -> agentics_config::RunnerNamespace {

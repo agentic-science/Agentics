@@ -4,9 +4,8 @@
 //! still lives in the runner crate. This module owns the application workflow
 //! around one worker polling cycle.
 
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use bollard::Docker;
 use tokio::sync::watch;
 use tokio::time::interval;
 use tracing::{error, info, warn};
@@ -20,8 +19,9 @@ use agentics_persistence::{
     QueueEvaluationJobInput, Repositories,
 };
 use agentics_runner::{
-    EvaluationJobExecution, ExecutionResult, RunnerContainerCleanupSummary, RunnerContainerScope,
-    evaluation_runner_log_key, execute_evaluation_job, reconcile_runner_containers,
+    DockerRunner, EvaluationJobExecution, ExecutionResult, RunnerContainerCleanupSummary,
+    RunnerContainerIdentity, RunnerContainerRuntimeState, RunnerContainerScope,
+    evaluation_runner_log_key,
 };
 use agentics_storage::Storage;
 
@@ -61,7 +61,7 @@ pub enum EvaluationWorkerCycleOutcome {
 /// Service object for running worker evaluation lifecycle transitions.
 pub struct EvaluationWorkerService<'a> {
     db: &'a sqlx::PgPool,
-    docker: &'a Docker,
+    runner: &'a DockerRunner<'a>,
     config: &'a Config,
     storage: &'a dyn Storage,
 }
@@ -70,7 +70,7 @@ impl std::fmt::Debug for EvaluationWorkerService<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("EvaluationWorkerService")
             .field("db", &"<PgPool>")
-            .field("docker", &"<Docker>")
+            .field("runner", &"<DockerRunner>")
             .field("config", self.config)
             .field("storage", &"<Storage>")
             .finish()
@@ -81,13 +81,13 @@ impl<'a> EvaluationWorkerService<'a> {
     /// Build a service over worker runtime handles.
     pub const fn new(
         db: &'a sqlx::PgPool,
-        docker: &'a Docker,
+        runner: &'a DockerRunner<'a>,
         config: &'a Config,
         storage: &'a dyn Storage,
     ) -> Self {
         Self {
             db,
-            docker,
+            runner,
             config,
             storage,
         }
@@ -160,18 +160,19 @@ impl<'a> EvaluationWorkerService<'a> {
             lease_stop_rx,
         ));
 
-        let exec_result = execute_evaluation_job(EvaluationJobExecution {
-            docker: self.docker,
-            config: self.config,
-            job_id: job.id.as_str(),
-            worker_id,
-            attempt_count: job.attempt_count,
-            container_scope: RunnerContainerScope::HostedWorker,
-            eval_type: job.eval_type,
-            payload: &job.payload,
-            storage: self.storage,
-        })
-        .await;
+        let exec_result = self
+            .runner
+            .execute_evaluation_job(EvaluationJobExecution {
+                config: self.config,
+                job_id: job.id.as_str(),
+                worker_id,
+                attempt_count: job.attempt_count,
+                container_scope: RunnerContainerScope::HostedWorker,
+                eval_type: job.eval_type,
+                payload: &job.payload,
+                storage: self.storage,
+            })
+            .await;
         let _ = lease_stop_tx.send(true);
         if let Err(join_err) = lease_task.await {
             error!(error = %join_err, "job lease refresh task failed");
@@ -204,7 +205,7 @@ impl<'a> EvaluationWorkerService<'a> {
             );
         }
         let cleanup = reconcile_worker_containers(
-            self.docker,
+            self.runner,
             self.db,
             self.config.worker.stale_job_minutes.max(1),
             self.config,
@@ -396,12 +397,78 @@ impl<'a> EvaluationWorkerService<'a> {
 
 /// Reconcile runner containers for one worker runtime.
 pub async fn reconcile_worker_containers(
-    docker: &Docker,
+    runner: &DockerRunner<'_>,
     db: &sqlx::PgPool,
     stale_minutes: i32,
     config: &Config,
 ) -> Result<RunnerContainerCleanupSummary> {
-    reconcile_runner_containers(docker, db, stale_minutes, config).await
+    let repos = Repositories::new(db);
+    let containers = runner.list_hosted_worker_containers(config).await?;
+    let now_secs = current_unix_timestamp_secs();
+    let mut summary = RunnerContainerCleanupSummary::default();
+
+    for container in containers {
+        match container.state {
+            RunnerContainerRuntimeState::Stopped => {
+                if container.is_stale(now_secs) {
+                    runner
+                        .remove_runner_container(config, &container.container_id)
+                        .await?;
+                    summary.removed_stopped =
+                        summary.removed_stopped.checked_add(1).ok_or_else(|| {
+                            ServiceError::Internal(
+                                "removed stopped container count overflow".to_string(),
+                            )
+                        })?;
+                }
+            }
+            RunnerContainerRuntimeState::Running => {
+                let should_remove = match &container.identity {
+                    Some(identity) => {
+                        let claim = repos
+                            .evaluation_jobs()
+                            .runner_claim(&identity.job_id, stale_minutes)
+                            .await?;
+                        runner_container_claim_is_stale(identity, claim.as_ref())
+                    }
+                    None => true,
+                };
+                if should_remove {
+                    runner
+                        .kill_runner_container(config, &container.container_id)
+                        .await?;
+                    summary.removed_running =
+                        summary.removed_running.checked_add(1).ok_or_else(|| {
+                            ServiceError::Internal(
+                                "removed running container count overflow".to_string(),
+                            )
+                        })?;
+                }
+            }
+        }
+    }
+
+    Ok(summary)
+}
+
+fn runner_container_claim_is_stale(
+    identity: &RunnerContainerIdentity,
+    claim: Option<&agentics_persistence::RunnerJobClaimRecord>,
+) -> bool {
+    let Some(claim) = claim else {
+        return true;
+    };
+    !(claim.status == "running"
+        && claim.worker_id.as_deref() == Some(identity.worker_id.as_str())
+        && claim.attempt_count == identity.attempt_count
+        && claim.claim_is_fresh)
+}
+
+fn current_unix_timestamp_secs() -> i64 {
+    let Ok(duration) = SystemTime::now().duration_since(UNIX_EPOCH) else {
+        return 0;
+    };
+    i64::try_from(duration.as_secs()).unwrap_or(i64::MAX)
 }
 
 /// Promote a staged evaluation job into the queued worker lifecycle.
@@ -488,5 +555,71 @@ async fn refresh_claim_until_stopped(
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::runner_container_claim_is_stale;
+    use agentics_domain::models::ids::EvaluationJobId;
+    use agentics_persistence::RunnerJobClaimRecord;
+    use agentics_runner::RunnerContainerIdentity;
+
+    fn identity(worker_id: &str, attempt_count: i32) -> RunnerContainerIdentity {
+        RunnerContainerIdentity {
+            job_id: EvaluationJobId::generate(),
+            worker_id: worker_id.to_string(),
+            attempt_count,
+        }
+    }
+
+    /// Verifies fresh matching claims keep their runner containers.
+    #[test]
+    fn runner_container_claim_keeps_fresh_matching_claim() {
+        let identity = identity("worker-a", 2);
+        let claim = RunnerJobClaimRecord {
+            status: "running".to_string(),
+            worker_id: Some("worker-a".to_string()),
+            attempt_count: 2,
+            claim_is_fresh: true,
+        };
+
+        assert!(!runner_container_claim_is_stale(&identity, Some(&claim)));
+    }
+
+    /// Verifies stale or superseded claims remove running runner containers.
+    #[test]
+    fn runner_container_claim_removes_stale_or_superseded_claims() {
+        let identity = identity("worker-a", 2);
+
+        for claim in [
+            RunnerJobClaimRecord {
+                status: "queued".to_string(),
+                worker_id: Some("worker-a".to_string()),
+                attempt_count: 2,
+                claim_is_fresh: true,
+            },
+            RunnerJobClaimRecord {
+                status: "running".to_string(),
+                worker_id: Some("worker-b".to_string()),
+                attempt_count: 2,
+                claim_is_fresh: true,
+            },
+            RunnerJobClaimRecord {
+                status: "running".to_string(),
+                worker_id: Some("worker-a".to_string()),
+                attempt_count: 3,
+                claim_is_fresh: true,
+            },
+            RunnerJobClaimRecord {
+                status: "running".to_string(),
+                worker_id: Some("worker-a".to_string()),
+                attempt_count: 2,
+                claim_is_fresh: false,
+            },
+        ] {
+            assert!(runner_container_claim_is_stale(&identity, Some(&claim)));
+        }
+        assert!(runner_container_claim_is_stale(&identity, None));
     }
 }

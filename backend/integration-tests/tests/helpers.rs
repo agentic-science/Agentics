@@ -69,15 +69,14 @@ pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
         .await
         .expect("failed to initialize test storage");
     if std::fs::exists(&config.storage.challenges_root).expect("failed to inspect challenge root") {
-        agentics_persistence::Repositories::new(&pool)
-            .maintenance()
-            .ensure_challenges_seeded_from_root(
-                &config,
-                storage.as_ref(),
-                &config.storage.challenges_root,
-            )
-            .await
-            .expect("failed to seed challenges");
+        agentics_services::maintenance::ensure_challenges_seeded_from_root(
+            &pool,
+            &config,
+            storage.as_ref(),
+            &config.storage.challenges_root,
+        )
+        .await
+        .expect("failed to seed challenges");
     }
 
     let state = AppState {

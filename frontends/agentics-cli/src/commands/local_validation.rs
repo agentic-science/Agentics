@@ -163,7 +163,10 @@ async fn execute_local_validation_targets(
     output_format: cli::OutputFormat,
 ) -> Result<Vec<output::LocalValidationTargetReport>> {
     let docker = agentics_runner::connect_docker(&context.config)?;
-    agentics_runner::remove_stale_local_validation_containers(&docker, &context.config).await?;
+    let runner = agentics_runner::DockerRunner::new(&docker);
+    runner
+        .remove_stale_local_validation_containers(&context.config)
+        .await?;
     let storage = LocalStorage::new(&context.storage_root);
     let mut target_reports = Vec::with_capacity(context.targets.len());
     for target in &context.targets {
@@ -190,18 +193,18 @@ async fn execute_local_validation_targets(
         };
         let log_key = agentics_runner::evaluation_runner_log_key(&job_id, 1)?;
         let log_path = context.storage_root.join(log_key.as_str());
-        match agentics_runner::execute_evaluation_job(agentics_runner::EvaluationJobExecution {
-            docker: &docker,
-            config: &context.config,
-            job_id: &job_id,
-            worker_id: "local-validation",
-            attempt_count: 1,
-            container_scope: agentics_runner::RunnerContainerScope::LocalValidation,
-            eval_type: ScoringMode::Validation,
-            payload: &payload,
-            storage: &storage,
-        })
-        .await
+        match runner
+            .execute_evaluation_job(agentics_runner::EvaluationJobExecution {
+                config: &context.config,
+                job_id: &job_id,
+                worker_id: "local-validation",
+                attempt_count: 1,
+                container_scope: agentics_runner::RunnerContainerScope::LocalValidation,
+                eval_type: ScoringMode::Validation,
+                payload: &payload,
+                storage: &storage,
+            })
+            .await
         {
             Ok(execution) => {
                 let primary_metric = agentics_domain::models::evaluation::MetricValue::find_by_name(

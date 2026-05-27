@@ -38,7 +38,9 @@ pub use crate::db::challenges::{
     ChallengeCatalogFilters, ChallengeMoltbookDiscussionRecord, ChallengeRecord,
     CreateChallengeShortlistRevisionInput, PublishChallengeInput, PublishedChallengeList,
 };
-pub use crate::db::evaluation_jobs::{EvaluationJobRecord, QueueEvaluationJobInput};
+pub use crate::db::evaluation_jobs::{
+    EvaluationJobRecord, QueueEvaluationJobInput, RunnerJobClaimRecord,
+};
 pub use crate::db::evaluation_policy::PublishedChallengeAdmission;
 pub use crate::db::evaluations::{MarkEvaluationStartedInput, PersistedEvaluationResult};
 pub use crate::db::leaderboard::LeaderboardMetricEntry;

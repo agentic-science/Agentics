@@ -3,7 +3,7 @@ use super::topologies::{
     run_setup_and_build, run_solution_invocations,
 };
 use super::{
-    ChallengeExecutionSpec, CoexecutedBenchmarkRequest, EVALUATION_LOG_BYTES_PER_RUN,
+    ChallengeExecutionSpec, CoexecutedBenchmarkRequest, Docker, EVALUATION_LOG_BYTES_PER_RUN,
     EvaluationJobExecution, EvaluationLimitConfig, EvaluationLogs, EvaluatorRequest,
     EvaluatorRunResult, ExecutionResult, JobRequirement, OutputTreeLimits, PipedStdioRequest,
     Result, RetainedRunnerTree, RunPlanRequest, RunnerAttempt, RunnerContext, RunnerStorage,
@@ -14,11 +14,11 @@ use super::{
 };
 
 /// Execute one evaluation job in Docker and return the validated evaluator result.
-pub async fn execute_evaluation_job(
+pub(crate) async fn execute_evaluation_job(
+    docker: &Docker,
     request: EvaluationJobExecution<'_>,
 ) -> Result<ExecutionResult> {
     let EvaluationJobExecution {
-        docker,
         config,
         job_id,
         worker_id,

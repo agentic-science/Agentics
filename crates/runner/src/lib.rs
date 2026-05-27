@@ -27,7 +27,6 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use bollard::Docker;
-use sqlx::PgPool;
 
 use agentics_config::{Config, RunnerNamespace};
 use agentics_contracts::zip_project::{
@@ -56,8 +55,10 @@ mod storage;
 mod tests;
 mod topologies;
 
-pub use docker::{RunnerContainerCleanupSummary, connect_docker};
-pub use execution::execute_evaluation_job;
+pub use docker::{
+    RunnerContainerCleanupSummary, RunnerContainerIdentity, RunnerContainerRuntimeState,
+    RunnerContainerSnapshot, connect_docker,
+};
 
 use backend::{DockerRunnerBackend, RunnerBackend};
 use docker::{ContainerOutcome, ContainerRequest, bind_mount};
@@ -107,6 +108,68 @@ pub struct ExecutionResult {
     pub log_key: StorageKey,
 }
 
+/// Docker-backed runner handle used by workers and local validation.
+#[derive(Debug, Clone, Copy)]
+pub struct DockerRunner<'a> {
+    docker: &'a Docker,
+}
+
+impl<'a> DockerRunner<'a> {
+    /// Wrap a Docker client in the MVP runner backend.
+    pub const fn new(docker: &'a Docker) -> Self {
+        Self { docker }
+    }
+
+    /// Execute one evaluation job and return the validated evaluator result.
+    pub async fn execute_evaluation_job(
+        &self,
+        request: EvaluationJobExecution<'_>,
+    ) -> Result<ExecutionResult> {
+        execution::execute_evaluation_job(self.docker, request).await
+    }
+
+    /// List hosted-worker containers for service-owned reconciliation.
+    pub async fn list_hosted_worker_containers(
+        &self,
+        config: &Config,
+    ) -> Result<Vec<RunnerContainerSnapshot>> {
+        DockerRunnerBackend::new(self.docker, &config.runner.namespace)
+            .list_hosted_worker_containers()
+            .await
+    }
+
+    /// Remove one stopped or already-stopped runner container.
+    pub async fn remove_runner_container(&self, config: &Config, container_id: &str) -> Result<()> {
+        DockerRunnerBackend::new(self.docker, &config.runner.namespace)
+            .remove_runner_container(container_id)
+            .await
+    }
+
+    /// Kill and remove one running runner container.
+    pub async fn kill_runner_container(&self, config: &Config, container_id: &str) -> Result<()> {
+        DockerRunnerBackend::new(self.docker, &config.runner.namespace)
+            .kill_runner_container(container_id)
+            .await
+    }
+
+    /// Remove stopped Agentics runner containers.
+    pub async fn remove_stopped_runner_containers(&self, config: &Config) -> Result<u64> {
+        DockerRunnerBackend::new(self.docker, &config.runner.namespace)
+            .remove_stopped_runner_containers()
+            .await
+    }
+
+    /// Remove stale local-validation containers.
+    pub async fn remove_stale_local_validation_containers(
+        &self,
+        config: &Config,
+    ) -> Result<RunnerContainerCleanupSummary> {
+        DockerRunnerBackend::new(self.docker, &config.runner.namespace)
+            .remove_stale_local_validation_containers()
+            .await
+    }
+}
+
 #[derive(Clone, Copy)]
 /// Carries runner context data across this module boundary.
 struct RunnerContext<'a> {
@@ -135,22 +198,10 @@ impl JobRequirement {
     }
 }
 
-/// Reconcile running Docker containers against database job claims.
-pub async fn reconcile_runner_containers(
-    docker: &Docker,
-    pool: &PgPool,
-    stale_minutes: i32,
-    config: &Config,
-) -> Result<RunnerContainerCleanupSummary> {
-    DockerRunnerBackend::new(docker, &config.runner.namespace)
-        .reconcile_containers(pool, stale_minutes)
-        .await
-}
-
 /// Remove stopped Agentics runner containers.
 pub async fn remove_stopped_runner_containers(docker: &Docker, config: &Config) -> Result<u64> {
-    DockerRunnerBackend::new(docker, &config.runner.namespace)
-        .remove_stopped_runner_containers()
+    DockerRunner::new(docker)
+        .remove_stopped_runner_containers(config)
         .await
 }
 
@@ -159,8 +210,8 @@ pub async fn remove_stale_local_validation_containers(
     docker: &Docker,
     config: &Config,
 ) -> Result<RunnerContainerCleanupSummary> {
-    DockerRunnerBackend::new(docker, &config.runner.namespace)
-        .remove_stale_local_validation_containers()
+    DockerRunner::new(docker)
+        .remove_stale_local_validation_containers(config)
         .await
 }
 
@@ -446,8 +497,6 @@ impl RunnerContainerScope {
 
 /// Carries all boundary inputs required to execute one evaluation job.
 pub struct EvaluationJobExecution<'a> {
-    /// Docker client used for phase containers.
-    pub docker: &'a Docker,
     /// Runtime configuration that constrains runner behavior.
     pub config: &'a Config,
     /// Persistent evaluation job identifier.

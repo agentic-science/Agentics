@@ -10,7 +10,6 @@ use bollard::query_parameters::{
     RemoveContainerOptionsBuilder, StartContainerOptions, WaitContainerOptionsBuilder,
 };
 use futures::StreamExt;
-use sqlx::PgPool;
 use tokio::time::timeout;
 
 use agentics_config::{Config, RunnerNamespace};
@@ -75,6 +74,37 @@ impl RunnerContainerCleanupSummary {
     /// Return the total number of containers removed during reconciliation.
     pub fn total_removed(self) -> u64 {
         self.removed_stopped.saturating_add(self.removed_running)
+    }
+}
+
+/// Runtime state for an Agentics-owned runner container.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunnerContainerRuntimeState {
+    Running,
+    Stopped,
+}
+
+/// Parsed durable job identity carried by Agentics runner labels.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunnerContainerIdentity {
+    pub job_id: EvaluationJobId,
+    pub worker_id: String,
+    pub attempt_count: i32,
+}
+
+/// Backend-neutral snapshot of one Agentics runner container.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RunnerContainerSnapshot {
+    pub container_id: String,
+    pub state: RunnerContainerRuntimeState,
+    pub created_secs: Option<i64>,
+    pub identity: Option<RunnerContainerIdentity>,
+}
+
+impl RunnerContainerSnapshot {
+    /// Return true when this container is old enough for runner cleanup.
+    pub fn is_stale(&self, now_secs: i64) -> bool {
+        is_stale_runner_container(self.created_secs, now_secs)
     }
 }
 
@@ -303,64 +333,31 @@ async fn repair_bind_mount_permissions(
     }
 }
 
-/// Reconcile Docker runner containers against live database job claims.
-pub(crate) async fn reconcile_runner_containers(
+/// List hosted-worker runner containers for service-owned reconciliation.
+pub(crate) async fn list_hosted_worker_runner_containers(
     docker: &Docker,
-    pool: &PgPool,
-    stale_minutes: i32,
     runner_namespace: &RunnerNamespace,
-) -> Result<RunnerContainerCleanupSummary> {
+) -> Result<Vec<RunnerContainerSnapshot>> {
     let containers = list_agentics_runner_containers(
         docker,
         super::RUNNER_SCOPE_HOSTED_WORKER,
         runner_namespace,
     )
     .await?;
-    let now_secs = current_unix_timestamp_secs();
-    let mut summary = RunnerContainerCleanupSummary::default();
-    for container in containers {
-        let Some(container_id) = container.id else {
-            continue;
-        };
-        if !matches!(container.state, Some(ContainerSummaryStateEnum::RUNNING)) {
-            if is_stale_runner_container(container.created, now_secs) {
-                remove_container(docker, &container_id).await?;
-                summary.removed_stopped =
-                    summary.removed_stopped.checked_add(1).ok_or_else(|| {
-                        ServiceError::Internal(
-                            "removed stopped container count overflow".to_string(),
-                        )
-                    })?;
-            }
-            continue;
-        }
+    Ok(containers
+        .into_iter()
+        .filter_map(runner_container_snapshot)
+        .collect())
+}
 
-        let labels = container
-            .labels
-            .as_ref()
-            .and_then(RunnerContainerLabels::parse);
-        let action = if let Some(labels) = labels {
-            let db_claim = load_runner_job_claim(pool, &labels.job_id, stale_minutes).await?;
-            runner_container_action(&labels, db_claim.as_ref())
-        } else {
-            RunnerContainerAction::RemoveRunning
-        };
+/// Remove one stopped or already-stopped runner container by id.
+pub(crate) async fn remove_runner_container(docker: &Docker, container_id: &str) -> Result<()> {
+    remove_container(docker, container_id).await
+}
 
-        match action {
-            RunnerContainerAction::Keep => {}
-            RunnerContainerAction::RemoveRunning => {
-                kill_and_remove_container(docker, &container_id).await?;
-                summary.removed_running =
-                    summary.removed_running.checked_add(1).ok_or_else(|| {
-                        ServiceError::Internal(
-                            "removed running container count overflow".to_string(),
-                        )
-                    })?;
-            }
-        }
-    }
-
-    Ok(summary)
+/// Kill and remove one running runner container by id.
+pub(crate) async fn kill_runner_container(docker: &Docker, container_id: &str) -> Result<()> {
+    kill_and_remove_container(docker, container_id).await
 }
 
 /// Remove old stopped Agentics runner containers left by earlier worker attempts.
@@ -537,74 +534,37 @@ impl RunnerContainerLabels {
             attempt_count,
         })
     }
-}
 
-/// Current database claim state for a runner job.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct RunnerJobClaim {
-    status: String,
-    worker_id: Option<String>,
-    attempt_count: i32,
-    claim_is_fresh: bool,
-}
-
-/// Cleanup action for one running Agentics runner container.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RunnerContainerAction {
-    Keep,
-    RemoveRunning,
-}
-
-/// Determine whether a running container still matches the durable job claim.
-fn runner_container_action(
-    labels: &RunnerContainerLabels,
-    claim: Option<&RunnerJobClaim>,
-) -> RunnerContainerAction {
-    let Some(claim) = claim else {
-        return RunnerContainerAction::RemoveRunning;
-    };
-    if claim.status == "running"
-        && claim.worker_id.as_deref() == Some(labels.worker_id.as_str())
-        && claim.attempt_count == labels.attempt_count
-        && claim.claim_is_fresh
-    {
-        RunnerContainerAction::Keep
-    } else {
-        RunnerContainerAction::RemoveRunning
+    fn into_identity(self) -> RunnerContainerIdentity {
+        RunnerContainerIdentity {
+            job_id: self.job_id,
+            worker_id: self.worker_id,
+            attempt_count: self.attempt_count,
+        }
     }
 }
 
-/// Load the database claim corresponding to one runner container label set.
-async fn load_runner_job_claim(
-    pool: &PgPool,
-    job_id: &EvaluationJobId,
-    stale_minutes: i32,
-) -> Result<Option<RunnerJobClaim>> {
-    let row: Option<(String, Option<String>, i32, bool)> = sqlx::query_as(
-        r#"
-        SELECT
-            status,
-            worker_id,
-            attempt_count,
-            claimed_at IS NOT NULL
-              AND claimed_at >= NOW() - INTERVAL '1 minute' * $2 AS claim_is_fresh
-        FROM evaluation_jobs
-        WHERE id = $1::uuid
-        "#,
-    )
-    .bind(job_id.as_str())
-    .bind(stale_minutes.max(1))
-    .fetch_optional(pool)
-    .await?;
-
-    Ok(row.map(
-        |(status, worker_id, attempt_count, claim_is_fresh)| RunnerJobClaim {
-            status,
-            worker_id,
-            attempt_count,
-            claim_is_fresh,
-        },
-    ))
+/// Convert a Docker container summary into the backend-neutral cleanup snapshot.
+fn runner_container_snapshot(
+    container: bollard::models::ContainerSummary,
+) -> Option<RunnerContainerSnapshot> {
+    let container_id = container.id?;
+    let state = if matches!(container.state, Some(ContainerSummaryStateEnum::RUNNING)) {
+        RunnerContainerRuntimeState::Running
+    } else {
+        RunnerContainerRuntimeState::Stopped
+    };
+    let identity = container
+        .labels
+        .as_ref()
+        .and_then(RunnerContainerLabels::parse)
+        .map(RunnerContainerLabels::into_identity);
+    Some(RunnerContainerSnapshot {
+        container_id,
+        state,
+        created_secs: container.created,
+        identity,
+    })
 }
 
 /// Returns whether a stopped runner container is old enough for startup cleanup.
