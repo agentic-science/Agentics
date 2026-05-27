@@ -94,7 +94,9 @@ The current crate boundaries are:
 ```text
 agentics-error
   Shared service error type, stable API error codes, structured validation
-  details, and infrastructure error adaptation.
+  details, and infrastructure error adaptation. Crates that return service
+  errors depend on this crate directly instead of reaching through
+  `agentics-domain`.
 
 agentics-domain
   IDs, names, URLs, DTOs, redacted projection types, and semantic models. It
@@ -104,6 +106,12 @@ agentics-domain
 agentics-contracts
   Challenge bundle schema, solution manifest schema, target/image policy,
   archive/text/GitHub validation, and web schema export manifest.
+
+agentics-config
+  Environment-backed runtime configuration and policy validation. Runtime
+  settings are grouped by concern in dedicated config structs, so field-local
+  validation can stay near the owning group while cross-field production policy
+  remains explicit.
 
 agentics-persistence
   Repository facades, SQLx transaction helpers, row adapters, and durable state
@@ -116,11 +124,13 @@ agentics-services
   such as draft publishing, private asset upload, solution submission creation,
   public result redaction, job claiming, evaluation completion, heartbeat
   updates, runner reconciliation, leaderboard repair, and stale-job reaping.
+  Draft creation/read/validation, submission admission/artifact staging, and
+  owner/public submission projections are split into focused modules.
 
 agentics-runner
   Runner request/response types, execution topology orchestration, Docker
   backend implementation, backend-neutral execution context and limits, storage
-  quota mounts, logs, and future runner backends.
+  quota mounts, logs, container label vocabulary, and future runner backends.
 
 agentics-storage
   Durable object storage boundary for solution ZIPs, runner logs, private
@@ -138,7 +148,8 @@ worker
 
 agentics-cli
   CLI UX, API client, ZIP packaging, workspace generation, and local validation
-  through contracts and runner interfaces.
+  through contracts and runner interfaces. Output rendering is split by surface
+  so commands do not all depend on one large renderer module.
 ```
 
 The dependency direction should be:
@@ -301,7 +312,9 @@ challenge review checks, and DGX production profile are the accepted boundary.
 The first crate split, runner backend boundary, and main service-layer
 consolidation are in place. `agentics-services` now owns the evaluation
 lifecycle, solution submission creation, challenge draft lifecycle, Moltbook
-challenge metadata updates, and public projection/redaction surfaces.
+challenge metadata updates, and public/owner projection and redaction surfaces.
+Recent cleanup also split grouped config structs, submission/draft workflow
+modules, runner labels, and the first CLI output renderers.
 
 The remaining architecture work before MVP is mostly discipline, not new public
 behavior:
