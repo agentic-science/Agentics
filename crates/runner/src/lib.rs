@@ -23,31 +23,31 @@
 //! current invocation's input files, while evaluator-only reference data stays in
 //! the evaluator container.
 
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use bollard::Docker;
 
-use agentics_config::{Config, RunnerNamespace};
+use agentics_config::Config;
 use agentics_contracts::zip_project::{
-    ZIP_PROJECT_MANIFEST_FILE, ZipProjectManifest, ZipProjectPhaseLimits, ZipProjectPhaseName,
-    ZipProjectResolvedPhase,
+    ZIP_PROJECT_MANIFEST_FILE, ZipProjectManifest, ZipProjectPhaseName,
 };
 use agentics_domain::error::{Result, ServiceError};
 use agentics_domain::models::challenge::{
     ChallengeBundleSpec, ChallengeExecutionSpec, ChallengeRunManifest, ChallengeSetupSpec,
     CoexecutedBenchmarkSetupSpec, DockerPlatform, MetricSchemaSpec, PipedStdioSessionManifest,
-    PipedStdioSetupSpec, ResourceProfileSpec, StageResourceProfile, TargetAccelerator,
+    PipedStdioSetupSpec, ResourceProfileSpec, TargetAccelerator,
 };
 use agentics_domain::models::evaluation::{EvaluationJobPayload, EvaluatorRunResult, ScoringMode};
 use agentics_domain::models::paths::BundleRelativePath;
 use agentics_storage::{Storage, StorageKey};
 
 mod backend;
+mod context;
 mod docker;
 mod errors;
 mod execution;
 mod filesystem;
+mod limits;
 mod logs;
 mod run_io;
 mod storage;
@@ -55,17 +55,26 @@ mod storage;
 mod tests;
 mod topologies;
 
+pub use context::RunnerContainerScope;
 pub use docker::{
     RunnerContainerCleanupSummary, RunnerContainerIdentity, RunnerContainerRuntimeState,
     RunnerContainerSnapshot, connect_docker,
 };
 
 use backend::{DockerRunnerBackend, RunnerBackend};
+use context::{
+    JobRequirement, RetainedRunTree, RetainedRunnerTree, RunnerAttempt, RunnerContext,
+    container_name,
+};
 use docker::{ContainerOutcome, ContainerRequest, bind_mount};
 use errors::{ensure_container_succeeded, ensure_setup_succeeded};
 use filesystem::{
     OutputTreeLimits, cleanup_paths, copy_dir_all, create_private_host_dir, ensure_disk_limit,
     ensure_setup_disk_limit, extract_zip_safe, validate_evaluator_visible_output_tree,
+};
+use limits::{
+    EvaluationLimitConfig, effective_accelerator_count, effective_phase_limits, evaluator_limits,
+    evaluator_setup_limits, writable_phase_for_solution_phase,
 };
 use logs::{
     EVALUATION_LOG_BYTES_PER_RUN, EvaluationLogs, append_named_logs, append_phase_logs,
@@ -76,7 +85,7 @@ use run_io::{
     make_container_writable_tree, materialize_input_files, materialize_run_io, run_alias,
     run_interface, write_run_metadata,
 };
-use storage::{RunnerStorage, WritableMountLease, WritablePhase};
+use storage::{RunnerStorage, WritablePhase};
 
 /// Docker label marking an Agentics-owned runner container.
 pub const RUNNER_KIND_LABEL: &str = "agentics.runner";
@@ -170,34 +179,6 @@ impl<'a> DockerRunner<'a> {
     }
 }
 
-#[derive(Clone, Copy)]
-/// Carries runner context data across this module boundary.
-struct RunnerContext<'a> {
-    docker: &'a Docker,
-    backend: &'a dyn RunnerBackend,
-    storage: &'a RunnerStorage,
-    runner_namespace: &'a RunnerNamespace,
-    job_id: &'a str,
-    attempt: &'a RunnerAttempt,
-    container_scope: RunnerContainerScope,
-}
-
-/// Product-level execution requirements resolved before backend calls.
-#[derive(Clone, Copy)]
-struct JobRequirement {
-    docker_platform: DockerPlatform,
-    accelerator: TargetAccelerator,
-}
-
-impl JobRequirement {
-    const fn new(docker_platform: DockerPlatform, accelerator: TargetAccelerator) -> Self {
-        Self {
-            docker_platform,
-            accelerator,
-        }
-    }
-}
-
 /// Remove stopped Agentics runner containers.
 pub async fn remove_stopped_runner_containers(docker: &Docker, config: &Config) -> Result<u64> {
     DockerRunner::new(docker)
@@ -213,105 +194,6 @@ pub async fn remove_stale_local_validation_containers(
     DockerRunner::new(docker)
         .remove_stale_local_validation_containers(config)
         .await
-}
-
-impl RunnerContext<'_> {
-    /// Build Docker labels that identify one runner container and its slot owner.
-    fn container_labels(
-        self,
-        phase: &str,
-        writable_mount: Option<&WritableMountLease>,
-    ) -> HashMap<String, String> {
-        let mut labels = HashMap::from([
-            (RUNNER_JOB_ID_LABEL.to_string(), self.job_id.to_string()),
-            (
-                RUNNER_WORKER_ID_LABEL.to_string(),
-                self.attempt.worker_id.clone(),
-            ),
-            (
-                RUNNER_ATTEMPT_COUNT_LABEL.to_string(),
-                self.attempt.attempt_count.to_string(),
-            ),
-            (
-                RUNNER_NAMESPACE_LABEL.to_string(),
-                self.runner_namespace.as_str().to_string(),
-            ),
-            (
-                RUNNER_SCOPE_LABEL.to_string(),
-                self.container_scope.as_label().to_string(),
-            ),
-            (RUNNER_PHASE_LABEL.to_string(), phase.to_string()),
-        ]);
-        if let Some(writable_mount) = writable_mount {
-            labels.extend(writable_mount.docker_labels());
-        }
-        labels
-    }
-}
-
-/// Identifies one concrete execution attempt for transient runner resources.
-struct RunnerAttempt {
-    worker_id: String,
-    attempt_count: i32,
-    transient_name: String,
-}
-
-impl RunnerAttempt {
-    /// Build an attempt identity safe for Docker names and temporary paths.
-    fn new(job_id: &str, worker_id: &str, attempt_count: i32) -> Self {
-        let nonce = uuid::Uuid::new_v4()
-            .simple()
-            .to_string()
-            .chars()
-            .take(12)
-            .collect::<String>();
-        Self {
-            worker_id: sanitize_name_component(worker_id),
-            attempt_count,
-            transient_name: format!(
-                "{}-attempt-{}-{}",
-                sanitize_name_component(job_id),
-                attempt_count,
-                nonce
-            ),
-        }
-    }
-}
-
-/// Keeps a retained runner tree alive when it is backed by a bounded slot lease.
-struct RetainedRunnerTree {
-    path: PathBuf,
-    _lease: Option<WritableMountLease>,
-}
-
-impl RetainedRunnerTree {
-    /// Return the host path used for subsequent read-only mounts.
-    fn path(&self) -> &Path {
-        &self.path
-    }
-
-    /// Build a retained tree from an existing runtime path.
-    fn runtime_path(path: &Path) -> Self {
-        Self {
-            path: path.to_path_buf(),
-            _lease: None,
-        }
-    }
-
-    /// Build a retained tree that keeps its writable mount lease alive.
-    fn leased(lease: WritableMountLease) -> Self {
-        let path = lease.path().to_path_buf();
-        Self {
-            path,
-            _lease: Some(lease),
-        }
-    }
-}
-
-/// Keeps one evaluator-visible run tree alive until the evaluator finishes.
-struct RetainedRunTree {
-    run_name: String,
-    tree: RetainedRunnerTree,
 }
 
 /// Carries solution run request data across this module boundary.
@@ -430,15 +312,6 @@ struct SessionPlanRequest<'a> {
     setup_root: &'a Path,
 }
 
-/// Platform-owned limits applied to one runner evaluation.
-#[derive(Clone, Copy)]
-struct EvaluationLimitConfig {
-    max_runs: u64,
-    max_result_json_bytes: u64,
-    max_public_results: u64,
-    max_result_log_bytes: u64,
-}
-
 /// Carries setup request data across this module boundary.
 struct EvaluatorSetupRequest<'a> {
     runner: RunnerContext<'a>,
@@ -476,23 +349,6 @@ struct CoexecutedBenchmarkSetupRequest<'a> {
     setup: &'a CoexecutedBenchmarkSetupSpec,
     bundle_dir: &'a Path,
     setup_root: &'a Path,
-}
-
-/// Docker label scope separating hosted worker containers from CLI local validation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RunnerContainerScope {
-    HostedWorker,
-    LocalValidation,
-}
-
-impl RunnerContainerScope {
-    /// Stable Docker label value for this runner container scope.
-    fn as_label(self) -> &'static str {
-        match self {
-            Self::HostedWorker => RUNNER_SCOPE_HOSTED_WORKER,
-            Self::LocalValidation => RUNNER_SCOPE_LOCAL_VALIDATION,
-        }
-    }
 }
 
 /// Carries all boundary inputs required to execute one evaluation job.
@@ -1041,74 +897,6 @@ fn coexecuted_benchmark_setup(
     }
 }
 
-/// Return the enforced accelerator count for one container request.
-fn effective_accelerator_count(
-    profile: &ResourceProfileSpec,
-    accelerator: TargetAccelerator,
-) -> Result<Option<u32>> {
-    match accelerator {
-        TargetAccelerator::None => Ok(None),
-        TargetAccelerator::Gpu => {
-            let hardware = profile.hardware_metadata.as_ref().ok_or_else(|| {
-                ServiceError::Runner(
-                    "accelerator `gpu` requires resource_profile.hardware_metadata".to_string(),
-                )
-            })?;
-            let count = hardware.gpu_count.ok_or_else(|| {
-                ServiceError::Runner(
-                    "accelerator `gpu` requires resource_profile.hardware_metadata.gpu_count"
-                        .to_string(),
-                )
-            })?;
-            if count == 0 {
-                return Err(ServiceError::Runner(
-                    "resource_profile.hardware_metadata.gpu_count must be greater than zero"
-                        .to_string(),
-                ));
-            }
-            Ok(Some(count))
-        }
-    }
-}
-
-/// Handles effective phase limits for this module.
-fn effective_phase_limits(
-    profile: &ResourceProfileSpec,
-    phase: &ZipProjectResolvedPhase,
-) -> Result<ZipProjectPhaseLimits> {
-    let stage = match phase.name {
-        ZipProjectPhaseName::Setup => &profile.solution.setup,
-        ZipProjectPhaseName::Build => &profile.solution.build,
-        ZipProjectPhaseName::Run => profile.solution.run.as_ref().ok_or_else(|| {
-            ServiceError::Runner(
-                "resource_profile.solution.run is required for solution run".to_string(),
-            )
-        })?,
-    };
-    Ok(stage_limits(stage))
-}
-
-/// Handles evaluator limits for this module.
-fn evaluator_limits(profile: &ResourceProfileSpec) -> ZipProjectPhaseLimits {
-    stage_limits(&profile.evaluator.run)
-}
-
-/// Handles setup limits for this module.
-fn evaluator_setup_limits(profile: &ResourceProfileSpec) -> ZipProjectPhaseLimits {
-    stage_limits(&profile.evaluator.setup)
-}
-
-/// Convert a stage resource profile into runner phase limits.
-fn stage_limits(stage: &StageResourceProfile) -> ZipProjectPhaseLimits {
-    ZipProjectPhaseLimits {
-        timeout_sec: stage.timeout_sec,
-        memory_limit_mb: stage.memory_limit_mb,
-        cpu_limit_millis: stage.cpu_limit_millis,
-        disk_limit_mb: stage.disk_limit_mb,
-        network_access: stage.network_access,
-    }
-}
-
 /// Handles replace dir all for this module.
 async fn replace_dir_all(source: &Path, destination: &Path) -> Result<()> {
     cleanup_paths([destination.to_path_buf()]).await?;
@@ -1121,33 +909,4 @@ async fn replace_dir_all_if_separate(source: &Path, destination: &Path) -> Resul
         return Ok(());
     }
     replace_dir_all(source, destination).await
-}
-
-/// Handles writable phase for solution phase for this module.
-fn writable_phase_for_solution_phase(phase: ZipProjectPhaseName) -> WritablePhase {
-    match phase {
-        ZipProjectPhaseName::Setup => WritablePhase::SolutionSetup,
-        ZipProjectPhaseName::Build => WritablePhase::SolutionBuild,
-        ZipProjectPhaseName::Run => WritablePhase::SolutionRun,
-    }
-}
-
-/// Build a Docker container name for one attempt-local phase.
-fn container_name(attempt: &RunnerAttempt, suffix: &str) -> String {
-    let safe_suffix = sanitize_name_component(suffix);
-    format!("agentics-{}-{safe_suffix}", attempt.transient_name)
-}
-
-/// Convert arbitrary identifiers into Docker-name-safe components.
-fn sanitize_name_component(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
-                ch
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>()
 }
