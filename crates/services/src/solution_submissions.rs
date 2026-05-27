@@ -13,6 +13,7 @@ use agentics_storage::Storage;
 
 use crate::evaluation_lifecycle;
 use crate::public_projection;
+use crate::storage_errors::storage_error_to_service_error;
 
 mod admission;
 mod artifact_staging;
@@ -115,7 +116,7 @@ pub async fn create_solution_submission(
     {
         cleanup_solution_submission_record(pool, &solution_submission.id).await;
         cleanup_storage_key(storage, &temporary_artifact_key).await;
-        return Err(error.into());
+        return Err(storage_error_to_service_error(error));
     }
 
     if let Err(error) = evaluation_lifecycle::mark_staged_evaluation_job_ready(pool, &job_id).await

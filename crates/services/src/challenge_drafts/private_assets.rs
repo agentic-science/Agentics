@@ -20,6 +20,7 @@ use agentics_storage::{Storage, StorageKey, StorageWriteIntent};
 
 use super::types::UploadChallengePrivateAssetServiceRequest;
 use super::utils::{base64_decode, cleanup_storage_key};
+use crate::storage_errors::storage_error_to_service_error;
 
 const MAX_PRIVATE_ASSET_FILE_COUNT: usize = 1024;
 
@@ -143,7 +144,7 @@ pub async fn upload_challenge_private_asset(
         Err(error) => {
             fail_challenge_private_asset_record(pool, &asset_row_id, &error.to_string()).await;
             cleanup_storage_key(storage, &temporary_asset_key).await;
-            return Err(error.into());
+            return Err(storage_error_to_service_error(error));
         }
     };
 
@@ -157,7 +158,7 @@ pub async fn upload_challenge_private_asset(
     if let Err(error) = storage.promote(&temporary_storage_key, &storage_key).await {
         fail_challenge_private_asset_record(pool, &asset_row_id, &error.to_string()).await;
         cleanup_storage_key(storage, &temporary_storage_key).await;
-        return Err(error.into());
+        return Err(storage_error_to_service_error(error));
     }
     let asset = match Repositories::new(pool)
         .challenge_drafts()
@@ -203,7 +204,11 @@ async fn cleanup_unreferenced_private_asset_object(
     storage: &dyn Storage,
     storage_key: &StorageKey,
 ) -> Result<()> {
-    if !storage.exists(storage_key).await? {
+    if !storage
+        .exists(storage_key)
+        .await
+        .map_err(storage_error_to_service_error)?
+    {
         return Ok(());
     }
     if Repositories::new(pool)

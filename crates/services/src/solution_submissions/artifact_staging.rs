@@ -5,6 +5,8 @@ use agentics_domain::models::ids::SolutionSubmissionId;
 use agentics_error::{Result, ServiceError};
 use agentics_storage::{Storage, StorageKey, StorageWriteIntent};
 
+use crate::storage_errors::storage_error_to_service_error;
+
 /// Durable and temporary object-storage keys for a submitted solution ZIP.
 pub(super) struct SolutionArtifactKeys {
     pub(super) durable: StorageKey,
@@ -39,11 +41,12 @@ pub(super) async fn stage_temporary_solution_artifact(
     key: &StorageKey,
     artifact_bytes: &[u8],
 ) -> Result<StorageKey> {
-    Ok(storage
+    storage
         .put(
             key,
             artifact_bytes,
             StorageWriteIntent::new("solution artifact ZIP", MAX_ZIP_PROJECT_ARTIFACT_BYTES),
         )
-        .await?)
+        .await
+        .map_err(storage_error_to_service_error)
 }

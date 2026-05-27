@@ -65,7 +65,21 @@ impl From<zip::result::ZipError> for ApiError {
 
 impl From<agentics_storage::StorageError> for ApiError {
     fn from(error: agentics_storage::StorageError) -> Self {
-        Self::new(ServiceError::from(error))
+        use agentics_storage::StorageError;
+
+        let error = match error {
+            StorageError::InvalidKey(message) | StorageError::SymlinkRejected(message) => {
+                ServiceError::BadRequest(message)
+            }
+            StorageError::ObjectTooLarge { .. } => ServiceError::BadRequest(error.to_string()),
+            StorageError::ObjectConflict(_) => ServiceError::Conflict,
+            StorageError::ObjectNotFound(_) => ServiceError::NotFound,
+            StorageError::Internal(message) | StorageError::Backend(message) => {
+                ServiceError::Internal(message)
+            }
+            StorageError::Io(error) => ServiceError::Io(error),
+        };
+        Self::new(error)
     }
 }
 

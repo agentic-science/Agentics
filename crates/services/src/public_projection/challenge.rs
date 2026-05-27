@@ -7,6 +7,8 @@ use agentics_error::{Result, ServiceError};
 use agentics_persistence::{ChallengeRecord, Repositories};
 use agentics_storage::{Storage, StorageWriteIntent};
 
+use crate::storage_errors::storage_error_to_service_error;
+
 /// Fetch public challenge details by challenge name.
 pub async fn get_challenge_detail(
     pool: &sqlx::PgPool,
@@ -24,7 +26,8 @@ pub async fn get_challenge_detail(
             &challenge.statement_key,
             StorageWriteIntent::new("challenge statement", config.storage.max_statement_bytes),
         )
-        .await?;
+        .await
+        .map_err(storage_error_to_service_error)?;
     let statement = String::from_utf8(statement_bytes).map_err(|e| {
         ServiceError::Internal(format!("stored challenge statement is not UTF-8: {e}"))
     })?;

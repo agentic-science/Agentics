@@ -23,4 +23,6 @@ pub mod maintenance;
 pub mod public_projection;
 pub mod solution_submissions;
 
+mod storage_errors;
+
 pub use agentics_error as error;

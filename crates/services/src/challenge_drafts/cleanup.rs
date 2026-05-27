@@ -6,6 +6,8 @@ use agentics_error::{Result, ServiceError};
 use agentics_persistence::Repositories;
 use agentics_storage::{Storage, StorageKey};
 
+use crate::storage_errors::storage_error_to_service_error;
+
 /// Expire stale drafts and purge private assets for rejected or abandoned
 /// unpublished drafts after the configured grace period.
 pub async fn cleanup_challenge_drafts(
@@ -34,9 +36,15 @@ pub async fn cleanup_challenge_drafts(
         else {
             continue;
         };
-        storage.delete(&asset.storage_key).await?;
+        storage
+            .delete(&asset.storage_key)
+            .await
+            .map_err(storage_error_to_service_error)?;
         if let Some(temporary_storage_key) = &asset.temporary_storage_key {
-            storage.delete(temporary_storage_key).await?;
+            storage
+                .delete(temporary_storage_key)
+                .await
+                .map_err(storage_error_to_service_error)?;
         }
         repos
             .challenge_drafts()
@@ -49,7 +57,8 @@ pub async fn cleanup_challenge_drafts(
     let tmp_cutoff = temporary_storage_cleanup_cutoff(config)?;
     let purged_temporary_storage_objects = storage
         .delete_prefix_older_than(&StorageKey::try_new("_tmp")?, tmp_cutoff)
-        .await?;
+        .await
+        .map_err(storage_error_to_service_error)?;
     let purged_temporary_storage_objects = i64::try_from(purged_temporary_storage_objects)
         .map_err(|_| {
             ServiceError::Internal(

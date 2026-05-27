@@ -1,5 +1,3 @@
-use agentics_error::ServiceError;
-
 /// Storage-layer failures before conversion to service/API errors.
 #[derive(Debug, thiserror::Error)]
 pub enum StorageError {
@@ -26,20 +24,3 @@ pub enum StorageError {
 }
 
 pub type Result<T> = std::result::Result<T, StorageError>;
-
-impl From<StorageError> for ServiceError {
-    fn from(error: StorageError) -> Self {
-        match error {
-            StorageError::InvalidKey(message) | StorageError::SymlinkRejected(message) => {
-                ServiceError::BadRequest(message)
-            }
-            StorageError::ObjectTooLarge { .. } => ServiceError::BadRequest(error.to_string()),
-            StorageError::ObjectConflict(_) => ServiceError::Conflict,
-            StorageError::ObjectNotFound(_) => ServiceError::NotFound,
-            StorageError::Internal(message) | StorageError::Backend(message) => {
-                ServiceError::Internal(message)
-            }
-            StorageError::Io(error) => ServiceError::Io(error),
-        }
-    }
-}

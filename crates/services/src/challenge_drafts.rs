@@ -16,6 +16,8 @@ use agentics_domain::models::ids::ChallengeDraftPublishClaimId;
 use agentics_error::{Result, ServiceError};
 use agentics_storage::{Storage, StorageWriteIntent, storage_work_root};
 
+use crate::storage_errors::storage_error_to_service_error;
+
 const CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 
 mod cleanup;
@@ -73,7 +75,8 @@ pub(super) async fn assemble_runtime_bundle(
                     config.quotas.challenge_private_asset_bytes_per_draft,
                 ),
             )
-            .await?;
+            .await
+            .map_err(storage_error_to_service_error)?;
         extract_private_asset_overlay(
             &bytes,
             runtime_bundle_path,
@@ -111,7 +114,8 @@ pub(super) fn temporary_runtime_bundle_path(
     draft: &ChallengeDraftResponse,
     publish_claim_id: &ChallengeDraftPublishClaimId,
 ) -> Result<PathBuf> {
-    Ok(storage_work_root(config)?
+    Ok(storage_work_root(config)
+        .map_err(storage_error_to_service_error)?
         .join("_tmp")
         .join("challenge-bundles")
         .join(format!(
@@ -128,7 +132,8 @@ pub(super) fn temporary_public_runtime_bundle_path(
     draft: &ChallengeDraftResponse,
     publish_claim_id: &ChallengeDraftPublishClaimId,
 ) -> Result<PathBuf> {
-    Ok(storage_work_root(config)?
+    Ok(storage_work_root(config)
+        .map_err(storage_error_to_service_error)?
         .join("_tmp")
         .join("challenge-public-bundles")
         .join(format!(

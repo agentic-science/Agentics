@@ -27,6 +27,7 @@ use super::{
     assemble_public_bundle, assemble_runtime_bundle, temporary_public_runtime_bundle_path,
     temporary_runtime_bundle_path, validate_draft_repository,
 };
+use crate::storage_errors::storage_error_to_service_error;
 
 /// Publish an approved draft into an immutable challenge contract.
 pub async fn publish_challenge_draft(
@@ -209,10 +210,12 @@ async fn prepare_and_publish_new_challenge_draft(
         "challenge-statements/{}/{}-{}.md",
         ctx.manifest.challenge_name, ctx.draft.id, ctx.publish_claim_id
     ))?;
-    let private_archive_path = storage_work_root(config)?
+    let private_archive_path = storage_work_root(config)
+        .map_err(storage_error_to_service_error)?
         .join("_tmp")
         .join(format!("bundle-{}.tar", Uuid::new_v4()));
-    let public_archive_path = storage_work_root(config)?
+    let public_archive_path = storage_work_root(config)
+        .map_err(storage_error_to_service_error)?
         .join("_tmp")
         .join(format!("public-bundle-{}.tar", Uuid::new_v4()));
     let storage_result = async {
@@ -225,13 +228,15 @@ async fn prepare_and_publish_new_challenge_draft(
             &private_archive_path,
             bundle_archive_intent,
         )
-        .await?;
+        .await
+        .map_err(storage_error_to_service_error)?;
         pack_directory_to_tar(
             ctx.temporary_public_bundle_path,
             &public_archive_path,
             bundle_archive_intent,
         )
-        .await?;
+        .await
+        .map_err(storage_error_to_service_error)?;
         storage
             .put_file(
                 &bundle_key,
@@ -241,7 +246,8 @@ async fn prepare_and_publish_new_challenge_draft(
                     config.storage.max_bundle_archive_bytes,
                 ),
             )
-            .await?;
+            .await
+            .map_err(storage_error_to_service_error)?;
         storage
             .put_file(
                 &public_bundle_key,
@@ -251,7 +257,8 @@ async fn prepare_and_publish_new_challenge_draft(
                     config.storage.max_bundle_archive_bytes,
                 ),
             )
-            .await?;
+            .await
+            .map_err(storage_error_to_service_error)?;
         let statement_bytes =
             tokio::fs::read(ctx.temporary_bundle_path.join("statement.md")).await?;
         storage
@@ -260,7 +267,8 @@ async fn prepare_and_publish_new_challenge_draft(
                 &statement_bytes,
                 StorageWriteIntent::new("challenge statement", config.storage.max_statement_bytes),
             )
-            .await?;
+            .await
+            .map_err(storage_error_to_service_error)?;
         Ok::<(), ServiceError>(())
     }
     .await;

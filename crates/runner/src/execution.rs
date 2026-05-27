@@ -12,6 +12,7 @@ use super::{
     extract_zip_safe, make_container_readable_tree, read_limited_result_json, resolve_run_plan,
     sanitize_runner_error, validate_evaluator_result, visible_log_content,
 };
+use agentics_storage::StorageError;
 
 /// Execute one evaluation job in Docker and return the validated evaluator result.
 pub(crate) async fn execute_evaluation_job(
@@ -96,9 +97,11 @@ pub(crate) async fn execute_evaluation_job(
                     config.storage.max_bundle_archive_bytes,
                 ),
             )
-            .await?;
+            .await
+            .map_err(storage_error_to_runner_error)?;
         agentics_storage::unpack_tar_to_directory(&bundle_archive_path, &challenge_bundle_root)
-            .await?;
+            .await
+            .map_err(storage_error_to_runner_error)?;
         make_container_readable_tree(&challenge_bundle_root).await?;
         let bundle_dir = challenge_bundle_root.as_path();
         let spec =
@@ -140,7 +143,8 @@ pub(crate) async fn execute_evaluation_job(
                     agentics_contracts::zip_project::MAX_ZIP_PROJECT_ARTIFACT_BYTES,
                 ),
             )
-            .await?;
+            .await
+            .map_err(storage_error_to_runner_error)?;
         let artifact_path = working_root.join("solution.zip");
         tokio::fs::write(&artifact_path, artifact_bytes).await?;
         extract_zip_safe(&artifact_path, &source_root).await?;
@@ -298,7 +302,7 @@ pub(crate) async fn execute_evaluation_job(
     let cleanup = cleanup_paths([working_root]).await;
     match (execution, log_write, cleanup) {
         (Ok(result), Ok(_), Ok(())) => Ok(result),
-        (Ok(_), Err(log_err), Ok(())) => Err(log_err.into()),
+        (Ok(_), Err(log_err), Ok(())) => Err(storage_error_to_runner_error(log_err)),
         (Ok(_), Ok(_), Err(cleanup_err)) => Err(cleanup_err),
         (Ok(_), Err(log_err), Err(cleanup_err)) => Err(ServiceError::Runner(format!(
             "{log_err}; additionally failed to clean runner workspace: {cleanup_err}"
@@ -308,5 +312,19 @@ pub(crate) async fn execute_evaluation_job(
             "{}; additionally failed to clean runner workspace: {cleanup_err}",
             sanitize_runner_error(eval_type, run_err)
         ))),
+    }
+}
+
+fn storage_error_to_runner_error(error: StorageError) -> ServiceError {
+    match error {
+        StorageError::InvalidKey(message) | StorageError::SymlinkRejected(message) => {
+            ServiceError::Validation(message)
+        }
+        StorageError::ObjectTooLarge { .. } => ServiceError::Runner(error.to_string()),
+        StorageError::ObjectConflict(_)
+        | StorageError::ObjectNotFound(_)
+        | StorageError::Internal(_)
+        | StorageError::Backend(_) => ServiceError::Runner(error.to_string()),
+        StorageError::Io(error) => ServiceError::Io(error),
     }
 }

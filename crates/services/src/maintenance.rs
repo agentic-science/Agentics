@@ -12,6 +12,8 @@ use agentics_storage::{
 };
 use sqlx::PgPool;
 
+use crate::storage_errors::storage_error_to_service_error;
+
 /// Seed or refresh published challenges by scanning a local bundle root.
 ///
 /// Each immediate child directory may contain one or more bundle directories.
@@ -144,7 +146,8 @@ async fn seeded_public_bundle_dir(
         return Ok(bundle_dir.to_path_buf());
     }
 
-    let target = storage_work_root(config)?
+    let target = storage_work_root(config)
+        .map_err(storage_error_to_service_error)?
         .join("seeded-public-bundles")
         .join(spec.challenge_name.as_str())
         .join(digest);
@@ -171,10 +174,15 @@ async fn put_bundle_archive_if_missing(
     bundle_dir: &Path,
     label: &str,
 ) -> Result<()> {
-    if storage.exists(key).await? {
+    if storage
+        .exists(key)
+        .await
+        .map_err(storage_error_to_service_error)?
+    {
         return Ok(());
     }
-    let archive_path = storage_work_root(config)?
+    let archive_path = storage_work_root(config)
+        .map_err(storage_error_to_service_error)?
         .join("_tmp")
         .join(format!("{label}-{}.tar", uuid::Uuid::new_v4()));
     pack_directory_to_tar(
@@ -185,7 +193,8 @@ async fn put_bundle_archive_if_missing(
             config.storage.max_bundle_archive_bytes,
         ),
     )
-    .await?;
+    .await
+    .map_err(storage_error_to_service_error)?;
     let result = storage
         .put_file(
             key,
@@ -205,7 +214,7 @@ async fn put_bundle_archive_if_missing(
     match result {
         Ok(_) => Ok(()),
         Err(StorageError::ObjectConflict(_)) => Ok(()),
-        Err(error) => Err(error.into()),
+        Err(error) => Err(storage_error_to_service_error(error)),
     }
 }
 
@@ -215,7 +224,11 @@ async fn put_statement_if_missing(
     key: &StorageKey,
     statement_path: &Path,
 ) -> Result<()> {
-    if storage.exists(key).await? {
+    if storage
+        .exists(key)
+        .await
+        .map_err(storage_error_to_service_error)?
+    {
         return Ok(());
     }
     let bytes = tokio::fs::read(statement_path).await?;
@@ -228,7 +241,7 @@ async fn put_statement_if_missing(
         .await
     {
         Ok(_) | Err(StorageError::ObjectConflict(_)) => Ok(()),
-        Err(error) => Err(error.into()),
+        Err(error) => Err(storage_error_to_service_error(error)),
     }
 }
 

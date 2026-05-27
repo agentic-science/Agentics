@@ -228,7 +228,6 @@ version = "0.2.5"
 dependencies = [
  "agentics-config",
  "agentics-domain",
- "agentics-error",
  "anyhow",
  "async-trait",
  "aws-config",
