@@ -208,6 +208,7 @@ For frontend changes:
 
 ```bash
 cd frontends/web
+bun install --frozen-lockfile
 bun run generate:schemas
 bun run generate:schemas:check
 bun run format
@@ -290,6 +291,7 @@ the nested `ErrorResponse { error: { code, message, details? } }` envelope.
 After changing shared DTOs used by the frontend, run:
 
 ```bash
+(cd frontends/web && bun install --frozen-lockfile)
 (cd frontends/web && bun run generate:schemas)
 (cd frontends/web && bun run generate:schemas:check)
 ```

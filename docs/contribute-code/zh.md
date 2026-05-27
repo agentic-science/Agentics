@@ -199,6 +199,7 @@ Frontend 改动运行：
 
 ```bash
 cd frontends/web
+bun install --frozen-lockfile
 bun run generate:schemas
 bun run generate:schemas:check
 bun run format
@@ -276,6 +277,7 @@ response fields 应省略，而不是序列化成显式 `null`；API errors 应�
 修改 frontend 使用的 shared DTOs 后运行：
 
 ```bash
+(cd frontends/web && bun install --frozen-lockfile)
 (cd frontends/web && bun run generate:schemas)
 (cd frontends/web && bun run generate:schemas:check)
 ```

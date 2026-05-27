@@ -204,7 +204,7 @@ all-cpu: env-status-cpu
     cargo fmt --all -- --check
     cargo clippy --workspace --all-targets -- -D warnings
     cargo test --workspace --exclude integration-tests
-    cd frontends/web && bun run generate:schemas:check && bun run lint && bunx tsc --noEmit && bun test
+    just web::check
     just test::integration-cpu
 
 # Full test suite, including ignored GPU/CUDA tests
@@ -213,5 +213,5 @@ all: env-status
     cargo fmt --all -- --check
     cargo clippy --workspace --all-targets -- -D warnings
     cargo test --workspace --exclude integration-tests
-    cd frontends/web && bun run generate:schemas:check && bun run lint && bunx tsc --noEmit && bun test
+    just web::check
     just test::integration

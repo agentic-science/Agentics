@@ -79,6 +79,7 @@ Frontend runtime schemas 从 Rust DTOs 生成：
 
 ```bash
 cd frontends/web
+bun install --frozen-lockfile
 bun run generate:schemas
 bun run generate:schemas:check
 ```
