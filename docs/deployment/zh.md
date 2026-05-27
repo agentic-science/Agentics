@@ -18,7 +18,9 @@ Local 已验证目标是单机 Compose deployment：
 Production Compose 目标是名为 `agentics-prod` 的单机 project：
 
 - Postgres 和 RustFS 作为 Compose-managed durable services 运行。
-- API、worker、checks 和 migrations 使用本地构建的 production app image。
+- API、worker、checks 和 migrations 使用本地构建的 production app image。它的
+  builder stage 会安装内部 Homebrew LLVM 22 加 Wild Rust toolchain；最终 runtime
+  image 只包含已构建的 binaries 和 runtime packages。
 - Web 使用本地构建的 production Next.js image，并由 Bun serve。
 - API 和 web ports 绑定到 `AGENTICS_COMPOSE_BIND_IP`，默认是 `127.0.0.1`，
   因此 public ingress 和 TLS 保持在 Compose 外部。
@@ -158,6 +160,11 @@ Production Compose：
    baseline 时，请先重建 disposable dev/test databases，并在 production rehearsal
    中重置 Postgres volumes，再启动 services。带旧 `_sqlx_migrations` rows 的
    database 与新的 baseline checksums 不兼容。
+
+   Production app image build 使用与 Compose dev/test services 相同的 Homebrew-based
+   internal Rust toolchain recipe。Toolchain metadata 会在 builder stage 写入
+   `/opt/agentics/toolchain-info.json`，可通过 build logs 检查；LLVM、Cargo 和 Wild
+   不会复制到最终 runtime image。
 
 4. 运行 production checks 并查看 logs：
 

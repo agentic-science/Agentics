@@ -92,12 +92,20 @@ env-status-cpu:
       root="${AGENTICS_TEST_ROOT:-/srv/agentics-test}"; \
       socket="${AGENTICS_TEST_DOCKER_SOCKET_PATH:-$root/docker.sock}"; \
       host="${AGENTICS_TEST_DOCKER_HOST:-unix://$socket}"; \
+      toolchain_image="${AGENTICS_RUST_TOOLCHAIN_IMAGE:-{{rust_toolchain_image}}}"; \
       runner_image="${AGENTICS_TEST_RUNNER_IMAGE:-{{cpu_runner_image}}}"; \
       status=0; \
       pass() { printf 'PASS %s - %s\n' "$1" "$2"; }; \
       fail() { printf 'FAIL %s - %s\n' "$1" "$2" >&2; status=1; }; \
       if [ "$(uname -s)" = "Linux" ]; then pass "Linux host" "$(uname -srm)"; else fail "Linux host" "test-all-cpu requires Linux"; fi; \
       if docker compose version >/dev/null 2>&1; then pass "Docker Compose" "$(docker compose version --short 2>/dev/null || docker compose version)"; else fail "Docker Compose" "install Docker Compose"; fi; \
+      if docker image inspect "$toolchain_image" >/dev/null 2>&1; then \
+        pass "Rust toolchain image" "$toolchain_image is available on the default daemon"; \
+      elif [ -d deploy/service-images/rust-toolchain ]; then \
+        pass "Rust toolchain image" "$toolchain_image can be built from deploy/service-images/rust-toolchain"; \
+      else \
+        fail "Rust toolchain image" "$toolchain_image is missing and no build context was found"; \
+      fi; \
       if [ -d "$root/runtime" ] && [ -d "$root/phase-mounts" ] && [ -d "$root/docker-data-root" ]; then pass "test storage" "$root is prepared"; else fail "test storage" "run: sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage agentics-prepare-dgx-spark-test-storage"; fi; \
       if docker --host "$host" info >/dev/null 2>&1; then pass "dedicated test Docker" "$host is reachable"; else fail "dedicated test Docker" "run: sudo env AGENTICS_TEST_ROOT=$root just test-env-up"; fi; \
       if docker --host "$host" image inspect "$runner_image" >/dev/null 2>&1; then \
@@ -194,7 +202,7 @@ _integration include_ignored:
         fi; \
       fi; \
       status=0; \
-      AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" AGENTICS_COMPOSE_TEST_RUN_ID="$run_id" AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED="{{include_ignored}}" AGENTICS_S3_PREFIX="test/$run_id" {{compose_test}} -p "$project" up --abort-on-container-exit --exit-code-from tests || status=$?; \
+      AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" AGENTICS_COMPOSE_TEST_RUN_ID="$run_id" AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED="{{include_ignored}}" AGENTICS_S3_PREFIX="test/$run_id" {{compose_test}} -p "$project" up --build --abort-on-container-exit --exit-code-from tests || status=$?; \
       AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" AGENTICS_COMPOSE_TEST_RUN_ID="$run_id" AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED="{{include_ignored}}" AGENTICS_S3_PREFIX="test/$run_id" {{compose_test}} -p "$project" down -v --remove-orphans; \
       exit "$status"
 

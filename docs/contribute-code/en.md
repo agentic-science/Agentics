@@ -46,6 +46,14 @@ The easiest way to run the platform for development is the Compose dev stack:
 just dev::up
 ```
 
+The Rust services in the dev and test Compose stacks use the internal
+`agentics-rust-toolchain:bookworm-llvm22-local` image. The image is built from
+`deploy/service-images/rust-toolchain/` and installs Homebrew LLVM 22,
+Homebrew `cargo-binstall`, and Wild 0.9.0. Its Cargo config uses `clang` plus
+Wild for Linux ARM64 and Linux AMD64 builds. Override
+`AGENTICS_RUST_TOOLCHAIN_IMAGE` only when you are intentionally testing a
+different internal toolchain image.
+
 This starts the persistent private-bundle backup RustFS service if needed, then
 starts Postgres, runs migrations, restores private bundles into the dev RustFS
 store, prepares the non-GPU migrated Frontier-CS challenge root with those
@@ -128,12 +136,13 @@ just test-all
 ```
 
 Both suites start test-scoped Postgres and RustFS services, initialize the test
-S3 bucket, and run the Rust integration crate inside a Rust container. They use a
-dedicated test Docker daemon at `unix:///srv/agentics-test/docker.sock`, backed
-by `/srv/agentics-test/docker-data-root`, so Docker layer quotas are tested
-against overlay2 on XFS with `prjquota` instead of the workstation daemon. The
-wrapper uses a unique Compose project and runner namespace for each run, then
-removes test-scoped Compose volumes after the test service exits. Stop only the
+S3 bucket, and run the Rust integration crate inside the same internal
+LLVM/Wild Rust toolchain image used by dev services. They use a dedicated test
+Docker daemon at `unix:///srv/agentics-test/docker.sock`, backed by
+`/srv/agentics-test/docker-data-root`, so Docker layer quotas are tested against
+overlay2 on XFS with `prjquota` instead of the workstation daemon. The wrapper
+uses a unique Compose project and runner namespace for each run, then removes
+test-scoped Compose volumes after the test service exits. Stop only the
 dedicated test daemon with:
 
 ```bash

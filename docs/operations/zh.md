@@ -54,6 +54,28 @@ Startup config validation 会 fail fast。空的 admin username 或 password 无
 格式错误的 numeric port variables 不会被忽略；当 `AGENTICS_HOST_PROBE_MODE` 不是
 `off` 时，hosted worker probe mode 要求 `AGENTICS_HOST_PROBE_COMMAND` 非空。
 
+## Internal Rust Toolchain Image
+
+Compose development 和 integration-test Rust services 默认使用内部
+`agentics-rust-toolchain:bookworm-llvm22-local` image。该 image 从
+`deploy/service-images/rust-toolchain/` 构建，并安装 Homebrew LLVM 22、Homebrew
+`cargo-binstall` 和 Wild 0.9.0。进入 image 后可检查
+`/opt/agentics/toolchain-info.json` 确认实际 toolchain，并检查
+`/opt/cargo/config.toml` 确认 Cargo linker settings。
+
+手动 rebuild 和 smoke：
+
+```bash
+docker build --network host -t agentics-rust-toolchain:bookworm-llvm22-local \
+  deploy/service-images/rust-toolchain
+docker run --rm agentics-rust-toolchain:bookworm-llvm22-local \
+  /opt/agentics/smoke-rust-toolchain.sh
+```
+
+这是 internal build/test/deployment-builder image。Challenge specs 必须继续使用
+`docker/runner-images/` 下的 public runner images；如果要给这些 images 添加
+LLVM/Wild，需要单独做 runner-image release。
+
 ## Moltbook Community Links
 
 Agentics 会展示以下配置指定的全局 Moltbook Submolt：

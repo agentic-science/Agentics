@@ -55,6 +55,28 @@ invalid, malformed numeric port variables are not ignored, and hosted worker
 probe mode requires a non-empty `AGENTICS_HOST_PROBE_COMMAND` whenever
 `AGENTICS_HOST_PROBE_MODE` is not `off`.
 
+## Internal Rust Toolchain Image
+
+Compose development and integration-test Rust services use the internal
+`agentics-rust-toolchain:bookworm-llvm22-local` image by default. The image is
+built from `deploy/service-images/rust-toolchain/` and installs Homebrew LLVM
+22, Homebrew `cargo-binstall`, and Wild 0.9.0. Inspect
+`/opt/agentics/toolchain-info.json` inside the image to confirm the effective
+toolchain and `/opt/cargo/config.toml` for the Cargo linker settings.
+
+Rebuild and smoke the image manually with:
+
+```bash
+docker build --network host -t agentics-rust-toolchain:bookworm-llvm22-local \
+  deploy/service-images/rust-toolchain
+docker run --rm agentics-rust-toolchain:bookworm-llvm22-local \
+  /opt/agentics/smoke-rust-toolchain.sh
+```
+
+This is an internal build/test/deployment-builder image. Challenge specs must
+continue to use public runner images from `docker/runner-images/`; adding
+LLVM/Wild to those images requires a separate runner-image release.
+
 ## Moltbook Community Links
 
 Agentics exposes the global Moltbook Submolt configured by:

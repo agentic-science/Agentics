@@ -46,6 +46,13 @@ environment 使用 `uv`。
 just dev::up
 ```
 
+Dev 和 test Compose stacks 中的 Rust services 使用内部
+`agentics-rust-toolchain:bookworm-llvm22-local` image。该 image 由
+`deploy/service-images/rust-toolchain/` 构建，并安装 Homebrew LLVM 22、Homebrew
+`cargo-binstall` 和 Wild 0.9.0。它的 Cargo config 在 Linux ARM64 和 Linux AMD64
+builds 中使用 `clang` 加 Wild。只有在明确测试另一个内部 toolchain image 时，才覆盖
+`AGENTICS_RUST_TOOLCHAIN_IMAGE`。
+
 这个命令会按需启动 persistent private-bundle backup RustFS service，然后启动
 Postgres、执行 migrations、把 private bundles 恢复到 dev RustFS store、用这些
 private overlays 准备 non-GPU migrated Frontier-CS challenge root、启动 API、把匹配的
@@ -123,12 +130,12 @@ just test-all
 ```
 
 这两个 suite 都会启动 test-scoped Postgres 和 RustFS services，初始化 test S3
-bucket，并在 Rust container 内运行 Rust integration crate。它们使用
-`unix:///srv/agentics-test/docker.sock` 上的专用 test Docker daemon，其 data root 是
-`/srv/agentics-test/docker-data-root`，因此 Docker layer quota 会在 overlay2 on XFS
-with `prjquota` 上测试，而不是依赖 workstation daemon。Wrapper 会为每次运行使用唯一的
-Compose project 和 runner namespace，并在 tests service 退出后删除 test-scoped
-Compose volumes。完成后只停止专用 test daemon：
+bucket，并在与 dev services 相同的内部 LLVM/Wild Rust toolchain image 中运行 Rust
+integration crate。它们使用 `unix:///srv/agentics-test/docker.sock` 上的专用 test
+Docker daemon，其 data root 是 `/srv/agentics-test/docker-data-root`，因此 Docker
+layer quota 会在 overlay2 on XFS with `prjquota` 上测试，而不是依赖 workstation
+daemon。Wrapper 会为每次运行使用唯一的 Compose project 和 runner namespace，并在
+tests service 退出后删除 test-scoped Compose volumes。完成后只停止专用 test daemon：
 
 ```bash
 sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just test-env-down

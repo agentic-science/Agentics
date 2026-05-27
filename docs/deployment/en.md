@@ -19,7 +19,10 @@ The local verified target is a single-machine Compose deployment:
 The production Compose target is a single-machine project named `agentics-prod`:
 
 - Postgres and RustFS run as Compose-managed durable services.
-- API, worker, checks, and migrations use the locally built production app image.
+- API, worker, checks, and migrations use the locally built production app
+  image. Its builder stage installs the internal Homebrew LLVM 22 plus Wild
+  Rust toolchain; the final runtime image contains only the built binaries and
+  runtime packages.
 - Web uses a locally built production Next.js image served by Bun.
 - The API and web ports bind to `AGENTICS_COMPOSE_BIND_IP`, defaulting to
   `127.0.0.1`, so public ingress and TLS remain outside Compose.
@@ -167,6 +170,12 @@ For production Compose:
    production-rehearsal Postgres volumes before starting services. Existing
    databases with old `_sqlx_migrations` rows are incompatible with the new
    baseline checksums.
+
+   The production app image build runs inside the same Homebrew-based internal
+   Rust toolchain recipe used by Compose dev and test services. The toolchain
+   metadata is written to `/opt/agentics/toolchain-info.json` in the builder
+   stage for inspection during image build logs, but LLVM, Cargo, and Wild are
+   not copied into the final runtime image.
 
 4. Run production checks and inspect logs:
 

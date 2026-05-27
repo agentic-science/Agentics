@@ -56,7 +56,11 @@ services:
     restart: "no"
 
   tests:
-    image: rust:1-bookworm
+    image: ${AGENTICS_RUST_TOOLCHAIN_IMAGE:-agentics-rust-toolchain:bookworm-llvm22-local}
+    build:
+      context: ../service-images/rust-toolchain
+      dockerfile: Dockerfile
+      network: host
     working_dir: /workspace/Agentics
     env_file:
       - ./env/test.env.example
@@ -86,8 +90,8 @@ services:
       - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics:ro
       - ${AGENTICS_TEST_ROOT:?set AGENTICS_TEST_ROOT}:${AGENTICS_TEST_ROOT:?set AGENTICS_TEST_ROOT}
       - ${AGENTICS_TEST_DOCKER_SOCKET_PATH:?set AGENTICS_TEST_DOCKER_SOCKET_PATH}:${AGENTICS_TEST_DOCKER_SOCKET_PATH:?set AGENTICS_TEST_DOCKER_SOCKET_PATH}
-      - cargo_registry:/usr/local/cargo/registry
-      - cargo_git:/usr/local/cargo/git
+      - cargo_registry:/opt/cargo/registry
+      - cargo_git:/opt/cargo/git
       - cargo_target:/workspace/Agentics/target
     command:
       - /bin/sh
