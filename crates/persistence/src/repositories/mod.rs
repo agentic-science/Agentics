@@ -35,8 +35,11 @@ pub use crate::db::challenge_creation::{
     PublishNewChallengeDraftInput,
 };
 pub use crate::db::challenges::{
-    ChallengeCatalogFilters, ChallengeMoltbookDiscussionRecord, ChallengeRecord,
-    CreateChallengeShortlistRevisionInput, PublishChallengeInput, PublishedChallengeList,
+    AdminChallengeListItemRecord, ChallengeCatalogFilters, ChallengeMoltbookDiscussionRecord,
+    ChallengeRecord, ChallengeShortlistRecord, ChallengeShortlistRevisionRecord,
+    ChallengeShortlistedAgentRecord, CreateChallengeShortlistRevisionInput,
+    CreatorChallengeParticipantRecord, CreatorChallengeParticipantsRecord,
+    CreatorChallengeStatsRecord, PublishChallengeInput, PublishedChallengeList,
     PublishedChallengeListItemRecord,
 };
 pub use crate::db::evaluation_jobs::{
@@ -45,7 +48,7 @@ pub use crate::db::evaluation_jobs::{
 pub use crate::db::evaluation_policy::PublishedChallengeAdmission;
 pub use crate::db::evaluations::{MarkEvaluationStartedInput, PersistedEvaluationResult};
 pub use crate::db::leaderboard::{LeaderboardMetricEntry, LeaderboardRecord};
-pub use crate::db::maintenance::{HeartbeatPayload, StaleJobReapResult};
+pub use crate::db::maintenance::{HeartbeatPayload, ServiceHeartbeatRecord, StaleJobReapResult};
 pub use crate::db::pioneer_codes::{
     CreatePioneerCodeInput, PioneerCodeRecord, PioneerCodeRegistrationKind, PioneerCodeUseRecord,
     RevokePioneerCodeOutcome,
@@ -55,7 +58,9 @@ pub use crate::db::sessions::{
     CreateAdminSessionInput, CreateCreatorSessionInput, CreateGithubOauthStateInput,
 };
 pub use crate::db::solution_submissions::{
-    CreateSolutionSubmissionInput, SolutionSubmissionQuotaAdmission, SolutionSubmissionRecord,
+    AdminSolutionSubmissionListItemRecord, CreateSolutionSubmissionInput,
+    PublicSolutionSubmissionListItemRecord, SolutionSubmissionQuotaAdmission,
+    SolutionSubmissionRecord,
 };
 
 /// Root persistence facade for one database pool.

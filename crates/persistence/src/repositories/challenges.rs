@@ -2,18 +2,15 @@ use sqlx::PgPool;
 
 use crate::db;
 use crate::repositories::{
-    ChallengeCatalogFilters, ChallengeMoltbookDiscussionRecord, ChallengeRecord,
-    CreateChallengeShortlistRevisionInput, PublishChallengeInput, PublishedChallengeAdmission,
+    AdminChallengeListItemRecord, ChallengeCatalogFilters, ChallengeMoltbookDiscussionRecord,
+    ChallengeRecord, ChallengeShortlistRecord, ChallengeShortlistRevisionRecord,
+    CreateChallengeShortlistRevisionInput, CreatorChallengeParticipantsRecord,
+    CreatorChallengeStatsRecord, PublishChallengeInput, PublishedChallengeAdmission,
     PublishedChallengeList,
 };
-use agentics_domain::models::challenge::AdminChallengeListItemDto;
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::AgentId;
 use agentics_domain::models::names::{ChallengeName, TargetName};
-use agentics_domain::models::request::{
-    ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
-    CreatorChallengeParticipantsResponse, CreatorChallengeStatsResponse,
-};
 use agentics_domain::models::urls::MoltbookPostUrl;
 use agentics_error::Result;
 
@@ -23,7 +20,7 @@ pub struct ChallengesRepository<'a> {
 }
 
 impl ChallengesRepository<'_> {
-    pub async fn list_admin(&self) -> Result<Vec<AdminChallengeListItemDto>> {
+    pub async fn list_admin(&self) -> Result<Vec<AdminChallengeListItemRecord>> {
         db::challenges::list_admin_challenges(self.pool).await
     }
 
@@ -89,14 +86,14 @@ impl ChallengesRepository<'_> {
     pub async fn create_shortlist_revision(
         &self,
         input: &CreateChallengeShortlistRevisionInput,
-    ) -> Result<ChallengeShortlistRevisionResponse> {
+    ) -> Result<ChallengeShortlistRevisionRecord> {
         db::challenges::create_challenge_shortlist_revision(self.pool, input).await
     }
 
     pub async fn list_shortlist(
         &self,
         challenge_name: &ChallengeName,
-    ) -> Result<ChallengeShortlistResponse> {
+    ) -> Result<ChallengeShortlistRecord> {
         db::challenges::list_challenge_shortlist(self.pool, challenge_name).await
     }
 
@@ -104,7 +101,7 @@ impl ChallengesRepository<'_> {
         &self,
         challenge_name: &ChallengeName,
         target: Option<&TargetName>,
-    ) -> Result<CreatorChallengeStatsResponse> {
+    ) -> Result<CreatorChallengeStatsRecord> {
         db::challenges::get_creator_challenge_stats(self.pool, challenge_name, target).await
     }
 
@@ -112,7 +109,7 @@ impl ChallengesRepository<'_> {
         &self,
         challenge_name: &ChallengeName,
         target: Option<&TargetName>,
-    ) -> Result<CreatorChallengeParticipantsResponse> {
+    ) -> Result<CreatorChallengeParticipantsRecord> {
         db::challenges::list_creator_challenge_participants(self.pool, challenge_name, target).await
     }
 

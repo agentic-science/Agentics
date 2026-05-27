@@ -1,8 +1,7 @@
 use sqlx::PgPool;
 
 use crate::db;
-use crate::repositories::{HeartbeatPayload, StaleJobReapResult};
-use agentics_domain::models::request::AdminServiceHeartbeatDto;
+use crate::repositories::{HeartbeatPayload, ServiceHeartbeatRecord, StaleJobReapResult};
 use agentics_error::Result;
 
 #[derive(Debug, Clone, Copy)]
@@ -19,7 +18,7 @@ impl MaintenanceRepository<'_> {
         db::maintenance::upsert_service_heartbeat(self.pool, worker_id, payload).await
     }
 
-    pub async fn list_service_heartbeats(&self) -> Result<Vec<AdminServiceHeartbeatDto>> {
+    pub async fn list_service_heartbeats(&self) -> Result<Vec<ServiceHeartbeatRecord>> {
         db::maintenance::list_service_heartbeats(self.pool).await
     }
 

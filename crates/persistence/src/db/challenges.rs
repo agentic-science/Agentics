@@ -9,19 +9,13 @@ use super::ids::{
     optional_solution_submission_id_from_row,
 };
 use agentics_domain::models::challenge::{
-    AdminChallengeListItemDto, ChallengeBundleSpec, ChallengeLifecycleStatus,
-    PublishChallengeResponse,
+    ChallengeBundleSpec, ChallengeLifecycleStatus, PublishChallengeResponse,
 };
 use agentics_domain::models::evaluation::SolutionSubmissionStatus;
 use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::ids::{AgentId, ChallengeShortlistRevisionId};
 use agentics_domain::models::localization::LocalizedText;
 use agentics_domain::models::names::{ChallengeKeyword, ChallengeName, TargetName};
-use agentics_domain::models::request::{
-    ChallengeShortlistResponse, ChallengeShortlistRevisionResponse, ChallengeShortlistedAgentDto,
-    CreatorChallengeParticipantDto, CreatorChallengeParticipantsResponse,
-    CreatorChallengeStatsResponse,
-};
 use agentics_domain::models::urls::MoltbookPostUrl;
 use agentics_domain::storage::StorageKey;
 use agentics_error::{Result, ServiceError};
@@ -73,6 +67,19 @@ pub struct ChallengeMoltbookDiscussionRecord {
     pub discussion_url: Option<MoltbookPostUrl>,
 }
 
+/// Admin challenge catalog row before DTO projection.
+#[derive(Debug, Clone)]
+pub struct AdminChallengeListItemRecord {
+    pub challenge_name: ChallengeName,
+    pub title: String,
+    pub summary: LocalizedText,
+    pub status: ChallengeLifecycleStatus,
+    pub spec_json: Option<Value>,
+    pub moltbook_discussion_url: Option<MoltbookPostUrl>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
 /// Challenge publish inputs.
 #[derive(Debug)]
 pub struct PublishChallengeInput<'a> {
@@ -86,7 +93,7 @@ pub struct PublishChallengeInput<'a> {
 }
 
 /// List all challenge shells for admin review.
-pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeListItemDto>> {
+pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeListItemRecord>> {
     let rows = sqlx::query(
         r#"
         SELECT challenge_name, title, summary, status, spec_json, moltbook_discussion_url, created_at, updated_at
@@ -100,34 +107,18 @@ pub async fn list_admin_challenges(pool: &PgPool) -> Result<Vec<AdminChallengeLi
     rows.into_iter()
         .map(|r| {
             let spec_json: Option<Value> = r.try_get("spec_json")?;
-            let spec = spec_json
-                .map(serde_json::from_value::<ChallengeBundleSpec>)
-                .transpose()
-                .map_err(|e| ServiceError::Internal(e.to_string()))?;
-            Ok(AdminChallengeListItemDto {
+            Ok(AdminChallengeListItemRecord {
                 challenge_name: challenge_name_from_row(&r, "challenge_name")?,
                 title: r.try_get("title")?,
                 summary: localized_text_from_row(&r, "summary")?,
-                keywords: spec
-                    .as_ref()
-                    .map(|challenge_spec| challenge_spec.keywords.clone())
-                    .unwrap_or_default(),
                 status: challenge_status_from_row(&r, "status")?,
-                targets: spec.as_ref().map(|spec| spec.targets.clone()),
-                starts_at: spec.as_ref().map(|spec| spec.starts_at.clone()),
-                closes_at: spec.as_ref().and_then(|spec| spec.closes_at.clone()),
-                eligibility: spec.as_ref().map(|spec| spec.eligibility.clone()),
-                visibility: spec.as_ref().map(|spec| spec.visibility.clone()),
-                solution_publication: spec.as_ref().map(|spec| spec.solution_publication),
-                private_benchmark_enabled: spec
-                    .as_ref()
-                    .map(|spec| spec.datasets.private_benchmark_enabled),
+                spec_json,
                 moltbook_discussion_url: optional_moltbook_post_url_from_row(
                     &r,
                     "moltbook_discussion_url",
                 )?,
-                created_at: r.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
-                updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
+                created_at: r.try_get("created_at")?,
+                updated_at: r.try_get("updated_at")?,
             })
         })
         .collect::<Result<Vec<_>>>()
@@ -461,11 +452,80 @@ pub struct CreateChallengeShortlistRevisionInput {
     pub agent_ids_to_add: Vec<AgentId>,
 }
 
+/// Persisted shortlist revision row before DTO projection.
+#[derive(Debug, Clone)]
+pub struct ChallengeShortlistRevisionRecord {
+    pub id: ChallengeShortlistRevisionId,
+    pub challenge_name: ChallengeName,
+    pub uploader_agent_id: AgentId,
+    pub requested_count: i64,
+    pub added_count: i64,
+    pub sha256: Sha256Digest,
+    pub storage_key: StorageKey,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Effective shortlisted agent row before DTO projection.
+#[derive(Debug, Clone)]
+pub struct ChallengeShortlistedAgentRecord {
+    pub agent_id: AgentId,
+    pub agent_display_name: String,
+    pub added_by_agent_id: AgentId,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Effective challenge shortlist before DTO projection.
+#[derive(Debug, Clone)]
+pub struct ChallengeShortlistRecord {
+    pub challenge_name: ChallengeName,
+    pub items: Vec<ChallengeShortlistedAgentRecord>,
+}
+
+/// Challenge-owner aggregate statistics before DTO projection.
+#[derive(Debug, Clone)]
+pub struct CreatorChallengeStatsRecord {
+    pub challenge_name: ChallengeName,
+    pub target: Option<TargetName>,
+    pub agent_count: i64,
+    pub solution_submission_count: i64,
+    pub completed_solution_submission_count: i64,
+    pub failed_solution_submission_count: i64,
+    pub queued_or_running_solution_submission_count: i64,
+    pub visible_solution_submission_count: i64,
+    pub validation_run_count: i64,
+    pub official_run_count: i64,
+    pub latest_solution_submission_at: Option<DateTime<Utc>>,
+    pub latest_completed_evaluation_at: Option<DateTime<Utc>>,
+    pub best_rank_score_min: Option<f64>,
+    pub best_rank_score_max: Option<f64>,
+    pub best_rank_score_mean: Option<f64>,
+}
+
+/// Challenge-owner participant row before DTO projection.
+#[derive(Debug, Clone)]
+pub struct CreatorChallengeParticipantRecord {
+    pub agent_id: AgentId,
+    pub agent_display_name: String,
+    pub solution_submission_count: i64,
+    pub best_solution_submission_id: Option<agentics_domain::models::ids::SolutionSubmissionId>,
+    pub best_rank_score: Option<f64>,
+    pub latest_status: Option<SolutionSubmissionStatus>,
+    pub latest_solution_submission_at: Option<DateTime<Utc>>,
+}
+
+/// Challenge-owner participant list before DTO projection.
+#[derive(Debug, Clone)]
+pub struct CreatorChallengeParticipantsRecord {
+    pub challenge_name: ChallengeName,
+    pub target: Option<TargetName>,
+    pub items: Vec<CreatorChallengeParticipantRecord>,
+}
+
 /// Persist a shortlist delta and append any new agent ids to the effective shortlist.
 pub async fn create_challenge_shortlist_revision(
     pool: &PgPool,
     input: &CreateChallengeShortlistRevisionInput,
-) -> Result<ChallengeShortlistRevisionResponse> {
+) -> Result<ChallengeShortlistRevisionRecord> {
     let mut tx = pool.begin().await?;
 
     lock_challenge_shortlist(&mut tx, &input.challenge_name).await?;
@@ -533,7 +593,7 @@ pub async fn create_challenge_shortlist_revision(
     .fetch_one(&mut *tx)
     .await?;
 
-    let response = row_to_shortlist_revision_response(row)?;
+    let response = row_to_shortlist_revision_record(row)?;
     tx.commit().await?;
     Ok(response)
 }
@@ -575,7 +635,7 @@ async fn ensure_shortlist_agents_exist(
 pub async fn list_challenge_shortlist(
     pool: &PgPool,
     challenge_name: &ChallengeName,
-) -> Result<ChallengeShortlistResponse> {
+) -> Result<ChallengeShortlistRecord> {
     let challenge = get_public_challenge(pool, challenge_name)
         .await?
         .ok_or(ServiceError::NotFound)?;
@@ -595,16 +655,16 @@ pub async fn list_challenge_shortlist(
     let items = rows
         .into_iter()
         .map(|row| {
-            Ok(ChallengeShortlistedAgentDto {
+            Ok(ChallengeShortlistedAgentRecord {
                 agent_id: agent_id_from_row(&row, "agent_id")?,
                 agent_display_name: row.try_get("agent_display_name")?,
                 added_by_agent_id: agent_id_from_row(&row, "added_by_agent_id")?,
-                created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
+                created_at: row.try_get("created_at")?,
             })
         })
         .collect::<Result<Vec<_>>>()?;
 
-    Ok(ChallengeShortlistResponse {
+    Ok(ChallengeShortlistRecord {
         challenge_name: challenge.challenge_name,
         items,
     })
@@ -615,7 +675,7 @@ pub async fn get_creator_challenge_stats(
     pool: &PgPool,
     challenge_name: &ChallengeName,
     target: Option<&TargetName>,
-) -> Result<CreatorChallengeStatsResponse> {
+) -> Result<CreatorChallengeStatsRecord> {
     let challenge = get_public_challenge(pool, challenge_name)
         .await?
         .ok_or(ServiceError::NotFound)?;
@@ -686,7 +746,7 @@ pub async fn get_creator_challenge_stats(
     .fetch_one(pool)
     .await?;
 
-    Ok(CreatorChallengeStatsResponse {
+    Ok(CreatorChallengeStatsRecord {
         challenge_name: challenge.challenge_name,
         target: target.cloned(),
         agent_count: row.try_get("agent_count")?,
@@ -698,14 +758,8 @@ pub async fn get_creator_challenge_stats(
         visible_solution_submission_count: row.try_get("visible_solution_submission_count")?,
         validation_run_count: row.try_get("validation_run_count")?,
         official_run_count: row.try_get("official_run_count")?,
-        latest_solution_submission_at: optional_datetime_rfc3339(
-            &row,
-            "latest_solution_submission_at",
-        )?,
-        latest_completed_evaluation_at: optional_datetime_rfc3339(
-            &row,
-            "latest_completed_evaluation_at",
-        )?,
+        latest_solution_submission_at: row.try_get("latest_solution_submission_at")?,
+        latest_completed_evaluation_at: row.try_get("latest_completed_evaluation_at")?,
         best_rank_score_min: row.try_get("best_rank_score_min")?,
         best_rank_score_max: row.try_get("best_rank_score_max")?,
         best_rank_score_mean: row.try_get("best_rank_score_mean")?,
@@ -717,7 +771,7 @@ pub async fn list_creator_challenge_participants(
     pool: &PgPool,
     challenge_name: &ChallengeName,
     target: Option<&TargetName>,
-) -> Result<CreatorChallengeParticipantsResponse> {
+) -> Result<CreatorChallengeParticipantsRecord> {
     let challenge = get_public_challenge(pool, challenge_name)
         .await?
         .ok_or(ServiceError::NotFound)?;
@@ -770,7 +824,7 @@ pub async fn list_creator_challenge_participants(
     let items = rows
         .into_iter()
         .map(|row| {
-            Ok(CreatorChallengeParticipantDto {
+            Ok(CreatorChallengeParticipantRecord {
                 agent_id: agent_id_from_row(&row, "agent_id")?,
                 agent_display_name: row.try_get("agent_display_name")?,
                 solution_submission_count: row.try_get("solution_submission_count")?,
@@ -780,15 +834,12 @@ pub async fn list_creator_challenge_participants(
                 )?,
                 best_rank_score: row.try_get("best_rank_score")?,
                 latest_status: optional_solution_submission_status_from_row(&row, "latest_status")?,
-                latest_solution_submission_at: optional_datetime_rfc3339(
-                    &row,
-                    "latest_solution_submission_at",
-                )?,
+                latest_solution_submission_at: row.try_get("latest_solution_submission_at")?,
             })
         })
         .collect::<Result<Vec<_>>>()?;
 
-    Ok(CreatorChallengeParticipantsResponse {
+    Ok(CreatorChallengeParticipantsRecord {
         challenge_name: challenge.challenge_name,
         target: target.cloned(),
         items,
@@ -1026,11 +1077,11 @@ fn optional_moltbook_post_url_from_row(
         .map_err(|e| ServiceError::Internal(format!("stored invalid {column}: {e}")))
 }
 
-/// Converts a database row into the shortlist revision response model.
-fn row_to_shortlist_revision_response(
+/// Converts a database row into the shortlist revision record.
+fn row_to_shortlist_revision_record(
     row: sqlx::postgres::PgRow,
-) -> Result<ChallengeShortlistRevisionResponse> {
-    Ok(ChallengeShortlistRevisionResponse {
+) -> Result<ChallengeShortlistRevisionRecord> {
+    Ok(ChallengeShortlistRevisionRecord {
         id: challenge_shortlist_revision_id_from_row(&row, "id")?,
         challenge_name: challenge_name_from_row(&row, "challenge_name")?,
         uploader_agent_id: agent_id_from_row(&row, "uploader_agent_id")?,
@@ -1038,7 +1089,7 @@ fn row_to_shortlist_revision_response(
         added_count: row.try_get("added_count")?,
         sha256: sha256_digest_from_row(&row, "sha256")?,
         storage_key: storage_key_from_row(&row, "storage_key")?,
-        created_at: row.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
+        created_at: row.try_get("created_at")?,
     })
 }
 
@@ -1079,11 +1130,4 @@ fn sha256_digest_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<S
     let value: String = row.try_get(column)?;
     Sha256Digest::try_new(&value)
         .map_err(|e| ServiceError::Internal(format!("invalid stored {column}: {e}")))
-}
-
-/// Handles optional datetime rfc3339 for this module.
-fn optional_datetime_rfc3339(row: &sqlx::postgres::PgRow, column: &str) -> Result<Option<String>> {
-    Ok(row
-        .try_get::<Option<DateTime<Utc>>, _>(column)?
-        .map(|value| value.to_rfc3339()))
 }

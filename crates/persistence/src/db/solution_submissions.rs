@@ -9,8 +9,6 @@ use agentics_domain::models::evaluation::{
 };
 use agentics_domain::models::ids::{AgentId, EvaluationId, EvaluationJobId, SolutionSubmissionId};
 use agentics_domain::models::names::{ChallengeName, TargetName};
-use agentics_domain::models::request::AdminSolutionSubmissionListItemDto;
-use agentics_domain::models::request::PublicSolutionSubmissionListItemDto;
 use agentics_domain::storage::StorageKey;
 use agentics_error::{Result, ServiceError};
 
@@ -39,6 +37,48 @@ pub struct CreateSolutionSubmissionInput {
     pub parent_solution_submission_id: Option<SolutionSubmissionId>,
     pub credit_text: String,
     pub quota_admission: SolutionSubmissionQuotaAdmission,
+}
+
+/// Admin solution-submission list row before DTO projection.
+#[derive(Debug, Clone)]
+pub struct AdminSolutionSubmissionListItemRecord {
+    pub id: SolutionSubmissionId,
+    pub challenge_name: ChallengeName,
+    pub challenge_title: String,
+    pub target: TargetName,
+    pub agent_id: AgentId,
+    pub agent_display_name: String,
+    pub status: SolutionSubmissionStatus,
+    pub note: String,
+    pub visible_after_eval: bool,
+    pub latest_job_id: Option<EvaluationJobId>,
+    pub latest_job_status: Option<EvaluationJobStatus>,
+    pub latest_job_eval_type: Option<ScoringMode>,
+    pub validation_status: Option<EvaluationStatus>,
+    pub official_status: Option<EvaluationStatus>,
+    pub rank_score: Option<f64>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Public solution-submission list row before DTO projection/redaction.
+#[derive(Debug, Clone)]
+pub struct PublicSolutionSubmissionListItemRecord {
+    pub id: SolutionSubmissionId,
+    pub challenge_name: ChallengeName,
+    pub target: TargetName,
+    pub challenge_title: String,
+    pub agent_id: AgentId,
+    pub agent_display_name: String,
+    pub status: SolutionSubmissionStatus,
+    pub note: String,
+    pub explanation: String,
+    pub parent_solution_submission_id: Option<SolutionSubmissionId>,
+    pub credit_text: String,
+    pub rank_score: Option<f64>,
+    pub official_metrics: Vec<MetricValue>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 /// Authoritative quota limits applied inside the submission/job transaction.
@@ -642,7 +682,7 @@ async fn get_solution_submission_by_id_inner(
 pub async fn list_admin_solution_submissions(
     pool: &PgPool,
     limit: i64,
-) -> Result<Vec<AdminSolutionSubmissionListItemDto>> {
+) -> Result<Vec<AdminSolutionSubmissionListItemRecord>> {
     let rows = sqlx::query(
         r#"
         SELECT
@@ -697,7 +737,7 @@ pub async fn list_admin_solution_submissions(
 
     rows.into_iter()
         .map(|r| {
-            Ok(AdminSolutionSubmissionListItemDto {
+            Ok(AdminSolutionSubmissionListItemRecord {
                 id: solution_submission_id_from_row(&r, "id")?,
                 challenge_name: challenge_name_from_row(&r, "challenge_name")?,
                 challenge_title: r.try_get("challenge_title")?,
@@ -716,8 +756,8 @@ pub async fn list_admin_solution_submissions(
                 validation_status: optional_evaluation_status_from_row(&r, "validation_status")?,
                 official_status: optional_evaluation_status_from_row(&r, "official_status")?,
                 rank_score: r.try_get("official_rank_score")?,
-                created_at: r.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
-                updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
+                created_at: r.try_get("created_at")?,
+                updated_at: r.try_get("updated_at")?,
             })
         })
         .collect::<Result<Vec<_>>>()
@@ -729,12 +769,11 @@ pub async fn list_public_solution_submissions_for_challenge(
     challenge_name: &ChallengeName,
     target: &TargetName,
     limit: i64,
-) -> Result<Vec<PublicSolutionSubmissionListItemDto>> {
+) -> Result<Vec<PublicSolutionSubmissionListItemRecord>> {
     let rows = sqlx::query(
         r#"
         SELECT
             s.id, s.challenge_name, s.target, p.title AS challenge_title,
-            p.spec_json AS challenge_spec_json,
             s.agent_id, a.display_name AS agent_display_name, s.status, s.note, s.explanation,
             s.parent_solution_submission_id, s.credit_text, s.created_at, s.updated_at,
             oe.rank_score AS rank_score,
@@ -763,21 +802,12 @@ pub async fn list_public_solution_submissions_for_challenge(
 
     rows.into_iter()
         .map(|r| {
-            let challenge_spec_json: Value = r.try_get("challenge_spec_json")?;
-            let challenge_spec = serde_json::from_value::<ChallengeBundleSpec>(challenge_spec_json)
-                .map_err(|e| {
-                    ServiceError::Internal(format!("stored challenge spec is invalid: {e}"))
-                })?;
             let official_metrics: Vec<MetricValue> = decode_optional_json(
                 r.try_get::<Option<Value>, _>("official_metrics")?,
                 "solution submission official metrics",
             )?
             .unwrap_or_default();
-            let official_primary_metric = MetricValue::find_by_name(
-                &official_metrics,
-                &challenge_spec.metric_schema.ranking.primary_metric_name,
-            );
-            Ok(PublicSolutionSubmissionListItemDto {
+            Ok(PublicSolutionSubmissionListItemRecord {
                 id: solution_submission_id_from_row(&r, "id")?,
                 challenge_name: challenge_name_from_row(&r, "challenge_name")?,
                 target: target_from_row(&r, "target")?,
@@ -792,10 +822,10 @@ pub async fn list_public_solution_submissions_for_challenge(
                     "parent_solution_submission_id",
                 )?,
                 credit_text: r.try_get("credit_text")?,
-                created_at: r.try_get::<DateTime<Utc>, _>("created_at")?.to_rfc3339(),
-                updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?.to_rfc3339(),
                 rank_score: r.try_get::<Option<f64>, _>("rank_score")?,
-                official_primary_metric,
+                official_metrics,
+                created_at: r.try_get("created_at")?,
+                updated_at: r.try_get("updated_at")?,
             })
         })
         .collect::<Result<Vec<_>>>()

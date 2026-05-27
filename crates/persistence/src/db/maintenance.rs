@@ -6,7 +6,6 @@ use super::ids::{solution_submission_id_from_row, uuid_string_from_row};
 use super::leaderboard::repair_leaderboard_entry_for_solution_submission_tx;
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::{EvaluationJobId, SolutionSubmissionId};
-use agentics_domain::models::request::AdminServiceHeartbeatDto;
 use agentics_error::{Result, ServiceError};
 
 /// JSON payload stored with each service heartbeat.
@@ -25,6 +24,14 @@ pub struct HeartbeatPayload {
     pub last_completed_job_id: Option<EvaluationJobId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub last_failed_job_id: Option<EvaluationJobId>,
+}
+
+/// Latest persisted heartbeat for one service instance.
+#[derive(Debug, Clone)]
+pub struct ServiceHeartbeatRecord {
+    pub service_name: String,
+    pub last_seen_at: chrono::DateTime<chrono::Utc>,
+    pub payload: serde_json::Value,
 }
 
 /// Insert or refresh the latest heartbeat for a named service instance.
@@ -53,7 +60,7 @@ pub async fn upsert_service_heartbeat(
 }
 
 /// List latest service heartbeats for the admin operations console.
-pub async fn list_service_heartbeats(pool: &PgPool) -> Result<Vec<AdminServiceHeartbeatDto>> {
+pub async fn list_service_heartbeats(pool: &PgPool) -> Result<Vec<ServiceHeartbeatRecord>> {
     let rows = sqlx::query_as::<_, (String, chrono::DateTime<chrono::Utc>, serde_json::Value)>(
         r#"
         SELECT service_name, last_seen_at, payload
@@ -67,9 +74,9 @@ pub async fn list_service_heartbeats(pool: &PgPool) -> Result<Vec<AdminServiceHe
     Ok(rows
         .into_iter()
         .map(
-            |(service_name, last_seen_at, payload)| AdminServiceHeartbeatDto {
+            |(service_name, last_seen_at, payload)| ServiceHeartbeatRecord {
                 service_name,
-                last_seen_at: last_seen_at.to_rfc3339(),
+                last_seen_at,
                 payload,
             },
         )

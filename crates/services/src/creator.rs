@@ -8,13 +8,17 @@ use agentics_domain::models::challenge::ChallengeBundleSpec;
 use agentics_domain::models::ids::{AgentId, ChallengeShortlistRevisionId};
 use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::models::request::{
-    ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
-    CreateChallengeShortlistRevisionRequest, CreatorChallengeParticipantsResponse,
-    CreatorChallengeStatsResponse,
+    ChallengeShortlistResponse, ChallengeShortlistRevisionResponse, ChallengeShortlistedAgentDto,
+    CreateChallengeShortlistRevisionRequest, CreatorChallengeParticipantDto,
+    CreatorChallengeParticipantsResponse, CreatorChallengeStatsResponse,
 };
 use agentics_domain::storage::StorageKey;
 use agentics_error::{Result, ServiceError};
-use agentics_persistence::{CreateChallengeShortlistRevisionInput, Repositories};
+use agentics_persistence::{
+    ChallengeShortlistRecord, ChallengeShortlistRevisionRecord,
+    CreateChallengeShortlistRevisionInput, CreatorChallengeParticipantsRecord,
+    CreatorChallengeStatsRecord, Repositories,
+};
 use agentics_storage::{Storage, StorageWriteIntent};
 
 use crate::storage_errors::storage_error_to_service_error;
@@ -32,6 +36,7 @@ pub async fn get_creator_challenge_stats(
         .challenges()
         .creator_stats(&challenge_name, target.as_ref())
         .await
+        .map(creator_challenge_stats_from_record)
 }
 
 /// Fetch owner-visible participant rows for shortlist decisions.
@@ -47,6 +52,7 @@ pub async fn list_creator_challenge_participants(
         .challenges()
         .creator_participants(&challenge_name, target.as_ref())
         .await
+        .map(creator_challenge_participants_from_record)
 }
 
 /// Append a delta-only owner-managed shortlist revision.
@@ -97,7 +103,7 @@ pub async fn create_challenge_shortlist_revision(
         .await;
 
     match response {
-        Ok(response) => Ok(response),
+        Ok(response) => Ok(shortlist_revision_from_record(response)),
         Err(error) => {
             cleanup_storage_key(storage, &stored_key).await;
             Err(error)
@@ -117,6 +123,89 @@ pub async fn get_challenge_shortlist(
         .challenges()
         .list_shortlist(&challenge_name)
         .await
+        .map(challenge_shortlist_from_record)
+}
+
+fn creator_challenge_stats_from_record(
+    record: CreatorChallengeStatsRecord,
+) -> CreatorChallengeStatsResponse {
+    CreatorChallengeStatsResponse {
+        challenge_name: record.challenge_name,
+        target: record.target,
+        agent_count: record.agent_count,
+        solution_submission_count: record.solution_submission_count,
+        completed_solution_submission_count: record.completed_solution_submission_count,
+        failed_solution_submission_count: record.failed_solution_submission_count,
+        queued_or_running_solution_submission_count: record
+            .queued_or_running_solution_submission_count,
+        visible_solution_submission_count: record.visible_solution_submission_count,
+        validation_run_count: record.validation_run_count,
+        official_run_count: record.official_run_count,
+        latest_solution_submission_at: record
+            .latest_solution_submission_at
+            .map(|value| value.to_rfc3339()),
+        latest_completed_evaluation_at: record
+            .latest_completed_evaluation_at
+            .map(|value| value.to_rfc3339()),
+        best_rank_score_min: record.best_rank_score_min,
+        best_rank_score_max: record.best_rank_score_max,
+        best_rank_score_mean: record.best_rank_score_mean,
+    }
+}
+
+fn creator_challenge_participants_from_record(
+    record: CreatorChallengeParticipantsRecord,
+) -> CreatorChallengeParticipantsResponse {
+    CreatorChallengeParticipantsResponse {
+        challenge_name: record.challenge_name,
+        target: record.target,
+        items: record
+            .items
+            .into_iter()
+            .map(|item| CreatorChallengeParticipantDto {
+                agent_id: item.agent_id,
+                agent_display_name: item.agent_display_name,
+                solution_submission_count: item.solution_submission_count,
+                best_solution_submission_id: item.best_solution_submission_id,
+                best_rank_score: item.best_rank_score,
+                latest_status: item.latest_status,
+                latest_solution_submission_at: item
+                    .latest_solution_submission_at
+                    .map(|value| value.to_rfc3339()),
+            })
+            .collect(),
+    }
+}
+
+fn shortlist_revision_from_record(
+    record: ChallengeShortlistRevisionRecord,
+) -> ChallengeShortlistRevisionResponse {
+    ChallengeShortlistRevisionResponse {
+        id: record.id,
+        challenge_name: record.challenge_name,
+        uploader_agent_id: record.uploader_agent_id,
+        requested_count: record.requested_count,
+        added_count: record.added_count,
+        sha256: record.sha256,
+        storage_key: record.storage_key,
+        created_at: record.created_at.to_rfc3339(),
+    }
+}
+
+fn challenge_shortlist_from_record(record: ChallengeShortlistRecord) -> ChallengeShortlistResponse {
+    ChallengeShortlistResponse {
+        challenge_name: record.challenge_name,
+        items: record
+            .items
+            .into_iter()
+            .map(|item| ChallengeShortlistedAgentDto {
+                agent_id: item.agent_id,
+                agent_display_name: item.agent_display_name,
+                added_by_agent_id: item.added_by_agent_id,
+                created_at: item.created_at.to_rfc3339(),
+            })
+            .collect(),
+    }
 }
 
 /// Resolve and authorize a creator-owned challenge plus optional target filter.

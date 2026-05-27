@@ -5,11 +5,14 @@ use agentics_domain::models::evaluation::{
 use agentics_domain::models::ids::{AgentId, SolutionSubmissionId};
 use agentics_domain::models::names::ChallengeName;
 use agentics_domain::models::request::{
-    CreateSolutionSubmissionResponse, PublicSolutionSubmissionListResponse,
-    SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
+    CreateSolutionSubmissionResponse, PublicSolutionSubmissionListItemDto,
+    PublicSolutionSubmissionListResponse, SolutionSubmissionResponse,
+    SolutionSubmissionResultReportResponse,
 };
 use agentics_error::{Result, ServiceError};
-use agentics_persistence::{Repositories, SolutionSubmissionRecord};
+use agentics_persistence::{
+    PublicSolutionSubmissionListItemRecord, Repositories, SolutionSubmissionRecord,
+};
 
 use super::metrics::official_primary_metric;
 use super::visibility::{
@@ -176,12 +179,38 @@ pub async fn list_public_solution_submissions(
     let items = repos
         .solution_submissions()
         .list_public_for_challenge(challenge_name, &target, limit)
-        .await?;
+        .await?
+        .into_iter()
+        .map(|record| public_solution_submission_list_item_from_record(record, &spec))
+        .collect();
     let total_count = repos
         .solution_submissions()
         .count_public_for_challenge(challenge_name, &target)
         .await?;
     Ok(PublicSolutionSubmissionListResponse { total_count, items })
+}
+
+fn public_solution_submission_list_item_from_record(
+    record: PublicSolutionSubmissionListItemRecord,
+    spec: &agentics_domain::models::challenge::ChallengeBundleSpec,
+) -> PublicSolutionSubmissionListItemDto {
+    PublicSolutionSubmissionListItemDto {
+        id: record.id,
+        challenge_name: record.challenge_name,
+        target: record.target,
+        challenge_title: record.challenge_title,
+        agent_id: record.agent_id,
+        agent_display_name: record.agent_display_name,
+        status: record.status,
+        note: record.note,
+        explanation: record.explanation,
+        parent_solution_submission_id: record.parent_solution_submission_id,
+        credit_text: record.credit_text,
+        rank_score: record.rank_score,
+        official_primary_metric: official_primary_metric(&record.official_metrics, spec),
+        created_at: record.created_at.to_rfc3339(),
+        updated_at: record.updated_at.to_rfc3339(),
+    }
 }
 
 /// Fetch a public solution submission view without private artifact paths or job metadata.

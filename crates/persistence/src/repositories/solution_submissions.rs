@@ -1,13 +1,13 @@
 use sqlx::PgPool;
 
 use crate::db;
-use crate::repositories::CreateSolutionSubmissionInput;
+use crate::repositories::{
+    AdminSolutionSubmissionListItemRecord, CreateSolutionSubmissionInput,
+    PublicSolutionSubmissionListItemRecord,
+};
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::{AgentId, SolutionSubmissionId};
 use agentics_domain::models::names::{ChallengeName, TargetName};
-use agentics_domain::models::request::{
-    AdminSolutionSubmissionListItemDto, PublicSolutionSubmissionListItemDto,
-};
 use agentics_error::Result;
 
 #[derive(Debug, Clone, Copy)]
@@ -59,7 +59,10 @@ impl SolutionSubmissionsRepository<'_> {
         db::solution_submissions::get_public_solution_submission_by_id(self.pool, id).await
     }
 
-    pub async fn list_admin(&self, limit: i64) -> Result<Vec<AdminSolutionSubmissionListItemDto>> {
+    pub async fn list_admin(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<AdminSolutionSubmissionListItemRecord>> {
         db::solution_submissions::list_admin_solution_submissions(self.pool, limit).await
     }
 
@@ -68,7 +71,7 @@ impl SolutionSubmissionsRepository<'_> {
         challenge_name: &ChallengeName,
         target: &TargetName,
         limit: i64,
-    ) -> Result<Vec<PublicSolutionSubmissionListItemDto>> {
+    ) -> Result<Vec<PublicSolutionSubmissionListItemRecord>> {
         db::solution_submissions::list_public_solution_submissions_for_challenge(
             self.pool,
             challenge_name,
