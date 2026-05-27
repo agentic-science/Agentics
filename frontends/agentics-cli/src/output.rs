@@ -1,7 +1,5 @@
-use std::path::PathBuf;
-
 use agentics_domain::models::challenge::ChallengeDetailResponse;
-use agentics_domain::models::evaluation::{EvaluationDto, EvaluatorRunResult, MetricValue};
+use agentics_domain::models::evaluation::EvaluationDto;
 use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
 use agentics_domain::models::request::{
     CreateSolutionSubmissionResponse, LeaderboardResponse, PublicSolutionSubmissionListResponse,
@@ -9,7 +7,6 @@ use agentics_domain::models::request::{
     SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
 use anyhow::Result;
-use serde::Serialize;
 use serde_json::{Map, Value, json};
 
 use crate::cli::OutputFormat;
@@ -19,6 +16,7 @@ mod auth;
 mod challenges;
 mod drafts;
 mod format;
+mod validation;
 mod workspace;
 
 pub(crate) use auth::{render_auth_status, render_config_set, render_register_agent};
@@ -29,35 +27,11 @@ use format::{
     first_aggregate_metric, format_optional_metric, format_score, pretty_json, render_table,
     status_label,
 };
+pub(crate) use validation::{
+    LocalValidationPackageReport, LocalValidationReport, LocalValidationTargetReport,
+    render_local_validation_report,
+};
 pub(crate) use workspace::render_init_solution;
-
-#[derive(Debug, Clone, Serialize)]
-/// Carries local validation package report data across this module boundary.
-pub(crate) struct LocalValidationPackageReport {
-    pub workspace_dir: PathBuf,
-    pub file_count: usize,
-    pub uncompressed_bytes: u64,
-    pub zip_bytes: usize,
-}
-
-#[derive(Debug, Clone, Serialize)]
-/// Carries local validation target report data across this module boundary.
-pub(crate) struct LocalValidationTargetReport {
-    pub target: TargetName,
-    pub log_path: PathBuf,
-    pub primary_metric: Option<MetricValue>,
-    pub result: EvaluatorRunResult,
-}
-
-#[derive(Debug, Clone, Serialize)]
-/// Carries local validation report data across this module boundary.
-pub(crate) struct LocalValidationReport {
-    pub challenge_name: ChallengeName,
-    pub bundle_dir: PathBuf,
-    pub storage_root: PathBuf,
-    pub package: LocalValidationPackageReport,
-    pub targets: Vec<LocalValidationTargetReport>,
-}
 
 /// Renders create solution submission for user-facing output.
 pub(crate) fn render_create_solution_submission(
@@ -289,70 +263,6 @@ pub(crate) fn render_validation_run_status_batch(
                 Ok(render_table(
                     &["TARGET", "ID", "STATUS", "JOB", "VALIDATION", "RANK_SCORE"],
                     &rows,
-                ))
-            }
-        },
-    }
-}
-
-/// Renders local validation report for user-facing output.
-pub(crate) fn render_local_validation_report(
-    report: &LocalValidationReport,
-    format: OutputFormat,
-) -> Result<String> {
-    match format {
-        OutputFormat::Json => pretty_json(report),
-        OutputFormat::Table => match report.targets.as_slice() {
-            [target] => Ok(format!(
-                "Local validation completed\nchallenge: {}\ntarget: {}\nstatus: {}\nprimary_metric: {}\nrank_score: {}\nlog: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}\nbundle: {}\nstorage: {}",
-                report.challenge_name,
-                target.target,
-                status_label(&target.result.status),
-                format_optional_metric(target.primary_metric.as_ref()),
-                target
-                    .result
-                    .rank_score
-                    .map(format_score)
-                    .unwrap_or_else(|| "none".to_string()),
-                target.log_path.display(),
-                report.package.file_count,
-                report.package.uncompressed_bytes,
-                report.package.zip_bytes,
-                report.package.workspace_dir.display(),
-                report.bundle_dir.display(),
-                report.storage_root.display()
-            )),
-            _ => {
-                let rows = report
-                    .targets
-                    .iter()
-                    .map(|target| {
-                        vec![
-                            target.target.to_string(),
-                            status_label(&target.result.status),
-                            format_optional_metric(target.primary_metric.as_ref()),
-                            target
-                                .result
-                                .rank_score
-                                .map(format_score)
-                                .unwrap_or_else(|| "none".to_string()),
-                            target.log_path.display().to_string(),
-                        ]
-                    })
-                    .collect::<Vec<_>>();
-                Ok(format!(
-                    "Local validation completed\nchallenge: {}\n{}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}\nbundle: {}\nstorage: {}",
-                    report.challenge_name,
-                    render_table(
-                        &["TARGET", "STATUS", "PRIMARY_METRIC", "RANK", "LOG"],
-                        &rows
-                    ),
-                    report.package.file_count,
-                    report.package.uncompressed_bytes,
-                    report.package.zip_bytes,
-                    report.package.workspace_dir.display(),
-                    report.bundle_dir.display(),
-                    report.storage_root.display()
                 ))
             }
         },
