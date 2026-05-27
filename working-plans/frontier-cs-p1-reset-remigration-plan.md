@@ -208,6 +208,24 @@ affected challenge.
 - Affected challenge: migration-wide production setup, before individual
   challenge remigration.
 
+### 2026-05-28: Docker Rejects Combined Runner Bridge And BIP Flags
+
+- Symptom: after stale socket cleanup, `runner-docker-up` spawned dockerd but it
+  failed to become ready. The daemon log ended with
+  `You specified -b & --bip, mutually exclusive options`.
+- Cause: the ops command asked dockerd to both use a named bridge and assign
+  the bridge IP with `--bip`; the Docker version on this host rejects that
+  combination.
+- Fix: the ops command now prepares the dedicated host bridge with `ip link`
+  and `ip addr`, then starts dockerd with the named bridge only.
+- Verification: `cargo fmt --check` and `cargo test -p agentics-ops
+  runner_docker` passed; after rebuilding the ops binary,
+  `sudo target/debug/agentics-compose-prod runner-docker-up` reported the
+  dedicated daemon ready at `unix:///srv/agentics/docker.sock` with the
+  `agentics0` bridge.
+- Affected challenge: migration-wide production setup, before individual
+  challenge remigration.
+
 ## Assumptions
 
 - Scope is P1 only; P2 issues remain for a separate targeted-fix/private-bundle

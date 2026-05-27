@@ -59,6 +59,7 @@ pub(super) async fn runner_docker_up(
 
     create_runner_docker_dirs(&config)?;
     remove_stale_runner_docker_files(&config)?;
+    ensure_runner_docker_bridge(&config).await?;
     spawn_runner_dockerd(&config)?;
     wait_for_runner_docker(&config).await?;
     repair_runner_docker_socket_permissions(&config)?;
@@ -329,8 +330,6 @@ fn spawn_runner_dockerd(config: &RunnerDockerConfig) -> Result<(), ComposeProdEr
         .arg("overlay2")
         .arg("--bridge")
         .arg(&config.bridge_name)
-        .arg("--bip")
-        .arg(&config.bridge_cidr)
         .arg("--iptables=true")
         .arg("--ip-forward=true")
         .arg("--ip-masq=true")
@@ -365,6 +364,81 @@ async fn wait_for_runner_docker(config: &RunnerDockerConfig) -> Result<(), Compo
         config.docker_host,
         config.logfile.display()
     )))
+}
+
+async fn ensure_runner_docker_bridge(config: &RunnerDockerConfig) -> Result<(), ComposeProdError> {
+    let link = run_process_output(
+        "ip",
+        ["link", "show", "dev", &config.bridge_name],
+        Duration::from_secs(10),
+    )
+    .await?;
+    if !link.success() {
+        let add = run_process_output(
+            "ip",
+            ["link", "add", "name", &config.bridge_name, "type", "bridge"],
+            Duration::from_secs(10),
+        )
+        .await?;
+        if !add.success() {
+            return Err(ComposeProdError::Process(format!(
+                "failed to create runner Docker bridge {}: {}",
+                config.bridge_name,
+                add.combined()
+            )));
+        }
+    }
+
+    let addr = run_process_output(
+        "ip",
+        ["addr", "show", "dev", &config.bridge_name],
+        Duration::from_secs(10),
+    )
+    .await?;
+    if !addr.success() {
+        return Err(ComposeProdError::Process(format!(
+            "failed to inspect runner Docker bridge {}: {}",
+            config.bridge_name,
+            addr.combined()
+        )));
+    }
+    if !addr.stdout.contains(&config.bridge_cidr) {
+        let add_addr = run_process_output(
+            "ip",
+            [
+                "addr",
+                "add",
+                &config.bridge_cidr,
+                "dev",
+                &config.bridge_name,
+            ],
+            Duration::from_secs(10),
+        )
+        .await?;
+        if !add_addr.success() {
+            return Err(ComposeProdError::Process(format!(
+                "failed to assign {} to runner Docker bridge {}: {}",
+                config.bridge_cidr,
+                config.bridge_name,
+                add_addr.combined()
+            )));
+        }
+    }
+
+    let up = run_process_output(
+        "ip",
+        ["link", "set", "dev", &config.bridge_name, "up"],
+        Duration::from_secs(10),
+    )
+    .await?;
+    if !up.success() {
+        return Err(ComposeProdError::Process(format!(
+            "failed to bring runner Docker bridge {} up: {}",
+            config.bridge_name,
+            up.combined()
+        )));
+    }
+    Ok(())
 }
 
 async fn runner_docker_ready(config: &RunnerDockerConfig) -> Result<bool, ComposeProdError> {
