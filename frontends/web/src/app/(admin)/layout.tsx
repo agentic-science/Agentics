@@ -17,16 +17,16 @@ export default async function AdminLayout({
         <div className="site-header-main">
           <nav className="flex items-center justify-between h-11">
             <Link href="/admin" className="flex items-center gap-2 group">
-              <span className="font-[var(--font-sans)] text-xl font-bold tracking-tight text-[var(--text-primary)] group-hover:text-[var(--accent-primary-text)] transition-colors">
+              <span className="font-sans text-xl font-bold tracking-tight text-fg group-hover:text-action-fg transition-colors">
                 {t("brand")}
               </span>
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary-500)]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-action" />
             </Link>
 
             <div className="hidden sm:flex items-center gap-1">
               <Link
                 href="/"
-                className="px-3 py-1.5 rounded-md text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-secondary)] transition-colors"
+                className="px-3 py-1.5 rounded-panel text-sm font-medium text-fg-secondary hover:text-fg hover:bg-surface-2 transition-colors"
               >
                 {t("observer")}
               </Link>

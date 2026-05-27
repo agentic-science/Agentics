@@ -117,7 +117,7 @@ export default async function SolutionSubmissionPage({
       <div className="card-elevated">
         <Link
           href={`/challenges/${submission.challenge_name}`}
-          className="inline-flex items-center gap-1.5 text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 text-body-sm text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors mb-4"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           {submission.challenge_title ?? submission.challenge_name}
@@ -126,16 +126,16 @@ export default async function SolutionSubmissionPage({
         <div className="flex flex-col lg:flex-row lg:items-start gap-6">
           <div className="flex-1 min-w-0">
             <h1
-              className="text-[var(--text-h1)] font-bold text-[var(--text-primary)] leading-[var(--leading-h1)]"
+              className="text-h1 font-bold text-[var(--text-primary)] leading-h1"
               style={{ fontFamily: "var(--font-sans)" }}
             >
               {t("submissionDetail.title", { id: submission.id.slice(0, 8) })}
             </h1>
-            <p className="text-[var(--text-body)] text-[var(--text-secondary)] mt-2 leading-[var(--leading-body)]">
+            <p className="text-body text-[var(--text-secondary)] mt-2 leading-body">
               {submission.explanation}
             </p>
             {submission.note ? (
-              <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] mt-2 whitespace-pre-wrap">
+              <p className="text-body-sm text-[var(--text-muted)] mt-2 whitespace-pre-wrap">
                 {submission.note}
               </p>
             ) : null}
@@ -163,40 +163,40 @@ export default async function SolutionSubmissionPage({
           <div className="grid grid-cols-2 gap-3 lg:w-auto lg:min-w-[280px]">
             <div className="card flex flex-col gap-1 py-3 px-4">
               <Award className="w-4 h-4 text-[var(--accent-primary-text)]" />
-              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+              <span className="text-caption text-[var(--text-muted)]">
                 {primaryMetricLabel(
                   metricSchema,
                   t("leaderboard.primaryMetric"),
                 )}
               </span>
-              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
+              <span className="text-body-sm font-mono font-medium text-[var(--text-primary)]">
                 {formatDeclaredMetric(metricSchema, primary)}
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
               <Activity className="w-4 h-4 text-[var(--accent-secondary-text)]" />
-              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+              <span className="text-caption text-[var(--text-muted)]">
                 {t("leaderboard.rankScore")}
               </span>
-              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
+              <span className="text-body-sm font-mono font-medium text-[var(--text-primary)]">
                 {formatScore(evalDto?.rank_score)}
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
               <Trophy className="w-4 h-4 text-[var(--accent-primary-text)]" />
-              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+              <span className="text-caption text-[var(--text-muted)]">
                 {t("submissions.officialPrimary")}
               </span>
-              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
+              <span className="text-body-sm font-mono font-medium text-[var(--text-primary)]">
                 {formatDeclaredMetric(metricSchema, officialPrimary)}
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
               <Calendar className="w-4 h-4 text-[var(--accent-secondary-text)]" />
-              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+              <span className="text-caption text-[var(--text-muted)]">
                 {t("submissionDetail.metadata.created")}
               </span>
-              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
+              <span className="text-body-sm font-mono font-medium text-[var(--text-primary)]">
                 {formatDate(submission.created_at, locale)}
               </span>
             </div>
@@ -210,48 +210,48 @@ export default async function SolutionSubmissionPage({
         <div className="flex flex-col gap-5">
           {/* Metadata */}
           <div className="card">
-            <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
+            <h3 className="text-h3 font-semibold text-[var(--text-primary)] mb-4 flex items-center gap-2">
               <User className="w-4 h-4 text-[var(--accent-secondary-text)]" />
               {t("submissionDetail.metadata.title")}
             </h3>
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               <div>
-                <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
+                <span className="block text-caption text-[var(--text-muted)] uppercase tracking-wide">
                   {t("submissionDetail.metadata.agent")}
                 </span>
-                <span className="text-[var(--text-body-sm)] font-medium text-[var(--text-primary)]">
+                <span className="text-body-sm font-medium text-[var(--text-primary)]">
                   {submission.agent_display_name ?? submission.agent_id}
                 </span>
               </div>
               <div>
-                <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
+                <span className="block text-caption text-[var(--text-muted)] uppercase tracking-wide">
                   {t("submissionDetail.metadata.parent")}
                 </span>
-                <span className="text-[var(--text-body-sm)] font-mono text-[var(--text-primary)]">
+                <span className="text-body-sm font-mono text-[var(--text-primary)]">
                   {submission.parent_solution_submission_id ?? t("common.none")}
                 </span>
               </div>
               <div>
-                <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
+                <span className="block text-caption text-[var(--text-muted)] uppercase tracking-wide">
                   {t("submissionDetail.metadata.created")}
                 </span>
-                <span className="text-[var(--text-body-sm)] font-mono text-[var(--text-primary)]">
+                <span className="text-body-sm font-mono text-[var(--text-primary)]">
                   {formatDate(submission.created_at, locale)}
                 </span>
               </div>
               <div>
-                <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
+                <span className="block text-caption text-[var(--text-muted)] uppercase tracking-wide">
                   {t("submissionDetail.metadata.credit")}
                 </span>
-                <span className="text-[var(--text-body-sm)] text-[var(--text-primary)]">
+                <span className="text-body-sm text-[var(--text-primary)]">
                   {submission.credit_text || t("common.none")}
                 </span>
               </div>
               <div className="col-span-2">
-                <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
+                <span className="block text-caption text-[var(--text-muted)] uppercase tracking-wide">
                   {t("submissionDetail.metadata.note")}
                 </span>
-                <span className="text-[var(--text-body-sm)] text-[var(--text-primary)] whitespace-pre-wrap">
+                <span className="text-body-sm text-[var(--text-primary)] whitespace-pre-wrap">
                   {submission.note || t("common.none")}
                 </span>
               </div>
@@ -260,11 +260,11 @@ export default async function SolutionSubmissionPage({
 
           {/* Aggregate Metrics */}
           <div className="card">
-            <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
+            <h3 className="text-h3 font-semibold text-[var(--text-primary)] mb-2 flex items-center gap-2">
               <Activity className="w-4 h-4 text-[var(--accent-primary-text)]" />
               {t("submissionDetail.aggregateMetrics.title")}
             </h3>
-            <p className="text-[var(--text-caption)] text-[var(--text-muted)] mb-4">
+            <p className="text-caption text-[var(--text-muted)] mb-4">
               {t("submissionDetail.aggregateMetrics.note")}
             </p>
             {evalDto && evalDto.aggregate_metrics.length > 0 ? (
@@ -275,7 +275,7 @@ export default async function SolutionSubmissionPage({
                   );
                   return (
                     <div key={metric.metric_name}>
-                      <span className="block text-[var(--text-caption)] text-[var(--text-muted)]">
+                      <span className="block text-caption text-[var(--text-muted)]">
                         {definition?.label ?? metric.metric_name}
                         {definition
                           ? ` · ${metricDirectionLabel(
@@ -284,7 +284,7 @@ export default async function SolutionSubmissionPage({
                             )}`
                           : ""}
                       </span>
-                      <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
+                      <span className="text-body-sm font-mono font-medium text-[var(--text-primary)]">
                         {formatDeclaredMetric(metricSchema, metric)}
                       </span>
                     </div>
@@ -292,7 +292,7 @@ export default async function SolutionSubmissionPage({
                 })}
               </div>
             ) : (
-              <p className="text-[var(--text-muted)] text-[var(--text-body-sm)]">
+              <p className="text-[var(--text-muted)] text-body-sm">
                 {t("common.empty")}
               </p>
             )}
@@ -301,7 +301,7 @@ export default async function SolutionSubmissionPage({
           {/* Run Metrics */}
           {evalDto && evalDto.run_metrics.length > 0 && (
             <div className="card overflow-x-auto">
-              <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] mb-4">
+              <h3 className="text-h3 font-semibold text-[var(--text-primary)] mb-4">
                 {t("submissionDetail.runMetrics.title")}
               </h3>
               <table className="data-table">
@@ -314,10 +314,8 @@ export default async function SolutionSubmissionPage({
                 <tbody>
                   {evalDto.run_metrics.map((run) => (
                     <tr key={run.run_name}>
-                      <td className="font-mono text-[var(--text-caption)]">
-                        {run.run_name}
-                      </td>
-                      <td className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                      <td className="font-mono text-caption">{run.run_name}</td>
+                      <td className="text-caption text-[var(--text-muted)]">
                         {run.metrics
                           .map(
                             (metric) =>
@@ -335,7 +333,7 @@ export default async function SolutionSubmissionPage({
           {/* Public Cases */}
           {evalDto && evalDto.public_results.length > 0 && (
             <div className="card overflow-x-auto">
-              <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] mb-4">
+              <h3 className="text-h3 font-semibold text-[var(--text-primary)] mb-4">
                 {t("submissionDetail.publicCases.title")}
               </h3>
               <table className="data-table">
@@ -350,9 +348,7 @@ export default async function SolutionSubmissionPage({
                 <tbody>
                   {evalDto.public_results.map((c) => (
                     <tr key={c.case_name}>
-                      <td className="font-mono text-[var(--text-caption)]">
-                        {c.case_name}
-                      </td>
+                      <td className="font-mono text-caption">{c.case_name}</td>
                       <td>
                         <span
                           className={`badge ${
@@ -369,7 +365,7 @@ export default async function SolutionSubmissionPage({
                         </span>
                       </td>
                       <td className="font-mono">{formatScore(c.score)}</td>
-                      <td className="text-[var(--text-muted)] text-[var(--text-caption)]">
+                      <td className="text-[var(--text-muted)] text-caption">
                         {c.message ?? t("common.none")}
                       </td>
                     </tr>
@@ -384,11 +380,11 @@ export default async function SolutionSubmissionPage({
         {artifact ? (
           <div className="card">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
+              <h3 className="text-h3 font-semibold text-[var(--text-primary)] flex items-center gap-2">
                 <GitCommit className="w-4 h-4 text-[var(--accent-secondary-text)]" />
                 {t("submissionDetail.codeBrowser.title")}
               </h3>
-              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+              <span className="text-caption text-[var(--text-muted)]">
                 {artifact.archive_name} · {artifact.file_count}{" "}
                 {t("submissionDetail.codeBrowser.files")} ·{" "}
                 {artifact.total_uncompressed_size.toLocaleString()}{" "}

@@ -70,14 +70,14 @@ export function OperationsPanel({
                     <div className="font-medium">
                       {submission.challenge_title}
                     </div>
-                    <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
+                    <div className="font-mono text-caption text-fg-muted">
                       {submission.id.slice(0, 8)} ·{" "}
                       {submission.agent_display_name}
                     </div>
-                    <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
+                    <div className="font-mono text-caption text-fg-muted">
                       {submission.target}
                     </div>
-                    <div className="text-[var(--text-caption)] text-[var(--text-muted)] max-w-[20rem] truncate">
+                    <div className="text-caption text-fg-muted max-w-[20rem] truncate">
                       {submission.note || t("noNote")}
                     </div>
                   </td>
@@ -85,10 +85,10 @@ export function OperationsPanel({
                     <LocalizedStatusBadge status={submission.status} />
                   </td>
                   <td>
-                    <div className="font-mono text-[var(--text-caption)]">
+                    <div className="font-mono text-caption">
                       {submission.latest_job_id?.slice(0, 8) ?? "—"}
                     </div>
-                    <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                    <div className="text-caption text-fg-muted">
                       {submission.latest_job_eval_type ?? t("noJob")} ·{" "}
                       {submission.latest_job_status ?? "—"}
                     </div>
@@ -96,7 +96,7 @@ export function OperationsPanel({
                   <td className="font-mono">
                     {formatScore(submission.rank_score)}
                   </td>
-                  <td className="text-[var(--text-muted)]">
+                  <td className="text-fg-muted">
                     {formatDate(submission.updated_at, locale)}
                   </td>
                   <td>
@@ -146,10 +146,10 @@ export function OperationsPanel({
                       status={String(heartbeat.payload.status ?? "unknown")}
                     />
                   </td>
-                  <td className="text-[var(--text-muted)]">
+                  <td className="text-fg-muted">
                     {formatDate(heartbeat.last_seen_at, locale)}
                   </td>
-                  <td className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
+                  <td className="font-mono text-caption text-fg-muted">
                     {JSON.stringify(heartbeat.payload)}
                   </td>
                 </tr>
@@ -265,7 +265,7 @@ function SubmissionActions({
       </button>
       <button
         type="button"
-        className="btn btn-ghost btn-sm text-[var(--status-error)]"
+        className="btn btn-ghost btn-sm text-danger"
         onClick={() => runAction("disable-agent")}
         disabled={!csrfToken || pendingAction !== null}
       >

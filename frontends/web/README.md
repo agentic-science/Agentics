@@ -53,6 +53,7 @@ Run before committing frontend changes:
 
 ```bash
 bun run generate:schemas
+bun run check:vis
 bun run format
 bun run test
 bun run build
@@ -61,3 +62,6 @@ bun run build
 `bun run generate:schemas` regenerates frontend Zod schemas from the
 `agentics-contracts` Rust schema manifest. Keep `src/lib/schemas.ts` as the
 stable import facade.
+`bun run check:vis` prevents new raw Tailwind brand palette, `dark:*` color,
+generic radius/shadow, and ambiguous VIS type classes from bypassing the visual
+identity tokens.

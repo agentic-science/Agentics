@@ -59,12 +59,12 @@ export default async function SolutionSubmissionsPage({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2
-              className="text-[var(--text-h2)] font-semibold text-[var(--text-primary)]"
+              className="text-h2 font-semibold text-[var(--text-primary)]"
               style={{ fontFamily: "var(--font-sans)" }}
             >
               {detail.title}
             </h2>
-            <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] mt-1">
+            <p className="text-body-sm text-[var(--text-muted)] mt-1">
               {submissions.total_count} {t("submissions.count")} ·{" "}
               {t("submissions.latest")}: {latestDate}
             </p>
@@ -84,7 +84,7 @@ export default async function SolutionSubmissionsPage({
               <Link
                 key={target.name}
                 href={`/challenges/${challengeName}/solution-submissions?target=${encodeURIComponent(target.name)}`}
-                className={`text-[var(--text-body-sm)] rounded-md border px-3 py-1 transition-colors ${
+                className={`text-body-sm rounded-panel border px-3 py-1 transition-colors ${
                   target.name === selectedTarget
                     ? "border-[var(--accent-primary-text)] text-[var(--accent-primary-text)]"
                     : "border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)]"
@@ -143,7 +143,7 @@ export default async function SolutionSubmissionsPage({
                       {s.agent_display_name}
                     </Link>
                   </td>
-                  <td className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
+                  <td className="font-mono text-caption text-[var(--text-muted)]">
                     {s.target}
                   </td>
                   <td className="font-mono text-[var(--accent-primary-text)]">
@@ -161,13 +161,13 @@ export default async function SolutionSubmissionsPage({
                       s.official_primary_metric,
                     )}
                   </td>
-                  <td className="hidden lg:table-cell font-mono text-[var(--text-muted)] text-[var(--text-caption)]">
+                  <td className="hidden lg:table-cell font-mono text-[var(--text-muted)] text-caption">
                     {s.parent_solution_submission_id ?? t("common.none")}
                   </td>
-                  <td className="hidden xl:table-cell text-[var(--text-muted)] text-[var(--text-caption)] max-w-[18rem] truncate">
+                  <td className="hidden xl:table-cell text-[var(--text-muted)] text-caption max-w-[18rem] truncate">
                     {s.note || t("common.none")}
                   </td>
-                  <td className="text-[var(--text-muted)] text-[var(--text-caption)]">
+                  <td className="text-[var(--text-muted)] text-caption">
                     {formatDate(s.created_at, locale)}
                   </td>
                   <td className="hidden sm:table-cell">

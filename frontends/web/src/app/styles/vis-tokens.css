@@ -1,0 +1,234 @@
+/* ===================================================================
+   Agentics Visual Identity System — "The Observatory"
+   =================================================================== */
+
+@theme {
+  /* Font families */
+  --font-sans:
+    "Geist Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "IBM Plex Mono", monospace;
+
+  /* Type scale (fluid) */
+  --text-hero: clamp(2.8rem, 6.5vw, 5rem);
+  --text-hero--line-height: 1.05;
+  --text-h1: clamp(1.8rem, 4vw, 2.5rem);
+  --text-h1--line-height: 1.1;
+  --text-h2: clamp(1.3rem, 3vw, 1.8rem);
+  --text-h2--line-height: 1.2;
+  --text-h3: 1.125rem;
+  --text-h3--line-height: 1.3;
+  --text-body: 1rem;
+  --text-body--line-height: 1.65;
+  --text-body-sm: 0.875rem;
+  --text-body-sm--line-height: 1.55;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.4;
+  --text-mono: 0.875rem;
+  --text-mono--line-height: 1.4;
+
+  /* Line heights */
+  --leading-hero: 1.05;
+  --leading-h1: 1.1;
+  --leading-h2: 1.2;
+  --leading-h3: 1.3;
+  --leading-body: 1.65;
+  --leading-body-sm: 1.55;
+  --leading-caption: 1.4;
+  --leading-mono: 1.4;
+
+  /* Semantic VIS color aliases for Tailwind utilities */
+  --color-fg: var(--text-primary);
+  --color-fg-secondary: var(--text-secondary);
+  --color-fg-muted: var(--text-muted);
+  --color-fg-inverse: var(--text-inverse);
+  --color-surface: var(--surface-primary);
+  --color-surface-2: var(--surface-secondary);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-line: var(--border-subtle);
+  --color-line-medium: var(--border-medium);
+  --color-line-strong: var(--border-strong);
+  --color-action: var(--accent-primary-500);
+  --color-action-hover: var(--accent-primary-400);
+  --color-action-fg: var(--accent-primary-text);
+  --color-data: var(--accent-secondary-text);
+  --color-success: var(--status-success);
+  --color-danger: var(--status-error);
+  --color-warning: var(--status-warning);
+  --color-info: var(--status-info);
+
+  /* Semantic VIS shape and elevation aliases */
+  --radius-control: var(--radius-sm);
+  --radius-panel: var(--radius-md);
+  --radius-dialog: var(--radius-lg);
+  --radius-feature: var(--radius-xl);
+  --shadow-control: var(--shadow-sm);
+  --shadow-panel: var(--shadow-md);
+  --shadow-dialog: var(--shadow-lg);
+}
+
+/* ===================================================================
+   CSS Custom Properties — Dark Mode (Primary)
+   =================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* Spacing */
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-10: 40px;
+  --spacing-12: 48px;
+  --spacing-16: 64px;
+
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Duration */
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+  --duration-slower: 600ms;
+
+  /* Easing */
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Background */
+  --bg-base: #020617;
+  --bg-gradient-start: #020617;
+  --bg-gradient-end: #0a0f1c;
+  --bg-accent-glow: rgba(245, 158, 11, 0.04);
+
+  /* Surface */
+  --surface-primary: rgba(255, 255, 255, 0.03);
+  --surface-secondary: rgba(255, 255, 255, 0.02);
+  --surface-elevated: rgba(255, 255, 255, 0.05);
+
+  /* Border */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-medium: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  /* Accent: Amber */
+  --accent-primary-50: #fffbeb;
+  --accent-primary-100: #fef3c7;
+  --accent-primary-400: #fbbf24;
+  --accent-primary-500: #f59e0b;
+  --accent-primary-600: #d97706;
+  --accent-primary-text: #fbbf24;
+
+  /* Accent: Teal */
+  --accent-secondary-300: #5eead4;
+  --accent-secondary-400: #2dd4bf;
+  --accent-secondary-500: #14b8a6;
+  --accent-secondary-text: #2dd4bf;
+
+  /* Text */
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-inverse: #0f172a;
+
+  /* Status */
+  --status-success: #10b981;
+  --status-error: #f43f5e;
+  --status-warning: #f59e0b;
+  --status-info: #3b82f6;
+  --badge-validation-text: #60a5fa;
+  --badge-official-text: #fbbf24;
+  --badge-success-text: #34d399;
+  --badge-error-text: #fb7185;
+  --badge-warning-text: #fbbf24;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --glow-amber: 0 0 20px rgba(245, 158, 11, 0.15);
+  --glow-teal: 0 0 20px rgba(45, 212, 191, 0.12);
+  --header-glass-bg: rgba(8, 11, 20, 0.76);
+  --header-glass-layer: rgba(8, 11, 20, 0.46);
+  --header-glass-highlight: rgba(255, 255, 255, 0.04);
+  --header-glass-filter: blur(16px) saturate(130%);
+  --header-glass-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+}
+
+/* ===================================================================
+   Light Mode Override
+   =================================================================== */
+
+html[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-base: #f8fafc;
+  --bg-gradient-start: #f1f5f9;
+  --bg-gradient-end: #ffffff;
+  --bg-accent-glow: rgba(245, 158, 11, 0.06);
+
+  --surface-primary: rgba(255, 255, 255, 0.7);
+  --surface-secondary: rgba(241, 245, 249, 0.8);
+  --surface-elevated: rgba(255, 255, 255, 0.9);
+
+  --border-subtle: rgba(15, 23, 42, 0.08);
+  --border-medium: rgba(15, 23, 42, 0.12);
+  --border-strong: rgba(15, 23, 42, 0.2);
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-inverse: #f8fafc;
+  --accent-primary-text: #b45309;
+  --accent-secondary-text: #0f766e;
+  --badge-validation-text: #2563eb;
+  --badge-official-text: #b45309;
+  --badge-success-text: #047857;
+  --badge-error-text: #be123c;
+  --badge-warning-text: #b45309;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 30px rgba(0, 0, 0, 0.1);
+  --glow-amber: 0 0 20px rgba(245, 158, 11, 0.1);
+  --glow-teal: 0 0 20px rgba(45, 212, 191, 0.08);
+  --header-glass-bg: rgba(255, 255, 255, 0.82);
+  --header-glass-layer: rgba(255, 255, 255, 0.58);
+  --header-glass-highlight: rgba(255, 255, 255, 0.18);
+  --header-glass-filter: blur(14px) saturate(120%);
+  --header-glass-shadow: none;
+}
+
+html[data-browser-engine="chromium"] {
+  --header-glass-bg: rgba(8, 11, 20, 0.86);
+  --header-glass-layer: rgba(8, 11, 20, 0.64);
+  --header-glass-highlight: rgba(255, 255, 255, 0.035);
+  --header-glass-filter: blur(12px) saturate(125%);
+}
+
+html[data-browser-engine="safari"] {
+  --header-glass-bg: rgba(8, 11, 20, 0.86);
+  --header-glass-layer: rgba(8, 11, 20, 0.7);
+  --header-glass-highlight: rgba(255, 255, 255, 0.025);
+  --header-glass-filter: blur(2px) saturate(105%);
+}
+
+html[data-theme="light"][data-browser-engine="chromium"] {
+  --header-glass-bg: rgba(255, 255, 255, 0.9);
+  --header-glass-layer: rgba(255, 255, 255, 0.72);
+}
+
+html[data-theme="light"][data-browser-engine="safari"] {
+  --header-glass-bg: rgba(255, 255, 255, 0.9);
+  --header-glass-layer: rgba(255, 255, 255, 0.76);
+  --header-glass-filter: blur(2px) saturate(105%);
+}

@@ -9,6 +9,7 @@
     "test": "vitest run",
     "lint": "biome check",
     "format": "biome format --write",
+    "check:vis": "bun scripts/check-vis-tailwind.mjs",
     "generate:schemas": "bun scripts/generate-api-schemas.mjs",
     "generate:schemas:check": "bun scripts/generate-api-schemas.mjs --check"
   },

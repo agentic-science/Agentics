@@ -9,12 +9,12 @@ export function RankBadge({
   const sizeClass = size === "sm" ? "w-6 h-6 text-[11px]" : "w-7 h-7 text-xs";
   const toneClass =
     rank === 1
-      ? "bg-[var(--accent-primary-500)]/20 text-[var(--accent-primary-text)]"
+      ? "bg-action/20 text-action-fg"
       : rank === 2
-        ? "bg-[var(--text-muted)]/20 text-[var(--text-muted)]"
+        ? "bg-fg-muted/20 text-fg-muted"
         : rank === 3
-          ? "bg-[var(--accent-secondary-500)]/20 text-[var(--accent-secondary-text)]"
-          : "text-[var(--text-muted)]";
+          ? "bg-data/20 text-data"
+          : "text-fg-muted";
 
   return (
     <span

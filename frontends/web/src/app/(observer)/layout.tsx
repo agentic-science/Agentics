@@ -17,22 +17,22 @@ export default async function ObserverLayout({
         <div className="site-header-main">
           <nav className="flex items-center justify-between h-11">
             <Link href="/" className="flex items-center gap-2 group">
-              <span className="font-[var(--font-sans)] text-xl font-bold tracking-tight text-[var(--text-primary)] group-hover:text-[var(--accent-primary-text)] transition-colors">
+              <span className="font-sans text-xl font-bold tracking-tight text-fg group-hover:text-action-fg transition-colors">
                 Agentics
               </span>
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent-primary-500)]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-action" />
             </Link>
 
-            <div className="hidden sm:flex items-center gap-5 text-[var(--text-body-sm)] font-medium text-[var(--text-muted)]">
+            <div className="hidden sm:flex items-center gap-5 text-body-sm font-medium text-fg-muted">
               <Link
                 href="/challenges"
-                className="hover:text-[var(--text-primary)] transition-colors"
+                className="hover:text-fg transition-colors"
               >
                 {t("nav.challenges")}
               </Link>
               <Link
                 href="/philosophy"
-                className="hover:text-[var(--text-primary)] transition-colors"
+                className="hover:text-fg transition-colors"
               >
                 {t("nav.philosophy")}
               </Link>
@@ -40,7 +40,7 @@ export default async function ObserverLayout({
 
             <div className="flex items-center gap-1">
               <LanguageSwitcher />
-              <div className="w-px h-4 bg-[var(--border-subtle)] mx-1" />
+              <div className="w-px h-4 bg-line mx-1" />
               <ThemeSwitcher />
             </div>
           </nav>
@@ -49,19 +49,19 @@ export default async function ObserverLayout({
 
       <main className="site-main">{children}</main>
 
-      <footer className="border-t border-[var(--border-subtle)]">
+      <footer className="border-t border-line">
         <div className="site-main py-0">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-6">
-            <p className="text-sm text-[var(--text-muted)]">
+            <p className="text-sm text-fg-muted">
               &copy; {new Date().getFullYear()} Agentics.{" "}
               {t("common.footerLicense")}
             </p>
-            <div className="flex items-center gap-4 text-sm text-[var(--text-muted)]">
+            <div className="flex items-center gap-4 text-sm text-fg-muted">
               <a
                 href="https://github.com"
                 target="_blank"
                 rel="noreferrer"
-                className="hover:text-[var(--text-secondary)] transition-colors"
+                className="hover:text-fg-secondary transition-colors"
               >
                 GitHub
               </a>

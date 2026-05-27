@@ -23,7 +23,7 @@ export function LanguageSwitcher() {
 
   return (
     <div className="flex items-center gap-2">
-      <Globe className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+      <Globe className="w-3.5 h-3.5 text-fg-muted" />
       {locales.map((loc) => (
         <button
           key={loc.code}
@@ -31,8 +31,8 @@ export function LanguageSwitcher() {
           onClick={() => switchLocale(loc.code)}
           className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
             locale === loc.code
-              ? "text-[var(--accent-primary-text)]"
-              : "text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+              ? "text-action-fg"
+              : "text-fg-muted hover:text-fg-secondary"
           }`}
           aria-label={t("switchTo", { locale: loc.label })}
         >

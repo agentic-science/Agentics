@@ -196,12 +196,12 @@ export function AdminConsole() {
               {t("hero.badge")}
             </span>
             <h1
-              className="text-[var(--text-h1)] font-bold leading-[var(--leading-h1)]"
+              className="text-h1 font-bold leading-h1"
               style={{ fontFamily: "var(--font-sans)" }}
             >
               {t("hero.title")}
             </h1>
-            <p className="mt-3 max-w-2xl text-[var(--text-body)] leading-[var(--leading-body)] text-[var(--text-secondary)]">
+            <p className="mt-3 max-w-2xl text-body leading-body text-fg-secondary">
               {t("hero.description")}
             </p>
           </div>
@@ -217,14 +217,10 @@ export function AdminConsole() {
       </section>
 
       {error ? (
-        <div className="card border-[var(--status-error)]/40 text-[var(--status-error)]">
-          {error}
-        </div>
+        <div className="card border-danger/40 text-danger">{error}</div>
       ) : null}
       {message ? (
-        <div className="card border-[var(--status-success)]/30 text-[var(--status-success)]">
-          {message}
-        </div>
+        <div className="card border-success/30 text-success">{message}</div>
       ) : null}
 
       <nav className="tab-list overflow-x-auto">

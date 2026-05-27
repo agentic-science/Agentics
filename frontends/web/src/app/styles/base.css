@@ -1,0 +1,161 @@
+/* ===================================================================
+   Base Styles
+   =================================================================== */
+
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    min-height: 100dvh;
+    background:
+      radial-gradient(ellipse at 20% 0%, var(--bg-accent-glow), transparent 50%),
+      radial-gradient(
+        ellipse at 80% 100%,
+        rgba(45, 212, 191, 0.03),
+        transparent 50%
+      ),
+      linear-gradient(180deg, var(--bg-gradient-start), var(--bg-gradient-end));
+    background-attachment: fixed;
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--leading-body);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  a {
+    color: inherit;
+    text-decoration: none;
+    transition: color var(--duration-fast) var(--ease-default);
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+}
+
+/* ===================================================================
+   Layout
+   =================================================================== */
+
+@layer components {
+  .site-shell {
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .site-main {
+    flex: 1;
+    width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: var(--spacing-6) var(--spacing-6) var(--spacing-16);
+  }
+
+  .site-header-main {
+    width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 27px var(--spacing-6);
+  }
+
+  @media (max-width: 640px) {
+    .site-main {
+      padding: var(--spacing-4) var(--spacing-4) var(--spacing-12);
+    }
+
+    .site-header-main {
+      padding: 18px var(--spacing-4);
+    }
+  }
+}
+
+/* ===================================================================
+   Animations
+   =================================================================== */
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@layer utilities {
+  .animate-fade-in-up {
+    animation: fade-in-up var(--duration-slow) var(--ease-out) forwards;
+  }
+}
+
+/* ===================================================================
+   Scrollbar
+   =================================================================== */
+
+@layer base {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-medium);
+    border-radius: var(--radius-full);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--border-strong);
+  }
+}
+
+/* ===================================================================
+   Reduced Motion
+   =================================================================== */
+
+@layer base {
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      /* biome-ignore lint/complexity/noImportantStyles: essential for accessibility */
+      animation-duration: 0.01ms !important;
+      /* biome-ignore lint/complexity/noImportantStyles: essential for accessibility */
+      animation-iteration-count: 1 !important;
+      /* biome-ignore lint/complexity/noImportantStyles: essential for accessibility */
+      transition-duration: 0.01ms !important;
+    }
+
+    html {
+      scroll-behavior: auto;
+    }
+  }
+}
+
+/* ===================================================================
+   Selection
+   =================================================================== */
+
+@layer base {
+  ::selection {
+    background: rgba(245, 158, 11, 0.25);
+    color: var(--text-primary);
+  }
+}

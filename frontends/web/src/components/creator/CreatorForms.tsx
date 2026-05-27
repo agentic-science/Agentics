@@ -130,11 +130,11 @@ export function DraftCreateForm({
         required
       />
       <label className="flex flex-col gap-1">
-        <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+        <span className="text-caption uppercase tracking-wide text-fg-muted">
           {t("draft.manifestJson")}
         </span>
         <textarea
-          className="min-h-80 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 font-mono text-[var(--text-caption)] leading-relaxed outline-none focus:border-[var(--accent-primary-500)]"
+          className="min-h-80 rounded-control border border-line bg-surface-2 px-3 py-2 font-mono text-caption leading-relaxed outline-none focus:border-action"
           value={draftForm.manifestText}
           onChange={(event) =>
             setDraftForm({
@@ -219,11 +219,11 @@ export function PrivateAssetUploadForm({
         required
       />
       <label className="flex flex-col gap-1">
-        <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+        <span className="text-caption uppercase tracking-wide text-fg-muted">
           {t("draft.assetKind")}
         </span>
         <select
-          className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
+          className="rounded-control border border-line bg-surface-2 px-3 py-2 text-body-sm outline-none focus:border-action"
           value={assetForm.kind}
           onChange={(event) =>
             setAssetForm({
@@ -239,7 +239,7 @@ export function PrivateAssetUploadForm({
           ))}
         </select>
       </label>
-      <label className="flex items-center gap-2 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
+      <label className="flex items-center gap-2 text-body-sm text-fg-secondary">
         <input
           type="checkbox"
           checked={assetForm.required}
@@ -254,7 +254,7 @@ export function PrivateAssetUploadForm({
       </label>
       <input
         type="file"
-        className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)]"
+        className="rounded-control border border-line bg-surface-2 px-3 py-2 text-body-sm"
         onChange={(event) =>
           setAssetForm({
             ...assetForm,
@@ -338,11 +338,11 @@ export function ShortlistUploadForm({
         title={t("owner.uploadShortlist")}
       />
       <label className="flex flex-col gap-1">
-        <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+        <span className="text-caption uppercase tracking-wide text-fg-muted">
           {t("owner.deltaJson")}
         </span>
         <textarea
-          className="min-h-40 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 font-mono text-[var(--text-caption)] leading-relaxed outline-none focus:border-[var(--accent-primary-500)]"
+          className="min-h-40 rounded-control border border-line bg-surface-2 px-3 py-2 font-mono text-caption leading-relaxed outline-none focus:border-action"
           value={ownerForm.shortlistText}
           onChange={(event) =>
             setOwnerForm({

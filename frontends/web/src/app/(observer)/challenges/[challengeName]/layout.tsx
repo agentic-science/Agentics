@@ -34,7 +34,7 @@ export default async function ChallengeLayout({
   } catch (e) {
     error = e instanceof Error ? e.message : t("common.error");
     return (
-      <div className="card text-center py-12 text-[var(--status-error)]">
+      <div className="card text-center py-12 text-danger">
         {t("common.error")}: {error}
       </div>
     );
@@ -42,7 +42,7 @@ export default async function ChallengeLayout({
 
   if (challenge.spec.targets.length === 0) {
     return (
-      <div className="card text-center py-12 text-[var(--status-error)]">
+      <div className="card text-center py-12 text-danger">
         {t("common.error")}: {t("challenge.config.noTargets")}
       </div>
     );
@@ -66,16 +66,16 @@ export default async function ChallengeLayout({
       <div className="card-elevated">
         <div className="flex flex-col lg:flex-row lg:items-start gap-6">
           <div className="flex-1 min-w-0">
-            <span className="text-[var(--text-caption)] text-[var(--text-muted)] font-mono tracking-wide uppercase">
+            <span className="text-caption text-fg-muted font-mono tracking-wide uppercase">
               {challenge.challenge_name}
             </span>
             <h1
-              className="text-[var(--text-h1)] font-bold text-[var(--text-primary)] mt-1 leading-[var(--leading-h1)]"
+              className="text-h1 font-bold text-fg mt-1 leading-h1"
               style={{ fontFamily: "var(--font-sans)" }}
             >
               {challenge.title}
             </h1>
-            <p className="text-[var(--text-body)] text-[var(--text-secondary)] mt-3 leading-[var(--leading-body)] max-w-2xl">
+            <p className="text-body text-fg-secondary mt-3 leading-body max-w-2xl">
               {selectLocalizedText(challenge.summary, locale)}
             </p>
 
@@ -96,7 +96,7 @@ export default async function ChallengeLayout({
                 href={challenge.moltbook.submolt_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded border border-[var(--border-subtle)] px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--text-secondary)] hover:text-[var(--accent-primary-text)]"
+                className="inline-flex items-center gap-2 rounded border border-line px-3 py-1.5 text-body-sm text-fg-secondary hover:text-action-fg"
               >
                 <MessagesSquare className="h-4 w-4" />
                 {t("challenge.moltbook.submolt", {
@@ -109,7 +109,7 @@ export default async function ChallengeLayout({
                   href={challenge.moltbook.discussion_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded border border-[var(--border-subtle)] px-3 py-1.5 text-[var(--text-body-sm)] text-[var(--accent-primary-text)] hover:text-[var(--text-primary)]"
+                  className="inline-flex items-center gap-2 rounded border border-line px-3 py-1.5 text-body-sm text-action-fg hover:text-fg"
                 >
                   <MessagesSquare className="h-4 w-4" />
                   {t("challenge.moltbook.discussion")}
@@ -122,38 +122,38 @@ export default async function ChallengeLayout({
           {/* Resource Chips */}
           <div className="grid grid-cols-2 gap-3 lg:w-auto lg:min-w-[240px]">
             <div className="card flex flex-col gap-1 py-3 px-4">
-              <Target className="w-4 h-4 text-[var(--accent-primary-text)]" />
-              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+              <Target className="w-4 h-4 text-action-fg" />
+              <span className="text-caption text-fg-muted">
                 {t("challenge.config.targets")}
               </span>
-              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
+              <span className="text-body-sm font-mono font-medium text-fg">
                 {challenge.spec.targets.length}
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
-              <Cpu className="w-4 h-4 text-[var(--accent-secondary-text)]" />
-              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+              <Cpu className="w-4 h-4 text-data" />
+              <span className="text-caption text-fg-muted">
                 {t("challenge.config.targetNames")}
               </span>
-              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)] [overflow-wrap:anywhere]">
+              <span className="text-body-sm font-mono font-medium text-fg [overflow-wrap:anywhere]">
                 {targetNames}
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
-              <Code2 className="w-4 h-4 text-[var(--accent-secondary-text)]" />
-              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+              <Code2 className="w-4 h-4 text-data" />
+              <span className="text-caption text-fg-muted">
                 {t("challenge.config.protocol")}
               </span>
-              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)]">
+              <span className="text-body-sm font-mono font-medium text-fg">
                 {challenge.spec.solution.protocol}
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
-              <Package className="w-4 h-4 text-[var(--accent-primary-text)]" />
-              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+              <Package className="w-4 h-4 text-action-fg" />
+              <span className="text-caption text-fg-muted">
                 {t("challenge.config.resourceProfiles")}
               </span>
-              <span className="text-[var(--text-body-sm)] font-mono font-medium text-[var(--text-primary)] [overflow-wrap:anywhere]">
+              <span className="text-body-sm font-mono font-medium text-fg [overflow-wrap:anywhere]">
                 {resourceProfileNames}
               </span>
             </div>

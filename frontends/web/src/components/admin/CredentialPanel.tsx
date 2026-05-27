@@ -28,16 +28,16 @@ export function CredentialPanel({
   return (
     <div className="card min-w-full lg:min-w-[360px] lg:max-w-[420px]">
       <div className="flex items-center gap-2 mb-4">
-        <KeyRound className="w-4 h-4 text-[var(--accent-primary-text)]" />
-        <h2 className="text-[var(--text-h3)] font-semibold">{t("title")}</h2>
+        <KeyRound className="w-4 h-4 text-action-fg" />
+        <h2 className="text-h3 font-semibold">{t("title")}</h2>
       </div>
       <div className="grid grid-cols-1 gap-3">
         <label className="flex flex-col gap-1">
-          <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+          <span className="text-caption uppercase tracking-wide text-fg-muted">
             {t("username")}
           </span>
           <input
-            className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
+            className="rounded-control border border-line bg-surface-2 px-3 py-2 text-body-sm outline-none focus:border-action"
             value={credentials.username}
             onChange={(event) =>
               onChange({ ...credentials, username: event.target.value })
@@ -45,11 +45,11 @@ export function CredentialPanel({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+          <span className="text-caption uppercase tracking-wide text-fg-muted">
             {t("password")}
           </span>
           <input
-            className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
+            className="rounded-control border border-line bg-surface-2 px-3 py-2 text-body-sm outline-none focus:border-action"
             type="password"
             value={credentials.password}
             onChange={(event) =>
@@ -59,7 +59,7 @@ export function CredentialPanel({
         </label>
       </div>
       <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+        <span className="text-caption text-fg-muted">
           {sessionUsername
             ? t("signedInAs", { username: sessionUsername })
             : t("cookieNote")}

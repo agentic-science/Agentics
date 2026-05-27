@@ -20,6 +20,40 @@ Simplified Chinese. This includes observer, creator, and admin surfaces. New UI
 copy should not be hard-coded in components unless it is technical data supplied
 by the API or by challenge/authored content.
 
+## Tailwind Integration
+
+The web frontend treats CSS custom properties as the VIS source of truth.
+Tailwind v4 consumes those tokens through semantic `@theme` aliases in the CSS
+entrypoint. New JSX should use the semantic Tailwind utility when one exists,
+and should avoid raw Tailwind palette classes for brand, surface, text, border,
+or status colors.
+
+| Intent | Preferred utility | Source token |
+|---|---|---|
+| Primary text | `text-fg` | `--text-primary` |
+| Secondary text | `text-fg-secondary` | `--text-secondary` |
+| Muted text | `text-fg-muted` | `--text-muted` |
+| Primary surface | `bg-surface` | `--surface-primary` |
+| Secondary surface | `bg-surface-2` | `--surface-secondary` |
+| Subtle border | `border-line` | `--border-subtle` |
+| Stronger border | `border-line-medium`, `border-line-strong` | `--border-medium`, `--border-strong` |
+| Amber accent text | `text-action-fg` | `--accent-primary-text` |
+| Teal data/link text | `text-data` | `--accent-secondary-text` |
+| Control radius | `rounded-control` | `--radius-sm` |
+
+Use Tailwind for layout, spacing utilities, responsive variants, and state
+variants such as `hover:` and `focus-visible:`. Use VIS semantic utilities for
+brand values, text roles, surfaces, borders, status colors, type scale, and
+component radius. Prefer `rounded-control`, `rounded-panel`, and
+`rounded-dialog` over generic `rounded-sm`, `rounded-md`, and `rounded-lg` when
+the radius is part of the VIS.
+
+Use direct `var(--token)` references in CSS modules, complex gradients, canvas or
+media export code, and bespoke component CSS where a Tailwind class is not the
+clearest expression. Light and dark mode must be resolved in the token layer
+through `:root` and `html[data-theme="light"]` overrides. Do not scatter
+`dark:*` color classes through components.
+
 ---
 
 ## Color System

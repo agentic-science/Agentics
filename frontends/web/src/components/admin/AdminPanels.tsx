@@ -98,7 +98,7 @@ export function ChallengeAdminPanel({
     <section className="grid grid-cols-1 gap-6">
       <div className="card overflow-x-auto">
         <div className="flex items-center justify-between gap-4 mb-4">
-          <h2 className="text-[var(--text-h3)] font-semibold">{t("title")}</h2>
+          <h2 className="text-h3 font-semibold">{t("title")}</h2>
           <span className="badge badge-default">
             {common("rows", { count: challenges.length })}
           </span>
@@ -122,7 +122,7 @@ export function ChallengeAdminPanel({
                 <tr key={challenge.challenge_name}>
                   <td>
                     <div className="font-medium">{challenge.title}</div>
-                    <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
+                    <div className="font-mono text-caption text-fg-muted">
                       {challenge.challenge_name}
                     </div>
                   </td>
@@ -133,7 +133,7 @@ export function ChallengeAdminPanel({
                     <div className="font-mono">
                       {challenge.eligibility?.type ?? "—"}
                     </div>
-                    <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                    <div className="text-caption text-fg-muted">
                       {challenge.starts_at
                         ? t("starts", {
                             date: formatDate(challenge.starts_at, locale),
@@ -147,7 +147,7 @@ export function ChallengeAdminPanel({
                   <td>
                     <ModeSummary challenge={challenge} />
                   </td>
-                  <td className="text-[var(--text-muted)]">
+                  <td className="text-fg-muted">
                     {formatDate(challenge.updated_at, locale)}
                   </td>
                 </tr>
@@ -204,7 +204,7 @@ export function CapacityPanel({
           icon={<Gauge className="w-4 h-4" />}
           title={t("quotaTitle")}
         />
-        <p className="mt-2 mb-4 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
+        <p className="mt-2 mb-4 text-body-sm text-fg-secondary">
           {t("quotaDescription")}
         </p>
         <table className="data-table">
@@ -229,7 +229,7 @@ export function CapacityPanel({
           icon={<Activity className="w-4 h-4" />}
           title={t("usageTitle")}
         />
-        <p className="mt-2 mb-4 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
+        <p className="mt-2 mb-4 text-body-sm text-fg-secondary">
           {t("usageDescription", {
             hours: capacity.quota_window_seconds / 3600,
           })}
@@ -272,18 +272,16 @@ function StatCard({
       <div
         className={`w-10 h-10 rounded-full flex items-center justify-center ${
           tone === "amber"
-            ? "bg-[var(--accent-primary-500)]/10 text-[var(--accent-primary-text)]"
-            : "bg-[var(--accent-secondary-500)]/10 text-[var(--accent-secondary-text)]"
+            ? "bg-action/10 text-action-fg"
+            : "bg-data/10 text-data"
         }`}
       >
         {icon}
       </div>
-      <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+      <span className="text-caption uppercase tracking-wide text-fg-muted">
         {label}
       </span>
-      <span className="font-mono text-3xl font-bold text-[var(--text-primary)]">
-        {value}
-      </span>
+      <span className="font-mono text-3xl font-bold text-fg">{value}</span>
     </div>
   );
 }
@@ -293,7 +291,7 @@ function TargetSummary({ challenge }: { challenge: AdminChallengeListItem }) {
   const t = useTranslations("admin.challengeRegistry");
   const targets = challenge.targets ?? [];
   if (targets.length === 0) {
-    return <span className="text-[var(--text-muted)]">—</span>;
+    return <span className="text-fg-muted">—</span>;
   }
 
   return (
@@ -306,10 +304,8 @@ function TargetSummary({ challenge }: { challenge: AdminChallengeListItem }) {
           : t("notUsed");
         return (
           <div key={target.name}>
-            <div className="font-mono text-[var(--text-caption)]">
-              {target.name}
-            </div>
-            <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
+            <div className="font-mono text-caption">{target.name}</div>
+            <div className="text-caption text-fg-muted">
               {target.docker_platform} ·{" "}
               {t("solutionRun", { summary: solutionRunSummary })} ·{" "}
               {t("evaluatorRun", {

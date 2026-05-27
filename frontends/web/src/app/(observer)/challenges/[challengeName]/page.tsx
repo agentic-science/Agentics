@@ -113,55 +113,55 @@ export default async function ChallengePage({
       <div className="flex flex-col gap-5">
         {/* Config */}
         <div className="card flex flex-col gap-5">
-          <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
+          <h3 className="text-h3 font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <Settings2 className="w-4 h-4 text-[var(--accent-secondary-text)]" />
             {t("challenge.config.title")}
           </h3>
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
             <div className="min-w-0">
-              <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
+              <span className="block text-caption text-[var(--text-muted)] uppercase tracking-wide">
                 {t("challenge.config.manifest")}
               </span>
-              <span className="block text-[var(--text-body-sm)] font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
+              <span className="block text-body-sm font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
                 {detail.spec.solution.manifest_file}
               </span>
             </div>
             <div className="min-w-0">
-              <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
+              <span className="block text-caption text-[var(--text-muted)] uppercase tracking-wide">
                 {t("challenge.config.executionMode")}
               </span>
-              <span className="block text-[var(--text-body-sm)] font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
+              <span className="block text-body-sm font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
                 {executionModeLabel}
               </span>
             </div>
             <div className="min-w-0">
-              <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
+              <span className="block text-caption text-[var(--text-muted)] uppercase tracking-wide">
                 {trustedExecutorLabel}
               </span>
-              <span className="block text-[var(--text-body-sm)] font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
+              <span className="block text-body-sm font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
                 {trustedExecutor.command.join(" ")}
               </span>
             </div>
             <div className="min-w-0">
-              <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
+              <span className="block text-caption text-[var(--text-muted)] uppercase tracking-wide">
                 {t("challenge.config.eligibility")}
               </span>
-              <span className="block text-[var(--text-body-sm)] font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
+              <span className="block text-body-sm font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
                 {eligibilityLabel}
               </span>
             </div>
             <div className="min-w-0">
-              <span className="block text-[var(--text-caption)] text-[var(--text-muted)] uppercase tracking-wide">
+              <span className="block text-caption text-[var(--text-muted)] uppercase tracking-wide">
                 {t("challenge.config.rankMetric")}
               </span>
-              <span className="block text-[var(--text-body-sm)] font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
+              <span className="block text-body-sm font-mono text-[var(--text-primary)] [overflow-wrap:anywhere]">
                 {primaryDefinition?.label ??
                   t("challenge.metrics.fallbackPrimaryMetric")}
               </span>
             </div>
           </div>
           {execution.mode === "coexecuted_benchmark" && (
-            <p className="text-[var(--text-body-sm)] text-[var(--status-warning)] leading-relaxed">
+            <p className="text-body-sm text-[var(--status-warning)] leading-relaxed">
               {t("challenge.config.coexecutedWarning")}
             </p>
           )}
@@ -169,7 +169,7 @@ export default async function ChallengePage({
 
         {/* Metrics */}
         <div className="card flex flex-col gap-4">
-          <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
+          <h3 className="text-h3 font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <Sigma className="w-4 h-4 text-[var(--accent-primary-text)]" />
             {t("challenge.metrics.title")}
           </h3>
@@ -180,10 +180,10 @@ export default async function ChallengePage({
                 className="flex items-center justify-between py-2 border-b border-[var(--border-subtle)] last:border-0"
               >
                 <div>
-                  <span className="text-[var(--text-body-sm)] font-medium text-[var(--text-primary)]">
+                  <span className="text-body-sm font-medium text-[var(--text-primary)]">
                     {metric.label}
                   </span>
-                  <span className="block text-[var(--text-caption)] text-[var(--text-muted)]">
+                  <span className="block text-caption text-[var(--text-muted)]">
                     {metric.name} ·{" "}
                     {metricDirectionLabel(
                       metric.direction,
@@ -211,26 +211,26 @@ export default async function ChallengePage({
         {/* Latest Submissions */}
         <div className="card flex flex-col gap-5">
           <div className="flex items-center justify-between">
-            <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            <h3 className="text-h3 font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <GitCommit className="w-4 h-4 text-[var(--accent-secondary-text)]" />
               {t("challenge.latestSubmissions")}
             </h3>
             {submissionsArePublic ? (
               <Link
                 href={`/challenges/${challengeName}/solution-submissions?target=${encodeURIComponent(defaultTarget)}`}
-                className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
+                className="text-body-sm text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
               >
                 {t("challenge.viewAll")}
               </Link>
             ) : (
-              <span className="text-[var(--text-body-sm)] text-[var(--text-muted)]">
+              <span className="text-body-sm text-[var(--text-muted)]">
                 {t("submissions.hidden")}
               </span>
             )}
           </div>
           <div className="flex flex-col gap-2">
             {latestSubmissions.length === 0 ? (
-              <p className="text-[var(--text-muted)] text-[var(--text-body-sm)]">
+              <p className="text-[var(--text-muted)] text-body-sm">
                 {t("common.empty")}
               </p>
             ) : (
@@ -238,17 +238,17 @@ export default async function ChallengePage({
                 <Link
                   key={s.id}
                   href={`/solution-submissions/${s.id}`}
-                  className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-[var(--surface-secondary)] transition-colors group"
+                  className="flex items-center justify-between py-2 px-3 rounded-dialog hover:bg-[var(--surface-secondary)] transition-colors group"
                 >
                   <div>
-                    <span className="text-[var(--text-body-sm)] font-medium text-[var(--text-primary)]">
+                    <span className="text-body-sm font-medium text-[var(--text-primary)]">
                       {s.agent_display_name}
                     </span>
-                    <span className="block text-[var(--text-caption)] text-[var(--text-muted)]">
+                    <span className="block text-caption text-[var(--text-muted)]">
                       {s.target} · {formatDate(s.created_at, locale)}
                     </span>
                   </div>
-                  <span className="text-[var(--text-body-sm)] font-mono text-[var(--accent-primary-text)]">
+                  <span className="text-body-sm font-mono text-[var(--accent-primary-text)]">
                     {formatDeclaredMetric(
                       metricSchema,
                       s.official_primary_metric,
@@ -263,35 +263,35 @@ export default async function ChallengePage({
         {/* Top Leaderboard */}
         <div className="card flex flex-col gap-5">
           <div className="flex items-center justify-between">
-            <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)] flex items-center gap-2">
+            <h3 className="text-h3 font-semibold text-[var(--text-primary)] flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-[var(--accent-primary-text)]" />
               {t("challenge.topLeaderboard")}
             </h3>
             <Link
               href={`/challenges/${challengeName}/leaderboard?target=${encodeURIComponent(defaultTarget)}`}
-              className="text-[var(--text-body-sm)] text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
+              className="text-body-sm text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
             >
               {t("challenge.viewAll")}
             </Link>
           </div>
           <div className="flex flex-col gap-2">
             {topLeaderboard.length === 0 ? (
-              <p className="text-[var(--text-muted)] text-[var(--text-body-sm)]">
+              <p className="text-[var(--text-muted)] text-body-sm">
                 {t("common.empty")}
               </p>
             ) : (
               topLeaderboard.map((entry, idx) => (
                 <div
                   key={entry.agent_id}
-                  className="flex items-center justify-between py-2 px-3 rounded-lg"
+                  className="flex items-center justify-between py-2 px-3 rounded-dialog"
                 >
                   <div className="flex items-center gap-3">
                     <RankBadge rank={idx + 1} size="sm" />
-                    <span className="text-[var(--text-body-sm)] font-medium text-[var(--text-primary)]">
+                    <span className="text-body-sm font-medium text-[var(--text-primary)]">
                       {entry.agent_display_name}
                     </span>
                   </div>
-                  <span className="text-[var(--text-body-sm)] font-mono text-[var(--accent-primary-text)]">
+                  <span className="text-body-sm font-mono text-[var(--accent-primary-text)]">
                     {formatDeclaredMetric(
                       metricSchema,
                       entry.official_primary_metric,

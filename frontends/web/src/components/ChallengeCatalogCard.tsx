@@ -28,9 +28,9 @@ export function ChallengeCatalogCard({
       <div className="flex items-start justify-between gap-3">
         <Link
           href={`/challenges/${challenge.challenge_name}`}
-          className="text-[var(--text-primary)] group-hover:text-[var(--accent-primary-text)] transition-colors"
+          className="text-fg group-hover:text-action-fg transition-colors"
         >
-          <h3 className="text-[var(--text-h3)] font-semibold leading-[var(--leading-h3)]">
+          <h3 className="text-h3 font-semibold leading-h3">
             {challenge.title}
           </h3>
         </Link>
@@ -38,7 +38,7 @@ export function ChallengeCatalogCard({
           {challenge.eligibility.type}
         </span>
       </div>
-      <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] leading-[var(--leading-body-sm)] line-clamp-2">
+      <p className="text-body-sm text-fg-muted leading-body-sm line-clamp-2">
         {selectLocalizedText(challenge.summary, locale)}
       </p>
       {showKeywords && challenge.keywords.length > 0 ? (
@@ -68,7 +68,7 @@ export function ChallengeCatalogCard({
             rel="noreferrer"
             aria-label="Open Moltbook discussion"
             title="Moltbook discussion"
-            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--border-subtle)] text-[var(--text-muted)] transition-colors hover:border-[var(--border-medium)] hover:text-[var(--accent-primary-text)]"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-control border border-line text-fg-muted transition-colors hover:border-line-medium hover:text-action-fg"
           >
             <MessageCircle className="h-3.5 w-3.5" />
           </a>
@@ -77,10 +77,10 @@ export function ChallengeCatalogCard({
           href={`/challenges/${challenge.challenge_name}`}
           className="flex min-w-0 flex-1 items-center gap-2"
         >
-          <span className="home-challenge-name-chip min-w-0 truncate text-[var(--text-caption)] text-[var(--text-muted)] font-mono group-hover:border-[var(--border-medium)] transition-colors">
+          <span className="home-challenge-name-chip min-w-0 truncate text-caption text-fg-muted font-mono group-hover:border-line-medium transition-colors">
             {challenge.challenge_name}
           </span>
-          <ArrowRight className="w-3.5 h-3.5 text-[var(--text-muted)] group-hover:text-[var(--accent-primary-text)] group-hover:translate-x-0.5 transition-all ml-auto shrink-0" />
+          <ArrowRight className="w-3.5 h-3.5 text-fg-muted group-hover:text-action-fg group-hover:translate-x-0.5 transition-all ml-auto shrink-0" />
         </Link>
       </div>
     </article>

@@ -74,7 +74,7 @@ export default async function HomePage() {
           <h1 className="home-hero-title font-bold tracking-tight text-[var(--text-primary)] max-w-5xl">
             {t("home.heroSubtitle")}
           </h1>
-          <p className="home-hero-description text-[1.3rem] max-sm:text-[1.05rem] leading-[var(--leading-body)] text-[var(--text-muted)] max-w-5xl">
+          <p className="home-hero-description text-[1.3rem] max-sm:text-[1.05rem] leading-body text-[var(--text-muted)] max-w-5xl">
             <span className="block">{t("home.heroDescription.line1")}</span>
             <span className="block">{t("home.heroDescription.line2")}</span>
             <span className="block">{t("home.heroDescription.line3")}</span>
@@ -95,28 +95,28 @@ export default async function HomePage() {
           <div className="grid w-full max-w-3xl grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="card flex flex-col items-center gap-1 py-4 text-center">
               <FlaskConical className="w-5 h-5 text-[var(--accent-secondary-text)]" />
-              <span className="text-2xl font-bold font-[var(--font-mono)] text-[var(--text-primary)]">
+              <span className="text-2xl font-bold font-mono text-[var(--text-primary)]">
                 {stats.challenges}
               </span>
-              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+              <span className="text-caption text-[var(--text-muted)]">
                 {t("home.stats.challenges")}
               </span>
             </div>
             <div className="card flex flex-col items-center gap-1 py-4 text-center">
               <Bot className="w-5 h-5 text-[var(--accent-primary-text)]" />
-              <span className="text-2xl font-bold font-[var(--font-mono)] text-[var(--text-primary)]">
+              <span className="text-2xl font-bold font-mono text-[var(--text-primary)]">
                 {stats.agents}
               </span>
-              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+              <span className="text-caption text-[var(--text-muted)]">
                 {t("home.stats.agents")}
               </span>
             </div>
             <div className="card flex flex-col items-center gap-1 py-4 text-center">
               <Users className="w-5 h-5 text-[var(--accent-secondary-text)]" />
-              <span className="text-2xl font-bold font-[var(--font-mono)] text-[var(--text-primary)]">
+              <span className="text-2xl font-bold font-mono text-[var(--text-primary)]">
                 {stats.submissions}
               </span>
-              <span className="text-[var(--text-caption)] text-[var(--text-muted)]">
+              <span className="text-caption text-[var(--text-muted)]">
                 {t("home.stats.submissions")}
               </span>
             </div>
@@ -130,7 +130,7 @@ export default async function HomePage() {
           <h2 className="home-section-title font-semibold text-[var(--text-primary)]">
             {t("nav.challenges")}
           </h2>
-          <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] max-w-2xl">
+          <p className="text-body-sm text-[var(--text-muted)] max-w-2xl">
             {t("home.challengesIntro")}
           </p>
         </div>
@@ -181,10 +181,10 @@ export default async function HomePage() {
                 1
               </span>
             </div>
-            <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)]">
+            <h3 className="text-h3 font-semibold text-[var(--text-primary)]">
               {t("home.step1Title")}
             </h3>
-            <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] leading-[var(--leading-body-sm)]">
+            <p className="text-body-sm text-[var(--text-muted)] leading-body-sm">
               {t("home.step1Desc")}
             </p>
           </div>
@@ -194,10 +194,10 @@ export default async function HomePage() {
                 2
               </span>
             </div>
-            <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)]">
+            <h3 className="text-h3 font-semibold text-[var(--text-primary)]">
               {t("home.step2Title")}
             </h3>
-            <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] leading-[var(--leading-body-sm)]">
+            <p className="text-body-sm text-[var(--text-muted)] leading-body-sm">
               {t("home.step2Desc")}
             </p>
           </div>
@@ -207,10 +207,10 @@ export default async function HomePage() {
                 3
               </span>
             </div>
-            <h3 className="text-[var(--text-h3)] font-semibold text-[var(--text-primary)]">
+            <h3 className="text-h3 font-semibold text-[var(--text-primary)]">
               {t("home.step3Title")}
             </h3>
-            <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] leading-[var(--leading-body-sm)]">
+            <p className="text-body-sm text-[var(--text-muted)] leading-body-sm">
               {t("home.step3Desc")}
             </p>
           </div>

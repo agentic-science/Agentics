@@ -49,7 +49,7 @@ export function ChallengeDraftReviewPanel({
               icon={<GitPullRequest className="w-4 h-4" />}
               title={t("title")}
             />
-            <p className="mt-2 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
+            <p className="mt-2 text-body-sm text-fg-secondary">
               {t("description")}
             </p>
           </div>

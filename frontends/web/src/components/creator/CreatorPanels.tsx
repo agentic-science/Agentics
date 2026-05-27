@@ -43,24 +43,24 @@ export function CreatorIdentityPanel({
   return (
     <div className="card min-w-full lg:min-w-[360px] lg:max-w-[420px]">
       <div className="flex items-center gap-2 mb-4">
-        <KeyRound className="w-4 h-4 text-[var(--accent-primary-text)]" />
-        <h2 className="text-[var(--text-h3)] font-semibold">{t("title")}</h2>
+        <KeyRound className="w-4 h-4 text-action-fg" />
+        <h2 className="text-h3 font-semibold">{t("title")}</h2>
       </div>
       {creator ? (
         <div className="space-y-3">
           <div>
-            <div className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+            <div className="text-caption uppercase tracking-wide text-fg-muted">
               {t("githubAccount")}
             </div>
-            <div className="font-mono text-[var(--text-body-sm)]">
+            <div className="font-mono text-body-sm">
               {creator.github_login} · {creator.github_user_id}
             </div>
           </div>
           <div>
-            <div className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+            <div className="text-caption uppercase tracking-wide text-fg-muted">
               {t("agentId")}
             </div>
-            <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)] break-all">
+            <div className="font-mono text-caption text-fg-muted break-all">
               {creator.agent_id}
             </div>
           </div>
@@ -76,15 +76,13 @@ export function CreatorIdentityPanel({
         </div>
       ) : (
         <div className="space-y-4">
-          <p className="text-[var(--text-body-sm)] text-[var(--text-secondary)]">
-            {t("oauthRequired")}
-          </p>
+          <p className="text-body-sm text-fg-secondary">{t("oauthRequired")}</p>
           <label className="flex flex-col gap-1">
-            <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+            <span className="text-caption uppercase tracking-wide text-fg-muted">
               {t("pioneerCode")}
             </span>
             <input
-              className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
+              className="rounded-control border border-line bg-surface-2 px-3 py-2 text-body-sm outline-none focus:border-action"
               value={pioneerCode}
               onChange={(event) => onPioneerCodeChange(event.target.value)}
               autoComplete="off"
@@ -131,10 +129,8 @@ export function DraftDetail({
               <LocalizedStatusBadge status={draft.status} />
               <span className="badge badge-default">{draft.request}</span>
             </div>
-            <h2 className="text-[var(--text-h2)] font-semibold">
-              {draft.manifest.title}
-            </h2>
-            <p className="mt-2 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
+            <h2 className="text-h2 font-semibold">{draft.manifest.title}</h2>
+            <p className="mt-2 text-body-sm text-fg-secondary">
               {selectLocalizedText(
                 draft.manifest.summary,
                 currentDocumentLocale(),
@@ -152,7 +148,7 @@ export function DraftDetail({
           </a>
         </div>
 
-        <dl className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-[var(--text-body-sm)]">
+        <dl className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-body-sm">
           <Metadata label={t("draftId")} value={draft.id} />
           <Metadata label={t("challengeName")} value={draft.challenge_name} />
           <Metadata label={t("creator")} value={draft.creator_github_login} />
@@ -203,7 +199,7 @@ export function DraftDetail({
                 <tr key={asset.id}>
                   <td>
                     <div className="font-mono">{asset.asset_name}</div>
-                    <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                    <div className="text-caption text-fg-muted">
                       {asset.required ? t("required") : t("optional")}
                     </div>
                   </td>
@@ -283,7 +279,7 @@ export function OwnerSurfaces({
         {!stats ? (
           <div className="empty-state mt-4">{t("loadChallenge")}</div>
         ) : (
-          <dl className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-4 text-[var(--text-body-sm)]">
+          <dl className="mt-5 grid grid-cols-2 md:grid-cols-4 gap-4 text-body-sm">
             <Metadata
               label={t("agents")}
               value={stats.agent_count.toString()}
@@ -350,7 +346,7 @@ export function OwnerSurfaces({
                     <div className="font-medium">
                       {participant.agent_display_name}
                     </div>
-                    <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
+                    <div className="font-mono text-caption text-fg-muted">
                       {participant.agent_id}
                     </div>
                   </td>
@@ -359,7 +355,7 @@ export function OwnerSurfaces({
                     <div className="font-mono">
                       {formatOptionalScore(participant.best_rank_score)}
                     </div>
-                    <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
+                    <div className="font-mono text-caption text-fg-muted">
                       {participant.best_solution_submission_id ?? "—"}
                     </div>
                   </td>
@@ -394,7 +390,7 @@ export function OwnerSurfaces({
           </span>
         </div>
         {shortlistRevision ? (
-          <div className="mb-4 text-[var(--text-body-sm)] text-[var(--text-secondary)]">
+          <div className="mb-4 text-body-sm text-fg-secondary">
             {t("lastRevision", {
               added: shortlistRevision.added_count,
               requested: shortlistRevision.requested_count,
@@ -419,7 +415,7 @@ export function OwnerSurfaces({
                     <div className="font-medium">
                       {agent.agent_display_name}
                     </div>
-                    <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
+                    <div className="font-mono text-caption text-fg-muted">
                       {agent.agent_id}
                     </div>
                   </td>
@@ -468,7 +464,7 @@ function LocalizedStatusBadge({ status }: { status: string }) {
 function Metadata({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+      <dt className="text-caption uppercase tracking-wide text-fg-muted">
         {label}
       </dt>
       <dd className="mt-1 font-mono break-all">{value}</dd>

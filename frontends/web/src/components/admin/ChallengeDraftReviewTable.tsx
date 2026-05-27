@@ -77,14 +77,14 @@ export function ChallengeDraftReviewTable({
               <tr>
                 <td>
                   <div className="font-medium">{draft.manifest.title}</div>
-                  <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
+                  <div className="font-mono text-caption text-fg-muted">
                     {draft.challenge_name} · {draft.request}
                   </div>
                   <a
                     href={draft.pr_url}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-[var(--text-caption)] text-[var(--accent-secondary-text)] hover:underline"
+                    className="text-caption text-data hover:underline"
                   >
                     PR #{draft.pr_number}
                   </a>
@@ -94,11 +94,11 @@ export function ChallengeDraftReviewTable({
                 </td>
                 <td>
                   <div className="font-mono">{draft.creator_github_login}</div>
-                  <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                  <div className="text-caption text-fg-muted">
                     {draft.creator_github_user_id}
                   </div>
                 </td>
-                <td className="font-mono text-[var(--text-caption)]">
+                <td className="font-mono text-caption">
                   <Digest
                     displayLabel={t("manifestDigest")}
                     value={draft.manifest_sha256}
@@ -118,19 +118,19 @@ export function ChallengeDraftReviewTable({
                       count: draft.private_assets.length,
                     })}
                   </div>
-                  <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
+                  <div className="text-caption text-fg-muted">
                     {t("declaredAssets", {
                       count: draft.manifest.private_assets.length,
                     })}
                   </div>
                   {assetWarning ? (
-                    <div className="mt-1 text-[var(--text-caption)] text-[var(--status-warning)]">
+                    <div className="mt-1 text-caption text-warning">
                       {assetWarning}
                     </div>
                   ) : null}
                   <button
                     type="button"
-                    className="mt-2 text-[var(--text-caption)] text-[var(--accent-secondary-text)] hover:underline"
+                    className="mt-2 text-caption text-data hover:underline"
                     onClick={() => void onToggleAssetRows(draft.id)}
                     disabled={!csrfToken}
                   >
@@ -139,7 +139,7 @@ export function ChallengeDraftReviewTable({
                       : t("inspectLifecycle")}
                   </button>
                 </td>
-                <td className="text-[var(--text-muted)]">
+                <td className="text-fg-muted">
                   {formatDate(draft.updated_at, locale)}
                 </td>
                 <td>
@@ -246,21 +246,21 @@ function PrivateAssetLifecycleTable({
 
   if (loading) {
     return (
-      <div className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] p-4 text-[var(--text-muted)]">
+      <div className="rounded-control border border-line bg-surface-2 p-4 text-fg-muted">
         {t("loadingLifecycle")}
       </div>
     );
   }
   if (assets.length === 0) {
     return (
-      <div className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] p-4 text-[var(--text-muted)]">
+      <div className="rounded-control border border-line bg-surface-2 p-4 text-fg-muted">
         {t("noLifecycle")}
       </div>
     );
   }
 
   return (
-    <div className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] p-3 overflow-x-auto">
+    <div className="rounded-control border border-line bg-surface-2 p-3 overflow-x-auto">
       <table className="data-table">
         <thead>
           <tr>
@@ -279,35 +279,33 @@ function PrivateAssetLifecycleTable({
             <tr key={asset.id}>
               <td>
                 <div className="font-mono">{asset.asset_name}</div>
-                <div className="text-[var(--text-caption)] text-[var(--text-muted)]">
-                  {asset.kind}
-                </div>
+                <div className="text-caption text-fg-muted">{asset.kind}</div>
               </td>
               <td>
                 <LocalizedStatusBadge status={asset.status} />
               </td>
               <td>{asset.required ? common("yes") : common("no")}</td>
               <td className="font-mono">{asset.size_bytes}</td>
-              <td className="font-mono text-[var(--text-caption)]">
+              <td className="font-mono text-caption">
                 {asset.sha256.slice(0, 12)}
               </td>
-              <td className="font-mono text-[var(--text-caption)]">
+              <td className="font-mono text-caption">
                 <div>{asset.storage_key}</div>
                 {asset.temporary_storage_key ? (
-                  <div className="text-[var(--text-muted)]">
+                  <div className="text-fg-muted">
                     {t("temporaryStorage", {
                       key: asset.temporary_storage_key,
                     })}
                   </div>
                 ) : null}
               </td>
-              <td className="text-[var(--text-caption)] text-[var(--text-muted)]">
+              <td className="text-caption text-fg-muted">
                 {formatDate(
                   asset.activated_at ?? asset.failed_at ?? asset.created_at,
                   locale,
                 )}
               </td>
-              <td className="text-[var(--text-caption)] text-[var(--status-error)]">
+              <td className="text-caption text-danger">
                 {asset.failure_message ?? "—"}
               </td>
             </tr>
@@ -334,7 +332,7 @@ function ActionButton({
   return (
     <button
       type="button"
-      className={`btn btn-sm ${danger ? "btn-ghost text-[var(--status-error)]" : "btn-secondary"}`}
+      className={`btn btn-sm ${danger ? "btn-ghost text-danger" : "btn-secondary"}`}
       onClick={() => void onClick()}
       disabled={disabled}
     >
@@ -353,7 +351,7 @@ function Digest({
 }) {
   return (
     <div>
-      <span className="text-[var(--text-muted)]">{displayLabel}: </span>
+      <span className="text-fg-muted">{displayLabel}: </span>
       {value ? value.slice(0, 12) : "—"}
     </div>
   );

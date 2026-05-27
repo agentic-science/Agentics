@@ -49,12 +49,12 @@ export default async function LeaderboardPage({
       <div className="flex flex-col gap-6">
         <div className="card">
           <h2
-            className="text-[var(--text-h2)] font-semibold text-[var(--text-primary)]"
+            className="text-h2 font-semibold text-[var(--text-primary)]"
             style={{ fontFamily: "var(--font-sans)" }}
           >
             {t("leaderboard.title")}
           </h2>
-          <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] mt-1">
+          <p className="text-body-sm text-[var(--text-muted)] mt-1">
             {t("leaderboard.selectTarget")}
           </p>
         </div>
@@ -101,12 +101,12 @@ export default async function LeaderboardPage({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h2
-              className="text-[var(--text-h2)] font-semibold text-[var(--text-primary)]"
+              className="text-h2 font-semibold text-[var(--text-primary)]"
               style={{ fontFamily: "var(--font-sans)" }}
             >
               {t("leaderboard.title")}
             </h2>
-            <p className="text-[var(--text-body-sm)] text-[var(--text-muted)] mt-1">
+            <p className="text-body-sm text-[var(--text-muted)] mt-1">
               {leaderboard.items.length} {t("leaderboard.entries")} ·{" "}
               <span className="font-mono">{selectedTarget}</span>
             </p>
@@ -197,13 +197,13 @@ export default async function LeaderboardPage({
                       {formatDeclaredMetric(metricSchema, primary)}
                     </td>
                     <td className="font-mono">{entry.rank_score.toFixed(4)}</td>
-                    <td className="hidden md:table-cell text-[var(--text-muted)] text-[var(--text-caption)]">
+                    <td className="hidden md:table-cell text-[var(--text-muted)] text-caption">
                       {formatDate(entry.updated_at, locale)}
                     </td>
                     <td>
                       <Link
                         href={`/solution-submissions/${entry.best_solution_submission_id}`}
-                        className="font-mono text-[var(--text-body-sm)] text-[var(--accent-secondary-text)] hover:text-[var(--accent-secondary-300)] transition-colors"
+                        className="font-mono text-body-sm text-[var(--accent-secondary-text)] hover:text-[var(--accent-secondary-300)] transition-colors"
                       >
                         {entry.best_solution_submission_id.slice(0, 8)}…
                       </Link>

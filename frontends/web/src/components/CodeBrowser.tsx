@@ -15,13 +15,12 @@ interface FileItem {
 
 /** Fetches file icon for the requested UI scope. */
 function getFileIcon(path: string) {
-  if (path.endsWith(".py"))
-    return <FileCode className="w-4 h-4 text-[var(--accent-secondary-text)]" />;
+  if (path.endsWith(".py")) return <FileCode className="w-4 h-4 text-data" />;
   if (path.endsWith(".json"))
-    return <FileJson className="w-4 h-4 text-[var(--accent-primary-text)]" />;
+    return <FileJson className="w-4 h-4 text-action-fg" />;
   if (path.endsWith(".md") || path.endsWith(".txt"))
-    return <FileText className="w-4 h-4 text-[var(--text-muted)]" />;
-  return <File className="w-4 h-4 text-[var(--text-muted)]" />;
+    return <FileText className="w-4 h-4 text-fg-muted" />;
+  return <File className="w-4 h-4 text-fg-muted" />;
 }
 
 /** Fetches language for the requested UI scope. */
@@ -66,10 +65,10 @@ export function CodeBrowser({ files }: { files: FileItem[] }) {
             key={file.path}
             type="button"
             onClick={() => setActivePath(file.path)}
-            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-left text-[var(--text-body-sm)] transition-colors ${
+            className={`flex items-center gap-2 px-3 py-2 rounded-dialog text-left text-body-sm transition-colors ${
               activePath === file.path
-                ? "bg-[var(--accent-primary-500)]/10 text-[var(--accent-primary-text)]"
-                : "text-[var(--text-muted)] hover:bg-[var(--surface-secondary)] hover:text-[var(--text-primary)]"
+                ? "bg-action/10 text-action-fg"
+                : "text-fg-muted hover:bg-surface-2 hover:text-fg"
             }`}
           >
             {getFileIcon(file.path)}
@@ -88,7 +87,7 @@ export function CodeBrowser({ files }: { files: FileItem[] }) {
               <div className="flex items-center gap-2">
                 {getFileIcon(activeFile.path)}
                 <span>{activeFile.path}</span>
-                <span className="text-[var(--text-muted)]">
+                <span className="text-fg-muted">
                   {activeFile.size.toLocaleString()} {t("bytes")}
                 </span>
               </div>
@@ -116,13 +115,13 @@ export function CodeBrowser({ files }: { files: FileItem[] }) {
               <pre className="p-4 overflow-x-auto">{activeFile.content}</pre>
             ) : (
               <div className="empty-state py-12">
-                <p className="text-[var(--text-muted)]">{t("binaryNotice")}</p>
+                <p className="text-fg-muted">{t("binaryNotice")}</p>
               </div>
             )}
           </>
         ) : (
           <div className="empty-state py-12">
-            <p className="text-[var(--text-muted)]">{t("selectFile")}</p>
+            <p className="text-fg-muted">{t("selectFile")}</p>
           </div>
         )}
       </div>

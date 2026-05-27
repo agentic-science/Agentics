@@ -49,17 +49,15 @@ export function CreatorOAuthCallback() {
         {t("badge")}
       </span>
       <h1
-        className="text-[var(--text-h1)] font-bold leading-[var(--leading-h1)]"
+        className="text-h1 font-bold leading-h1"
         style={{ fontFamily: "var(--font-sans)" }}
       >
         {t("title")}
       </h1>
-      <p className="mt-3 text-[var(--text-body)] text-[var(--text-secondary)]">
-        {message}
-      </p>
+      <p className="mt-3 text-body text-fg-secondary">{message}</p>
       <div className="mt-6 flex items-center gap-3">
         {status === "loading" ? (
-          <LoaderCircle className="w-5 h-5 animate-spin text-[var(--accent-primary-text)]" />
+          <LoaderCircle className="w-5 h-5 animate-spin text-action-fg" />
         ) : null}
         {status !== "loading" ? (
           <Link href="/creator" className="btn btn-primary">

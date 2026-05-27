@@ -186,17 +186,15 @@ export function PioneerCodePanel({
     <section className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-6">
       <form className="card flex flex-col gap-4" onSubmit={submit}>
         <div className="flex items-center gap-2">
-          <KeyRound className="w-4 h-4 text-[var(--accent-primary-text)]" />
-          <h2 className="text-[var(--text-h3)] font-semibold">
-            {t("createTitle")}
-          </h2>
+          <KeyRound className="w-4 h-4 text-action-fg" />
+          <h2 className="text-h3 font-semibold">{t("createTitle")}</h2>
         </div>
         <label className="flex flex-col gap-1">
-          <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+          <span className="text-caption uppercase tracking-wide text-fg-muted">
             {t("label")}
           </span>
           <input
-            className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
+            className="rounded-control border border-line bg-surface-2 px-3 py-2 text-body-sm outline-none focus:border-action"
             value={form.label}
             maxLength={6}
             placeholder="jack"
@@ -206,11 +204,11 @@ export function PioneerCodePanel({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+          <span className="text-caption uppercase tracking-wide text-fg-muted">
             {t("code")}
           </span>
           <input
-            className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 font-mono text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
+            className="rounded-control border border-line bg-surface-2 px-3 py-2 font-mono text-body-sm outline-none focus:border-action"
             value={form.code}
             placeholder={t("codePlaceholder")}
             onChange={(event) =>
@@ -219,11 +217,11 @@ export function PioneerCodePanel({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+          <span className="text-caption uppercase tracking-wide text-fg-muted">
             {t("maxUses")}
           </span>
           <input
-            className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
+            className="rounded-control border border-line bg-surface-2 px-3 py-2 text-body-sm outline-none focus:border-action"
             value={form.maxUses}
             onChange={(event) =>
               setForm((current) => ({
@@ -234,11 +232,11 @@ export function PioneerCodePanel({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+          <span className="text-caption uppercase tracking-wide text-fg-muted">
             {t("expiresAt")}
           </span>
           <input
-            className="rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
+            className="rounded-control border border-line bg-surface-2 px-3 py-2 text-body-sm outline-none focus:border-action"
             value={form.expiresAt}
             placeholder="2026-06-01T00:00:00Z"
             onChange={(event) =>
@@ -250,11 +248,11 @@ export function PioneerCodePanel({
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[var(--text-caption)] uppercase tracking-wide text-[var(--text-muted)]">
+          <span className="text-caption uppercase tracking-wide text-fg-muted">
             {t("note")}
           </span>
           <textarea
-            className="min-h-24 rounded-[var(--radius-sm)] border border-[var(--border-subtle)] bg-[var(--surface-secondary)] px-3 py-2 text-[var(--text-body-sm)] outline-none focus:border-[var(--accent-primary-500)]"
+            className="min-h-24 rounded-control border border-line bg-surface-2 px-3 py-2 text-body-sm outline-none focus:border-action"
             value={form.note}
             onChange={(event) =>
               setForm((current) => ({ ...current, note: event.target.value }))
@@ -270,9 +268,7 @@ export function PioneerCodePanel({
       <div className="flex flex-col gap-5">
         <div className="card overflow-x-auto">
           <div className="flex items-center justify-between gap-4 mb-4">
-            <h2 className="text-[var(--text-h3)] font-semibold">
-              {t("title")}
-            </h2>
+            <h2 className="text-h3 font-semibold">{t("title")}</h2>
             <span className="badge badge-default">
               {common("rows", { count: pioneerCodes.items.length })}
             </span>
@@ -315,7 +311,7 @@ export function PioneerCodePanel({
                         </button>
                         <button
                           type="button"
-                          className="btn btn-ghost btn-sm text-[var(--status-error)]"
+                          className="btn btn-ghost btn-sm text-danger"
                           disabled={code.status === "revoked"}
                           onClick={() => void revoke(code.id)}
                         >
@@ -333,20 +329,20 @@ export function PioneerCodePanel({
         {detail ? (
           <div className="card">
             <div className="flex items-center justify-between gap-4 mb-4">
-              <h2 className="text-[var(--text-h3)] font-semibold">
+              <h2 className="text-h3 font-semibold">
                 {detail.code.code_display}
               </h2>
               <span className="badge badge-default">
                 {t("createdAgents", { count: detail.uses.length })}
               </span>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5 text-[var(--text-body-sm)]">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5 text-body-sm">
               <div>
-                <span className="text-[var(--text-muted)]">{t("note")}</span>
+                <span className="text-fg-muted">{t("note")}</span>
                 <div>{detail.code.note || "—"}</div>
               </div>
               <div>
-                <span className="text-[var(--text-muted)]">{t("created")}</span>
+                <span className="text-fg-muted">{t("created")}</span>
                 <div>{formatDate(detail.code.created_at)}</div>
               </div>
             </div>
@@ -366,7 +362,7 @@ export function PioneerCodePanel({
                     <tr key={`${usage.agent_id}-${usage.used_at}`}>
                       <td>
                         <div>{usage.agent_display_name}</div>
-                        <div className="font-mono text-[var(--text-caption)] text-[var(--text-muted)]">
+                        <div className="font-mono text-caption text-fg-muted">
                           {usage.agent_id}
                         </div>
                       </td>
