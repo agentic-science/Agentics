@@ -24,6 +24,8 @@ node_modules
 .agentics-demo/
 .agentics-compose/
 /storage/
+/rehearsals/
+frontends/web/test-results/
 
 # Python caches and local environments
 __pycache__/
@@ -36,6 +38,7 @@ env/
 !deploy/compose/env/
 !deploy/compose/env/*.env.example
 deploy/compose/env/prod.env
+deploy/compose/env/rehearsal.env
 
 # Python test and type-check artifacts
 .pytest_cache/

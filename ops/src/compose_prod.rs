@@ -11,9 +11,9 @@
 //! reports both the Compose services and matching runner containers, without
 //! stopping services or removing runners.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::ffi::{OsStr, OsString};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::process::{ExitCode, Stdio};
 use std::time::Duration;
 
@@ -39,6 +39,8 @@ const ENV_PREFIX: &str = "AGENTICS_";
 const DEFAULT_PROJECT: &str = "agentics-prod";
 const DEFAULT_ENV_FILE: &str = "deploy/compose/env/prod.env";
 const DEFAULT_PRIVATE_BUNDLE_BACKUP_CONTAINER: &str = "agentics-rustfs-private-backup";
+const REHEARSAL_PROJECT: &str = "agentics-rehearsal";
+const REHEARSAL_ROOT: &str = "/srv/agentics-rehearsal";
 const WORKER_SERVICES: &[&str] = &["worker-cpu", "worker-gpu"];
 const PROD_SERVICES: &[&str] = &[
     "postgres",
@@ -116,6 +118,15 @@ pub enum ProdCommand {
         #[arg(long)]
         dry_run: bool,
     },
+    /// Purge disposable rehearsal resources and data.
+    PurgeRehearsalData {
+        /// Required for destructive purge. Dry-run may omit it.
+        #[arg(long)]
+        confirm_rehearsal_purge: bool,
+        /// Show the rehearsal resources and paths that would be removed.
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 /// Runner handling policy for production shutdown.
@@ -143,6 +154,13 @@ struct RawComposeProdEnv {
     docker_host: Option<String>,
     docker_socket_path: Option<String>,
     docker_socket_gid: Option<u32>,
+    rehearsal_environment: Option<bool>,
+    dgx_state_root: Option<String>,
+    storage_work_root: Option<String>,
+    challenge_review_repository_host_root: Option<String>,
+    runner_runtime_root: Option<String>,
+    runner_phase_mount_root: Option<String>,
+    dgx_phase_mount_root: Option<String>,
     dgx_docker_data_root: Option<String>,
     dgx_runner_docker_exec_root: Option<String>,
     dgx_runner_docker_pidfile: Option<String>,
@@ -221,6 +239,10 @@ async fn run(cli: Cli) -> Result<ExitCode, ComposeProdError> {
             let reports = clean_runners(&context, &namespace, scope, dry_run).await?;
             Ok(print_reports(PREFIX, &reports))
         }
+        ProdCommand::PurgeRehearsalData {
+            confirm_rehearsal_purge,
+            dry_run,
+        } => purge_rehearsal_data(&context, confirm_rehearsal_purge, dry_run).await,
     }
 }
 
@@ -410,6 +432,263 @@ async fn stop_running_workers(context: &ComposeContext) -> Result<(), ComposePro
     Ok(())
 }
 
+async fn purge_rehearsal_data(
+    context: &ComposeContext,
+    confirm_rehearsal_purge: bool,
+    dry_run: bool,
+) -> Result<ExitCode, ComposeProdError> {
+    let plan = build_rehearsal_purge_plan(context, confirm_rehearsal_purge, dry_run)?;
+    if dry_run {
+        return Ok(print_reports(PREFIX, &plan.dry_run_reports()));
+    }
+
+    stop_running_workers(context).await?;
+    let runner_reports = clean_runners(
+        context,
+        &plan.namespace,
+        RunnerCleanupScope::HostedWorker,
+        false,
+    )
+    .await?;
+    let runner_code = print_reports(PREFIX, &runner_reports);
+    if runner_code != ExitCode::SUCCESS {
+        return Ok(runner_code);
+    }
+
+    let runner_stop_code = runner_docker_down(context, false).await?;
+    if runner_stop_code != ExitCode::SUCCESS {
+        return Ok(runner_stop_code);
+    }
+
+    let compose_code = context
+        .run_compose_passthrough(["down", "-v", "--remove-orphans"])
+        .await?;
+    if compose_code != ExitCode::SUCCESS {
+        return Ok(compose_code);
+    }
+
+    let mut reports = vec![ReportLine::pass(
+        "rehearsal purge",
+        format!(
+            "removed Compose project {} and runner namespace {}",
+            context.project,
+            plan.namespace.as_str()
+        ),
+    )];
+    for path in &plan.cleanup_paths {
+        reports.push(remove_rehearsal_path(path).await?);
+    }
+    Ok(print_reports(PREFIX, &reports))
+}
+
+#[derive(Debug, Clone)]
+struct RehearsalPurgePlan {
+    namespace: RunnerNamespace,
+    reported_paths: Vec<PathBuf>,
+    cleanup_paths: Vec<PathBuf>,
+}
+
+impl RehearsalPurgePlan {
+    fn dry_run_reports(&self) -> Vec<ReportLine> {
+        let mut reports = vec![
+            ReportLine::pass(
+                "rehearsal purge",
+                format!("would remove Compose project {REHEARSAL_PROJECT}"),
+            ),
+            ReportLine::pass(
+                "rehearsal purge",
+                format!(
+                    "would remove runner containers in namespace {}",
+                    self.namespace.as_str()
+                ),
+            ),
+            ReportLine::pass(
+                "rehearsal purge",
+                "would stop the dedicated rehearsal runner Docker daemon",
+            ),
+            ReportLine::pass(
+                "rehearsal purge",
+                "would remove rehearsal Compose volumes with docker compose down -v",
+            ),
+        ];
+        reports.extend(self.reported_paths.iter().map(|path| {
+            ReportLine::pass(
+                "rehearsal purge path",
+                format!("would remove or verify {}", path.display()),
+            )
+        }));
+        reports
+    }
+}
+
+fn build_rehearsal_purge_plan(
+    context: &ComposeContext,
+    confirm_rehearsal_purge: bool,
+    dry_run: bool,
+) -> Result<RehearsalPurgePlan, ComposeProdError> {
+    if !dry_run && !confirm_rehearsal_purge {
+        return Err(ComposeProdError::InvalidConfig(
+            "destructive rehearsal purge requires --confirm-rehearsal-purge".to_string(),
+        ));
+    }
+    if context.project == DEFAULT_PROJECT {
+        return Err(ComposeProdError::InvalidConfig(format!(
+            "refusing to purge production Compose project {DEFAULT_PROJECT}"
+        )));
+    }
+    if context.project != REHEARSAL_PROJECT {
+        return Err(ComposeProdError::InvalidConfig(format!(
+            "rehearsal purge requires --project {REHEARSAL_PROJECT}, got {}",
+            context.project
+        )));
+    }
+    if context.file_env.rehearsal_environment != Some(true) {
+        return Err(ComposeProdError::InvalidConfig(
+            "rehearsal purge requires AGENTICS_REHEARSAL_ENVIRONMENT=true in the env file"
+                .to_string(),
+        ));
+    }
+    let namespace = context.resolve_namespace(None)?;
+    if namespace.as_str() != REHEARSAL_PROJECT {
+        return Err(ComposeProdError::InvalidConfig(format!(
+            "rehearsal purge requires AGENTICS_RUNNER_NAMESPACE={REHEARSAL_PROJECT}, got {}",
+            namespace.as_str()
+        )));
+    }
+
+    let reported_paths = collect_rehearsal_paths(context)?;
+    for path in &reported_paths {
+        require_rehearsal_path(path)?;
+    }
+    let cleanup_paths = collapse_cleanup_paths(&reported_paths);
+    Ok(RehearsalPurgePlan {
+        namespace,
+        reported_paths,
+        cleanup_paths,
+    })
+}
+
+fn collect_rehearsal_paths(context: &ComposeContext) -> Result<Vec<PathBuf>, ComposeProdError> {
+    let mut paths = BTreeSet::new();
+    paths.insert(context.path_value(|env| env.dgx_state_root.as_ref(), "/srv/agentics"));
+    paths.insert(context.path_value(
+        |env| env.storage_work_root.as_ref(),
+        "/srv/agentics/storage-work",
+    ));
+    paths.insert(context.path_value(
+        |env| env.challenge_review_repository_host_root.as_ref(),
+        "/srv/agentics/review-checkouts/agentics-challenges",
+    ));
+    paths.insert(context.path_value(
+        |env| env.runner_runtime_root.as_ref(),
+        "/srv/agentics/runtime",
+    ));
+    paths.insert(context.path_value(
+        |env| env.runner_phase_mount_root.as_ref(),
+        "/srv/agentics/phase-mounts",
+    ));
+    paths.insert(context.path_value(
+        |env| env.dgx_phase_mount_root.as_ref(),
+        "/srv/agentics/phase-mounts",
+    ));
+    paths.insert(context.path_value(
+        |env| env.dgx_docker_data_root.as_ref(),
+        "/srv/agentics/docker-data-root",
+    ));
+    paths.insert(context.path_value(
+        |env| env.dgx_runner_docker_exec_root.as_ref(),
+        "/srv/agentics/docker-exec",
+    ));
+    paths.insert(context.path_value(
+        |env| env.dgx_runner_docker_pidfile.as_ref(),
+        "/srv/agentics/docker.pid",
+    ));
+    paths.insert(context.path_value(
+        |env| env.dgx_runner_docker_log.as_ref(),
+        "/srv/agentics/dockerd.log",
+    ));
+    if let Some(socket_path) = context.docker_socket_path() {
+        paths.insert(PathBuf::from(socket_path));
+    } else {
+        paths.insert(PathBuf::from("/srv/agentics/docker.sock"));
+    }
+
+    let paths = paths.into_iter().collect::<Vec<_>>();
+    if paths.is_empty() {
+        return Err(ComposeProdError::InvalidConfig(
+            "rehearsal purge resolved no cleanup paths".to_string(),
+        ));
+    }
+    Ok(paths)
+}
+
+fn require_rehearsal_path(path: &Path) -> Result<(), ComposeProdError> {
+    let rehearsal_root = Path::new(REHEARSAL_ROOT);
+    if !path.is_absolute() {
+        return Err(ComposeProdError::InvalidConfig(format!(
+            "rehearsal purge path must be absolute, got {}",
+            path.display()
+        )));
+    }
+    if path
+        .components()
+        .any(|component| matches!(component, Component::ParentDir))
+    {
+        return Err(ComposeProdError::InvalidConfig(format!(
+            "rehearsal purge path must not contain parent traversal, got {}",
+            path.display()
+        )));
+    }
+    if !path.starts_with(rehearsal_root) {
+        return Err(ComposeProdError::InvalidConfig(format!(
+            "rehearsal purge path {} is outside {REHEARSAL_ROOT}",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
+fn collapse_cleanup_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
+    let mut sorted = paths.to_vec();
+    sorted.sort_by_key(|path| path.components().count());
+    let mut collapsed = Vec::new();
+    'path: for path in sorted {
+        for parent in &collapsed {
+            if path == *parent || path.starts_with(parent) {
+                continue 'path;
+            }
+        }
+        collapsed.push(path);
+    }
+    collapsed
+}
+
+async fn remove_rehearsal_path(path: &Path) -> Result<ReportLine, ComposeProdError> {
+    let metadata = match tokio::fs::symlink_metadata(path).await {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(ReportLine::skip(
+                "rehearsal purge path",
+                format!("{} did not exist", path.display()),
+            ));
+        }
+        Err(error) => return Err(ComposeProdError::Process(error.to_string())),
+    };
+    if metadata.is_dir() {
+        tokio::fs::remove_dir_all(path)
+            .await
+            .map_err(|error| ComposeProdError::Process(error.to_string()))?;
+    } else {
+        tokio::fs::remove_file(path)
+            .await
+            .map_err(|error| ComposeProdError::Process(error.to_string()))?;
+    }
+    Ok(ReportLine::pass(
+        "rehearsal purge path",
+        format!("removed {}", path.display()),
+    ))
+}
+
 #[derive(Debug, Clone)]
 struct ComposeContext {
     repo_root: PathBuf,
@@ -456,9 +735,16 @@ impl ComposeContext {
             self.repo_root
                 .join("deploy/compose/compose.prod.yml")
                 .into_os_string(),
-            OsString::from("-p"),
-            OsString::from(&self.project),
         ];
+        if self.is_rehearsal_environment() {
+            output.push(OsString::from("-f"));
+            output.push(
+                self.repo_root
+                    .join("deploy/compose/compose.rehearsal.yml")
+                    .into_os_string(),
+            );
+        }
+        output.extend([OsString::from("-p"), OsString::from(&self.project)]);
         output.extend(
             args.into_iter()
                 .map(|arg| arg.as_ref().to_os_string())
@@ -587,6 +873,10 @@ impl ComposeContext {
         )
         .unwrap_or_else(|| DEFAULT_PRIVATE_BUNDLE_BACKUP_CONTAINER.to_string())
     }
+
+    fn is_rehearsal_environment(&self) -> bool {
+        self.file_env.rehearsal_environment.unwrap_or(false)
+    }
 }
 
 async fn run_passthrough<I, S>(
@@ -691,7 +981,7 @@ pub enum ComposeProdError {
     #[error("invalid production Compose config: {0}")]
     InvalidConfig(String),
     #[error(
-        "missing production Compose env file {0}; copy deploy/compose/env/prod.env.example to deploy/compose/env/prod.env and replace placeholders"
+        "missing Compose env file {0}; copy the matching deploy/compose/env/*.env.example file and replace placeholders"
     )]
     MissingEnvFile(PathBuf),
     #[error("production down requires --runner <keep|clean>")]
@@ -703,8 +993,9 @@ pub enum ComposeProdError {
 #[cfg(test)]
 mod tests {
     use super::{
-        Cli, ComposeContext, ComposeProdError, DEFAULT_PROJECT, ProdCommand, RawComposeProdEnv,
-        RunnerDownPolicy, down, env_value, resolve_project, run,
+        Cli, ComposeContext, ComposeProdError, DEFAULT_PROJECT, ProdCommand, REHEARSAL_PROJECT,
+        RawComposeProdEnv, RunnerDownPolicy, build_rehearsal_purge_plan, down, env_value,
+        resolve_project, run,
     };
     use clap::ValueEnum;
     use std::path::PathBuf;
@@ -771,6 +1062,128 @@ mod tests {
             env_value(None, file_env.compose_prod_project.as_ref()).as_deref(),
             Some("custom-prod")
         );
+    }
+
+    /// Verifies rehearsal purge dry-run still requires the explicit rehearsal env marker.
+    #[test]
+    fn rehearsal_purge_refuses_missing_env_marker() {
+        let mut context = fake_context();
+        context.project = REHEARSAL_PROJECT.to_string();
+        context.file_env.runner_namespace = Some(REHEARSAL_PROJECT.to_string());
+        context.file_env.dgx_state_root = Some("/srv/agentics-rehearsal".to_string());
+        let error = build_rehearsal_purge_plan(&context, false, true)
+            .expect_err("missing marker should fail");
+        assert!(
+            matches!(error, ComposeProdError::InvalidConfig(message) if message.contains("AGENTICS_REHEARSAL_ENVIRONMENT"))
+        );
+    }
+
+    /// Verifies rehearsal purge never accepts the production project.
+    #[test]
+    fn rehearsal_purge_refuses_production_project() {
+        let mut context = fake_context();
+        context.file_env.rehearsal_environment = Some(true);
+        context.file_env.runner_namespace = Some(REHEARSAL_PROJECT.to_string());
+        context.file_env.dgx_state_root = Some("/srv/agentics-rehearsal".to_string());
+        let error = build_rehearsal_purge_plan(&context, true, false)
+            .expect_err("production project should fail");
+        assert!(
+            matches!(error, ComposeProdError::InvalidConfig(message) if message.contains("refusing to purge production"))
+        );
+    }
+
+    /// Verifies destructive rehearsal purge requires an explicit confirmation flag.
+    #[test]
+    fn rehearsal_purge_requires_confirm_for_destructive_run() {
+        let context = rehearsal_context();
+        let error = build_rehearsal_purge_plan(&context, false, false)
+            .expect_err("missing confirmation should fail");
+        assert!(
+            matches!(error, ComposeProdError::InvalidConfig(message) if message.contains("--confirm-rehearsal-purge"))
+        );
+    }
+
+    /// Verifies purge guardrails reject even one production-rooted path.
+    #[test]
+    fn rehearsal_purge_refuses_paths_outside_rehearsal_root() {
+        let mut context = rehearsal_context();
+        context.file_env.runner_runtime_root = Some("/srv/agentics/runtime".to_string());
+        let error = build_rehearsal_purge_plan(&context, true, false)
+            .expect_err("production path should fail");
+        assert!(
+            matches!(error, ComposeProdError::InvalidConfig(message) if message.contains("outside /srv/agentics-rehearsal"))
+        );
+    }
+
+    /// Verifies dry-run plans are complete and non-mutating.
+    #[test]
+    fn rehearsal_purge_dry_run_reports_resources_and_paths() {
+        let context = rehearsal_context();
+        let plan = build_rehearsal_purge_plan(&context, false, true).expect("dry-run plan");
+        assert_eq!(plan.namespace.as_str(), REHEARSAL_PROJECT);
+        assert!(
+            plan.reported_paths
+                .iter()
+                .any(|path| path == &PathBuf::from("/srv/agentics-rehearsal/docker.sock"))
+        );
+        let reports = plan.dry_run_reports();
+        assert!(
+            reports
+                .iter()
+                .any(|report| format!("{report:?}").contains("Compose project"))
+        );
+    }
+
+    /// Verifies only the committed rehearsal env file marker adds the rehearsal Compose override.
+    #[test]
+    fn rehearsal_override_comes_from_env_file_marker() {
+        let mut context = fake_context();
+        context.process_env.rehearsal_environment = Some(true);
+        assert!(
+            !compose_args_text(&context).contains("compose.rehearsal.yml"),
+            "process env alone must not turn production commands into rehearsal commands"
+        );
+
+        context.file_env.rehearsal_environment = Some(true);
+        assert!(compose_args_text(&context).contains("compose.rehearsal.yml"));
+    }
+
+    fn rehearsal_context() -> ComposeContext {
+        let mut context = fake_context();
+        context.env_file = PathBuf::from("/tmp/agentics-test/rehearsal.env");
+        context.project = REHEARSAL_PROJECT.to_string();
+        context.file_env.rehearsal_environment = Some(true);
+        context.file_env.runner_namespace = Some(REHEARSAL_PROJECT.to_string());
+        context.file_env.dgx_state_root = Some("/srv/agentics-rehearsal".to_string());
+        context.file_env.storage_work_root =
+            Some("/srv/agentics-rehearsal/storage-work".to_string());
+        context.file_env.challenge_review_repository_host_root =
+            Some("/srv/agentics-rehearsal/review-checkouts/agentics-challenges".to_string());
+        context.file_env.runner_runtime_root = Some("/srv/agentics-rehearsal/runtime".to_string());
+        context.file_env.runner_phase_mount_root =
+            Some("/srv/agentics-rehearsal/phase-mounts".to_string());
+        context.file_env.dgx_phase_mount_root =
+            Some("/srv/agentics-rehearsal/phase-mounts".to_string());
+        context.file_env.dgx_docker_data_root =
+            Some("/srv/agentics-rehearsal/docker-data-root".to_string());
+        context.file_env.dgx_runner_docker_exec_root =
+            Some("/srv/agentics-rehearsal/docker-exec".to_string());
+        context.file_env.dgx_runner_docker_pidfile =
+            Some("/srv/agentics-rehearsal/docker.pid".to_string());
+        context.file_env.dgx_runner_docker_log =
+            Some("/srv/agentics-rehearsal/dockerd.log".to_string());
+        context.file_env.docker_socket_path =
+            Some("/srv/agentics-rehearsal/docker.sock".to_string());
+        context
+    }
+
+    fn compose_args_text(context: &ComposeContext) -> String {
+        context
+            .compose_args(["ps"])
+            .into_iter()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     fn fake_context() -> ComposeContext {

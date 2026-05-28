@@ -133,7 +133,7 @@ services:
       GIT_CONFIG_VALUE_0: "*"
       GIT_OPTIONAL_LOCKS: "0"
     ports:
-      - "${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:${AGENTICS_API_PORT:-3100}:3100"
+      - "${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:${AGENTICS_API_HOST_PORT:-${AGENTICS_API_PORT:-3100}}:3100"
     volumes:
       - *storage-work-mount
       - *challenge-review-repository-mount
@@ -188,7 +188,7 @@ services:
       AGENTICS_API_BASE_URL: http://api:3100
       NEXT_PUBLIC_AGENTICS_API_BASE_URL: ""
     ports:
-      - "${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:${AGENTICS_WEB_PORT:-3001}:3001"
+      - "${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:${AGENTICS_WEB_HOST_PORT:-${AGENTICS_WEB_PORT:-3001}}:3001"
     command: ["bun", "run", "start", "--", "-H", "0.0.0.0", "-p", "3001"]
     restart: unless-stopped
 

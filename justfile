@@ -9,6 +9,9 @@ mod dev 'justfiles/dev.just'
 # Production Compose operations.
 mod prod 'justfiles/prod.just'
 
+# Disposable production-like rehearsal environment.
+mod rehearsal 'justfiles/rehearsal.just'
+
 # RustFS, S3, and private-bundle backup helpers.
 mod storage 'justfiles/storage.just'
 

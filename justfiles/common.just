@@ -3,6 +3,7 @@ compose_dev := "docker compose --env-file deploy/compose/env/dev.env.example -f 
 compose_test := "docker compose --env-file deploy/compose/env/test.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.test.yml"
 compose_rustfs_private_backup := "docker compose --env-file deploy/compose/env/rustfs-private-backup.env -f deploy/compose/compose.rustfs-private-backup.yml"
 compose_prod := "cargo run -p agentics-ops --bin agentics-compose-prod --"
+compose_rehearsal := "cargo run -p agentics-ops --bin agentics-compose-prod -- --env-file deploy/compose/env/rehearsal.env --project agentics-rehearsal"
 crap_lcov_unit := "target/llvm-cov/agentics-workspace.lcov"
 crap_lcov_integration := "target/llvm-cov/agentics-workspace-with-integration.lcov"
 rustfs_container := "agentics-rustfs-test"
