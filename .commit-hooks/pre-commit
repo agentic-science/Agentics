@@ -4,4 +4,4 @@ set -euo pipefail
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
 
-exec cargo run -q -p agentics-ops --bin agentics-pre-commit -- --root "$repo_root" "$@"
+exec cargo run -q -p agentics-pre-commit -- --root "$repo_root" "$@"

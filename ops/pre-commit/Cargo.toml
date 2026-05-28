@@ -1,0 +1,17 @@
+[package]
+name = "agentics-pre-commit"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+agentics-dev-checks = { workspace = true }
+clap = { version = "4", features = ["derive"] }
+gix = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

@@ -181,7 +181,7 @@ when another machine needs to inspect the frontend.
 ## Build Binaries
 
 ```bash
-cargo build --release -p api-server -p worker -p agentics-cli -p agentics-ops
+cargo build --release -p api-server -p worker -p agentics-cli -p agentics-ops -p agentics-pre-commit
 test -x target/release/agentics-check-dgx-spark-profile
 ```
 
@@ -196,9 +196,10 @@ Build the web frontend:
 ## Checks Before Commit
 
 Install the repository hook once with `just maintenance::setup-hooks`. The hook delegates to
-the Rust `agentics-pre-commit` ops binary, runs independent checks concurrently,
-and always checks the human/agent docs policy and large-file threshold before a
-non-empty commit.
+the dedicated Rust `agentics-pre-commit` binary, reads staged paths from the Git
+index, and skips Rust, web, docs, and large-file checks unless the staged commit
+touches matching files. The root hook treats submodule changes as pointer
+updates only and does not inspect files inside `challenge-repos/agentics-challenges`.
 
 Run the canonical full suite before committing code changes. Use the CPU-only
 suite only when the task or environment explicitly cannot exercise GPU tests:

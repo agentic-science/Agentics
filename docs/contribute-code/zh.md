@@ -171,7 +171,7 @@ http://127.0.0.1:3001
 ## 构建二进制
 
 ```bash
-cargo build --release -p api-server -p worker -p agentics-cli -p agentics-ops
+cargo build --release -p api-server -p worker -p agentics-cli -p agentics-ops -p agentics-pre-commit
 test -x target/release/agentics-check-dgx-spark-profile
 ```
 
@@ -185,9 +185,11 @@ test -x target/release/agentics-check-dgx-spark-profile
 
 ## 提交前检查
 
-先运行一次 `just maintenance::setup-hooks` 安装 repository hook。该 hook 会委托给 Rust
-`agentics-pre-commit` ops binary，并发运行相互独立的检查，并在每次非空 commit
-前检查 human/agent docs policy 和 large-file threshold。
+先运行一次 `just maintenance::setup-hooks` 安装 repository hook。该 hook 会委托给独立的
+Rust `agentics-pre-commit` binary，从 Git index 读取 staged paths，并且只有 staged
+commit 触及匹配文件时才运行 Rust、web、docs 和 large-file checks。Root hook 会把
+submodule changes 视为 pointer updates，不会检查 `challenge-repos/agentics-challenges`
+内部文件。
 
 提交代码改动前运行 canonical full suite。仅当任务或环境明确不能覆盖 GPU tests 时，
 才使用 CPU-only suite：

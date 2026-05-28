@@ -156,6 +156,66 @@ impl ScanConfig {
     }
 }
 
+/// One staged source blob to check without reading the working tree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceBlob {
+    path: PathBuf,
+    content: Vec<u8>,
+}
+
+impl SourceBlob {
+    /// Build a staged source blob from a repository-relative path and blob bytes.
+    pub fn new(path: PathBuf, content: Vec<u8>) -> Self {
+        Self { path, content }
+    }
+
+    /// Return the repository-relative path.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// Return the staged blob bytes.
+    pub fn content(&self) -> &[u8] {
+        &self.content
+    }
+}
+
+/// Scanner configuration for staged blob contents.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlobScanConfig {
+    files: Vec<SourceBlob>,
+    threshold: usize,
+    watch_threshold: Option<usize>,
+}
+
+impl BlobScanConfig {
+    /// Build staged blob scanner configuration from explicit inputs.
+    pub fn new(
+        files: Vec<SourceBlob>,
+        threshold: usize,
+        watch_threshold: Option<usize>,
+    ) -> Result<Self, LargeFileScanError> {
+        if threshold == 0 {
+            return Err(LargeFileScanError::InvalidConfig(
+                "threshold must be greater than zero".to_string(),
+            ));
+        }
+        if let Some(watch_threshold) = watch_threshold
+            && watch_threshold >= threshold
+        {
+            return Err(LargeFileScanError::InvalidConfig(format!(
+                "watch threshold {} must be lower than threshold {}",
+                watch_threshold, threshold
+            )));
+        }
+        Ok(Self {
+            files,
+            threshold,
+            watch_threshold,
+        })
+    }
+}
+
 /// Full scan result.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ScanReport {
@@ -284,6 +344,51 @@ pub fn scan_large_files_with_cancel(
     })
 }
 
+/// Scan staged blob contents for large source files.
+pub fn scan_large_file_blobs(config: &BlobScanConfig) -> Result<ScanReport, LargeFileScanError> {
+    let mut oversized = Vec::new();
+    let mut watch = Vec::new();
+    let mut scanned_files = 0usize;
+
+    for file in &config.files {
+        if should_skip(&file.path) || !is_code_file(&file.path) {
+            continue;
+        }
+        scanned_files = scanned_files
+            .checked_add(1)
+            .ok_or_else(|| LargeFileScanError::LineCountOverflow(file.path.clone()))?;
+        let lines = count_lines_in_bytes(&file.content)
+            .ok_or_else(|| LargeFileScanError::LineCountOverflow(file.path.clone()))?;
+        let count = FileLineCount {
+            path: file.path.clone(),
+            lines,
+        };
+        if lines >= config.threshold {
+            oversized.push(count);
+        } else if config
+            .watch_threshold
+            .is_some_and(|watch_threshold| lines >= watch_threshold)
+        {
+            watch.push(count);
+        }
+    }
+
+    sort_counts(&mut oversized);
+    sort_counts(&mut watch);
+    Ok(ScanReport {
+        scanned_files,
+        threshold: config.threshold,
+        watch_threshold: config.watch_threshold,
+        oversized,
+        watch,
+    })
+}
+
+/// Return whether a repository-relative path is a source file covered by the large-file policy.
+pub fn is_source_file_path(path: &Path) -> bool {
+    !should_skip(path) && is_code_file(path)
+}
+
 fn ensure_not_cancelled(cancel: Option<&AtomicBool>) -> Result<(), LargeFileScanError> {
     if cancel.is_some_and(|cancel| cancel.load(Ordering::Relaxed)) {
         Err(LargeFileScanError::Cancelled)
@@ -389,6 +494,18 @@ fn count_lines(path: &Path, cancel: Option<&AtomicBool>) -> Result<usize, std::i
         })?;
     }
     Ok(lines)
+}
+
+fn count_lines_in_bytes(bytes: &[u8]) -> Option<usize> {
+    if bytes.is_empty() {
+        return Some(0);
+    }
+    let newline_count = bytes.iter().filter(|byte| **byte == b'\n').count();
+    if bytes.ends_with(b"\n") {
+        Some(newline_count)
+    } else {
+        newline_count.checked_add(1)
+    }
 }
 
 fn should_skip(path: &Path) -> bool {
@@ -501,6 +618,49 @@ mod tests {
             .expect_err("cancelled scan should stop");
 
         assert!(matches!(error, LargeFileScanError::Cancelled));
+    }
+
+    #[test]
+    fn staged_blob_scan_uses_blob_contents() {
+        let config = BlobScanConfig::new(
+            vec![
+                SourceBlob::new(PathBuf::from("src/large.rs"), b"a\nb\nc\n".to_vec()),
+                SourceBlob::new(PathBuf::from("src/watch.ts"), b"a\nb".to_vec()),
+                SourceBlob::new(PathBuf::from("docs/notes.md"), b"a\nb\nc\n".to_vec()),
+            ],
+            3,
+            Some(2),
+        )
+        .expect("valid config");
+
+        let report = scan_large_file_blobs(&config).expect("scan blobs");
+
+        assert_eq!(report.scanned_files, 2);
+        assert_eq!(
+            report.oversized,
+            vec![FileLineCount {
+                path: PathBuf::from("src/large.rs"),
+                lines: 3,
+            }]
+        );
+        assert_eq!(
+            report.watch,
+            vec![FileLineCount {
+                path: PathBuf::from("src/watch.ts"),
+                lines: 2,
+            }]
+        );
+    }
+
+    #[test]
+    fn staged_blob_scan_ignores_deleted_files_by_construction() {
+        let config = BlobScanConfig::new(Vec::new(), 3, Some(2)).expect("valid config");
+
+        let report = scan_large_file_blobs(&config).expect("scan blobs");
+
+        assert_eq!(report.scanned_files, 0);
+        assert!(report.oversized.is_empty());
+        assert!(report.watch.is_empty());
     }
 
     fn write_lines(path: &Path, line_count: usize) {
