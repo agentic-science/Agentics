@@ -234,6 +234,32 @@ Stop only the dedicated test Docker daemon when finished:
 sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just test-env-down
 ```
 
+## Run A Production Rehearsal
+
+Operators can run an end-to-end rehearsal against the disposable
+`agentics-rehearsal` Compose environment. Create an ignored env file first:
+
+```bash
+cp deploy/compose/env/rehearsal.env.example deploy/compose/env/rehearsal.env
+$EDITOR deploy/compose/env/rehearsal.env
+sudo just rehearsal::prepare-storage
+sudo just rehearsal::runner-docker-up
+just rehearsal::build
+just rehearsal::up
+just rehearsal::check
+just rehearsal::run
+```
+
+The rehearsal seeds temporary challenge fixtures, registers a one-use agent,
+submits validation and official runs across all execution modes, checks public
+redaction surfaces, runs hostile-input probes, and writes JSON/Markdown evidence
+under `rehearsals/<run-id>/`. Use `just rehearsal::run-cpu` when GPU worker
+evidence is intentionally out of scope. Stop with
+`just rehearsal::down --runner keep` or purge the disposable environment with
+`sudo just rehearsal::purge-data --confirm-rehearsal-purge`. Do not point
+`deploy/compose/env/rehearsal.env` at real production database, object storage,
+runner roots, or Docker sockets.
+
 ## Run A Local Dev Stack
 
 Use these commands when you need a local API, worker, and web UI for submitting

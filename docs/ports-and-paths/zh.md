@@ -8,12 +8,17 @@ reference。
 | Surface | Env var | Default | Scope |
 | --- | --- | --- | --- |
 | Compose dev Postgres host port | `AGENTICS_POSTGRES_PORT` | `deploy/compose/env/dev.env.example` 中的 `55432` | Local Compose development |
+| Rehearsal Postgres host port | `AGENTICS_POSTGRES_PORT` | `deploy/compose/env/rehearsal.env.example` 中的 `15432` | 仅 disposable production rehearsal |
 | Production Compose bind address | `AGENTICS_COMPOSE_BIND_IP` | `127.0.0.1` | Production API 和 web host publishes |
 | API listen port | `AGENTICS_API_PORT` | `3100` | API service，默认 loopback |
 | Web listen port | `AGENTICS_WEB_PORT` | `3001` | Next.js web service，默认 loopback |
+| Rehearsal API host port | `AGENTICS_API_HOST_PORT` | `rehearsal.env.example` 中的 `13100` | 仅 disposable production rehearsal |
+| Rehearsal web host port | `AGENTICS_WEB_HOST_PORT` | `rehearsal.env.example` 中的 `13001` | 仅 disposable production rehearsal |
 | Production RustFS S3 endpoint | `AGENTICS_S3_ENDPOINT_URL` | `http://rustfs:9000` | Internal production Compose storage |
 | RustFS S3 test port | `AGENTICS_RUSTFS_PORT` | `9000` | Local Docker RustFS test service |
 | RustFS console test port | `AGENTICS_RUSTFS_CONSOLE_PORT` | `9001` | Local Docker RustFS console |
+| Rehearsal RustFS S3 host port | `AGENTICS_RUSTFS_PORT` | `rehearsal.env.example` 中的 `19000` | Host-side rehearsal harness storage access |
+| Rehearsal RustFS console host port | `AGENTICS_RUSTFS_CONSOLE_PORT` | `rehearsal.env.example` 中的 `19001` | 仅 disposable production rehearsal |
 | Persistent private-bundle backup RustFS S3 port | `AGENTICS_RUSTFS_BACKUP_API_PORT` | `9100` | LAN-accessible private bundle backup store |
 | Persistent private-bundle backup RustFS console port | `AGENTICS_RUSTFS_BACKUP_CONSOLE_PORT` | `9101` | LAN-accessible private bundle backup console |
 | Public HTTPS | reverse proxy config | `443` | 仅 hosted ingress |
@@ -41,7 +46,15 @@ production Compose env file。
 | Local test Docker socket | `/srv/agentics-test/docker.sock` |
 | Local test runtime root | `/srv/agentics-test/runtime` |
 | Local test phase mount root | `/srv/agentics-test/phase-mounts` |
+| Rehearsal state root | `/srv/agentics-rehearsal` |
+| Rehearsal storage work root | `/srv/agentics-rehearsal/storage-work` |
+| Rehearsal runner Docker socket | `/srv/agentics-rehearsal/docker.sock` |
+| Rehearsal Docker data root | `/srv/agentics-rehearsal/docker-data-root` |
+| Rehearsal runner runtime root | `/srv/agentics-rehearsal/runtime` |
+| Rehearsal phase mount root | `/srv/agentics-rehearsal/phase-mounts` |
+| Rehearsal challenge review checkout | `/srv/agentics-rehearsal/review-checkouts/agentics-challenges` |
 | Persistent private-bundle backup RustFS data root | `/srv/agentics/private-bundle-backups/rustfs-data` |
+| Production rehearsal report output | 默认 `rehearsals/<run-id>/`，除非传入 `--output-dir` |
 
 DGX 默认 quota slot classes 为 `64`、`256`、`1024` 和 `4096` MiB，每个 phase
 和 class 有 100 个 slots。Worker 会为 writable container bind mounts 租用这些
@@ -59,6 +72,12 @@ dedicated Docker daemon；它的默认 bridge network 由 host bridge `agentics0
 `just test-env-up` 会在 `/srv/agentics-test/docker.sock` 启动专用 test Docker
 daemon；`just test-all-cpu` 使用它运行 CPU-only Compose integration tests，而
 `just test-all` 还要求 NVIDIA GPU support，并包含 ignored CUDA/GPU tests。
+
+`/srv/agentics-rehearsal` 是 disposable production-like staging state。用
+`sudo just rehearsal::prepare-storage` 准备，用
+`sudo just rehearsal::runner-docker-up` 启动专用 runner Docker daemon，并且只能用
+`sudo just rehearsal::purge-data --confirm-rehearsal-purge` 清理。Purge guard 会拒绝
+production project，并拒绝这个 root 之外的 destructive paths。
 
 Production Compose 会把 standalone `agentics-challenges` checkout 从
 `AGENTICS_CHALLENGE_REVIEW_REPOSITORY_HOST_ROOT` bind-mount 到

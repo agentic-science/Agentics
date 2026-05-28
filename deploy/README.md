@@ -5,7 +5,8 @@ This directory contains internal Agentics deployment assets.
 ## Layout
 
 - `compose/`: Docker Compose files and example environment files for
-  development, testing, production, and support services.
+  development, testing, production, disposable production rehearsals, and
+  support services.
 - `service-images/rust-toolchain/`: internal Rust build/test toolchain image
   with Homebrew LLVM 22, Homebrew `cargo-binstall`, and Wild linker
   configuration.
@@ -13,6 +14,17 @@ This directory contains internal Agentics deployment assets.
   migrations, and operational binaries. Its builder stage installs the same
   internal LLVM/Wild toolchain, while the final runtime image stays slim.
 - `service-images/web/`: production web image build.
+
+The app image includes the `agentics-rehearse-production` ops binary used by
+`just rehearsal::run` and `just rehearsal::run-cpu` for the disposable
+`agentics-rehearsal` environment. Copy
+`compose/env/rehearsal.env.example` to ignored `compose/env/rehearsal.env`,
+replace placeholders, prepare `/srv/agentics-rehearsal`, then use the
+`just rehearsal::*` lifecycle commands. The rehearsal Compose override exposes
+Postgres and RustFS only on loopback so the host-side rehearsal harness can
+seed disposable fixtures without touching production namespaces.
+The committed source of truth is `compose/env/rehearsal.env.example` plus
+`compose/compose.rehearsal.yml`; `compose/env/rehearsal.env` is ignored.
 
 These files are platform implementation details. Challenge specs and target
 contracts must not reference Dockerfiles or images under `deploy/service-images/`.

@@ -184,7 +184,46 @@ For production Compose:
    just prod::logs
    ```
 
-5. Stop explicitly:
+5. For a disposable staging stack, use the first-class rehearsal environment:
+
+   ```bash
+   cp deploy/compose/env/rehearsal.env.example deploy/compose/env/rehearsal.env
+   $EDITOR deploy/compose/env/rehearsal.env
+   sudo just rehearsal::prepare-storage
+   sudo just rehearsal::runner-docker-up
+   just rehearsal::build
+   just rehearsal::up
+   just rehearsal::check
+   just rehearsal::run
+   ```
+
+   `deploy/compose/env/rehearsal.env` must keep
+   `AGENTICS_REHEARSAL_ENVIRONMENT=true`, project `agentics-rehearsal`, bucket
+   `agentics-rehearsal`, prefix `rehearsal`, runner namespace
+   `agentics-rehearsal`, and all mutable roots under `/srv/agentics-rehearsal`.
+   The rehearsal stack uses loopback ports `13100` for API, `13001` for web,
+   `15432` for Postgres, and `19000`/`19001` for RustFS.
+
+   The rehearsal seeds run-id-scoped CPU fixture challenges through disposable
+   database and object-storage paths, registers a one-use agent with a
+   temporary pioneer code, exercises validation and official submissions for
+   `separated_evaluator`, `piped_stdio`, and `coexecuted_benchmark`, checks
+   public redaction surfaces, runs adversarial ZIP/network/private-data probes,
+   and optionally runs Playwright observer UI checks. Reports are written under
+   `rehearsals/<run-id>/`. Use `just rehearsal::run-cpu` when the staging host
+   is intentionally CPU-only or GPU worker evidence is out of scope.
+
+   Stop with `just rehearsal::down --runner keep` for ordinary pauses. To
+   destroy the disposable environment, first inspect with
+   `just rehearsal::purge-data --dry-run`, then run
+   `sudo just rehearsal::purge-data --confirm-rehearsal-purge`.
+
+   Do not run rehearsal commands against a production database or storage
+   bucket that is not explicitly disposable. The purge command refuses the
+   `agentics-prod` project, requires `AGENTICS_REHEARSAL_ENVIRONMENT=true`,
+   and refuses destructive paths outside `/srv/agentics-rehearsal`.
+
+6. Stop explicitly:
 
    ```bash
    just prod::down --runner keep --dry-run

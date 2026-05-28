@@ -303,6 +303,51 @@ just prod::check
 
 Check service 会有意挂载 host Docker socket。API、web、Postgres 和 RustFS 不挂载它。
 
+Production-like release rehearsals 使用 disposable `agentics-rehearsal` Compose
+environment，不要把 harness 指向真实 production：
+
+```bash
+cp deploy/compose/env/rehearsal.env.example deploy/compose/env/rehearsal.env
+$EDITOR deploy/compose/env/rehearsal.env
+sudo just rehearsal::prepare-storage
+sudo just rehearsal::runner-docker-up
+just rehearsal::build
+just rehearsal::up
+just rehearsal::check
+just rehearsal::run
+```
+
+Rehearsal env file 必须保留 `AGENTICS_REHEARSAL_ENVIRONMENT=true`、project
+`agentics-rehearsal`、bucket `agentics-rehearsal`、prefix `rehearsal`、runner
+namespace `agentics-rehearsal`，并且所有 mutable paths 都必须位于
+`/srv/agentics-rehearsal` 下。Rehearsal Compose override 只暴露 loopback ports：
+API `13100`、web `13001`、Postgres `15432`、RustFS `19000`/`19001`。
+
+Rehearsal 会 seed 临时 fixture challenges，创建一次性 pioneer code，注册
+rehearsal agent，覆盖三种 execution modes 的 validation 和 official submissions，
+验证 public projection/redaction surfaces，运行 hostile ZIP、network、private-data
+probes，并把 JSON/Markdown evidence 写入 `rehearsals/<run-id>/`。当 GPU worker
+evidence 不在本次范围内时，使用 `just rehearsal::run-cpu`。
+
+先检查 destructive cleanup：
+
+```bash
+just rehearsal::purge-data --dry-run
+sudo just rehearsal::purge-data --confirm-rehearsal-purge
+```
+
+Purge 命令会拒绝 production project，要求 rehearsal env marker，只删除
+`agentics-rehearsal` Compose project 和 runner namespace，并拒绝任何位于
+`/srv/agentics-rehearsal` 之外的 destructive path。
+生成的 fixture challenges 默认使用已发布、带 digest pin 的 ARM64 CPU runner
+image；只有在受控 local staging 中才用 `--cpu-image-source` 和
+`--cpu-image-reference` 覆盖。
+
+除非 operators 明确提供不同的 `--run-id` 并确认有足够 capacity headroom，否则同一个
+staging database/storage namespace 一次只运行一个 production rehearsal。Rehearsal
+cleanup 会 archive 生成的 challenges 并 revoke 临时 pioneer code；submitted ZIPs、
+runner logs 和 object-storage artifacts 仍按正常 retention cleanup 处理。
+
 ## Logs
 
 当前 service logs 是 Compose container stdout/stderr。Worker evaluation logs 会写入

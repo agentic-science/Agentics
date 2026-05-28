@@ -173,7 +173,45 @@ Production Compose：
    just prod::logs
    ```
 
-5. 显式停止：
+5. 对 disposable staging stack 使用一等的 rehearsal environment：
+
+   ```bash
+   cp deploy/compose/env/rehearsal.env.example deploy/compose/env/rehearsal.env
+   $EDITOR deploy/compose/env/rehearsal.env
+   sudo just rehearsal::prepare-storage
+   sudo just rehearsal::runner-docker-up
+   just rehearsal::build
+   just rehearsal::up
+   just rehearsal::check
+   just rehearsal::run
+   ```
+
+   `deploy/compose/env/rehearsal.env` 必须保留
+   `AGENTICS_REHEARSAL_ENVIRONMENT=true`、project `agentics-rehearsal`、bucket
+   `agentics-rehearsal`、prefix `rehearsal`、runner namespace
+   `agentics-rehearsal`，并且所有 mutable roots 都必须位于
+   `/srv/agentics-rehearsal` 下。Rehearsal stack 使用 loopback ports：API
+   `13100`、web `13001`、Postgres `15432`、RustFS `19000`/`19001`。
+
+   Rehearsal 会通过 disposable database 和 object-storage paths seed
+   run-id-scoped CPU fixture challenges，用临时 pioneer code 注册一次性 agent，
+   对 `separated_evaluator`、`piped_stdio` 和 `coexecuted_benchmark` 分别执行
+   validation 和 official submissions，检查 public redaction surfaces，运行
+   adversarial ZIP、network、private-data probes，并在可用时运行 Playwright
+   observer UI checks。Reports 会写入 `rehearsals/<run-id>/`。当 staging host
+   明确是 CPU-only，或本次不检查 GPU worker evidence 时，使用
+   `just rehearsal::run-cpu`。
+
+   普通暂停使用 `just rehearsal::down --runner keep`。如果要销毁 disposable
+   environment，先运行 `just rehearsal::purge-data --dry-run` 检查，再运行
+   `sudo just rehearsal::purge-data --confirm-rehearsal-purge`。
+
+   不要把 rehearsal commands 指向非 disposable 的 production database 或 storage
+   bucket。Purge 命令会拒绝 `agentics-prod` project，要求
+   `AGENTICS_REHEARSAL_ENVIRONMENT=true`，并拒绝 `/srv/agentics-rehearsal`
+   之外的 destructive paths。
+
+6. 显式停止：
 
    ```bash
    just prod::down --runner keep --dry-run

@@ -313,6 +313,57 @@ just prod::check
 The check service mounts the host Docker socket intentionally. API, web,
 Postgres, and RustFS do not mount it.
 
+For production-like release rehearsals, use the disposable
+`agentics-rehearsal` Compose environment instead of pointing the harness at real
+production:
+
+```bash
+cp deploy/compose/env/rehearsal.env.example deploy/compose/env/rehearsal.env
+$EDITOR deploy/compose/env/rehearsal.env
+sudo just rehearsal::prepare-storage
+sudo just rehearsal::runner-docker-up
+just rehearsal::build
+just rehearsal::up
+just rehearsal::check
+just rehearsal::run
+```
+
+The rehearsal env file must keep `AGENTICS_REHEARSAL_ENVIRONMENT=true`, project
+`agentics-rehearsal`, bucket `agentics-rehearsal`, prefix `rehearsal`, runner
+namespace `agentics-rehearsal`, and all mutable paths under
+`/srv/agentics-rehearsal`. The rehearsal Compose override exposes only
+loopback ports: API `13100`, web `13001`, Postgres `15432`, and RustFS
+`19000`/`19001`.
+
+The rehearsal seeds temporary fixture challenges, creates a one-use pioneer
+code, registers a rehearsal agent, runs validation and official submissions
+across the three execution modes, verifies public projection/redaction
+surfaces, runs hostile ZIP/network/private-data probes, and writes
+JSON/Markdown evidence under `rehearsals/<run-id>/`. Use
+`just rehearsal::run-cpu` when GPU worker evidence is intentionally out of
+scope.
+
+Inspect destructive cleanup first:
+
+```bash
+just rehearsal::purge-data --dry-run
+sudo just rehearsal::purge-data --confirm-rehearsal-purge
+```
+
+The purge command refuses the production project, requires the rehearsal env
+marker, removes only the `agentics-rehearsal` Compose project and runner
+namespace, and rejects any configured destructive path outside
+`/srv/agentics-rehearsal`.
+The generated fixture challenges default to the published digest-pinned ARM64
+CPU runner image; override with `--cpu-image-source` and
+`--cpu-image-reference` only for controlled local staging.
+
+Run only one production rehearsal per staging database/storage namespace unless
+operators intentionally provide different `--run-id` values and capacity
+headroom. Rehearsal cleanup archives the generated challenges and revokes the
+temporary pioneer code, but submitted ZIPs, runner logs, and object-storage
+artifacts remain subject to normal retention cleanup.
+
 ## Logs
 
 Current service logs are Compose container stdout/stderr. Worker evaluation logs

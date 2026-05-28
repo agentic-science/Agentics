@@ -8,12 +8,17 @@ and MVP target support.
 | Surface | Env var | Default | Scope |
 | --- | --- | --- | --- |
 | Compose dev Postgres host port | `AGENTICS_POSTGRES_PORT` | `55432` in `deploy/compose/env/dev.env.example` | Local Compose development |
+| Rehearsal Postgres host port | `AGENTICS_POSTGRES_PORT` | `15432` in `deploy/compose/env/rehearsal.env.example` | Disposable production rehearsal only |
 | Production Compose bind address | `AGENTICS_COMPOSE_BIND_IP` | `127.0.0.1` | Production API and web host publishes |
 | API listen port | `AGENTICS_API_PORT` | `3100` | API service on loopback by default |
 | Web listen port | `AGENTICS_WEB_PORT` | `3001` | Next.js web service on loopback by default |
+| Rehearsal API host port | `AGENTICS_API_HOST_PORT` | `13100` in `rehearsal.env.example` | Disposable production rehearsal only |
+| Rehearsal web host port | `AGENTICS_WEB_HOST_PORT` | `13001` in `rehearsal.env.example` | Disposable production rehearsal only |
 | Production RustFS S3 endpoint | `AGENTICS_S3_ENDPOINT_URL` | `http://rustfs:9000` | Internal production Compose storage |
 | RustFS S3 test port | `AGENTICS_RUSTFS_PORT` | `9000` | Local Docker RustFS test service |
 | RustFS console test port | `AGENTICS_RUSTFS_CONSOLE_PORT` | `9001` | Local Docker RustFS console |
+| Rehearsal RustFS S3 host port | `AGENTICS_RUSTFS_PORT` | `19000` in `rehearsal.env.example` | Host-side rehearsal harness storage access |
+| Rehearsal RustFS console host port | `AGENTICS_RUSTFS_CONSOLE_PORT` | `19001` in `rehearsal.env.example` | Disposable production rehearsal only |
 | Persistent private-bundle backup RustFS S3 port | `AGENTICS_RUSTFS_BACKUP_API_PORT` | `9100` | LAN-accessible private bundle backup store |
 | Persistent private-bundle backup RustFS console port | `AGENTICS_RUSTFS_BACKUP_CONSOLE_PORT` | `9101` | LAN-accessible private bundle backup console |
 | Public HTTPS | reverse proxy config | `443` | Hosted ingress only |
@@ -41,7 +46,15 @@ same production Compose env file.
 | Local test Docker socket | `/srv/agentics-test/docker.sock` |
 | Local test runtime root | `/srv/agentics-test/runtime` |
 | Local test phase mount root | `/srv/agentics-test/phase-mounts` |
+| Rehearsal state root | `/srv/agentics-rehearsal` |
+| Rehearsal storage work root | `/srv/agentics-rehearsal/storage-work` |
+| Rehearsal runner Docker socket | `/srv/agentics-rehearsal/docker.sock` |
+| Rehearsal Docker data root | `/srv/agentics-rehearsal/docker-data-root` |
+| Rehearsal runner runtime root | `/srv/agentics-rehearsal/runtime` |
+| Rehearsal phase mount root | `/srv/agentics-rehearsal/phase-mounts` |
+| Rehearsal challenge review checkout | `/srv/agentics-rehearsal/review-checkouts/agentics-challenges` |
 | Persistent private-bundle backup RustFS data root | `/srv/agentics/private-bundle-backups/rustfs-data` |
+| Production rehearsal report output | `rehearsals/<run-id>/` unless `--output-dir` is supplied |
 
 Default DGX quota slot classes are `64`, `256`, `1024`, and `4096` MiB, with
 100 slots per class and phase. The worker leases these slots for writable
@@ -63,6 +76,13 @@ workers. `just test-env-up` starts the dedicated test Docker daemon on
 `/srv/agentics-test/docker.sock`; `just test-all-cpu` uses it for CPU-only
 Compose integration tests, while `just test-all` also requires NVIDIA GPU
 support and includes ignored CUDA/GPU tests.
+
+The `/srv/agentics-rehearsal` root is disposable production-like staging state.
+Prepare it with `sudo just rehearsal::prepare-storage`, start its dedicated
+runner Docker daemon with `sudo just rehearsal::runner-docker-up`, and purge it
+only with `sudo just rehearsal::purge-data --confirm-rehearsal-purge`. The purge
+guard refuses the production project and refuses destructive paths outside this
+root.
 
 Production Compose bind-mounts a standalone `agentics-challenges` checkout from
 `AGENTICS_CHALLENGE_REVIEW_REPOSITORY_HOST_ROOT` to
