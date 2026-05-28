@@ -40,6 +40,16 @@ ps:
 check:
     {{compose_prod}} check
 
+# Run CPU-only production rehearsal against disposable staging
+[working-directory: repo]
+rehearse-cpu *args:
+    cargo run -p agentics-ops --bin agentics-rehearse-production -- run --gpu skip {{args}}
+
+# Run production rehearsal against disposable staging and require GPU worker evidence
+[working-directory: repo]
+rehearse *args:
+    cargo run -p agentics-ops --bin agentics-rehearse-production -- run --gpu require {{args}}
+
 # Copy backed-up migrated challenge private bundles into production RustFS
 [working-directory: repo]
 restore-private-bundles:

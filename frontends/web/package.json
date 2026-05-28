@@ -10,6 +10,7 @@
     "lint": "biome check",
     "format": "biome format --write",
     "check:vis": "bun scripts/check-vis-tailwind.mjs",
+    "rehearse:e2e": "playwright test --config playwright.rehearsal.config.ts",
     "generate:schemas": "bun scripts/generate-api-schemas.mjs",
     "generate:schemas:check": "bun scripts/generate-api-schemas.mjs --check"
   },

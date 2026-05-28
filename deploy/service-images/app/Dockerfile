@@ -32,7 +32,8 @@ RUN cargo build --release \
     -p agentics-ops --bin agentics-check-dgx-spark-profile \
     -p agentics-ops --bin agentics-migrate \
     -p agentics-ops --bin agentics-compose-prod \
-    -p agentics-ops --bin agentics-copy-private-bundle-backups
+    -p agentics-ops --bin agentics-copy-private-bundle-backups \
+    -p agentics-ops --bin agentics-rehearse-production
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update \
@@ -47,4 +48,5 @@ COPY --from=builder /workspace/Agentics/target/release/agentics-check-dgx-spark-
 COPY --from=builder /workspace/Agentics/target/release/agentics-migrate /usr/local/bin/agentics-migrate
 COPY --from=builder /workspace/Agentics/target/release/agentics-compose-prod /usr/local/bin/agentics-compose-prod
 COPY --from=builder /workspace/Agentics/target/release/agentics-copy-private-bundle-backups /usr/local/bin/agentics-copy-private-bundle-backups
+COPY --from=builder /workspace/Agentics/target/release/agentics-rehearse-production /usr/local/bin/agentics-rehearse-production
 ENV AGENTICS_CHALLENGES_ROOT=/app/no-seeded-challenges

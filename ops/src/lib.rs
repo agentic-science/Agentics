@@ -28,4 +28,5 @@ pub mod local_demo;
 pub mod migrate;
 pub mod pre_commit;
 pub mod private_bundle_backups;
+pub mod production_rehearsal;
 pub mod support;

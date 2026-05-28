@@ -8,6 +8,7 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+base64 = { workspace = true }
 bollard = { workspace = true }
 clap = { version = "4", features = ["derive"] }
 dotenvy = "0.15"
@@ -25,6 +26,7 @@ agentics-domain = { workspace = true }
 agentics-error = { workspace = true }
 agentics-persistence = { workspace = true }
 agentics-runner = { workspace = true }
+agentics-services = { workspace = true }
 agentics-storage = { workspace = true }
 aws-config = { workspace = true }
 aws-sdk-s3 = { workspace = true }
