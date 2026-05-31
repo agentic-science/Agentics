@@ -54,15 +54,27 @@ Wild for Linux ARM64 and Linux AMD64 builds. Override
 `AGENTICS_RUST_TOOLCHAIN_IMAGE` only when you are intentionally testing a
 different internal toolchain image.
 
-This starts the persistent private-bundle backup RustFS service if needed, then
-starts Postgres, runs migrations, restores private bundles into the dev RustFS
-store, prepares the non-GPU migrated Frontier-CS challenge root with those
-private overlays, starts the API, stages the matching public test solutions as
-official submissions, and starts the worker and Next.js frontend. Source files
-are bind-mounted into the Rust and Bun containers, so ordinary edits are visible
-without copying files. Cargo build output, Bun dependencies, and Postgres data
-live in Compose volumes, while dev storage and runner work roots live under
+This starts Postgres, RustFS, the API, worker, and Next.js frontend, runs
+migrations, prepares the local development challenge catalog from
+`challenge-repos/agentics-challenges/dev/challenges`, and stages matching
+public test solutions from
+`challenge-repos/agentics-challenges/dev/test-solutions` as official
+submissions. The local dev stack no longer starts or requires the persistent
+private-bundle backup RustFS service. Source files are bind-mounted into the
+Rust and Bun containers, so ordinary edits are visible without copying files.
+Cargo build output, Bun dependencies, and Postgres data live in Compose
+volumes, while dev storage and runner work roots live under
 `.agentics-compose/dev/` by default.
+
+The dev database name is `agentics_dev`. If your local Compose Postgres volume
+was created before this rename and still contains `agentics_demo`, reset the
+disposable dev volume before running `just dev::up`.
+
+Local dev uses `AGENTICS_OFFICIAL_LOG_REDACTION=contract_based`. Official
+evaluations for public-only dev challenges keep runner diagnostics, so failures
+such as missing declared output files should produce actionable logs. Challenges
+with private benchmark data or official setup-generated inputs are still
+redacted.
 
 The worker uses the host Docker socket so it can create sibling runner
 containers. Those containers are labeled with `AGENTICS_RUNNER_NAMESPACE`;
@@ -158,11 +170,11 @@ runner container.
 
 ## Frontend Dev Data
 
-The Compose dev stack uses the migrated challenge repository as its source of
-truth. Before the web service starts, it publishes all migrated non-GPU
-Frontier-CS challenges, assembles their runtime bundles with restored private
-asset overlays, and stages any matching workspace in
-`challenge-repos/agentics-challenges/test-solutions/` as an official
+The Compose dev stack uses the local dev catalog as its source of truth. Before
+the web service starts, it publishes every eligible CPU challenge under
+`challenge-repos/agentics-challenges/dev/challenges/`, skips any configured
+challenge that still requires private assets, and stages any matching workspace
+in `challenge-repos/agentics-challenges/dev/test-solutions/` as an official
 test-solution submission:
 
 ```bash

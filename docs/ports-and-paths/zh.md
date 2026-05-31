@@ -28,6 +28,19 @@ Compose 使用 `deploy/compose/env/prod.env`，从
 `deploy/compose/env/prod.env.example` 复制得到。DGX-specific host settings 位于同一个
 production Compose env file。
 
+## Local Development Paths
+
+| Purpose | Default |
+| --- | --- |
+| Dev database name | `agentics_dev` |
+| Dev challenge source root | `challenge-repos/agentics-challenges/dev/challenges` |
+| Dev test-solution source root | `challenge-repos/agentics-challenges/dev/test-solutions` |
+| Prepared runtime challenge root | `.agentics-compose/dev/dev-challenges` |
+| Dev storage 和 runner work root | `.agentics-compose/dev/` |
+
+从 `agentics_demo` 改名到 `agentics_dev` 之前创建的本地 Compose Postgres volumes
+是 disposable 的，可能需要重置。
+
 ## DGX Paths
 
 | Purpose | Path |
@@ -125,8 +138,8 @@ ports。如果显式设置 `AGENTICS_RUSTFS_DOCKER_NETWORK=host`，custom ports 
 host networking 不能 remap ports。如果改用 bind mounts，RustFS container 以 UID
 `10001` 运行，因此 host directory 必须允许该 UID 写入。
 
-Persistent private-bundle backup store 与 storage test helper 分离，并且不是
-Agentics durable storage backend：
+Persistent private-bundle backup store 与 storage test helper 分离，不是
+Agentics durable storage backend，并且不会被 `just dev::up` 启动：
 
 ```bash
 cp deploy/compose/env/rustfs-private-backup.env.example deploy/compose/env/rustfs-private-backup.env

@@ -8,10 +8,12 @@ x-rust-dev: &rust-dev
   env_file:
     - ./env/dev.env.example
   environment: &dev-env
-    AGENTICS_DEMO_ENV_FILE: /workspace/Agentics/deploy/compose/env/dev.env.example
-    AGENTICS_DATABASE_URL: postgres://agentics:agentics@postgres:5432/agentics_demo
-    AGENTICS_DEMO_DATABASE_URL: postgres://agentics:agentics@postgres:5432/agentics_demo
-    AGENTICS_DEMO_DATABASE_URL_CONFIRM: non-loopback-demo-db
+    AGENTICS_LOCAL_DEV_ENV_FILE: /workspace/Agentics/deploy/compose/env/dev.env.example
+    AGENTICS_DATABASE_URL: postgres://agentics:agentics@postgres:5432/agentics_dev
+    AGENTICS_LOCAL_DEV_DATABASE_URL: postgres://agentics:agentics@postgres:5432/agentics_dev
+    AGENTICS_LOCAL_DEV_DATABASE_URL_CONFIRM: non-loopback-local-dev-db
+    AGENTICS_LOCAL_DEV_CHALLENGE_SOURCE_ROOT: /workspace/Agentics/challenge-repos/agentics-challenges/dev/challenges
+    AGENTICS_LOCAL_DEV_TEST_SOLUTIONS_ROOT: /workspace/Agentics/challenge-repos/agentics-challenges/dev/test-solutions
     AGENTICS_STORAGE_BACKEND: ${AGENTICS_STORAGE_BACKEND:-s3}
     AGENTICS_S3_BUCKET: ${AGENTICS_S3_BUCKET:-agentics}
     AGENTICS_S3_PREFIX: ${AGENTICS_S3_PREFIX:-dev}
@@ -23,7 +25,7 @@ x-rust-dev: &rust-dev
     AGENTICS_RUSTFS_PORT: ${AGENTICS_RUSTFS_PORT:-9000}
     AGENTICS_RUSTFS_CONSOLE_PORT: ${AGENTICS_RUSTFS_CONSOLE_PORT:-9001}
     AGENTICS_STORAGE_WORK_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/storage-work
-    AGENTICS_CHALLENGES_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/frontier-cs-challenges
+    AGENTICS_CHALLENGES_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/dev-challenges
     AGENTICS_RUNNER_RUNTIME_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/runtime
     AGENTICS_RUNNER_PHASE_MOUNT_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/phase-mounts
     AGENTICS_RUNNER_NAMESPACE: ${AGENTICS_RUNNER_NAMESPACE:-agentics-dev}
@@ -106,11 +108,7 @@ services:
       - -p
       - agentics-ops
       - --bin
-      - agentics-local-demo
-      - -p
-      - agentics-ops
-      - --bin
-      - agentics-copy-private-bundle-backups
+      - agentics-local-dev
       - -p
       - api-server
       - --bin
@@ -126,15 +124,13 @@ services:
     depends_on:
       rust-build:
         condition: service_completed_successfully
-      private-bundle-restore:
-        condition: service_completed_successfully
     command:
       - cargo
       - run
       - -p
       - agentics-ops
       - --bin
-      - agentics-local-demo
+      - agentics-local-dev
       - --
       - prepare
     restart: "no"
@@ -152,13 +148,14 @@ services:
       - -p
       - agentics-ops
       - --bin
-      - agentics-local-demo
+      - agentics-local-dev
       - --
       - migrate
     restart: "no"
 
   private-bundle-restore:
     <<: *rust-dev
+    profiles: ["private-bundle-restore"]
     network_mode: host
     depends_on:
       rust-build:
@@ -201,8 +198,6 @@ services:
     depends_on:
       api:
         condition: service_started
-      private-bundle-restore:
-        condition: service_completed_successfully
       rustfs-bucket-init:
         condition: service_completed_successfully
     command:
@@ -211,7 +206,7 @@ services:
       - -p
       - agentics-ops
       - --bin
-      - agentics-local-demo
+      - agentics-local-dev
       - --
       - seed
     restart: "no"

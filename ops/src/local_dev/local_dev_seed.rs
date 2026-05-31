@@ -1,4 +1,4 @@
-//! Frontier-CS dev-data seeding for the Compose development stack.
+//! Local development challenge and baseline submission seeding.
 
 use std::fs;
 use std::io::{Seek, Write};
@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use agentics_config::Config;
 use agentics_contracts::challenge_bundle::{read_challenge_bundle_spec, validate_challenge_bundle};
 use agentics_contracts::challenge_creation::read_challenge_creation_manifest;
-use agentics_contracts::validation::archive::{ArchiveEnvelopePolicy, extract_zip_bytes_to_dir};
 use agentics_domain::models::challenge::{ChallengeBundleSpec, TargetAccelerator};
 use agentics_domain::models::challenge_creation::ChallengeCreationManifest;
 use agentics_domain::models::evaluation::ScoringMode;
@@ -17,6 +16,7 @@ use agentics_domain::storage::StorageKey;
 use agentics_persistence::{
     CreateSolutionSubmissionInput, Repositories, SolutionSubmissionQuotaAdmission,
 };
+use agentics_services::evaluation_lifecycle;
 use agentics_storage::{Storage, StorageWriteIntent};
 use secrecy::ExposeSecret;
 use sqlx::PgPool;
@@ -24,25 +24,19 @@ use sqlx::postgres::PgPoolOptions;
 use zip::CompressionMethod;
 use zip::write::SimpleFileOptions;
 
-use super::{LocalDemoConfig, LocalDemoError};
+use super::{LocalDevConfig, LocalDevError};
 use crate::support::ReportLine;
 
-const CHALLENGE_REPOSITORY_ROOT: &str = "challenge-repos/agentics-challenges";
-const CHALLENGES_DIR: &str = "challenges";
-const TEST_SOLUTIONS_DIR: &str = "test-solutions";
-const PRIVATE_BACKUP_PREFIX: &str = "private-bundle-backups";
-const LEGACY_BACKUP_BATCH: &str = "frontier-cs-migrations-20260525";
 const DEV_SEED_AGENT_ID: &str = "10000000-0000-4000-8000-00000000fc00";
-const DEV_SEED_AGENT_DISPLAY_NAME: &str = "Frontier-CS Dev Baseline";
-const DEV_SEED_CREDIT_TEXT: &str = "Seeded by agentics-local-demo from test-solutions";
-const DEV_SEED_NOTE: &str = "Frontier-CS dev test solution";
+const DEV_SEED_AGENT_DISPLAY_NAME: &str = "Agentics Dev Baseline";
+const DEV_SEED_CREDIT_TEXT: &str = "Seeded by agentics-local-dev from dev/test-solutions";
+const DEV_SEED_NOTE: &str = "dev test solution";
 const DEV_QUOTA_WINDOW_SECONDS: i64 = 86_400;
 const DEV_PER_AGENT_CHALLENGE_LIMIT: i64 = 10_000;
-const MAX_PRIVATE_ASSET_FILE_COUNT: usize = 1024;
 const TEST_SOLUTION_ARTIFACT_BYTES: u64 = 64 * 1024 * 1024;
 
 #[derive(Debug, Clone)]
-struct FrontierChallenge {
+struct DevChallenge {
     name: ChallengeName,
     challenge_root: PathBuf,
     manifest: ChallengeCreationManifest,
@@ -51,76 +45,54 @@ struct FrontierChallenge {
 
 #[derive(Debug, Clone, Copy, Default)]
 struct SeedStats {
-    private_bundles: usize,
+    runtime_bundles: usize,
     test_solution_submissions: usize,
     skipped_test_solutions: usize,
 }
 
-/// Prepare the API startup seed root with only migrated non-GPU Frontier-CS challenges.
+/// Counts challenge discovery results for local-dev prepare reporting.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct PrepareChallengeReport {
+    pub(super) prepared: usize,
+    pub(super) skipped_gpu: usize,
+    pub(super) skipped_private_assets: usize,
+}
+
+#[derive(Debug, Clone, Default)]
+struct DevChallengeDiscovery {
+    challenges: Vec<DevChallenge>,
+    skipped_gpu: usize,
+    skipped_private_assets: usize,
+}
+
+/// Prepare the API startup seed root with configured CPU-only dev challenges.
 pub(super) async fn prepare_challenge_root(
-    config: &LocalDemoConfig,
-) -> Result<usize, LocalDemoError> {
-    let source_root = challenge_repository_root(config.repo_root()).join(CHALLENGES_DIR);
+    config: &LocalDevConfig,
+) -> Result<PrepareChallengeReport, LocalDevError> {
+    let source_root = config.challenge_source_root();
     let destination_root = PathBuf::from(&config.storage_config().storage.challenges_root);
-    let challenges = discover_frontier_challenges(&source_root).await?;
-    let storage = agentics_storage::build_storage(
-        config
-            .storage_config()
-            .storage_factory_options()
-            .map_err(|error| LocalDemoError::StorageInit(error.to_string()))?,
-    )
-    .await
-    .map_err(|error| LocalDemoError::StorageInit(error.to_string()))?;
+    let discovery = discover_dev_challenges(source_root).await?;
     replace_dir(&destination_root)?;
-    for challenge in &challenges {
+    for challenge in &discovery.challenges {
         let destination = destination_root.join(challenge.name.as_str());
         copy_dir_rejecting_symlinks(&challenge.challenge_root, &destination)?;
         let Some(bundle_path) = &challenge.manifest.bundle_path else {
             continue;
         };
         let destination_bundle = destination.join(bundle_path.as_path());
-        for asset in &challenge.manifest.private_assets {
-            if !asset.required {
-                continue;
-            }
-            let asset_key = find_private_asset_key(
-                storage.as_ref(),
-                &challenge.name,
-                asset.asset_name.as_str(),
-            )
-            .await?;
-            let bytes = storage
-                .get(
-                    &asset_key,
-                    StorageWriteIntent::new(
-                        "Frontier-CS private asset ZIP",
-                        config
-                            .storage_config()
-                            .quotas
-                            .challenge_private_asset_bytes_per_draft,
-                    ),
-                )
-                .await?;
-            extract_private_asset_overlay(
-                &bytes,
-                &destination_bundle,
-                asset.asset_name.as_str(),
-                config
-                    .storage_config()
-                    .quotas
-                    .challenge_private_asset_bytes_per_draft,
-            )
-            .await?;
-        }
         validate_challenge_bundle(&destination_bundle).await?;
     }
-    Ok(challenges.len())
+    Ok(PrepareChallengeReport {
+        prepared: discovery.challenges.len(),
+        skipped_gpu: discovery.skipped_gpu,
+        skipped_private_assets: discovery.skipped_private_assets,
+    })
 }
 
-/// Seed private runtime bundles and real Frontier-CS test solution submissions.
+/// Seed baseline dev test solution submissions.
 pub(super) async fn seed_database(
-    config: &LocalDemoConfig,
-) -> Result<Vec<ReportLine>, LocalDemoError> {
+    config: &LocalDevConfig,
+) -> Result<Vec<ReportLine>, LocalDevError> {
     let pool = PgPoolOptions::new()
         .max_connections(3)
         .connect(config.database_url_secret().expose_secret())
@@ -129,22 +101,23 @@ pub(super) async fn seed_database(
         config
             .storage_config()
             .storage_factory_options()
-            .map_err(|error| LocalDemoError::StorageInit(error.to_string()))?,
+            .map_err(|error| LocalDevError::StorageInit(error.to_string()))?,
     )
     .await
-    .map_err(|error| LocalDemoError::StorageInit(error.to_string()))?;
-    let challenges = discover_frontier_challenges(&PathBuf::from(
+    .map_err(|error| LocalDevError::StorageInit(error.to_string()))?;
+    let discovery = discover_dev_challenges(&PathBuf::from(
         &config.storage_config().storage.challenges_root,
     ))
     .await?;
+    let challenges = discovery.challenges;
 
     ensure_dev_seed_agent(&pool).await?;
 
     let mut stats = SeedStats::default();
     for challenge in &challenges {
         verify_published_runtime_bundle(&pool, &challenge.name).await?;
-        stats.private_bundles = stats.private_bundles.checked_add(1).ok_or_else(|| {
-            LocalDemoError::InvalidConfig("private bundle count overflow".to_string())
+        stats.runtime_bundles = stats.runtime_bundles.checked_add(1).ok_or_else(|| {
+            LocalDevError::InvalidConfig("runtime bundle count overflow".to_string())
         })?;
 
         if seed_test_solution_submission(&pool, storage.as_ref(), config, challenge).await? {
@@ -152,16 +125,14 @@ pub(super) async fn seed_database(
                 .test_solution_submissions
                 .checked_add(1)
                 .ok_or_else(|| {
-                    LocalDemoError::InvalidConfig(
+                    LocalDevError::InvalidConfig(
                         "test solution submission count overflow".to_string(),
                     )
                 })?;
         } else {
             stats.skipped_test_solutions =
                 stats.skipped_test_solutions.checked_add(1).ok_or_else(|| {
-                    LocalDemoError::InvalidConfig(
-                        "skipped test solution count overflow".to_string(),
-                    )
+                    LocalDevError::InvalidConfig("skipped test solution count overflow".to_string())
                 })?;
         }
     }
@@ -169,10 +140,10 @@ pub(super) async fn seed_database(
 
     Ok(vec![
         ReportLine::pass(
-            "private bundles",
+            "runtime bundles",
             format!(
-                "verified {} prepared Frontier-CS runtime bundles",
-                stats.private_bundles
+                "verified {} prepared local dev runtime bundle(s)",
+                stats.runtime_bundles
             ),
         ),
         ReportLine::pass(
@@ -191,17 +162,17 @@ pub(super) async fn upload_test_solution_artifact_for_test(
     config: &Config,
     solution_root: &Path,
     challenge_name: &str,
-) -> Result<StorageKey, LocalDemoError> {
+) -> Result<StorageKey, LocalDevError> {
     upload_test_solution_artifact(storage, config, solution_root, challenge_name).await
 }
 
-async fn discover_frontier_challenges(
+async fn discover_dev_challenges(
     challenges_root: &Path,
-) -> Result<Vec<FrontierChallenge>, LocalDemoError> {
+) -> Result<DevChallengeDiscovery, LocalDevError> {
     let mut entries = fs::read_dir(challenges_root)?.collect::<std::io::Result<Vec<_>>>()?;
     entries.sort_by_key(|entry| entry.path());
 
-    let mut challenges = Vec::new();
+    let mut discovery = DevChallengeDiscovery::default();
     for entry in entries {
         if !entry.file_type()?.is_dir() {
             continue;
@@ -212,7 +183,13 @@ async fn discover_frontier_challenges(
             continue;
         }
         let manifest = read_challenge_creation_manifest(&challenge_root).await?;
-        if !manifest.challenge_name.as_str().contains("frontier-cs") {
+        if manifest.private_assets.iter().any(|asset| asset.required) {
+            discovery.skipped_private_assets = discovery
+                .skipped_private_assets
+                .checked_add(1)
+                .ok_or_else(|| {
+                    LocalDevError::InvalidConfig("private-asset skip count overflow".to_string())
+                })?;
             continue;
         }
         let Some(bundle_path) = &manifest.bundle_path else {
@@ -225,85 +202,25 @@ async fn discover_frontier_challenges(
             .iter()
             .any(|target| target.accelerator == TargetAccelerator::Gpu)
         {
+            discovery.skipped_gpu = discovery.skipped_gpu.checked_add(1).ok_or_else(|| {
+                LocalDevError::InvalidConfig("GPU skip count overflow".to_string())
+            })?;
             continue;
         }
-        challenges.push(FrontierChallenge {
+        discovery.challenges.push(DevChallenge {
             name: manifest.challenge_name.clone(),
             challenge_root,
             manifest,
             spec,
         });
     }
-    Ok(challenges)
-}
-
-async fn find_private_asset_key(
-    storage: &dyn Storage,
-    challenge_name: &ChallengeName,
-    asset_name: &str,
-) -> Result<StorageKey, LocalDemoError> {
-    for candidate in private_asset_key_candidates(challenge_name.as_str(), asset_name)? {
-        if storage.exists(&candidate).await? {
-            return Ok(candidate);
-        }
-    }
-    Err(LocalDemoError::InvalidConfig(format!(
-        "missing private asset backup for `{challenge_name}` asset `{asset_name}`; run the private-bundle restore step first"
-    )))
-}
-
-fn private_asset_key_candidates(
-    challenge_name: &str,
-    asset_name: &str,
-) -> Result<Vec<StorageKey>, LocalDemoError> {
-    [
-        format!("{PRIVATE_BACKUP_PREFIX}/{challenge_name}/{asset_name}.zip"),
-        format!("{PRIVATE_BACKUP_PREFIX}/{challenge_name}/{challenge_name}-{asset_name}.zip"),
-        format!("{PRIVATE_BACKUP_PREFIX}/{challenge_name}/official-runs.zip"),
-        format!("{PRIVATE_BACKUP_PREFIX}/{challenge_name}/official-session.zip"),
-        format!(
-            "{PRIVATE_BACKUP_PREFIX}/{LEGACY_BACKUP_BATCH}/uploaded-assets/{challenge_name}-{asset_name}.zip"
-        ),
-        format!(
-            "{PRIVATE_BACKUP_PREFIX}/{LEGACY_BACKUP_BATCH}/tmp-zips/{challenge_name}-private.zip"
-        ),
-    ]
-    .into_iter()
-    .map(|value| {
-        StorageKey::try_new(value).map_err(|error| LocalDemoError::InvalidConfig(error.to_string()))
-    })
-    .collect()
-}
-
-async fn extract_private_asset_overlay(
-    bytes: &[u8],
-    target_dir: &Path,
-    asset_name: &str,
-    max_uncompressed_bytes: u64,
-) -> Result<(), LocalDemoError> {
-    let bytes = bytes.to_vec();
-    let target_dir = target_dir.to_path_buf();
-    let asset_name = asset_name.to_string();
-    tokio::task::spawn_blocking(move || {
-        let policy = ArchiveEnvelopePolicy::new(
-            format!("private asset `{asset_name}`"),
-            max_uncompressed_bytes,
-            MAX_PRIVATE_ASSET_FILE_COUNT,
-            max_uncompressed_bytes,
-        );
-        extract_zip_bytes_to_dir(&bytes, &target_dir, &policy)
-    })
-    .await
-    .map_err(|error| {
-        LocalDemoError::InvalidConfig(format!("private asset task failed: {error}"))
-    })??;
-    Ok(())
+    Ok(discovery)
 }
 
 async fn verify_published_runtime_bundle(
     pool: &PgPool,
     challenge_name: &ChallengeName,
-) -> Result<(), LocalDemoError> {
+) -> Result<(), LocalDevError> {
     let bundle_key = sqlx::query_scalar::<_, Option<String>>(
         r#"
         SELECT bundle_key
@@ -315,19 +232,19 @@ async fn verify_published_runtime_bundle(
     .fetch_optional(pool)
     .await?;
     let Some(Some(bundle_key)) = bundle_key else {
-        return Err(LocalDemoError::InvalidConfig(format!(
+        return Err(LocalDevError::InvalidConfig(format!(
             "challenge `{challenge_name}` was not published by API startup seeding"
         )));
     };
     if bundle_key.trim().is_empty() {
-        return Err(LocalDemoError::InvalidConfig(format!(
+        return Err(LocalDevError::InvalidConfig(format!(
             "challenge `{challenge_name}` has an empty runtime bundle key"
         )));
     }
     Ok(())
 }
 
-async fn ensure_dev_seed_agent(pool: &PgPool) -> Result<AgentId, LocalDemoError> {
+async fn ensure_dev_seed_agent(pool: &PgPool) -> Result<AgentId, LocalDevError> {
     let agent_id = agent_id(DEV_SEED_AGENT_ID)?;
     sqlx::query(
         r#"
@@ -345,9 +262,9 @@ async fn ensure_dev_seed_agent(pool: &PgPool) -> Result<AgentId, LocalDemoError>
     )
     .bind(agent_id.as_str())
     .bind(DEV_SEED_AGENT_DISPLAY_NAME)
-    .bind("Real baseline submissions loaded from agentics-challenges/test-solutions.")
+    .bind("Baseline submissions loaded from agentics-challenges/dev/test-solutions.")
     .bind("Agentics Dev")
-    .bind(serde_json::json!({"profile": "frontier-cs-dev", "source": "test-solutions"}))
+    .bind(serde_json::json!({"profile": "local-dev", "source": "dev/test-solutions"}))
     .execute(pool)
     .await?;
     Ok(agent_id)
@@ -356,12 +273,10 @@ async fn ensure_dev_seed_agent(pool: &PgPool) -> Result<AgentId, LocalDemoError>
 async fn seed_test_solution_submission(
     pool: &PgPool,
     storage: &dyn Storage,
-    config: &LocalDemoConfig,
-    challenge: &FrontierChallenge,
-) -> Result<bool, LocalDemoError> {
-    let solution_root = challenge_repository_root(config.repo_root())
-        .join(TEST_SOLUTIONS_DIR)
-        .join(challenge.name.as_str());
+    config: &LocalDevConfig,
+    challenge: &DevChallenge,
+) -> Result<bool, LocalDevError> {
+    let solution_root = config.test_solutions_root().join(challenge.name.as_str());
     if !solution_root.is_dir() {
         return Ok(false);
     }
@@ -380,11 +295,12 @@ async fn seed_test_solution_submission(
         challenge.name.as_str(),
     )
     .await?;
+    let job_id = EvaluationJobId::generate();
     Repositories::new(pool)
         .solution_submissions()
         .create_with_job(&CreateSolutionSubmissionInput {
             solution_submission_id: SolutionSubmissionId::generate(),
-            job_id: EvaluationJobId::generate(),
+            job_id: job_id.clone(),
             agent_id,
             challenge_name: challenge.name.clone(),
             target: target.clone(),
@@ -405,6 +321,7 @@ async fn seed_test_solution_submission(
             },
         })
         .await?;
+    evaluation_lifecycle::mark_staged_evaluation_job_ready(pool, &job_id).await?;
     Ok(true)
 }
 
@@ -413,7 +330,7 @@ async fn existing_test_submission(
     agent_id: &AgentId,
     challenge_name: &ChallengeName,
     target: &TargetName,
-) -> Result<bool, LocalDemoError> {
+) -> Result<bool, LocalDevError> {
     let exists = sqlx::query_scalar::<_, bool>(
         r#"
         SELECT EXISTS (
@@ -439,16 +356,16 @@ async fn upload_test_solution_artifact(
     config: &Config,
     solution_root: &Path,
     challenge_name: &str,
-) -> Result<StorageKey, LocalDemoError> {
+) -> Result<StorageKey, LocalDevError> {
     let artifact_key = StorageKey::try_new(format!(
-        "solution-submissions/frontier-dev-seed/{challenge_name}.zip"
+        "solution-submissions/local-dev-seed/{challenge_name}.zip"
     ))
-    .map_err(|error| LocalDemoError::InvalidConfig(error.to_string()))?;
+    .map_err(|error| LocalDevError::InvalidConfig(error.to_string()))?;
     if storage.exists(&artifact_key).await? {
         storage.delete(&artifact_key).await?;
     }
     let archive_path = config.storage_work_root()?.join("_tmp").join(format!(
-        "frontier-dev-solution-{challenge_name}-{}.zip",
+        "local-dev-solution-{challenge_name}-{}.zip",
         uuid::Uuid::new_v4()
     ));
     zip_dir(solution_root, &archive_path)?;
@@ -456,17 +373,14 @@ async fn upload_test_solution_artifact(
         .put_file(
             &artifact_key,
             &archive_path,
-            StorageWriteIntent::new(
-                "Frontier-CS test solution ZIP",
-                TEST_SOLUTION_ARTIFACT_BYTES,
-            ),
+            StorageWriteIntent::new("dev test solution ZIP", TEST_SOLUTION_ARTIFACT_BYTES),
         )
         .await?;
     remove_file_if_exists(&archive_path)?;
     Ok(artifact_key)
 }
 
-fn zip_dir(source_dir: &Path, destination: &Path) -> Result<(), LocalDemoError> {
+fn zip_dir(source_dir: &Path, destination: &Path) -> Result<(), LocalDevError> {
     if let Some(parent) = destination.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -481,14 +395,14 @@ fn zip_dir_entries<W: Write + Seek>(
     root: &Path,
     current: &Path,
     archive: &mut zip::ZipWriter<W>,
-) -> Result<(), LocalDemoError> {
+) -> Result<(), LocalDevError> {
     let mut entries = fs::read_dir(current)?.collect::<std::io::Result<Vec<_>>>()?;
     entries.sort_by_key(|entry| entry.path());
     for entry in entries {
         let path = entry.path();
         let metadata = fs::symlink_metadata(&path)?;
         if metadata.file_type().is_symlink() {
-            return Err(LocalDemoError::InvalidConfig(format!(
+            return Err(LocalDevError::InvalidConfig(format!(
                 "test solution contains symlink {}",
                 path.display()
             )));
@@ -501,7 +415,7 @@ fn zip_dir_entries<W: Write + Seek>(
             continue;
         }
         let relative = path.strip_prefix(root).map_err(|error| {
-            LocalDemoError::InvalidConfig(format!("invalid test solution path: {error}"))
+            LocalDevError::InvalidConfig(format!("invalid test solution path: {error}"))
         })?;
         let relative = relative.to_string_lossy().replace('\\', "/");
         archive.start_file(relative, zip_file_options(&metadata))?;
@@ -525,17 +439,13 @@ fn zip_file_options(_metadata: &fs::Metadata) -> SimpleFileOptions {
     SimpleFileOptions::default().compression_method(CompressionMethod::Deflated)
 }
 
-fn challenge_repository_root(repo_root: &Path) -> PathBuf {
-    repo_root.join(CHALLENGE_REPOSITORY_ROOT)
-}
-
-fn replace_dir(path: &Path) -> Result<(), LocalDemoError> {
+fn replace_dir(path: &Path) -> Result<(), LocalDevError> {
     remove_dir_if_exists(path)?;
     fs::create_dir_all(path)?;
     Ok(())
 }
 
-fn remove_dir_if_exists(path: &Path) -> Result<(), LocalDemoError> {
+fn remove_dir_if_exists(path: &Path) -> Result<(), LocalDevError> {
     match fs::remove_dir_all(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -543,7 +453,7 @@ fn remove_dir_if_exists(path: &Path) -> Result<(), LocalDemoError> {
     }
 }
 
-fn remove_file_if_exists(path: &Path) -> Result<(), LocalDemoError> {
+fn remove_file_if_exists(path: &Path) -> Result<(), LocalDevError> {
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
@@ -551,7 +461,7 @@ fn remove_file_if_exists(path: &Path) -> Result<(), LocalDemoError> {
     }
 }
 
-fn copy_dir_rejecting_symlinks(source: &Path, destination: &Path) -> Result<(), LocalDemoError> {
+fn copy_dir_rejecting_symlinks(source: &Path, destination: &Path) -> Result<(), LocalDevError> {
     fs::create_dir_all(destination)?;
     let mut entries = fs::read_dir(source)?.collect::<std::io::Result<Vec<_>>>()?;
     entries.sort_by_key(|entry| entry.path());
@@ -560,7 +470,7 @@ fn copy_dir_rejecting_symlinks(source: &Path, destination: &Path) -> Result<(), 
         let destination_path = destination.join(entry.file_name());
         let metadata = fs::symlink_metadata(&source_path)?;
         if metadata.file_type().is_symlink() {
-            return Err(LocalDemoError::InvalidConfig(format!(
+            return Err(LocalDevError::InvalidConfig(format!(
                 "challenge source contains symlink {}",
                 source_path.display()
             )));
@@ -574,8 +484,165 @@ fn copy_dir_rejecting_symlinks(source: &Path, destination: &Path) -> Result<(), 
     Ok(())
 }
 
-fn agent_id(value: &str) -> Result<AgentId, LocalDemoError> {
+fn agent_id(value: &str) -> Result<AgentId, LocalDevError> {
     AgentId::try_new(value).map_err(|error| {
-        LocalDemoError::InvalidConfig(format!("invalid Frontier-CS dev seed agent id: {error}"))
+        LocalDevError::InvalidConfig(format!("invalid dev seed agent id: {error}"))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::discover_dev_challenges;
+
+    /// Verifies local-dev discovery is scoped by directory, not Frontier-CS naming.
+    #[tokio::test]
+    async fn discovery_uses_source_root_and_skips_ineligible_challenges() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let root = tempdir.path();
+        write_challenge(root, "plain-cpu", serde_json::Value::Null, false);
+        write_challenge(root, "gpu-only", json!("gpu"), false);
+        write_challenge(root, "needs-private-assets", serde_json::Value::Null, true);
+
+        let discovery = discover_dev_challenges(root)
+            .await
+            .expect("discovery should parse fixtures");
+
+        assert_eq!(discovery.challenges.len(), 1);
+        assert_eq!(
+            discovery
+                .challenges
+                .first()
+                .expect("one eligible challenge should be discovered")
+                .name
+                .as_str(),
+            "plain-cpu"
+        );
+        assert_eq!(discovery.skipped_gpu, 1);
+        assert_eq!(discovery.skipped_private_assets, 1);
+    }
+
+    fn write_challenge(
+        root: &std::path::Path,
+        name: &str,
+        accelerator: serde_json::Value,
+        private_asset_required: bool,
+    ) {
+        let target_name = if accelerator == json!("gpu") {
+            "linux-arm64-cuda"
+        } else {
+            "linux-arm64-cpu"
+        };
+        let hardware_metadata = if accelerator == json!("gpu") {
+            json!({
+                "kind": "cuda",
+                "gpu_model": "test",
+                "gpu_count": 1,
+                "gpu_memory_gb": 1,
+                "cuda_variant": "cu126",
+                "cuda_version": "12.6"
+            })
+        } else {
+            json!({"kind": "cpu"})
+        };
+        let image_reference = if accelerator == json!("gpu") {
+            "agentics-linux-arm64-cuda:cu126-ubuntu24.04-local"
+        } else {
+            "agentics-linux-arm64-cpu:ubuntu26.04-local"
+        };
+        let challenge_root = root.join(name);
+        let bundle_root = challenge_root.join("v1");
+        std::fs::create_dir_all(&bundle_root).expect("bundle dir");
+        let private_assets = if private_asset_required {
+            json!([{
+                "asset_name": "official-runs",
+                "kind": "private_benchmark_data",
+                "required": true,
+                "required_paths": ["private-benchmark/runs.json"]
+            }])
+        } else {
+            json!([])
+        };
+        std::fs::write(
+            challenge_root.join("agentics.challenge.json"),
+            serde_json::to_string_pretty(&json!({
+                "schema_version": 1,
+                "request": "new_challenge",
+                "challenge_name": name,
+                "title": name,
+                "summary": {"en": "English summary", "zh": "中文摘要"},
+                "keywords": ["dev"],
+                "readme_path": "README.md",
+                "bundle_path": "v1",
+                "private_assets": private_assets,
+                "ci": {
+                    "validate_manifest": true,
+                    "validate_public_bundle": true,
+                    "smoke_test_public_validation": false
+                }
+            }))
+            .expect("manifest JSON"),
+        )
+        .expect("manifest");
+        std::fs::write(challenge_root.join("README.md"), "# Fixture\n").expect("readme");
+        std::fs::write(
+            bundle_root.join("spec.json"),
+            serde_json::to_string_pretty(&json!({
+                "schema_version": 1,
+                "challenge_name": name,
+                "challenge_title": name,
+                "summary": {"en": "English summary", "zh": "中文摘要"},
+                "keywords": ["dev"],
+                "solution": {"protocol": "zip_project", "manifest_file": "agentics.solution.json"},
+                "targets": [{
+                    "name": target_name,
+                    "docker_platform": "linux/arm64",
+                    "accelerator": accelerator,
+                    "validation_enabled": true,
+                    "resource_profile": {
+                        "name": "agentics-small",
+                        "solution_image": {"source": "local", "reference": image_reference},
+                        "evaluator_image": {"source": "local", "reference": image_reference},
+                        "solution": {
+                            "setup": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"},
+                            "build": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"},
+                            "run": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"}
+                        },
+                        "evaluator": {
+                            "setup": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"},
+                            "run": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"}
+                        },
+                        "hardware_metadata": hardware_metadata
+                    }
+                }],
+                "starts_at": "2026-01-01T00:00:00Z",
+                "eligibility": {"type": "open"},
+                "visibility": {
+                    "leaderboard": "public_live",
+                    "score_distribution": "public_live",
+                    "result_detail": "submitter_live_public_live"
+                },
+                "solution_publication": "public",
+                "execution": {
+                    "mode": "separated_evaluator",
+                    "separated_evaluator": {"command": ["python", "separated-evaluator/run.py"], "result_file": "result.json"},
+                    "validation_runs": "public/validation-runs.json",
+                    "official_runs": "public/official-runs.json"
+                },
+                "datasets": {
+                    "public_dir": "public",
+                    "public_policy": "full",
+                    "private_benchmark_policy": "score_only",
+                    "private_benchmark_enabled": false
+                },
+                "metric_schema": {
+                    "metrics": [{"name": "score", "label": "Score", "direction": "maximize", "visibility": "public"}],
+                    "ranking": {"primary_metric_name": "score"}
+                }
+            }))
+            .expect("spec JSON"),
+        )
+        .expect("spec");
+    }
 }

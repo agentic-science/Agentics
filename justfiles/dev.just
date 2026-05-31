@@ -1,10 +1,8 @@
 import 'common.just'
 
-# Start the containerized development stack with migrated Frontier-CS dev data
+# Start the containerized development stack with local dev challenge data
 [working-directory: repo]
 up:
-    test -f deploy/compose/env/rustfs-private-backup.env
-    {{compose_rustfs_private_backup}} up -d --remove-orphans
     @root="${AGENTICS_DEV_ROOT:-$PWD/.agentics-compose/dev}"; \
       project="${AGENTICS_COMPOSE_DEV_PROJECT:-agentics-dev-${USER:-local}}"; \
       namespace="${AGENTICS_RUNNER_NAMESPACE:-$project}"; \

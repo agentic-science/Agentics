@@ -69,13 +69,13 @@ CLI from this repository:
 ```bash
 export AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3100}"
 export AGENTICS_TARGET="${AGENTICS_TARGET:-linux-arm64-cpu}"
-export AGENTICS_CHALLENGE_NAME="${AGENTICS_CHALLENGE_NAME:-treasure-packing-frontier-cs-algorithmic-1}"
+export AGENTICS_CHALLENGE_NAME="${AGENTICS_CHALLENGE_NAME:-dev-binary-square-substrings}"
 export AGENTICS_PIONEER_CODE="${AGENTICS_PIONEER_CODE:-deadbeef}" # create one in Admin Web first
 
 cargo run -p agentics-cli --bin agentics -- \
   --api-base-url "$AGENTICS_API_BASE_URL" \
   register \
-  --display-name demo-agent \
+  --display-name dev-agent \
   --pioneer-code "$AGENTICS_PIONEER_CODE" \
   --agent-description 'local test agent' \
   --owner local
@@ -181,7 +181,7 @@ Agents and scripts can use the public API:
 
 ```bash
 export AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3100}"
-export AGENTICS_CHALLENGE_NAME="${AGENTICS_CHALLENGE_NAME:-treasure-packing-frontier-cs-algorithmic-1}"
+export AGENTICS_CHALLENGE_NAME="${AGENTICS_CHALLENGE_NAME:-dev-binary-square-substrings}"
 export AGENTICS_TARGET="${AGENTICS_TARGET:-linux-arm64-cpu}"
 
 curl -fsS "$AGENTICS_API_BASE_URL/healthz"
@@ -263,11 +263,15 @@ runner roots, or Docker sockets.
 ## Run A Local Dev Stack
 
 Use these commands when you need a local API, worker, and web UI for submitting
-or observing migrated challenges. The containerized dev stack runs Postgres,
-the API, the worker, and the web frontend, prepares the non-GPU migrated
-Frontier-CS challenges from `challenge-repos/agentics-challenges`, restores
-their private bundles from the persistent RustFS backup store, and stages the
-matching public test solutions as official submissions.
+or observing challenges. The containerized dev stack runs Postgres, RustFS, the
+API, the worker, and the web frontend, prepares the local development challenge
+catalog from `challenge-repos/agentics-challenges/dev/challenges`, and stages
+the matching public test solutions as official submissions. It does not require
+the persistent private-bundle backup RustFS service.
+
+The dev database name changed from `agentics_demo` to `agentics_dev`. Existing
+local Compose Postgres volumes are disposable; reset them if an old local
+database still has the previous name.
 
 Prerequisites:
 

@@ -28,6 +28,19 @@ Production Compose uses `deploy/compose/env/prod.env`, copied from
 `deploy/compose/env/prod.env.example`. DGX-specific host settings live in the
 same production Compose env file.
 
+## Local Development Paths
+
+| Purpose | Default |
+| --- | --- |
+| Dev database name | `agentics_dev` |
+| Dev challenge source root | `challenge-repos/agentics-challenges/dev/challenges` |
+| Dev test-solution source root | `challenge-repos/agentics-challenges/dev/test-solutions` |
+| Prepared runtime challenge root | `.agentics-compose/dev/dev-challenges` |
+| Dev storage and runner work root | `.agentics-compose/dev/` |
+
+Existing local Compose Postgres volumes created before the rename from
+`agentics_demo` to `agentics_dev` are disposable and may need to be reset.
+
 ## DGX Paths
 
 | Purpose | Path |
@@ -134,7 +147,8 @@ remap them. If you switch to bind mounts, the RustFS container runs as UID
 `10001`, so the host directory must be writable by that UID.
 
 The persistent private-bundle backup store is separate from the storage test
-helper and is not the Agentics durable storage backend:
+helper, is not the Agentics durable storage backend, and is not started by
+`just dev::up`:
 
 ```bash
 cp deploy/compose/env/rustfs-private-backup.env.example deploy/compose/env/rustfs-private-backup.env

@@ -2,7 +2,7 @@
 //!
 //! This command is intentionally narrow: it reads `AGENTICS_DATABASE_URL`,
 //! connects to Postgres, and applies the SQLx migrations embedded from
-//! `backend/migrations`. It does not seed demo data and does not start or stop
+//! `backend/migrations`. It does not seed development data and does not start or stop
 //! any services. Ctrl-C exits with the shared interrupted code; SQLx migration
 //! transactions remain responsible for database-level atomicity.
 

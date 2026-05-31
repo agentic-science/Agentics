@@ -22,7 +22,7 @@ pub mod check_local_mvp;
 pub mod compose_prod;
 pub mod dgx;
 pub mod dgx_storage;
-pub mod local_demo;
+pub mod local_dev;
 pub mod migrate;
 pub mod private_bundle_backups;
 pub mod production_rehearsal;

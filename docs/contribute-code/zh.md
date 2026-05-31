@@ -53,14 +53,24 @@ Dev 和 test Compose stacks 中的 Rust services 使用内部
 builds 中使用 `clang` 加 Wild。只有在明确测试另一个内部 toolchain image 时，才覆盖
 `AGENTICS_RUST_TOOLCHAIN_IMAGE`。
 
-这个命令会按需启动 persistent private-bundle backup RustFS service，然后启动
-Postgres、执行 migrations、把 private bundles 恢复到 dev RustFS store、用这些
-private overlays 准备 non-GPU migrated Frontier-CS challenge root、启动 API、把匹配的
-public test solutions 作为 official submissions 写入队列，然后启动 worker 和
-Next.js frontend。Source files 会 bind mount 到 Rust 和 Bun containers 中，因此平时改代码
-不需要同步或复制文件。Cargo build output、Bun dependencies 和 Postgres data 放在
-Compose volumes 中；dev storage 和 runner work roots 默认放在
-`.agentics-compose/dev/` 下。
+这个命令会启动 Postgres、RustFS、API、worker 和 Next.js frontend，执行 migrations，
+从 `challenge-repos/agentics-challenges/dev/challenges` 准备 local development
+challenge catalog，并把
+`challenge-repos/agentics-challenges/dev/test-solutions` 中匹配的 public test
+solutions 作为 official submissions 写入队列。Local dev stack 不再启动，也不要求
+persistent private-bundle backup RustFS service。Source files 会 bind mount 到 Rust
+和 Bun containers 中，因此平时改代码不需要同步或复制文件。Cargo build output、Bun
+dependencies 和 Postgres data 放在 Compose volumes 中；dev storage 和 runner work
+roots 默认放在 `.agentics-compose/dev/` 下。
+
+Dev database 名称是 `agentics_dev`。如果本地 Compose Postgres volume 是改名前创建的，
+里面仍然有 `agentics_demo`，请先重置这个 disposable dev volume，再运行
+`just dev::up`。
+
+Local dev 使用 `AGENTICS_OFFICIAL_LOG_REDACTION=contract_based`。Public-only
+dev challenges 的 official evaluations 会保留 runner diagnostics，因此缺少声明
+output files 等失败应产生可操作的 logs。带 private benchmark data 或 official
+setup-generated inputs 的 challenges 仍会 redacted。
 
 Worker 会使用 host Docker socket 来创建 sibling runner containers。这些 runner
 containers 会带上 `AGENTICS_RUNNER_NAMESPACE` label；只有在明确需要另一个 cleanup
@@ -149,10 +159,10 @@ container 的内容放在 container-only `/tmp` 下。
 
 ## Frontend Dev Data
 
-Compose dev stack 使用 migrated challenge repository 作为 source of truth。Web
-service 启动前，它会发布所有 migrated non-GPU Frontier-CS challenges，结合恢复的
-private asset overlays 组装 runtime bundles，并把
-`challenge-repos/agentics-challenges/test-solutions/` 中匹配的 workspace 作为
+Compose dev stack 使用 local dev catalog 作为 source of truth。Web service 启动前，
+它会发布 `challenge-repos/agentics-challenges/dev/challenges/` 下所有 eligible CPU
+challenges，跳过任何仍然要求 private assets 的 configured challenge，并把
+`challenge-repos/agentics-challenges/dev/test-solutions/` 中匹配的 workspace 作为
 official test-solution submission 写入队列：
 
 ```bash

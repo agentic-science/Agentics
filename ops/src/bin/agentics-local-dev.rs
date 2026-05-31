@@ -2,5 +2,5 @@
 
 #[tokio::main]
 async fn main() -> std::process::ExitCode {
-    agentics_ops::local_demo::run_from_process().await
+    agentics_ops::local_dev::run_from_process().await
 }
