@@ -173,6 +173,10 @@ evaluator-visible output caps 是 `AGENTICS_RUNNER_MAX_OUTPUT_FILES=8192`、
 attached stream shutdown grace 是
 `AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS=2`。持久化 runner logs 会按实际
 run count 乘以 1 MiB 限制，因此默认最大值是 100 MiB。
+`AGENTICS_OFFICIAL_LOG_REDACTION=contract_based` 只会在加载的 challenge
+contract 使用 public-only official material 时保留 official diagnostics。如果
+hosted workers 的 operations policy 要求 blanket official-log redaction，请使用
+`AGENTICS_OFFICIAL_LOG_REDACTION=always`。
 
 Worker scheduling 对 GPU jobs 采用 fail-closed 策略。默认
 `AGENTICS_WORKER_ACCELERATORS=none` 只会领取无 accelerator jobs。在 DGX workers

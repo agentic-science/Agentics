@@ -12,8 +12,8 @@ use agentics_domain::models::urls::{
 use agentics_storage::{LocalStorageOptions, S3StorageOptions, StorageFactoryOptions};
 pub use local_urls::{local_api_base_url, local_web_base_url};
 pub use runtime_modes::{
-    AgentRegistrationMode, HostProbeMode, RunnerNamespace, RunnerSecurityProfile,
-    RunnerWritableStorageMode, WorkerAccelerators,
+    AgentRegistrationMode, HostProbeMode, OfficialLogRedactionMode, RunnerNamespace,
+    RunnerSecurityProfile, RunnerWritableStorageMode, WorkerAccelerators,
 };
 pub use storage_config::{
     DEFAULT_S3_BUCKET, DEFAULT_S3_ENDPOINT_URL, DEFAULT_S3_FORCE_PATH_STYLE, DEFAULT_S3_REGION,
@@ -60,6 +60,8 @@ pub const ENV_AGENTICS_RUNNER_NAMESPACE: &str = "AGENTICS_RUNNER_NAMESPACE";
 pub const ENV_AGENTICS_MOLTBOOK_SUBMOLT_NAME: &str = "AGENTICS_MOLTBOOK_SUBMOLT_NAME";
 /// Environment variable that configures the shared Moltbook Submolt URL.
 pub const ENV_AGENTICS_MOLTBOOK_SUBMOLT_URL: &str = "AGENTICS_MOLTBOOK_SUBMOLT_URL";
+/// Environment variable that controls official-evaluation runner log redaction.
+pub const ENV_AGENTICS_OFFICIAL_LOG_REDACTION: &str = "AGENTICS_OFFICIAL_LOG_REDACTION";
 
 /// Default API listen host for local development.
 pub const DEFAULT_API_HOST: &str = "127.0.0.1";
@@ -129,6 +131,9 @@ const DEFAULT_MOLTBOOK_SUBMOLT_URL: &str = "https://www.moltbook.com/m/agentics-
 /// Default runner security profile.
 pub const DEFAULT_RUNNER_SECURITY_PROFILE: RunnerSecurityProfile =
     RunnerSecurityProfile::Development;
+/// Default official-evaluation runner log redaction policy.
+pub const DEFAULT_OFFICIAL_LOG_REDACTION_MODE: OfficialLogRedactionMode =
+    OfficialLogRedactionMode::ContractBased;
 /// Default runner writable-storage mode.
 pub const DEFAULT_RUNNER_WRITABLE_STORAGE_MODE: RunnerWritableStorageMode =
     RunnerWritableStorageMode::Unbounded;
@@ -232,6 +237,7 @@ impl Default for Config {
                 host_probe_mode: DEFAULT_HOST_PROBE_MODE,
                 host_probe_command: DEFAULT_HOST_PROBE_COMMAND.to_string(),
                 security_profile: DEFAULT_RUNNER_SECURITY_PROFILE,
+                official_log_redaction: DEFAULT_OFFICIAL_LOG_REDACTION_MODE,
                 require_digest_pinned_images: DEFAULT_REQUIRE_DIGEST_PINNED_IMAGES,
                 writable_storage_mode: DEFAULT_RUNNER_WRITABLE_STORAGE_MODE,
                 namespace: builtin_runner_namespace(),

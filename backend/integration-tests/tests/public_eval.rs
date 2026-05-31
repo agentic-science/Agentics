@@ -113,12 +113,12 @@ async fn store_challenge_bundle_objects(
 }
 
 /// Read a runner log through configured storage for assertion diagnostics.
-async fn runner_log_text(config: &Config, log_key: Option<&str>) -> Option<String> {
-    let log_key = log_key?;
+async fn runner_log_text(config: &Config, runner_log_storage_key: Option<&str>) -> Option<String> {
+    let runner_log_storage_key = runner_log_storage_key?;
     let storage = build_storage(config.storage_factory_options().ok()?)
         .await
         .ok()?;
-    let key = StorageKey::try_new(log_key).ok()?;
+    let key = StorageKey::try_new(runner_log_storage_key).ok()?;
     storage
         .get(
             &key,

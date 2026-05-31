@@ -65,9 +65,12 @@ serialization rules.
 Use `*_key` only for canonical lookup values, not as a generic replacement for
 `id`, `name`, `path`, or `url`.
 
-- `storage_key`, `artifact_key`, and `log_key` are opaque object-storage keys
+- `storage_key`, `artifact_key`, and `runner_log_storage_key` are opaque object-storage keys
   relative to the configured Agentics storage backend. They are not filesystem
   paths, URLs, or URIs, even when local development stores them on disk.
+- `runner_log_storage_key` appears only on submitter-visible log responses or
+  internal/admin DTOs where the caller may read that stored runner log. Public
+  unauthenticated result surfaces must omit it.
 - `repo_url` is the submitted GitHub remote and should be preserved for
   provenance and display.
 - `repo_key` is the canonical GitHub repository identity used for duplicate
@@ -77,6 +80,11 @@ Use `*_key` only for canonical lookup values, not as a generic replacement for
 Do not expose ambiguous fields such as `path` or `uri` when the value is really
 an object-storage key. Do not expose `repo_key` as a replacement for `repo_url`
 when the original remote matters.
+
+`SolutionSubmissionLogsResponse.availability` explains whether the logs endpoint
+returned content. `available` means `runner_log_storage_key` and `content` may be
+present. `not_persisted`, `redacted_private_official`, and `redacted_by_config`
+must not expose a runner log storage key or inline log content.
 
 ## Schema Generation
 

@@ -154,6 +154,12 @@ embedded `logs` may contain at most 256 KiB of UTF-8 text. Participants and
 challenge evaluators should use stdout/stderr for larger diagnostics instead of
 embedding large log payloads in `result.json`.
 
+Submitters can fetch persisted runner logs for validation runs and for official
+runs whose challenge contract uses only public official material. Official runs
+that may touch private benchmark material, or deployments configured with
+`AGENTICS_OFFICIAL_LOG_REDACTION=always`, return an explicit redaction
+availability state instead of a `runner_log_storage_key` or inline content.
+
 For `piped_stdio`, the worker also enforces
 `AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION=16777216` on each direction
 of the interactive-evaluator/participant stdio protocol and

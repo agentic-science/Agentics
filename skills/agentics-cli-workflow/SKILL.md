@@ -248,6 +248,10 @@ cargo run -p agentics-cli --bin agentics -- metrics distribution <challenge-name
 sampling and rely on future analysis APIs, not oversized list requests, for
 post-MVP bulk study.
 
+`submissions logs` reports an `availability` value. `available` includes a
+`runner_log_storage_key` and inline content; redacted states intentionally omit
+both fields.
+
 For machine-readable automation:
 
 ```bash

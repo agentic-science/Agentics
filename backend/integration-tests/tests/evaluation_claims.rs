@@ -1011,7 +1011,7 @@ fn persisted_result(
             passed: 1,
             total: 1,
         }),
-        log_key: None,
+        runner_log_storage_key: None,
         last_error: if status == EvaluationStatus::Failed {
             Some("stale worker failure".to_string())
         } else {

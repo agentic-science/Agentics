@@ -259,7 +259,7 @@ pub struct EvaluationDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub official_summary: Option<ScoreSummary>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub log_key: Option<StorageKey>,
+    pub runner_log_storage_key: Option<StorageKey>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub started_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

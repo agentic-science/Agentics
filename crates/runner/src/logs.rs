@@ -1,9 +1,55 @@
+use agentics_config::OfficialLogRedactionMode;
 use agentics_contracts::zip_project::ZipProjectPhaseName;
+use agentics_domain::models::challenge::ChallengeBundleSpec;
 use agentics_domain::models::evaluation::ScoringMode;
 
 const OFFICIAL_LOG_REDACTION_NOTICE: &str =
     "[agentics] logs redacted for official private benchmark execution";
 pub(super) const EVALUATION_LOG_BYTES_PER_RUN: u64 = 1024 * 1024;
+
+/// Runner log exposure policy after applying evaluation mode and challenge contract.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum EvaluationLogPolicy {
+    /// Persist full runner logs and include short excerpts in runner errors.
+    FullDiagnostics,
+    /// Redact official logs because the run may touch private benchmark material.
+    RedactedOfficialPrivateBenchmark,
+}
+
+impl EvaluationLogPolicy {
+    /// Build the safest policy before the challenge contract has been loaded.
+    pub(super) const fn before_contract(
+        eval_type: ScoringMode,
+        redaction_mode: OfficialLogRedactionMode,
+    ) -> Self {
+        match (eval_type, redaction_mode) {
+            (ScoringMode::Validation, _) => Self::FullDiagnostics,
+            (ScoringMode::Official, _) => Self::RedactedOfficialPrivateBenchmark,
+        }
+    }
+
+    /// Build the final policy from scoring mode, deployment override, and challenge contract.
+    pub(super) fn for_challenge_contract(
+        eval_type: ScoringMode,
+        redaction_mode: OfficialLogRedactionMode,
+        spec: &ChallengeBundleSpec,
+    ) -> Self {
+        match (eval_type, redaction_mode) {
+            (ScoringMode::Validation, _) => Self::FullDiagnostics,
+            (ScoringMode::Official, OfficialLogRedactionMode::Always) => {
+                Self::RedactedOfficialPrivateBenchmark
+            }
+            (ScoringMode::Official, OfficialLogRedactionMode::ContractBased)
+                if spec.official_evaluation_may_expose_private_material() =>
+            {
+                Self::RedactedOfficialPrivateBenchmark
+            }
+            (ScoringMode::Official, OfficialLogRedactionMode::ContractBased) => {
+                Self::FullDiagnostics
+            }
+        }
+    }
+}
 
 /// Bounded persisted runner log accumulator for one evaluation.
 #[derive(Debug)]
@@ -107,16 +153,16 @@ pub(super) fn append_named_logs(logs: &mut EvaluationLogs, name: &str, content: 
 }
 
 /// Return log content that is safe to persist for an evaluation mode.
-pub(super) fn visible_log_content(eval_type: ScoringMode, content: &str) -> &str {
-    match eval_type {
-        ScoringMode::Validation => content,
-        ScoringMode::Official => OFFICIAL_LOG_REDACTION_NOTICE,
+pub(super) fn visible_log_content(policy: EvaluationLogPolicy, content: &str) -> &str {
+    match policy {
+        EvaluationLogPolicy::FullDiagnostics => content,
+        EvaluationLogPolicy::RedactedOfficialPrivateBenchmark => OFFICIAL_LOG_REDACTION_NOTICE,
     }
 }
 
 /// Return whether runner errors may include container log excerpts.
-pub(super) fn include_log_excerpts(eval_type: ScoringMode) -> bool {
-    matches!(eval_type, ScoringMode::Validation)
+pub(super) fn include_log_excerpts(policy: EvaluationLogPolicy) -> bool {
+    matches!(policy, EvaluationLogPolicy::FullDiagnostics)
 }
 
 /// Handles append log excerpt for this module.
@@ -143,22 +189,67 @@ pub(super) fn phase_name(phase: &ZipProjectPhaseName) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use agentics_config::OfficialLogRedactionMode;
     use agentics_domain::models::evaluation::ScoringMode;
 
     use super::{
-        EvaluationLogs, append_log_excerpt, append_named_logs, include_log_excerpts,
-        visible_log_content,
+        EvaluationLogPolicy, EvaluationLogs, append_log_excerpt, append_named_logs,
+        include_log_excerpts, visible_log_content,
     };
 
-    /// Verifies official runs never persist raw private benchmark logs.
+    /// Verifies validation runs persist raw diagnostic logs.
     #[test]
-    fn official_logs_are_redacted() {
+    fn validation_logs_keep_full_diagnostics() {
+        let sentinel = "VALIDATION_SENTINEL";
+        let visible = visible_log_content(EvaluationLogPolicy::FullDiagnostics, sentinel);
+
+        assert_eq!(visible, sentinel);
+        assert!(include_log_excerpts(EvaluationLogPolicy::FullDiagnostics));
+    }
+
+    /// Verifies official public-only contracts may persist diagnostics in contract-based mode.
+    #[test]
+    fn official_public_contract_logs_keep_full_diagnostics() {
+        let sentinel = "PUBLIC_OFFICIAL_SENTINEL";
+        let visible = visible_log_content(EvaluationLogPolicy::FullDiagnostics, sentinel);
+
+        assert_eq!(visible, sentinel);
+        assert!(include_log_excerpts(EvaluationLogPolicy::FullDiagnostics));
+    }
+
+    /// Verifies official private benchmark runs never persist raw private benchmark logs.
+    #[test]
+    fn official_private_benchmark_logs_are_redacted() {
         let sentinel = "PRIVATE_SENTINEL";
-        let visible = visible_log_content(ScoringMode::Official, sentinel);
+        let visible = visible_log_content(
+            EvaluationLogPolicy::RedactedOfficialPrivateBenchmark,
+            sentinel,
+        );
 
         assert!(!visible.contains(sentinel));
         assert!(visible.contains("redacted"));
-        assert!(!include_log_excerpts(ScoringMode::Official));
+        assert!(!include_log_excerpts(
+            EvaluationLogPolicy::RedactedOfficialPrivateBenchmark
+        ));
+    }
+
+    /// Verifies official pre-contract policy fails closed for unknown contracts.
+    #[test]
+    fn official_before_contract_logs_are_redacted() {
+        assert_eq!(
+            EvaluationLogPolicy::before_contract(
+                ScoringMode::Official,
+                OfficialLogRedactionMode::ContractBased,
+            ),
+            EvaluationLogPolicy::RedactedOfficialPrivateBenchmark
+        );
+        assert_eq!(
+            EvaluationLogPolicy::before_contract(
+                ScoringMode::Validation,
+                OfficialLogRedactionMode::Always,
+            ),
+            EvaluationLogPolicy::FullDiagnostics
+        );
     }
 
     /// Verifies official runner errors exclude raw log excerpts.

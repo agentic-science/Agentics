@@ -304,10 +304,11 @@ pub(crate) fn render_solution_submission_logs(
     match format {
         OutputFormat::Json => pretty_json(response),
         OutputFormat::Table => Ok(format!(
-            "solution_submission: {}\nlog_key: {}\ntruncated: {}\n\n{}",
+            "solution_submission: {}\navailability: {}\nrunner_log_storage_key: {}\ntruncated: {}\n\n{}",
             response.solution_submission_id,
+            response.availability,
             response
-                .log_key
+                .runner_log_storage_key
                 .as_ref()
                 .map_or("none", agentics_storage::StorageKey::as_str),
             response.truncated,

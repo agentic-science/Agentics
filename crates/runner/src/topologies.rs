@@ -79,12 +79,12 @@ pub(super) async fn run_setup_and_build(
         append_phase_logs(
             logs,
             phase.name,
-            visible_log_content(request.eval_type, &outcome.logs),
+            visible_log_content(request.log_policy, &outcome.logs),
         );
         ensure_container_succeeded(
             phase.name,
             &outcome,
-            include_log_excerpts(request.eval_type),
+            include_log_excerpts(request.log_policy),
         )?;
         ensure_disk_limit(request.build_root, limits.disk_limit_mb, phase.name).await?;
     }
@@ -157,12 +157,12 @@ async fn run_setup_and_build_bounded(
         append_phase_logs(
             logs,
             phase.name,
-            visible_log_content(request.eval_type, &outcome.logs),
+            visible_log_content(request.log_policy, &outcome.logs),
         );
         ensure_container_succeeded(
             phase.name,
             &outcome,
-            include_log_excerpts(request.eval_type),
+            include_log_excerpts(request.log_policy),
         )?;
         ensure_disk_limit(workspace.path(), limits.disk_limit_mb, phase.name).await?;
         retained_workspace = Some(RetainedRunnerTree::leased(workspace));
@@ -263,12 +263,12 @@ pub(super) async fn run_solution_invocations(
         append_run_logs(
             logs,
             run_alias.as_str(),
-            visible_log_content(request.eval_type, &outcome.logs),
+            visible_log_content(request.log_policy, &outcome.logs),
         );
         ensure_container_succeeded(
             ZipProjectPhaseName::Run,
             &outcome,
-            include_log_excerpts(request.eval_type),
+            include_log_excerpts(request.log_policy),
         )?;
         write_run_metadata(&io_root, run, run_alias.as_str(), &outcome).await?;
         ensure_disk_limit(&io_root, limits.disk_limit_mb, ZipProjectPhaseName::Run).await?;
@@ -377,7 +377,7 @@ pub(super) async fn run_evaluator(
     append_named_logs(
         logs,
         "separated-evaluator",
-        visible_log_content(request.eval_type, &outcome.logs),
+        visible_log_content(request.log_policy, &outcome.logs),
     );
     if outcome.timed_out || outcome.exit_code != 0 {
         return Err(ServiceError::Runner(format!(
@@ -411,6 +411,7 @@ pub(super) async fn run_piped_stdio_session(
             accelerator: request.accelerator,
             target: request.target,
             eval_type: request.eval_type,
+            log_policy: request.log_policy,
             bundle_dir: request.bundle_dir,
             setup_root: request.setup_root,
         },
@@ -575,12 +576,12 @@ pub(super) async fn run_piped_stdio_session(
     append_named_logs(
         logs,
         "participant",
-        visible_log_content(request.eval_type, &outcome.participant.logs),
+        visible_log_content(request.log_policy, &outcome.participant.logs),
     );
     append_named_logs(
         logs,
         "interactive-evaluator",
-        visible_log_content(request.eval_type, &outcome.interactive_evaluator.logs),
+        visible_log_content(request.log_policy, &outcome.interactive_evaluator.logs),
     );
     if outcome.participant.timed_out || outcome.participant.exit_code != 0 {
         return Err(ServiceError::Runner(format!(
@@ -625,6 +626,7 @@ pub(super) async fn run_coexecuted_benchmark(
                         accelerator: request.accelerator,
                         target: request.target,
                         eval_type: request.eval_type,
+                        log_policy: request.log_policy,
                         setup,
                         bundle_dir: request.bundle_dir,
                         setup_root: request.setup_root,
@@ -710,7 +712,7 @@ pub(super) async fn run_coexecuted_benchmark(
     append_named_logs(
         logs,
         "coexecuted-evaluator",
-        visible_log_content(request.eval_type, &outcome.logs),
+        visible_log_content(request.log_policy, &outcome.logs),
     );
     if outcome.timed_out || outcome.exit_code != 0 {
         return Err(ServiceError::Runner(format!(

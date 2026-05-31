@@ -168,6 +168,19 @@ fn mode_config_values_deserialize_through_typed_parsers() {
         "xfs-project-quota-slots"
     );
     assert_eq!(
+        serde_json::from_value::<super::OfficialLogRedactionMode>(serde_json::json!(
+            "contract_based"
+        ))
+        .unwrap(),
+        super::OfficialLogRedactionMode::ContractBased
+    );
+    assert_eq!(
+        serde_json::from_value::<super::OfficialLogRedactionMode>(serde_json::json!("always"))
+            .unwrap()
+            .as_str(),
+        "always"
+    );
+    assert_eq!(
         serde_json::from_value::<super::RunnerNamespace>(serde_json::json!("compose-dev_1"))
             .unwrap()
             .as_str(),
@@ -179,7 +192,33 @@ fn mode_config_values_deserialize_through_typed_parsers() {
         ))
         .is_err()
     );
+    assert!(
+        serde_json::from_value::<super::OfficialLogRedactionMode>(serde_json::json!("private"))
+            .is_err()
+    );
     assert!(super::RunnerNamespace::try_new("../prod").is_err());
+}
+
+/// Verifies official log redaction defaults to contract-based diagnostics and accepts env override.
+#[test]
+fn official_log_redaction_env_defaults_and_overrides() {
+    let default_config = test_config();
+    assert_eq!(
+        default_config.runner.official_log_redaction,
+        super::OfficialLogRedactionMode::ContractBased
+    );
+
+    let raw = super::RawAppEnv::from_env_iter([(
+        "AGENTICS_OFFICIAL_LOG_REDACTION".to_string(),
+        "always".to_string(),
+    )])
+    .expect("official log redaction env should deserialize");
+    let config = Config::try_from(raw).expect("raw env should convert");
+
+    assert_eq!(
+        config.runner.official_log_redaction,
+        super::OfficialLogRedactionMode::Always
+    );
 }
 
 /// Verifies durable storage defaults point at local RustFS-compatible S3.

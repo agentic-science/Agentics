@@ -61,9 +61,12 @@ Request deserialization rules 与 response serialization rules 分开处理。
 只有 canonical lookup values 才使用 `*_key`，不要把 `key` 当作 `id`、
 `name`、`path` 或 `url` 的通用替代词。
 
-- `storage_key`、`artifact_key` 和 `log_key` 是相对于 Agentics storage
+- `storage_key`、`artifact_key` 和 `runner_log_storage_key` 是相对于 Agentics storage
   backend 的 opaque object-storage keys。它们不是 filesystem paths、URLs 或
   URIs，即使 local development 会把它们映射到磁盘文件。
+- `runner_log_storage_key` 只应出现在 submitter-visible logs response 或 caller
+  有权限读取该 runner log 的 internal/admin DTO 中。Public unauthenticated result
+  surfaces 必须省略它。
 - `repo_url` 是 contributor 提交的 GitHub remote，应保留用于 provenance
   和 display。
 - `repo_key` 是用于 duplicate detection 和 authorization 的 canonical
@@ -72,6 +75,11 @@ Request deserialization rules 与 response serialization rules 分开处理。
 
 如果一个值本质上是 object-storage key，不要暴露含糊的 `path` 或 `uri`
 字段。如果需要保留原始 remote，不要用 `repo_key` 替代 `repo_url`。
+
+`SolutionSubmissionLogsResponse.availability` 用来解释 logs endpoint 是否返回了内容。
+`available` 表示可以返回 `runner_log_storage_key` 和 `content`。`not_persisted`、
+`redacted_private_official` 和 `redacted_by_config` 都不得暴露 runner log storage key
+或 inline log content。
 
 ## Schema Generation
 

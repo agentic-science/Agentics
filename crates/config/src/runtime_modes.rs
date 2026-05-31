@@ -47,6 +47,15 @@ pub enum RunnerSecurityProfile {
     Production,
 }
 
+/// Policy for official-evaluation runner log redaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OfficialLogRedactionMode {
+    /// Redact official logs only when the challenge contract may expose private material.
+    ContractBased,
+    /// Redact every official evaluation regardless of challenge contract.
+    Always,
+}
+
 /// Logical owner namespace for Docker runner containers on a shared daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RunnerNamespace(String);
@@ -110,6 +119,42 @@ impl FromStr for RunnerSecurityProfile {
                 "AGENTICS_RUNNER_SECURITY_PROFILE must be `development` or `production`, got `{other}`"
             ),
         }
+    }
+}
+
+impl OfficialLogRedactionMode {
+    /// Stable environment string for this official-log redaction policy.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::ContractBased => "contract_based",
+            Self::Always => "always",
+        }
+    }
+}
+
+impl FromStr for OfficialLogRedactionMode {
+    type Err = anyhow::Error;
+
+    /// Parse the configured official-log redaction mode.
+    fn from_str(value: &str) -> anyhow::Result<Self> {
+        match value.trim() {
+            "contract_based" => Ok(Self::ContractBased),
+            "always" => Ok(Self::Always),
+            other => anyhow::bail!(
+                "AGENTICS_OFFICIAL_LOG_REDACTION must be `contract_based` or `always`, got `{other}`"
+            ),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for OfficialLogRedactionMode {
+    /// Deserialize one official-log redaction mode through the canonical parser.
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::from_str(&value).map_err(serde::de::Error::custom)
     }
 }
 

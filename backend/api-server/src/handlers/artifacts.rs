@@ -3,12 +3,14 @@
 use axum::Json;
 
 use crate::error::ApiResult as Result;
+use agentics_config::OfficialLogRedactionMode;
 use agentics_contracts::validation::archive::inspect_zip_bytes;
 use agentics_contracts::zip_project::{MAX_ZIP_PROJECT_ARTIFACT_BYTES, zip_project_archive_policy};
 use agentics_domain::models::request::{
     SolutionSubmissionArtifactFileDto, SolutionSubmissionArtifactResponse,
-    SolutionSubmissionLogsResponse,
+    SolutionSubmissionLogAvailability, SolutionSubmissionLogsResponse,
 };
+use agentics_domain::storage::StorageKey;
 use agentics_error::ServiceError;
 use agentics_persistence::SolutionSubmissionRecord;
 
@@ -30,25 +32,21 @@ pub(super) async fn read_solution_submission_artifact_summary(
     .map_err(|e| ServiceError::Internal(format!("artifact summary task failed: {e}")))?
 }
 
-/// Read a submitter-visible validation log response, truncating the payload for transport.
-///
-/// Official logs can contain evaluator output from private benchmark execution, so
-/// they are intentionally not part of the participant-facing log surface.
+/// Read a submitter-visible runner log response, truncating the payload for transport.
 pub(super) async fn read_solution_submission_logs(
     state: &AppState,
     solution_submission: &SolutionSubmissionRecord,
 ) -> Result<Json<SolutionSubmissionLogsResponse>> {
     const MAX_LOG_RESPONSE_BYTES: usize = 200_000;
 
-    let log_key = solution_submission
-        .validation_evaluation
-        .as_ref()
-        .and_then(|evaluation| evaluation.log_key.clone());
+    let (runner_log_storage_key, availability) =
+        submitter_visible_runner_log_storage_key(state, solution_submission);
 
-    let Some(log_key) = log_key else {
+    let Some(runner_log_storage_key) = runner_log_storage_key else {
         return Ok(Json(SolutionSubmissionLogsResponse {
             solution_submission_id: solution_submission.id.clone(),
-            log_key: None,
+            availability,
+            runner_log_storage_key: None,
             content: None,
             truncated: false,
         }));
@@ -63,7 +61,7 @@ pub(super) async fn read_solution_submission_logs(
     let bytes = state
         .storage
         .get(
-            &log_key,
+            &runner_log_storage_key,
             agentics_storage::StorageWriteIntent::new("runner log", max_stored_log_bytes),
         )
         .await?;
@@ -79,10 +77,51 @@ pub(super) async fn read_solution_submission_logs(
 
     Ok(Json(SolutionSubmissionLogsResponse {
         solution_submission_id: solution_submission.id.clone(),
-        log_key: Some(log_key),
+        availability,
+        runner_log_storage_key: Some(runner_log_storage_key),
         content: Some(content),
         truncated,
     }))
+}
+
+/// Select the runner log storage key this submitter is allowed to read.
+fn submitter_visible_runner_log_storage_key(
+    state: &AppState,
+    solution_submission: &SolutionSubmissionRecord,
+) -> (Option<StorageKey>, SolutionSubmissionLogAvailability) {
+    if let Some(evaluation) = solution_submission.validation_evaluation.as_ref() {
+        return available_or_missing(evaluation.runner_log_storage_key.clone());
+    }
+
+    let Some(evaluation) = solution_submission.official_evaluation.as_ref() else {
+        return (None, SolutionSubmissionLogAvailability::NotPersisted);
+    };
+
+    if state.config.runner.official_log_redaction == OfficialLogRedactionMode::Always {
+        return (None, SolutionSubmissionLogAvailability::RedactedByConfig);
+    }
+
+    if solution_submission
+        .challenge_spec
+        .official_evaluation_may_expose_private_material()
+    {
+        return (
+            None,
+            SolutionSubmissionLogAvailability::RedactedPrivateOfficial,
+        );
+    }
+
+    available_or_missing(evaluation.runner_log_storage_key.clone())
+}
+
+/// Convert an optional persisted log key into its response availability state.
+fn available_or_missing(
+    runner_log_storage_key: Option<StorageKey>,
+) -> (Option<StorageKey>, SolutionSubmissionLogAvailability) {
+    match runner_log_storage_key {
+        Some(key) => (Some(key), SolutionSubmissionLogAvailability::Available),
+        None => (None, SolutionSubmissionLogAvailability::NotPersisted),
+    }
 }
 
 pub(super) fn solution_artifact_intent() -> agentics_storage::StorageWriteIntent {

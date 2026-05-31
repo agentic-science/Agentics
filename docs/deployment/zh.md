@@ -106,9 +106,13 @@ Local development：
    just dev::up
    ```
 
-   这个 recipe 也会按需启动 persistent private-bundle backup RustFS service，
-   把 private bundles 恢复到 dev RustFS service，用这些 overlays 准备 non-GPU
-   migrated Frontier-CS challenges，并写入匹配的 public test solutions。
+   这个 recipe 会启动本地 Postgres、RustFS、API、worker 和 web services，从
+   `challenge-repos/agentics-challenges/dev/challenges` 准备 dev challenge
+   catalog，并写入匹配的 public test solutions。它不会启动，也不要求 persistent
+   private-bundle backup RustFS service。
+
+   Dev database 名称是 `agentics_dev`。如果旧的 Compose volume 里仍然有
+   `agentics_demo`，请先重置这个 disposable local dev volume，再启动 stack。
 
 2. 在另一个 terminal 跟随 logs：
 
@@ -330,6 +334,8 @@ Hosted MVP 在接受 public evaluation jobs 前使用 Linux-only storage profile
   solution 的 `setup`、`build` 和 `run` phases，也覆盖 evaluator 的 `prepare`
   和 `score` phases。
 - 使用 `AGENTICS_RUNNER_SECURITY_PROFILE=production`、
+  在 operators 需要 blanket official log redaction 时设置
+  `AGENTICS_OFFICIAL_LOG_REDACTION=always`、
   `AGENTICS_WORKER_ACCELERATORS=gpu`、
   `AGENTICS_WORKER_GPU_PROBE_IMAGE`、
   `AGENTICS_DGX_DOCKER_DATA_ROOT`、
@@ -343,6 +349,10 @@ Hosted MVP 在接受 public evaluation jobs 前使用 Linux-only storage profile
   和 digest-pinned images。
 - Local Compose development 保持宽松；strict storage probe 属于 hosted Linux
   staging 和 DGX-hosted workers。
+- `AGENTICS_OFFICIAL_LOG_REDACTION=contract_based` 是默认值，只会为使用
+  public-only official material 的 contracts 保留 official runner diagnostics。
+  如果 hosted deployments 希望保留旧的 blanket official-log redaction 行为，请设置为
+  `always`。
 
 选择这个组合的原因是 Docker writable-layer quotas 和 bounded mounts
 保护的是不同路径。`storage_opt.size` 覆盖 package caches 或意外写入非挂载路径等

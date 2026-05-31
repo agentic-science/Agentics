@@ -2,7 +2,9 @@ use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use chrono::{DateTime, Utc};
 
-use agentics_domain::models::challenge::{ChallengeBundleSpec, ChallengeEligibilityType};
+use agentics_domain::models::challenge::{
+    ChallengeBundleSpec, ChallengeEligibilityType, ChallengeExecutionSpec,
+};
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::AgentId;
 use agentics_domain::models::names::{ChallengeName, TargetName};
@@ -92,13 +94,28 @@ fn ensure_target_supports_eval_type(
             "validation pass is disabled for this challenge and target".to_string(),
         ));
     }
-    if eval_type == ScoringMode::Official && !spec.datasets.private_benchmark_enabled {
+    if eval_type == ScoringMode::Official && !execution_declares_official_runs(&spec.execution) {
         return Err(ServiceError::BadRequest(
-            "challenge does not have private benchmark data enabled".to_string(),
+            "challenge does not support official evaluation".to_string(),
         ));
     }
 
     Ok(())
+}
+
+/// Return whether the challenge contract declares an official evaluation path.
+fn execution_declares_official_runs(execution: &ChallengeExecutionSpec) -> bool {
+    match execution {
+        ChallengeExecutionSpec::SeparatedEvaluator(spec) => {
+            spec.official_runs.is_some() || spec.official_evaluation_setup.is_some()
+        }
+        ChallengeExecutionSpec::PipedStdio(spec) => {
+            spec.official_session.is_some() || spec.official_evaluation_setup.is_some()
+        }
+        ChallengeExecutionSpec::CoexecutedBenchmark(spec) => {
+            spec.official_evaluation_setup.is_some()
+        }
+    }
 }
 
 /// Lock an active challenge row for an admission transaction.

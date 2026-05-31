@@ -83,8 +83,8 @@ use limits::{
     evaluator_setup_limits, writable_phase_for_solution_phase,
 };
 use logs::{
-    EVALUATION_LOG_BYTES_PER_RUN, EvaluationLogs, append_named_logs, append_phase_logs,
-    append_run_logs, include_log_excerpts, phase_name, visible_log_content,
+    EVALUATION_LOG_BYTES_PER_RUN, EvaluationLogPolicy, EvaluationLogs, append_named_logs,
+    append_phase_logs, append_run_logs, include_log_excerpts, phase_name, visible_log_content,
 };
 use run_io::{
     copy_evaluator_visible_run_tree, ensure_declared_outputs_exist, make_container_readable_tree,
@@ -99,7 +99,7 @@ pub struct ExecutionResult {
     /// Parsed and completed `result.json` emitted by the evaluator.
     pub result: EvaluatorRunResult,
     /// Storage-relative path to stdout and stderr captured from runner containers.
-    pub log_key: StorageKey,
+    pub runner_log_storage_key: StorageKey,
 }
 
 /// Docker-backed runner handle used by workers and local validation.
@@ -184,6 +184,7 @@ pub async fn remove_stale_local_validation_containers(
 /// Carries solution run request data across this module boundary.
 struct SolutionRunRequest<'a> {
     eval_type: ScoringMode,
+    log_policy: EvaluationLogPolicy,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
     accelerator: TargetAccelerator,
@@ -199,7 +200,7 @@ struct SolutionRunRequest<'a> {
 #[derive(Clone, Copy)]
 /// Carries setup build request data across this module boundary.
 struct SetupBuildRequest<'a> {
-    eval_type: ScoringMode,
+    log_policy: EvaluationLogPolicy,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
     accelerator: TargetAccelerator,
@@ -211,6 +212,7 @@ struct SetupBuildRequest<'a> {
 /// Carries evaluator request data across this module boundary.
 struct EvaluatorRequest<'a> {
     eval_type: ScoringMode,
+    log_policy: EvaluationLogPolicy,
     spec: &'a ChallengeBundleSpec,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
@@ -226,6 +228,7 @@ struct EvaluatorRequest<'a> {
 /// Carries piped-stdio session request data across this module boundary.
 struct PipedStdioRequest<'a> {
     eval_type: ScoringMode,
+    log_policy: EvaluationLogPolicy,
     spec: &'a ChallengeBundleSpec,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
@@ -245,6 +248,7 @@ struct PipedStdioRequest<'a> {
 /// Carries coexecuted-evaluator request data across this module boundary.
 struct CoexecutedBenchmarkRequest<'a> {
     eval_type: ScoringMode,
+    log_policy: EvaluationLogPolicy,
     spec: &'a ChallengeBundleSpec,
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
@@ -280,6 +284,7 @@ struct RunPlanRequest<'a> {
     accelerator: TargetAccelerator,
     target: &'a str,
     eval_type: ScoringMode,
+    log_policy: EvaluationLogPolicy,
     bundle_dir: &'a Path,
     setup_root: &'a Path,
 }
@@ -293,6 +298,7 @@ struct SessionPlanRequest<'a> {
     accelerator: TargetAccelerator,
     target: &'a str,
     eval_type: ScoringMode,
+    log_policy: EvaluationLogPolicy,
     bundle_dir: &'a Path,
     setup_root: &'a Path,
 }
@@ -305,6 +311,7 @@ struct EvaluatorSetupRequest<'a> {
     accelerator: TargetAccelerator,
     target: &'a str,
     eval_type: ScoringMode,
+    log_policy: EvaluationLogPolicy,
     setup: &'a ChallengeSetupSpec,
     bundle_dir: &'a Path,
     setup_root: &'a Path,
@@ -318,6 +325,7 @@ struct PipedStdioSetupRequest<'a> {
     accelerator: TargetAccelerator,
     target: &'a str,
     eval_type: ScoringMode,
+    log_policy: EvaluationLogPolicy,
     setup: &'a PipedStdioSetupSpec,
     bundle_dir: &'a Path,
     setup_root: &'a Path,
@@ -331,6 +339,7 @@ struct CoexecutedBenchmarkSetupRequest<'a> {
     accelerator: TargetAccelerator,
     target: &'a str,
     eval_type: ScoringMode,
+    log_policy: EvaluationLogPolicy,
     setup: &'a CoexecutedBenchmarkSetupSpec,
     bundle_dir: &'a Path,
     setup_root: &'a Path,
@@ -371,17 +380,17 @@ impl std::fmt::Debug for EvaluationJobExecution<'_> {
 }
 
 /// Return the durable storage key used for one runner log.
-pub fn evaluation_runner_log_key(job_id: &str, attempt_count: i32) -> Result<StorageKey> {
+pub fn evaluation_runner_log_storage_key(job_id: &str, attempt_count: i32) -> Result<StorageKey> {
     Ok(StorageKey::try_new(format!(
         "eval-artifacts/{job_id}/attempt-{attempt_count}/runner.log"
     ))?)
 }
 
 /// Remove private official benchmark identifiers from runner errors crossing trust boundaries.
-fn sanitize_runner_error(eval_type: ScoringMode, error: ServiceError) -> ServiceError {
-    match eval_type {
-        ScoringMode::Validation => error,
-        ScoringMode::Official => ServiceError::Runner(
+fn sanitize_runner_error(log_policy: EvaluationLogPolicy, error: ServiceError) -> ServiceError {
+    match log_policy {
+        EvaluationLogPolicy::FullDiagnostics => error,
+        EvaluationLogPolicy::RedactedOfficialPrivateBenchmark => ServiceError::Runner(
             "official evaluation failed; runner details are redacted for private benchmark execution"
                 .to_string(),
         ),
@@ -495,6 +504,7 @@ async fn resolve_run_plan(
                     accelerator: request.accelerator,
                     target: request.target,
                     eval_type: request.eval_type,
+                    log_policy: request.log_policy,
                     setup,
                     bundle_dir: request.bundle_dir,
                     setup_root: request.setup_root,
@@ -552,6 +562,7 @@ async fn resolve_piped_stdio_session_plan(
                     accelerator: request.accelerator,
                     target: request.target,
                     eval_type: request.eval_type,
+                    log_policy: request.log_policy,
                     setup,
                     bundle_dir: request.bundle_dir,
                     setup_root: request.setup_root,
@@ -650,9 +661,9 @@ async fn run_evaluator_setup_phase(
     append_named_logs(
         logs,
         &format!("setup-{}", request.eval_type.evaluator_mode_arg()),
-        visible_log_content(request.eval_type, &outcome.logs),
+        visible_log_content(request.log_policy, &outcome.logs),
     );
-    ensure_setup_succeeded(&outcome, include_log_excerpts(request.eval_type))?;
+    ensure_setup_succeeded(&outcome, include_log_excerpts(request.log_policy))?;
     ensure_setup_disk_limit(setup_mount.path(), limits.disk_limit_mb).await?;
     make_container_readable_tree(setup_mount.path()).await?;
 
@@ -724,9 +735,9 @@ async fn run_piped_stdio_setup_phase(
     append_named_logs(
         logs,
         &format!("setup-{}", request.eval_type.evaluator_mode_arg()),
-        visible_log_content(request.eval_type, &outcome.logs),
+        visible_log_content(request.log_policy, &outcome.logs),
     );
-    ensure_setup_succeeded(&outcome, include_log_excerpts(request.eval_type))?;
+    ensure_setup_succeeded(&outcome, include_log_excerpts(request.log_policy))?;
     ensure_setup_disk_limit(setup_mount.path(), limits.disk_limit_mb).await?;
     make_container_readable_tree(setup_mount.path()).await?;
 
@@ -797,9 +808,9 @@ async fn run_coexecuted_benchmark_setup_phase(
     append_named_logs(
         logs,
         &format!("setup-{}", request.eval_type.evaluator_mode_arg()),
-        visible_log_content(request.eval_type, &outcome.logs),
+        visible_log_content(request.log_policy, &outcome.logs),
     );
-    ensure_setup_succeeded(&outcome, include_log_excerpts(request.eval_type))?;
+    ensure_setup_succeeded(&outcome, include_log_excerpts(request.log_policy))?;
     ensure_setup_disk_limit(setup_mount.path(), limits.disk_limit_mb).await?;
     make_container_readable_tree(setup_mount.path()).await?;
 

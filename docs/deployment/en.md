@@ -113,10 +113,15 @@ For local development:
    just dev::up
    ```
 
-   The recipe also starts the persistent private-bundle backup RustFS service
-   if needed, restores private bundles into the dev RustFS service, prepares
-   the non-GPU migrated Frontier-CS challenges with those overlays, and stages
-   matching public test solutions.
+   The recipe starts the local Postgres, RustFS, API, worker, and web services,
+   prepares the dev challenge catalog from
+   `challenge-repos/agentics-challenges/dev/challenges`, and stages matching
+   public test solutions. It does not start or require the persistent
+   private-bundle backup RustFS service.
+
+   The dev database name is `agentics_dev`. If an older Compose volume still
+   contains `agentics_demo`, reset the disposable local dev volume before
+   starting the stack.
 
 2. Follow logs from another terminal:
 
@@ -354,6 +359,8 @@ evaluation jobs:
   `score` phases.
 - Configure the worker with
   `AGENTICS_RUNNER_SECURITY_PROFILE=production`,
+  `AGENTICS_OFFICIAL_LOG_REDACTION=always` when operators want blanket official
+  log redaction,
   `AGENTICS_WORKER_ACCELERATORS=gpu`,
   `AGENTICS_WORKER_GPU_PROBE_IMAGE`,
   `AGENTICS_DGX_DOCKER_DATA_ROOT`,
@@ -367,6 +374,10 @@ evaluation jobs:
   and digest-pinned images.
 - Keep local Compose development permissive. The strict storage probe belongs to
   hosted Linux staging and DGX-hosted workers.
+- `AGENTICS_OFFICIAL_LOG_REDACTION=contract_based` is the default and keeps
+  official runner diagnostics only for contracts that use public-only official
+  material. Set it to `always` in hosted deployments that prefer the previous
+  blanket official-log redaction behavior.
 
 This combination is chosen because Docker writable-layer quotas and bounded
 mounts protect different paths. `storage_opt.size` covers container-layer writes

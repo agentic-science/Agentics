@@ -4,13 +4,14 @@ use super::topologies::{
 };
 use super::{
     ChallengeExecutionSpec, CoexecutedBenchmarkRequest, Docker, EVALUATION_LOG_BYTES_PER_RUN,
-    EvaluationJobExecution, EvaluationLimitConfig, EvaluationLogs, EvaluatorRequest,
-    EvaluatorRunResult, ExecutionResult, JobRequirement, OutputTreeLimits, PipedStdioRequest,
-    Result, RetainedRunnerTree, RunPlanRequest, RunnerAttempt, RunnerContext, RunnerStorage,
-    ScoringMode, ServiceError, SetupBuildRequest, SolutionRunRequest, append_named_logs,
-    cleanup_paths, configure_run_count_limits, create_private_host_dir, evaluation_runner_log_key,
-    extract_zip_safe, make_container_readable_tree, read_limited_result_json, resolve_run_plan,
-    sanitize_runner_error, validate_evaluator_result, visible_log_content,
+    EvaluationJobExecution, EvaluationLimitConfig, EvaluationLogPolicy, EvaluationLogs,
+    EvaluatorRequest, EvaluatorRunResult, ExecutionResult, JobRequirement, OutputTreeLimits,
+    PipedStdioRequest, Result, RetainedRunnerTree, RunPlanRequest, RunnerAttempt, RunnerContext,
+    RunnerStorage, ScoringMode, ServiceError, SetupBuildRequest, SolutionRunRequest,
+    append_named_logs, cleanup_paths, configure_run_count_limits, create_private_host_dir,
+    evaluation_runner_log_storage_key, extract_zip_safe, make_container_readable_tree,
+    read_limited_result_json, resolve_run_plan, sanitize_runner_error, validate_evaluator_result,
+    visible_log_content,
 };
 use agentics_storage::StorageError;
 
@@ -43,7 +44,7 @@ pub(crate) async fn execute_evaluation_job(
     let session_root = working_root.join("session");
     let evaluator_output_root = working_root.join("evaluator-output");
     let challenge_bundle_root = working_root.join("challenge-bundle");
-    let log_key = evaluation_runner_log_key(job_id, attempt_count)?;
+    let runner_log_storage_key = evaluation_runner_log_storage_key(job_id, attempt_count)?;
 
     create_private_host_dir(&artifact_root).await?;
     cleanup_paths([working_root.clone()]).await?;
@@ -81,6 +82,8 @@ pub(crate) async fn execute_evaluation_job(
         attempt: &attempt,
         container_scope,
     };
+    let mut log_policy =
+        EvaluationLogPolicy::before_contract(eval_type, config.runner.official_log_redaction);
 
     let execution = async {
         let bundle_key = match eval_type {
@@ -106,6 +109,12 @@ pub(crate) async fn execute_evaluation_job(
         let bundle_dir = challenge_bundle_root.as_path();
         let spec =
             agentics_contracts::challenge_bundle::read_challenge_bundle_spec(bundle_dir).await?;
+        log_policy = EvaluationLogPolicy::for_challenge_contract(
+            eval_type,
+            config.runner.official_log_redaction,
+            &spec,
+        );
+        let current_log_policy = log_policy;
         if config.requires_digest_pinned_images() {
             agentics_contracts::challenge_bundle::validate_digest_pinned_images(&spec)?;
         }
@@ -152,7 +161,7 @@ pub(crate) async fn execute_evaluation_job(
         let build_workspace = run_setup_and_build(
             runner_context,
             SetupBuildRequest {
-                eval_type,
+                log_policy: current_log_policy,
                 profile,
                 docker_platform: job_requirement.docker_platform,
                 accelerator: job_requirement.accelerator,
@@ -175,6 +184,7 @@ pub(crate) async fn execute_evaluation_job(
                         accelerator: job_requirement.accelerator,
                         target: target.name.as_str(),
                         eval_type,
+                        log_policy: current_log_policy,
                         bundle_dir,
                         setup_root: &setup_root,
                     },
@@ -186,6 +196,7 @@ pub(crate) async fn execute_evaluation_job(
                     runner_context,
                     SolutionRunRequest {
                         eval_type,
+                        log_policy: current_log_policy,
                         profile,
                         docker_platform: job_requirement.docker_platform,
                         accelerator: job_requirement.accelerator,
@@ -205,6 +216,7 @@ pub(crate) async fn execute_evaluation_job(
                     runner_context,
                     EvaluatorRequest {
                         eval_type,
+                        log_policy: current_log_policy,
                         spec: &spec,
                         profile,
                         docker_platform: job_requirement.docker_platform,
@@ -226,6 +238,7 @@ pub(crate) async fn execute_evaluation_job(
                     runner_context,
                     PipedStdioRequest {
                         eval_type,
+                        log_policy: current_log_policy,
                         spec: &spec,
                         profile,
                         docker_platform: job_requirement.docker_platform,
@@ -255,6 +268,7 @@ pub(crate) async fn execute_evaluation_job(
                     runner_context,
                     CoexecutedBenchmarkRequest {
                         eval_type,
+                        log_policy: current_log_policy,
                         spec: &spec,
                         profile,
                         docker_platform: job_requirement.docker_platform,
@@ -281,20 +295,20 @@ pub(crate) async fn execute_evaluation_job(
             append_named_logs(
                 &mut logs,
                 "evaluator:result.logs",
-                visible_log_content(eval_type, &result_logs),
+                visible_log_content(current_log_policy, &result_logs),
             );
         }
 
         Ok(ExecutionResult {
             result,
-            log_key: log_key.clone(),
+            runner_log_storage_key: runner_log_storage_key.clone(),
         })
     }
     .await;
 
     let log_write = storage
         .put(
-            &log_key,
+            &runner_log_storage_key,
             logs.as_bytes(),
             agentics_storage::StorageWriteIntent::new("runner log", max_log_bytes),
         )
@@ -307,10 +321,10 @@ pub(crate) async fn execute_evaluation_job(
         (Ok(_), Err(log_err), Err(cleanup_err)) => Err(ServiceError::Runner(format!(
             "{log_err}; additionally failed to clean runner workspace: {cleanup_err}"
         ))),
-        (Err(run_err), _, Ok(())) => Err(sanitize_runner_error(eval_type, run_err)),
+        (Err(run_err), _, Ok(())) => Err(sanitize_runner_error(log_policy, run_err)),
         (Err(run_err), _, Err(cleanup_err)) => Err(ServiceError::Runner(format!(
             "{}; additionally failed to clean runner workspace: {cleanup_err}",
-            sanitize_runner_error(eval_type, run_err)
+            sanitize_runner_error(log_policy, run_err)
         ))),
     }
 }

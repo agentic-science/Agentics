@@ -597,6 +597,45 @@ fn enabled_private_benchmark_requires_directory() {
     assert!(validate_challenge_bundle_spec(&spec).is_err());
 }
 
+/// Verifies official diagnostics are private-sensitive when private benchmark data is enabled.
+#[test]
+fn official_log_contract_marks_private_benchmark_enabled_as_sensitive() {
+    let spec = base_spec();
+
+    assert!(spec.official_evaluation_may_expose_private_material());
+}
+
+/// Verifies setup-generated official inputs are conservatively private-sensitive.
+#[test]
+fn official_log_contract_marks_official_setup_as_sensitive() {
+    let mut spec = base_spec();
+    spec.datasets.private_benchmark_enabled = false;
+    let execution = separated_evaluator_mut(&mut spec);
+    execution.official_runs = None;
+    execution.official_evaluation_setup = Some(setup_spec());
+
+    assert!(spec.official_evaluation_may_expose_private_material());
+}
+
+/// Verifies static public-only official manifests may keep diagnostics.
+#[test]
+fn official_log_contract_marks_public_static_official_runs_as_diagnostic_safe() {
+    let mut spec = base_spec();
+    spec.datasets.private_benchmark_enabled = false;
+    separated_evaluator_mut(&mut spec).official_runs = Some(bundle_path("public/runs.json"));
+
+    assert!(!spec.official_evaluation_may_expose_private_material());
+}
+
+/// Verifies static official manifests outside the public dataset remain private-sensitive.
+#[test]
+fn official_log_contract_marks_non_public_static_official_runs_as_sensitive() {
+    let mut spec = base_spec();
+    spec.datasets.private_benchmark_enabled = false;
+
+    assert!(spec.official_evaluation_may_expose_private_material());
+}
+
 /// Verifies that validation run manifest required only when target enables validation.
 #[test]
 fn validation_run_manifest_required_only_when_target_enables_validation() {

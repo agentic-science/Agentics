@@ -442,7 +442,7 @@ fn official_solution_submission_response() -> SolutionSubmissionResponse {
             public_results: vec![],
             validation_summary: None,
             official_summary: None,
-            log_key: None,
+            runner_log_storage_key: None,
             started_at: Some("2026-04-28T00:00:00Z".to_string()),
             finished_at: Some("2026-04-28T00:00:42Z".to_string()),
         }),

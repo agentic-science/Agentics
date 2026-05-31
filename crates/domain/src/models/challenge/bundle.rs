@@ -66,6 +66,32 @@ impl ChallengeBundleSpec {
             _ => None,
         }
     }
+
+    /// Return whether official runner diagnostics may contain private benchmark material.
+    pub fn official_evaluation_may_expose_private_material(&self) -> bool {
+        if self.datasets.private_benchmark_enabled || self.execution.has_official_evaluation_setup()
+        {
+            return true;
+        }
+
+        match &self.execution {
+            ChallengeExecutionSpec::SeparatedEvaluator(spec) => {
+                spec.official_runs.as_ref().is_none_or(|path| {
+                    !path
+                        .as_path()
+                        .starts_with(self.datasets.public_dir.as_path())
+                })
+            }
+            ChallengeExecutionSpec::PipedStdio(spec) => {
+                spec.official_session.as_ref().is_none_or(|path| {
+                    !path
+                        .as_path()
+                        .starts_with(self.datasets.public_dir.as_path())
+                })
+            }
+            ChallengeExecutionSpec::CoexecutedBenchmark(_) => false,
+        }
+    }
 }
 
 /// Public projection of a challenge contract safe for unauthenticated clients.

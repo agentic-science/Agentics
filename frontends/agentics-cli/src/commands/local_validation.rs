@@ -191,8 +191,9 @@ async fn execute_local_validation_targets(
             challenge_name: context.spec.challenge_name.clone(),
             target: target.clone(),
         };
-        let log_key = agentics_runner::evaluation_runner_log_key(&job_id, 1)?;
-        let log_path = context.storage_root.join(log_key.as_str());
+        let runner_log_storage_key =
+            agentics_runner::evaluation_runner_log_storage_key(&job_id, 1)?;
+        let log_path = context.storage_root.join(runner_log_storage_key.as_str());
         match runner
             .execute_evaluation_job(agentics_runner::EvaluationJobExecution {
                 config: &context.config,

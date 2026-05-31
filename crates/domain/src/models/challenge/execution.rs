@@ -115,6 +115,15 @@ impl ChallengeExecutionSpec {
             Self::PipedStdio(_) | Self::CoexecutedBenchmark(_) => None,
         }
     }
+
+    /// Return whether the official evaluator declares setup-generated official inputs.
+    pub fn has_official_evaluation_setup(&self) -> bool {
+        match self {
+            Self::SeparatedEvaluator(spec) => spec.official_evaluation_setup.is_some(),
+            Self::PipedStdio(spec) => spec.official_evaluation_setup.is_some(),
+            Self::CoexecutedBenchmark(spec) => spec.official_evaluation_setup.is_some(),
+        }
+    }
 }
 
 /// Current separated-container evaluator topology.

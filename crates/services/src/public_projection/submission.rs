@@ -304,7 +304,7 @@ fn redact_private_benchmark_details(
         } else {
             None
         },
-        log_key: None,
+        runner_log_storage_key: None,
         started_at: evaluation.started_at.clone(),
         finished_at: evaluation.finished_at.clone(),
     }

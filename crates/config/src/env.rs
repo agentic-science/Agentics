@@ -9,8 +9,8 @@ use super::{
     DEFAULT_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES, DEFAULT_HOST_PROBE_COMMAND,
     DEFAULT_HOST_PROBE_MODE, DEFAULT_LOG_LEVEL, DEFAULT_MAX_ACTIVE_AGENTS,
     DEFAULT_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT, DEFAULT_MAX_ACTIVE_OFFICIAL_JOBS,
-    DEFAULT_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY, DEFAULT_POSTGRES_PORT,
-    DEFAULT_REQUIRE_DIGEST_PINNED_IMAGES, DEFAULT_RUNNER_DOCKER_LAYER_QUOTA,
+    DEFAULT_OFFICIAL_LOG_REDACTION_MODE, DEFAULT_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY,
+    DEFAULT_POSTGRES_PORT, DEFAULT_REQUIRE_DIGEST_PINNED_IMAGES, DEFAULT_RUNNER_DOCKER_LAYER_QUOTA,
     DEFAULT_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS,
     DEFAULT_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION, DEFAULT_RUNNER_MAX_OUTPUT_DEPTH,
     DEFAULT_RUNNER_MAX_OUTPUT_DIRS, DEFAULT_RUNNER_MAX_OUTPUT_FILES,
@@ -27,11 +27,12 @@ use super::{
     ENV_AGENTICS_MOLTBOOK_SUBMOLT_URL, ENV_AGENTICS_RUNNER_NAMESPACE, ENV_AGENTICS_S3_ENDPOINT_URL,
     ENV_AGENTICS_S3_REGION, ENV_AGENTICS_STORAGE_ROOT, GithubApiUserUrl, GithubOauthAuthorizeUrl,
     GithubOauthRedirectUrl, GithubOauthTokenUrl, HostProbeMode, INSECURE_DEFAULT_ADMIN_PASSWORD,
-    MoltbookSubmoltName, MoltbookSubmoltUrl, RunnerNamespace, RunnerSecurityProfile,
-    RunnerWritableStorageMode, StorageBackend, WorkerAccelerators, builtin_github_api_user_url,
-    builtin_github_oauth_authorize_url, builtin_github_oauth_token_url,
-    builtin_moltbook_submolt_name, builtin_moltbook_submolt_url, builtin_runner_namespace,
-    builtin_s3_endpoint_url, local_cors_allowed_origins, local_database_url, storage_config,
+    MoltbookSubmoltName, MoltbookSubmoltUrl, OfficialLogRedactionMode, RunnerNamespace,
+    RunnerSecurityProfile, RunnerWritableStorageMode, StorageBackend, WorkerAccelerators,
+    builtin_github_api_user_url, builtin_github_oauth_authorize_url,
+    builtin_github_oauth_token_url, builtin_moltbook_submolt_name, builtin_moltbook_submolt_url,
+    builtin_runner_namespace, builtin_s3_endpoint_url, local_cors_allowed_origins,
+    local_database_url, storage_config,
 };
 use secrecy::SecretString;
 use serde::{Deserialize, de::DeserializeOwned};
@@ -185,6 +186,7 @@ pub struct RawRunnerEnv {
     pub host_probe_mode: Option<HostProbeMode>,
     pub host_probe_command: Option<String>,
     pub runner_security_profile: Option<RunnerSecurityProfile>,
+    pub official_log_redaction: Option<OfficialLogRedactionMode>,
     pub require_digest_pinned_images: Option<bool>,
     pub runner_writable_storage_mode: Option<RunnerWritableStorageMode>,
     pub runner_namespace: Option<String>,
@@ -447,6 +449,9 @@ fn apply_runner_env(config: &mut Config, raw: RawRunnerEnv) -> anyhow::Result<()
     config.runner.security_profile = raw
         .runner_security_profile
         .unwrap_or(DEFAULT_RUNNER_SECURITY_PROFILE);
+    config.runner.official_log_redaction = raw
+        .official_log_redaction
+        .unwrap_or(DEFAULT_OFFICIAL_LOG_REDACTION_MODE);
     config.runner.require_digest_pinned_images = raw
         .require_digest_pinned_images
         .unwrap_or(DEFAULT_REQUIRE_DIGEST_PINNED_IMAGES);

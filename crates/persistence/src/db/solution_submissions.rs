@@ -596,7 +596,7 @@ async fn get_solution_submission_by_id_inner(
             pe.public_results_json AS validation_eval_public_results,
             pe.validation_summary_json AS validation_eval_validation_summary,
             pe.official_summary_json AS validation_eval_official_summary,
-            pe.log_key AS validation_eval_log_key,
+            pe.runner_log_storage_key AS validation_eval_runner_log_storage_key,
             pe.started_at AS validation_eval_started_at,
             pe.finished_at AS validation_eval_finished_at,
             oe.id AS official_eval_id,
@@ -609,7 +609,7 @@ async fn get_solution_submission_by_id_inner(
             oe.public_results_json AS official_eval_public_results,
             oe.validation_summary_json AS official_eval_validation_summary,
             oe.official_summary_json AS official_eval_official_summary,
-            oe.log_key AS official_eval_log_key,
+            oe.runner_log_storage_key AS official_eval_runner_log_storage_key,
             oe.started_at AS official_eval_started_at,
             oe.finished_at AS official_eval_finished_at
         FROM solution_submissions s
@@ -619,11 +619,11 @@ async fn get_solution_submission_by_id_inner(
             SELECT id, status FROM evaluation_jobs WHERE solution_submission_id = s.id ORDER BY created_at DESC LIMIT 1
         ) j ON TRUE
         LEFT JOIN LATERAL (
-            SELECT id, target, status, eval_type, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, log_key, started_at, finished_at
+            SELECT id, target, status, eval_type, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, runner_log_storage_key, started_at, finished_at
             FROM evaluations WHERE solution_submission_id = s.id AND eval_type = 'validation' AND target = s.target ORDER BY created_at DESC LIMIT 1
         ) pe ON TRUE
         LEFT JOIN LATERAL (
-            SELECT id, target, status, eval_type, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, log_key, started_at, finished_at
+            SELECT id, target, status, eval_type, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, runner_log_storage_key, started_at, finished_at
             FROM evaluations
             WHERE solution_submission_id = s.id
               AND eval_type = 'official'
@@ -913,7 +913,8 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
         row.try_get(format!("{}_validation_summary", prefix).as_str())?;
     let official_json: Option<Value> =
         row.try_get(format!("{}_official_summary", prefix).as_str())?;
-    let log_key = optional_storage_key_from_row(row, format!("{prefix}_log_key").as_str())?;
+    let runner_log_storage_key =
+        optional_storage_key_from_row(row, format!("{prefix}_runner_log_storage_key").as_str())?;
     let started_at: Option<DateTime<Utc>> =
         row.try_get(format!("{}_started_at", prefix).as_str())?;
     let finished_at: Option<DateTime<Utc>> =
@@ -952,7 +953,7 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
         public_results,
         validation_summary,
         official_summary,
-        log_key,
+        runner_log_storage_key,
         started_at: started_at.map(|d| d.to_rfc3339()),
         finished_at: finished_at.map(|d| d.to_rfc3339()),
     }))

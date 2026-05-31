@@ -626,6 +626,134 @@ async fn submissions_list_uses_public_target_api_with_default_limit() {
     assert!(output.contains("solver"));
 }
 
+/// Verifies logs output renders available runner log storage keys and content.
+#[tokio::test]
+async fn submissions_logs_renders_available_runner_logs() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/agent/solution-submissions/11111111-1111-4111-8111-111111111111/logs",
+        ))
+        .and(header("authorization", "Bearer test-token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "solution_submission_id": "11111111-1111-4111-8111-111111111111",
+            "availability": "available",
+            "runner_log_storage_key": "eval-artifacts/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/attempt-1/runner.log",
+            "content": "runner failed with useful diagnostics",
+            "truncated": false
+        })))
+        .mount(&server)
+        .await;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--api-base-url",
+        &server.uri(),
+        "--token",
+        "test-token",
+        "submissions",
+        "logs",
+        "11111111-1111-4111-8111-111111111111",
+    ]);
+
+    let output = execute(cli, Environment::default())
+        .await
+        .expect("submissions logs should succeed");
+
+    assert!(output.contains("availability: available"));
+    assert!(output.contains("runner_log_storage_key: eval-artifacts/"));
+    assert!(output.contains("runner failed with useful diagnostics"));
+}
+
+/// Verifies logs output reports redaction reasons instead of looking empty.
+#[tokio::test]
+async fn submissions_logs_renders_redaction_availability() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/agent/solution-submissions/11111111-1111-4111-8111-111111111111/logs",
+        ))
+        .and(header("authorization", "Bearer test-token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "solution_submission_id": "11111111-1111-4111-8111-111111111111",
+            "availability": "redacted_private_official",
+            "truncated": false
+        })))
+        .mount(&server)
+        .await;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--api-base-url",
+        &server.uri(),
+        "--token",
+        "test-token",
+        "submissions",
+        "logs",
+        "11111111-1111-4111-8111-111111111111",
+    ]);
+
+    let output = execute(cli, Environment::default())
+        .await
+        .expect("submissions logs should succeed");
+
+    assert!(output.contains("availability: redacted_private_official"));
+    assert!(output.contains("runner_log_storage_key: none"));
+}
+
+/// Verifies JSON logs output uses the explicit storage-key and availability fields.
+#[tokio::test]
+async fn submissions_logs_json_uses_runner_log_storage_key() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path(
+            "/api/agent/solution-submissions/11111111-1111-4111-8111-111111111111/logs",
+        ))
+        .and(header("authorization", "Bearer test-token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "solution_submission_id": "11111111-1111-4111-8111-111111111111",
+            "availability": "available",
+            "runner_log_storage_key": "eval-artifacts/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/attempt-1/runner.log",
+            "content": "json diagnostics",
+            "truncated": false
+        })))
+        .mount(&server)
+        .await;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--api-base-url",
+        &server.uri(),
+        "--token",
+        "test-token",
+        "--json",
+        "submissions",
+        "logs",
+        "11111111-1111-4111-8111-111111111111",
+    ]);
+
+    let output = execute(cli, Environment::default())
+        .await
+        .expect("submissions logs should succeed");
+    let parsed: serde_json::Value = serde_json::from_str(&output).expect("logs JSON should parse");
+
+    assert_eq!(parsed["availability"], "available");
+    assert!(parsed["runner_log_storage_key"].is_string());
+    assert!(parsed.get("log_key").is_none());
+}
+
 /// Verifies that public result reports work without a configured token.
 #[tokio::test]
 async fn submissions_report_uses_public_result_report_without_token() {

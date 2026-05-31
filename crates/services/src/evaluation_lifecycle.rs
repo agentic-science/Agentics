@@ -21,7 +21,7 @@ use agentics_persistence::{
 use agentics_runner::{
     DockerRunner, EvaluationJobExecution, ExecutionResult, RunnerContainerCleanupSummary,
     RunnerContainerIdentity, RunnerContainerRuntimeState, RunnerContainerScope,
-    evaluation_runner_log_key,
+    evaluation_runner_log_storage_key,
 };
 use agentics_storage::Storage;
 
@@ -251,7 +251,7 @@ impl<'a> EvaluationWorkerService<'a> {
                 public_results: result.result.public_results,
                 validation_summary: result.result.validation_summary,
                 official_summary: result.result.official_summary,
-                log_key: Some(result.log_key),
+                runner_log_storage_key: Some(result.runner_log_storage_key),
                 last_error: None,
             })
             .await?;
@@ -323,7 +323,8 @@ impl<'a> EvaluationWorkerService<'a> {
         job: &EvaluationJobRecord,
         error_msg: &str,
     ) -> Result<EvaluationWorkerCycleOutcome> {
-        let log_key = evaluation_runner_log_key(job.id.as_str(), job.attempt_count).ok();
+        let runner_log_storage_key =
+            evaluation_runner_log_storage_key(job.id.as_str(), job.attempt_count).ok();
         let persisted = Repositories::new(self.db)
             .evaluation_jobs()
             .mark_finished(&PersistedEvaluationResult {
@@ -340,7 +341,7 @@ impl<'a> EvaluationWorkerService<'a> {
                 public_results: vec![],
                 validation_summary: None,
                 official_summary: None,
-                log_key,
+                runner_log_storage_key,
                 last_error: Some(error_msg.to_string()),
             })
             .await?;

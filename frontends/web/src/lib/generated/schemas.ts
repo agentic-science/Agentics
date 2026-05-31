@@ -3312,7 +3312,70 @@ export const solutionSubmissionLogsResponseSchema = z
       .string()
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
-    log_key: z
+    availability: z
+      .any()
+      .superRefine((x, ctx) => {
+        const schemas = [
+          z
+            .literal("available")
+            .describe(
+              "A runner log was persisted and may be returned to this submitter.",
+            ),
+          z
+            .literal("not_persisted")
+            .describe(
+              "No runner log was persisted for the visible evaluation.",
+            ),
+          z
+            .literal("redacted_private_official")
+            .describe(
+              "The official run may have touched private benchmark material.",
+            ),
+          z
+            .literal("redacted_by_config")
+            .describe("Operator configuration redacts all official-run logs."),
+        ];
+        const { errors, failed } = schemas.reduce<{
+          errors: z.core.$ZodIssue[];
+          failed: number;
+        }>(
+          ({ errors, failed }, schema) =>
+            ((result) =>
+              result.error
+                ? {
+                    errors: [...errors, ...result.error.issues],
+                    failed: failed + 1,
+                  }
+                : { errors, failed })(schema.safeParse(x)),
+          { errors: [], failed: 0 },
+        );
+        const passed = schemas.length - failed;
+        if (passed !== 1) {
+          ctx.addIssue(
+            errors.length
+              ? {
+                  path: [],
+                  code: "invalid_union",
+                  errors: [errors],
+                  message:
+                    "Invalid input: Should pass single schema. Passed " +
+                    passed,
+                }
+              : {
+                  path: [],
+                  code: "custom",
+                  errors: [errors],
+                  message:
+                    "Invalid input: Should pass single schema. Passed " +
+                    passed,
+                },
+          );
+        }
+      })
+      .describe(
+        "Explains whether a submitter-visible runner log can be returned.",
+      ),
+    runner_log_storage_key: z
       .string()
       .regex(
         /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
@@ -3566,7 +3629,7 @@ export const solutionSubmissionResponseSchema = z
             "Aggregate score summary for validation or official datasets.",
           )
           .optional(),
-        log_key: z
+        runner_log_storage_key: z
           .string()
           .regex(
             /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
@@ -3749,7 +3812,7 @@ export const solutionSubmissionResponseSchema = z
             "Aggregate score summary for validation or official datasets.",
           )
           .optional(),
-        log_key: z
+        runner_log_storage_key: z
           .string()
           .regex(
             /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
@@ -3932,7 +3995,7 @@ export const solutionSubmissionResponseSchema = z
             "Aggregate score summary for validation or official datasets.",
           )
           .optional(),
-        log_key: z
+        runner_log_storage_key: z
           .string()
           .regex(
             /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
@@ -4207,7 +4270,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                 "Aggregate score summary for validation or official datasets.",
               )
               .optional(),
-            log_key: z
+            runner_log_storage_key: z
               .string()
               .regex(
                 /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
@@ -4395,7 +4458,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                 "Aggregate score summary for validation or official datasets.",
               )
               .optional(),
-            log_key: z
+            runner_log_storage_key: z
               .string()
               .regex(
                 /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
@@ -4583,7 +4646,7 @@ export const solutionSubmissionResultReportResponseSchema = z
                 "Aggregate score summary for validation or official datasets.",
               )
               .optional(),
-            log_key: z
+            runner_log_storage_key: z
               .string()
               .regex(
                 /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,

@@ -177,6 +177,10 @@ are capped by `AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION=16777216`
 per direction, with `AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS=2` for
 attached stream shutdown. Persisted runner logs are capped at the concrete run
 count times 1 MiB, so the default maximum is 100 MiB.
+`AGENTICS_OFFICIAL_LOG_REDACTION=contract_based` keeps official diagnostics only
+when the loaded challenge contract is public-only. Use
+`AGENTICS_OFFICIAL_LOG_REDACTION=always` on hosted workers if the operations
+policy requires blanket official-log redaction.
 
 Worker scheduling is fail-closed for GPU jobs. `AGENTICS_WORKER_ACCELERATORS=none`
 is the default and can claim only no-accelerator jobs. Set

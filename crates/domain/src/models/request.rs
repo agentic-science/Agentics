@@ -451,11 +451,45 @@ pub struct ChallengeShortlistResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct SolutionSubmissionLogsResponse {
     pub solution_submission_id: SolutionSubmissionId,
+    pub availability: SolutionSubmissionLogAvailability,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub log_key: Option<StorageKey>,
+    pub runner_log_storage_key: Option<StorageKey>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
     pub truncated: bool,
+}
+
+/// Explains whether a submitter-visible runner log can be returned.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SolutionSubmissionLogAvailability {
+    /// A runner log was persisted and may be returned to this submitter.
+    Available,
+    /// No runner log was persisted for the visible evaluation.
+    NotPersisted,
+    /// The official run may have touched private benchmark material.
+    RedactedPrivateOfficial,
+    /// Operator configuration redacts all official-run logs.
+    RedactedByConfig,
+}
+
+impl SolutionSubmissionLogAvailability {
+    /// Stable JSON and CLI label for this log availability state.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Available => "available",
+            Self::NotPersisted => "not_persisted",
+            Self::RedactedPrivateOfficial => "redacted_private_official",
+            Self::RedactedByConfig => "redacted_by_config",
+        }
+    }
+}
+
+impl fmt::Display for SolutionSubmissionLogAvailability {
+    /// Render the stable snake-case availability label.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
 }
 
 /// One solution submission row in the admin operations console.

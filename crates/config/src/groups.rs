@@ -10,8 +10,8 @@ use agentics_domain::models::urls::{
 };
 
 use crate::runtime_modes::{
-    AgentRegistrationMode, HostProbeMode, RunnerNamespace, RunnerSecurityProfile,
-    RunnerWritableStorageMode, WorkerAccelerators,
+    AgentRegistrationMode, HostProbeMode, OfficialLogRedactionMode, RunnerNamespace,
+    RunnerSecurityProfile, RunnerWritableStorageMode, WorkerAccelerators,
 };
 use crate::storage_config::StorageBackend;
 use crate::validation;
@@ -177,6 +177,7 @@ pub struct RunnerConfig {
     #[garde(custom(validation::trimmed_non_empty))]
     pub host_probe_command: String,
     pub security_profile: RunnerSecurityProfile,
+    pub official_log_redaction: OfficialLogRedactionMode,
     pub require_digest_pinned_images: bool,
     pub writable_storage_mode: RunnerWritableStorageMode,
     pub namespace: RunnerNamespace,

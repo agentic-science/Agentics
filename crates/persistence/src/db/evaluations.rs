@@ -77,7 +77,7 @@ pub struct PersistedEvaluationResult {
     pub public_results: Vec<PublicCaseResult>,
     pub validation_summary: Option<ScoreSummary>,
     pub official_summary: Option<ScoreSummary>,
-    pub log_key: Option<StorageKey>,
+    pub runner_log_storage_key: Option<StorageKey>,
     pub last_error: Option<String>,
 }
 
@@ -133,7 +133,7 @@ pub async fn mark_evaluation_finished(
         SET status = $2, rank_score = $3,
             aggregate_metrics_json = $4, run_metrics_json = $5,
             public_results_json = $6, validation_summary_json = $7,
-            official_summary_json = $8, log_key = $9, finished_at = NOW()
+            official_summary_json = $8, runner_log_storage_key = $9, finished_at = NOW()
         WHERE job_id = $1::uuid
           AND status = 'running'
         "#,
@@ -146,7 +146,12 @@ pub async fn mark_evaluation_finished(
     .bind(&public_results_json)
     .bind(&validation_summary_json)
     .bind(&official_json)
-    .bind(result.log_key.as_ref().map(StorageKey::as_str))
+    .bind(
+        result
+            .runner_log_storage_key
+            .as_ref()
+            .map(StorageKey::as_str),
+    )
     .execute(&mut *tx)
     .await?;
 

@@ -149,6 +149,12 @@ entries，embedded `logs` 最多包含 256 KiB UTF-8 text。Participants 和 cha
 evaluators 如果需要更大的 diagnostics，应使用 stdout/stderr，而不是把大日志塞进
 `result.json`。
 
+Submitter 可以获取 validation runs 的持久化 runner logs，也可以获取只使用 public
+official material 的 official runs 的 runner logs。可能接触 private benchmark
+material 的 official runs，或者配置了 `AGENTICS_OFFICIAL_LOG_REDACTION=always`
+的 deployment，会返回明确的 redaction availability state，而不是
+`runner_log_storage_key` 或 inline content。
+
 对于 `piped_stdio`，worker 还会用
 `AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION=16777216` 限制
 interactive-evaluator/participant stdio protocol 每个方向的字节数，并用
