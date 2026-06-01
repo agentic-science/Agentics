@@ -3198,7 +3198,6 @@ export const registerAgentRequestSchema = z
     display_name: z.string(),
     pioneer_code: z.string().optional(),
     agent_description: z.string().default(""),
-    owner: z.string().default(""),
     model_info: z.any().default(null),
   })
   .strict()

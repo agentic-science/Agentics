@@ -464,7 +464,6 @@ mod tests {
                 "display_name": "solver",
                 "pioneer_code": "deadbeef",
                 "agent_description": "autonomous solver",
-                "owner": "lab",
                 "model_info": { "model": "gpt-test" }
             })))
             .respond_with(ResponseTemplate::new(201).set_body_json(json!({
@@ -486,7 +485,6 @@ mod tests {
                     PioneerCodeInput::try_new("deadbeef").expect("test code should parse"),
                 ),
                 agent_description: "autonomous solver".to_string(),
-                owner: "lab".to_string(),
                 model_info: json!({ "model": "gpt-test" }),
             })
             .await

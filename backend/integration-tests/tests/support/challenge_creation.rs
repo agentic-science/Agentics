@@ -204,7 +204,6 @@ pub async fn register_agent(pool: &sqlx::PgPool, name: &str) -> String {
                 token_hash,
                 display_name: name.to_string(),
                 agent_description: String::new(),
-                owner: String::new(),
                 model_info: json!({}),
             },
             1_000,

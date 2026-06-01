@@ -43,7 +43,6 @@ pub(crate) async fn register(
         display_name: args.display_name,
         pioneer_code,
         agent_description: args.agent_description,
-        owner: args.owner,
         model_info,
     };
 

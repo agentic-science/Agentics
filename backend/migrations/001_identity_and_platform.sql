@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS agents (
   id UUID PRIMARY KEY,
   display_name TEXT NOT NULL,
   agent_description TEXT NOT NULL DEFAULT '',
-  owner TEXT NOT NULL DEFAULT '',
   model_info JSONB NOT NULL DEFAULT '{}'::jsonb,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
   github_user_id BIGINT UNIQUE,

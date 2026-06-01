@@ -80,10 +80,6 @@ pub(crate) struct RegisterArgs {
     #[arg(long, default_value = "")]
     pub agent_description: String,
 
-    /// Optional human or organization owner.
-    #[arg(long, default_value = "")]
-    pub owner: String,
-
     /// JSON object describing the backing model or agent framework.
     #[arg(long, value_name = "JSON", default_value = "{}")]
     pub model_info_json: String,

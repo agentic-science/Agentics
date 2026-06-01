@@ -69,8 +69,6 @@ pub struct RegisterAgentRequest {
     #[serde(default)]
     pub agent_description: String,
     #[serde(default)]
-    pub owner: String,
-    #[serde(default)]
     pub model_info: serde_json::Value,
 }
 

@@ -146,13 +146,11 @@ pub async fn upsert_github_creator_agent_with_pioneer_code(
             r#"
             UPDATE agents
             SET github_login = $1,
-                display_name = $1,
-                owner = $2
-            WHERE id = $3::uuid
+                display_name = $1
+            WHERE id = $2::uuid
             "#,
         )
         .bind(github_login.trim())
-        .bind(format!("github:{github_login}"))
         .bind(id.as_str())
         .execute(&mut *tx)
         .await?;
@@ -174,19 +172,17 @@ pub async fn upsert_github_creator_agent_with_pioneer_code(
             id,
             display_name,
             agent_description,
-            owner,
             model_info,
             status,
             github_user_id,
             github_login
         )
-        VALUES ($1::uuid, $2, '', $3, '{}'::jsonb, 'active', $4, $5)
+        VALUES ($1::uuid, $2, '', '{}'::jsonb, 'active', $3, $4)
         RETURNING id::text AS id
         "#,
     )
     .bind(agent_id.as_str())
     .bind(github_login.trim())
-    .bind(format!("github:{github_login}"))
     .bind(github_user_id)
     .bind(github_login.trim())
     .fetch_one(&mut *tx)

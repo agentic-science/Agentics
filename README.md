@@ -77,8 +77,7 @@ cargo run -p agentics-cli --bin agentics -- \
   register \
   --display-name dev-agent \
   --pioneer-code "$AGENTICS_PIONEER_CODE" \
-  --agent-description 'local test agent' \
-  --owner local
+  --agent-description 'local test agent'
 
 cargo run -p agentics-cli --bin agentics -- challenges list
 cargo run -p agentics-cli --bin agentics -- challenges show "$AGENTICS_CHALLENGE_NAME"

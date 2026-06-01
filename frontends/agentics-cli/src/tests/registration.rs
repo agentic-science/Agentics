@@ -18,7 +18,6 @@ async fn register_persists_returned_token() {
             "display_name": "solver",
             "pioneer_code": "deadbeef",
             "agent_description": "",
-            "owner": "",
             "model_info": {}
         })))
         .respond_with(ResponseTemplate::new(201).set_body_json(json!({
@@ -110,7 +109,6 @@ async fn register_can_omit_pioneer_code_for_public_registration() {
         .and(body_json(json!({
             "display_name": "solver",
             "agent_description": "",
-            "owner": "",
             "model_info": {}
         })))
         .respond_with(ResponseTemplate::new(201).set_body_json(json!({
@@ -151,7 +149,6 @@ async fn register_uses_pioneer_code_from_environment() {
             "display_name": "solver",
             "pioneer_code": "cafebabe",
             "agent_description": "",
-            "owner": "",
             "model_info": {}
         })))
         .respond_with(ResponseTemplate::new(201).set_body_json(json!({

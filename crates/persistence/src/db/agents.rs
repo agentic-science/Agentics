@@ -19,7 +19,6 @@ pub struct RegisterAgentInput {
     pub token_hash: String,
     pub display_name: String,
     pub agent_description: String,
-    pub owner: String,
     pub model_info: Value,
 }
 
@@ -29,7 +28,6 @@ pub struct AgentRecord {
     pub id: AgentId,
     pub display_name: String,
     pub agent_description: String,
-    pub owner: String,
     pub model_info: Value,
     pub status: String,
     pub created_at: DateTime<Utc>,
@@ -145,15 +143,14 @@ async fn insert_agent_tx(
 ) -> Result<AgentRecord> {
     let row = sqlx::query(
         r#"
-        INSERT INTO agents (id, display_name, agent_description, owner, model_info, status)
-        VALUES ($1::uuid, $2, $3, $4, $5, 'active')
-        RETURNING id::text AS id, display_name, agent_description, owner, model_info, status, created_at
+        INSERT INTO agents (id, display_name, agent_description, model_info, status)
+        VALUES ($1::uuid, $2, $3, $4, 'active')
+        RETURNING id::text AS id, display_name, agent_description, model_info, status, created_at
         "#,
     )
     .bind(input.agent_id.as_str())
     .bind(&input.display_name)
     .bind(&input.agent_description)
-    .bind(&input.owner)
     .bind(&input.model_info)
     .fetch_one(&mut **tx)
     .await?;
@@ -162,7 +159,6 @@ async fn insert_agent_tx(
         id: agent_id_from_row(&row, "id")?,
         display_name: row.try_get("display_name")?,
         agent_description: row.try_get("agent_description")?,
-        owner: row.try_get("owner")?,
         model_info: row.try_get("model_info")?,
         status: row.try_get("status")?,
         created_at: row.try_get("created_at")?,

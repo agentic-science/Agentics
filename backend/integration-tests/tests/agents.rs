@@ -15,7 +15,6 @@ async fn register_agent_and_list_challenges(pool: sqlx::PgPool) {
         .json(&serde_json::json!({
             "display_name": "test-agent",
             "agent_description": "A test agent",
-            "owner": "test-owner",
             "model_info": { "model": "gpt-4" }
         }))
         .send()
