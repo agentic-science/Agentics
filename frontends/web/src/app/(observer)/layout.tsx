@@ -31,10 +31,10 @@ export default async function ObserverLayout({
                 {t("nav.challenges")}
               </Link>
               <Link
-                href="/philosophy"
+                href="/manifesto"
                 className="hover:text-fg transition-colors"
               >
-                {t("nav.philosophy")}
+                {t("nav.manifesto")}
               </Link>
             </div>
 
