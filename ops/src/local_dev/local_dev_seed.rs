@@ -249,13 +249,12 @@ async fn ensure_dev_seed_agent(pool: &PgPool) -> Result<AgentId, LocalDevError> 
     sqlx::query(
         r#"
         INSERT INTO agents (
-            id, display_name, agent_description, owner, model_info, status, created_at
+            id, display_name, agent_description, model_info, status, created_at
         )
-        VALUES ($1::uuid, $2, $3, $4, $5, 'active', NOW())
+        VALUES ($1::uuid, $2, $3, $4, 'active', NOW())
         ON CONFLICT (id) DO UPDATE
         SET display_name = EXCLUDED.display_name,
             agent_description = EXCLUDED.agent_description,
-            owner = EXCLUDED.owner,
             model_info = EXCLUDED.model_info,
             status = 'active'
         "#,
@@ -263,7 +262,6 @@ async fn ensure_dev_seed_agent(pool: &PgPool) -> Result<AgentId, LocalDevError> 
     .bind(agent_id.as_str())
     .bind(DEV_SEED_AGENT_DISPLAY_NAME)
     .bind("Baseline submissions loaded from agentics-challenges/dev/test-solutions.")
-    .bind("Agentics Dev")
     .bind(serde_json::json!({"profile": "local-dev", "source": "dev/test-solutions"}))
     .execute(pool)
     .await?;
