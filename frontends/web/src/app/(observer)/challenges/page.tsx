@@ -1,19 +1,21 @@
-import { ArrowLeft, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getLocale, getTranslations } from "next-intl/server";
-import { ChallengeCatalogCard } from "@/components/ChallengeCatalogCard";
+import { ChallengeCatalogLive } from "@/components/ChallengeCatalogLive";
 import { ScrollToTop } from "@/components/ScrollToTop";
 import { fetchJson } from "@/lib/api";
+import {
+  CHALLENGE_CATALOG_PAGE_SIZE,
+  challengeCatalogApiQuery,
+  challengeCatalogHref,
+  removeKeywordHref,
+} from "@/lib/challengeCatalog";
 import {
   type ChallengeListResponse,
   challengeListResponseSchema,
 } from "@/lib/schemas";
 
-const CHALLENGE_CATALOG_PAGE_SIZE = 12;
-
 type SearchParams = Record<string, string | string[] | undefined>;
-type PageSlot = number | "ellipsis-start" | "ellipsis-end";
 
 /** Selects the first value for a Next.js search parameter. */
 function firstSearchParamValue(value: string | string[] | undefined) {
@@ -31,43 +33,6 @@ function parseCatalogPage(searchParams: SearchParams) {
   }
   const page = Number.parseInt(rawPage, 10);
   return Number.isSafeInteger(page) ? page : 1;
-}
-
-/** Builds the canonical challenge catalog URL for a one-indexed page. */
-function challengeCatalogHref(
-  page: number,
-  filters: { q?: string; keywords?: string[] } = {},
-) {
-  const params = new URLSearchParams();
-  if (page > 1) {
-    params.set("page", page.toString());
-  }
-  if (filters.q) {
-    params.set("q", filters.q);
-  }
-  for (const keyword of filters.keywords ?? []) {
-    params.append("keyword", keyword);
-  }
-  const query = params.toString();
-  return query ? `/challenges?${query}` : "/challenges";
-}
-
-/** Builds API query parameters for a filtered challenge catalog request. */
-function challengeCatalogApiQuery(
-  page: number,
-  filters: { q?: string; keywords: string[] },
-) {
-  const params = new URLSearchParams({
-    limit: CHALLENGE_CATALOG_PAGE_SIZE.toString(),
-    offset: ((page - 1) * CHALLENGE_CATALOG_PAGE_SIZE).toString(),
-  });
-  if (filters.q) {
-    params.set("q", filters.q);
-  }
-  for (const keyword of filters.keywords) {
-    params.append("keyword", keyword);
-  }
-  return params.toString();
 }
 
 /** Collects one or more URL query values from a Next.js search param. */
@@ -97,60 +62,6 @@ function selectedKeywords(searchParams: SearchParams) {
     }
   }
   return keywords;
-}
-
-/** Adds one keyword to the current catalog filter set and resets pagination. */
-function addKeywordHref(
-  q: string | undefined,
-  keywords: string[],
-  keyword: string,
-) {
-  const nextKeywords = keywords.some(
-    (existing) => existing.toLocaleLowerCase() === keyword.toLocaleLowerCase(),
-  )
-    ? keywords
-    : [...keywords, keyword];
-  return challengeCatalogHref(1, { q, keywords: nextKeywords });
-}
-
-/** Removes one keyword from the current catalog filter set and resets pagination. */
-function removeKeywordHref(
-  q: string | undefined,
-  keywords: string[],
-  keyword: string,
-) {
-  return challengeCatalogHref(1, {
-    q,
-    keywords: keywords.filter(
-      (existing) =>
-        existing.toLocaleLowerCase() !== keyword.toLocaleLowerCase(),
-    ),
-  });
-}
-
-/** Builds compact numbered pagination with stable ellipsis slots. */
-function buildPaginationSlots(currentPage: number, totalPages: number) {
-  const pages = new Set([
-    1,
-    totalPages,
-    currentPage - 1,
-    currentPage,
-    currentPage + 1,
-  ]);
-  const sortedPages = [...pages]
-    .filter((page) => page >= 1 && page <= totalPages)
-    .sort((left, right) => left - right);
-  const slots: PageSlot[] = [];
-
-  for (const page of sortedPages) {
-    const previous = slots.at(-1);
-    if (typeof previous === "number" && page - previous > 1) {
-      slots.push(previous === 1 ? "ellipsis-start" : "ellipsis-end");
-    }
-    slots.push(page);
-  }
-
-  return slots;
 }
 
 /** Renders the paginated public challenge catalog page. */
@@ -196,7 +107,6 @@ export default async function ChallengeCatalogPage({
     redirect(challengeCatalogHref(totalPages, filters));
   }
 
-  const paginationSlots = buildPaginationSlots(page, totalPages);
   const hasActiveFilters = Boolean(q) || keywords.length > 0;
 
   return (
@@ -251,89 +161,20 @@ export default async function ChallengeCatalogPage({
         ) : null}
       </section>
 
-      {error ? (
-        <div className="card text-center py-12 text-[var(--status-error)]">
-          {t("common.error")}: {error}
-        </div>
-      ) : challenges.items.length === 0 ? (
-        <div className="empty-state">
-          <p className="text-[var(--text-muted)]">
-            {t("challengeCatalog.empty")}
-          </p>
-        </div>
-      ) : (
-        <div className="challenge-catalog-grid">
-          <div className="home-challenge-grid">
-            {challenges.items.map((challenge) => (
-              <ChallengeCatalogCard
-                key={challenge.challenge_name}
-                challenge={challenge}
-                locale={locale}
-                showKeywords
-                keywordHref={(keyword) => addKeywordHref(q, keywords, keyword)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      <nav
-        className="challenge-catalog-pagination"
-        aria-label={t("common.pagination")}
-      >
-        {page > 1 ? (
-          <Link
-            href={challengeCatalogHref(page - 1, filters)}
-            className="challenge-catalog-pagination-button"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            {t("challengeCatalog.previous")}
-          </Link>
-        ) : (
-          <span className="challenge-catalog-pagination-button is-disabled">
-            <ArrowLeft className="w-4 h-4" />
-            {t("challengeCatalog.previous")}
-          </span>
-        )}
-
-        <div className="challenge-catalog-page-list">
-          {paginationSlots.map((slot) =>
-            typeof slot === "number" ? (
-              <Link
-                key={slot}
-                href={challengeCatalogHref(slot, filters)}
-                aria-current={slot === page ? "page" : undefined}
-                className={
-                  slot === page
-                    ? "challenge-catalog-page-number is-current"
-                    : "challenge-catalog-page-number"
-                }
-              >
-                {slot}
-              </Link>
-            ) : (
-              <span key={slot} className="challenge-catalog-page-ellipsis">
-                ...
-              </span>
-            ),
-          )}
-        </div>
-
-        {challenges.has_more ? (
-          <Link
-            href={challengeCatalogHref(page + 1, filters)}
-            className="challenge-catalog-pagination-button"
-          >
-            {t("challengeCatalog.next")}
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-        ) : (
-          <span className="challenge-catalog-pagination-button is-disabled">
-            {t("challengeCatalog.next")}
-            <ArrowRight className="w-4 h-4" />
-          </span>
-        )}
-      </nav>
+      <ChallengeCatalogLive
+        filters={filters}
+        initialChallenges={challenges}
+        initialError={error}
+        labels={{
+          empty: t("challengeCatalog.empty"),
+          error: t("common.error"),
+          next: t("challengeCatalog.next"),
+          pagination: t("common.pagination"),
+          previous: t("challengeCatalog.previous"),
+        }}
+        locale={locale}
+        page={page}
+      />
     </div>
   );
 }

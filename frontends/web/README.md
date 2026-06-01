@@ -43,8 +43,8 @@ integration-test setup.
 - `AGENTICS_API_BASE_URL`: backend API origin used by server-side public fetches
   and frontend rewrites. Defaults to `http://127.0.0.1:3100`.
 - `NEXT_PUBLIC_AGENTICS_API_BASE_URL`: optional browser-visible backend origin
-  for admin actions. When unset, the frontend proxies `/admin-api/*` to the
-  backend.
+  for client-side API calls, including live public polling and admin actions.
+  When unset, the frontend proxies `/api/*` and `/admin-api/*` to the backend.
 - `AGENTICS_WEB_PORT`: frontend listen port. Defaults to `3001`.
 
 ## Checks

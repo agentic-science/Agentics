@@ -1,7 +1,8 @@
-import { ArrowRight, Bot, FlaskConical, Users } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
-import { ChallengeCatalogCard } from "@/components/ChallengeCatalogCard";
+import { HomeChallengePreview } from "@/components/HomeChallengePreview";
+import { type HomeStats, HomeStatsRow } from "@/components/HomeStatsRow";
 import { fetchJson } from "@/lib/api";
 import {
   type ChallengeListResponse,
@@ -10,12 +11,6 @@ import {
 } from "@/lib/schemas";
 
 const HOME_CHALLENGE_PREVIEW_LIMIT = 12;
-
-type HomeStats = {
-  challenges: number;
-  agents: number;
-  submissions: number;
-};
 
 async function loadHomeStats(
   challenges: ChallengeListResponse,
@@ -64,7 +59,6 @@ export default async function HomePage() {
   }
 
   const stats = await loadHomeStats(challenges);
-  const shouldFadeChallengePreview = challenges.items.length > 9;
 
   return (
     <div className="flex flex-col gap-16">
@@ -91,37 +85,14 @@ export default async function HomePage() {
         </div>
 
         {/* Stats Row */}
-        <div className="home-stats-row flex justify-center">
-          <div className="grid w-full max-w-3xl grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="card flex flex-col items-center gap-1 py-4 text-center">
-              <FlaskConical className="w-5 h-5 text-[var(--accent-secondary-text)]" />
-              <span className="text-2xl font-bold font-mono text-[var(--text-primary)]">
-                {stats.challenges}
-              </span>
-              <span className="text-caption text-[var(--text-muted)]">
-                {t("home.stats.challenges")}
-              </span>
-            </div>
-            <div className="card flex flex-col items-center gap-1 py-4 text-center">
-              <Bot className="w-5 h-5 text-[var(--accent-primary-text)]" />
-              <span className="text-2xl font-bold font-mono text-[var(--text-primary)]">
-                {stats.agents}
-              </span>
-              <span className="text-caption text-[var(--text-muted)]">
-                {t("home.stats.agents")}
-              </span>
-            </div>
-            <div className="card flex flex-col items-center gap-1 py-4 text-center">
-              <Users className="w-5 h-5 text-[var(--accent-secondary-text)]" />
-              <span className="text-2xl font-bold font-mono text-[var(--text-primary)]">
-                {stats.submissions}
-              </span>
-              <span className="text-caption text-[var(--text-muted)]">
-                {t("home.stats.submissions")}
-              </span>
-            </div>
-          </div>
-        </div>
+        <HomeStatsRow
+          initialStats={stats}
+          labels={{
+            agents: t("home.stats.agents"),
+            challenges: t("home.stats.challenges"),
+            submissions: t("home.stats.submissions"),
+          }}
+        />
       </section>
 
       {/* Challenges Grid */}
@@ -135,38 +106,15 @@ export default async function HomePage() {
           </p>
         </div>
 
-        {error ? (
-          <div className="card text-center py-12 text-[var(--status-error)]">
-            {t("common.error")}: {error}
-          </div>
-        ) : challenges.items.length === 0 ? (
-          <div className="empty-state">
-            <p className="text-[var(--text-muted)]">{t("common.empty")}</p>
-          </div>
-        ) : (
-          <div
-            className={
-              shouldFadeChallengePreview
-                ? "home-challenge-preview home-challenge-preview-fade"
-                : "home-challenge-preview"
-            }
-          >
-            <div className="home-challenge-grid">
-              {challenges.items.map((challenge) => (
-                <ChallengeCatalogCard
-                  key={challenge.challenge_name}
-                  challenge={challenge}
-                  locale={locale}
-                />
-              ))}
-            </div>
-            {shouldFadeChallengePreview ? (
-              <Link href="/challenges" className="home-challenge-more-pill">
-                {t("home.moreChallenges")}
-              </Link>
-            ) : null}
-          </div>
-        )}
+        <HomeChallengePreview
+          emptyLabel={t("common.empty")}
+          errorLabel={t("common.error")}
+          initialChallenges={challenges}
+          initialError={error}
+          locale={locale}
+          moreLabel={t("home.moreChallenges")}
+          previewLimit={HOME_CHALLENGE_PREVIEW_LIMIT}
+        />
       </section>
 
       {/* How It Works */}

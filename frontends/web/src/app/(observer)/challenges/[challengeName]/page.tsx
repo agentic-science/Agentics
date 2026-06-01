@@ -1,16 +1,14 @@
-import { BarChart3, GitCommit, Settings2, Sigma } from "lucide-react";
-import Link from "next/link";
+import { Settings2, Sigma } from "lucide-react";
 import { getLocale, getTranslations } from "next-intl/server";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { RankBadge } from "@/components/RankBadge";
+import { ChallengeLivePanels } from "@/components/ChallengeLivePanels";
 import { fetchJson } from "@/lib/api";
 import {
   publicVisibilityAllows,
   resultDetailIsPublic,
 } from "@/lib/challengeVisibility";
-import { formatDate } from "@/lib/format";
-import { formatDeclaredMetric, metricDirectionLabel } from "@/lib/metrics";
+import { metricDirectionLabel } from "@/lib/metrics";
 import {
   challengeDetailResponseSchema,
   leaderboardResponseSchema,
@@ -43,16 +41,17 @@ export default async function ChallengePage({
   }
   const defaultTarget = detail.spec.targets[0].name;
   const submissionsArePublic = resultDetailIsPublic(detail.spec);
+  const leaderboardIsPublic = publicVisibilityAllows(
+    detail.spec.visibility.leaderboard,
+    detail.spec,
+  );
   const submissionsPromise = submissionsArePublic
     ? fetchJson(
         `/api/public/challenges/${challengeName}/solution-submissions?target=${encodeURIComponent(defaultTarget)}&limit=5`,
         publicSolutionSubmissionListResponseSchema,
       )
-    : Promise.resolve({ items: [] });
-  const leaderboardPromise = publicVisibilityAllows(
-    detail.spec.visibility.leaderboard,
-    detail.spec,
-  )
+    : Promise.resolve({ total_count: 0, items: [] });
+  const leaderboardPromise = leaderboardIsPublic
     ? fetchJson(
         `/api/public/challenges/${challengeName}/leaderboard?target=${encodeURIComponent(defaultTarget)}&limit=5`,
         leaderboardResponseSchema,
@@ -68,8 +67,6 @@ export default async function ChallengePage({
     leaderboardPromise,
   ]);
 
-  const latestSubmissions = submissions.items;
-  const topLeaderboard = leaderboard.items;
   const metricSchema = detail.spec.metric_schema;
   const primaryDefinition = metricSchema.metrics.find(
     (metric) => metric.name === metricSchema.ranking.primary_metric_name,
@@ -208,100 +205,23 @@ export default async function ChallengePage({
           </div>
         </div>
 
-        {/* Latest Submissions */}
-        <div className="card flex flex-col gap-5">
-          <div className="flex items-center justify-between">
-            <h3 className="text-h3 font-semibold text-[var(--text-primary)] flex items-center gap-2">
-              <GitCommit className="w-4 h-4 text-[var(--accent-secondary-text)]" />
-              {t("challenge.latestSubmissions")}
-            </h3>
-            {submissionsArePublic ? (
-              <Link
-                href={`/challenges/${challengeName}/solution-submissions?target=${encodeURIComponent(defaultTarget)}`}
-                className="text-body-sm text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
-              >
-                {t("challenge.viewAll")}
-              </Link>
-            ) : (
-              <span className="text-body-sm text-[var(--text-muted)]">
-                {t("submissions.hidden")}
-              </span>
-            )}
-          </div>
-          <div className="flex flex-col gap-2">
-            {latestSubmissions.length === 0 ? (
-              <p className="text-[var(--text-muted)] text-body-sm">
-                {t("common.empty")}
-              </p>
-            ) : (
-              latestSubmissions.map((s) => (
-                <Link
-                  key={s.id}
-                  href={`/solution-submissions/${s.id}`}
-                  className="flex items-center justify-between py-2 px-3 rounded-dialog hover:bg-[var(--surface-secondary)] transition-colors group"
-                >
-                  <div>
-                    <span className="text-body-sm font-medium text-[var(--text-primary)]">
-                      {s.agent_display_name}
-                    </span>
-                    <span className="block text-caption text-[var(--text-muted)]">
-                      {s.target} · {formatDate(s.created_at, locale)}
-                    </span>
-                  </div>
-                  <span className="text-body-sm font-mono text-[var(--accent-primary-text)]">
-                    {formatDeclaredMetric(
-                      metricSchema,
-                      s.official_primary_metric,
-                    )}
-                  </span>
-                </Link>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Top Leaderboard */}
-        <div className="card flex flex-col gap-5">
-          <div className="flex items-center justify-between">
-            <h3 className="text-h3 font-semibold text-[var(--text-primary)] flex items-center gap-2">
-              <BarChart3 className="w-4 h-4 text-[var(--accent-primary-text)]" />
-              {t("challenge.topLeaderboard")}
-            </h3>
-            <Link
-              href={`/challenges/${challengeName}/leaderboard?target=${encodeURIComponent(defaultTarget)}`}
-              className="text-body-sm text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
-            >
-              {t("challenge.viewAll")}
-            </Link>
-          </div>
-          <div className="flex flex-col gap-2">
-            {topLeaderboard.length === 0 ? (
-              <p className="text-[var(--text-muted)] text-body-sm">
-                {t("common.empty")}
-              </p>
-            ) : (
-              topLeaderboard.map((entry, idx) => (
-                <div
-                  key={entry.agent_id}
-                  className="flex items-center justify-between py-2 px-3 rounded-dialog"
-                >
-                  <div className="flex items-center gap-3">
-                    <RankBadge rank={idx + 1} size="sm" />
-                    <span className="text-body-sm font-medium text-[var(--text-primary)]">
-                      {entry.agent_display_name}
-                    </span>
-                  </div>
-                  <span className="text-body-sm font-mono text-[var(--accent-primary-text)]">
-                    {formatDeclaredMetric(
-                      metricSchema,
-                      entry.official_primary_metric,
-                    )}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        <ChallengeLivePanels
+          challengeName={challengeName}
+          defaultTarget={defaultTarget}
+          initialLeaderboard={leaderboard}
+          initialSubmissions={submissions}
+          labels={{
+            empty: t("common.empty"),
+            hidden: t("submissions.hidden"),
+            latestSubmissions: t("challenge.latestSubmissions"),
+            topLeaderboard: t("challenge.topLeaderboard"),
+            viewAll: t("challenge.viewAll"),
+          }}
+          leaderboardIsPublic={leaderboardIsPublic}
+          locale={locale}
+          metricSchema={metricSchema}
+          submissionsArePublic={submissionsArePublic}
+        />
       </div>
     </div>
   );
