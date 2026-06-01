@@ -272,14 +272,22 @@
    =================================================================== */
 
   .challenge-catalog {
+    --challenge-catalog-content-width: calc(
+      (24rem * 3) +
+      (var(--spacing-5) * 2)
+    );
     display: flex;
     flex-direction: column;
     gap: var(--spacing-8);
     padding-top: var(--spacing-4);
   }
 
-  .challenge-catalog-header {
-    display: block;
+  .challenge-catalog-header,
+  .challenge-catalog-search-panel,
+  .challenge-catalog-grid,
+  .challenge-catalog-pagination {
+    width: min(100%, var(--challenge-catalog-content-width));
+    margin-inline: auto;
   }
 
   .challenge-catalog-title {
@@ -438,6 +446,10 @@
   }
 
   @media (max-width: 720px) {
+    .challenge-catalog {
+      --challenge-catalog-content-width: 24rem;
+    }
+
     .challenge-catalog-search-form,
     .challenge-catalog-pagination {
       align-items: stretch;
@@ -446,6 +458,12 @@
 
     .challenge-catalog-page-list {
       order: -1;
+    }
+  }
+
+  @media (min-width: 721px) and (max-width: 1100px) {
+    .challenge-catalog {
+      --challenge-catalog-content-width: calc((24rem * 2) + var(--spacing-5));
     }
   }
 }
