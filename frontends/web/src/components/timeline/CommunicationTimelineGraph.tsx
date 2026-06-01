@@ -23,6 +23,7 @@ type CommunicationTimelineGraphProps = {
   className?: string;
   graph: CommunicationGraph;
   layout?: TimelineLayout;
+  play?: boolean;
   rowLabels?: RowLabel[];
   showTimeLabels?: boolean;
   title: string;
@@ -34,6 +35,7 @@ export function CommunicationTimelineGraph({
   className,
   graph,
   layout,
+  play = true,
   rowLabels,
   showTimeLabels = true,
   title,
@@ -65,7 +67,7 @@ export function CommunicationTimelineGraph({
       </g>
       <g>
         {model.links.map((link) => (
-          <AnimatedLink key={link.id} link={link} model={model} />
+          <AnimatedLink key={link.id} link={link} model={model} play={play} />
         ))}
       </g>
       {rowLabels?.map((row, index) => {
@@ -105,12 +107,14 @@ export function CommunicationTimelineGraph({
             key={`${node.index[0]}-${node.index[1]}`}
             model={model}
             node={node}
+            play={play}
           />
         ) : (
           <ActiveDot
             key={`${node.index[0]}-${node.index[1]}`}
             model={model}
             node={node}
+            play={play}
           />
         ),
       )}
@@ -121,15 +125,28 @@ export function CommunicationTimelineGraph({
 function AnimatedLink({
   link,
   model,
+  play,
 }: {
   link: DerivedTimelineLink;
   model: DerivedTimelineModel;
+  play: boolean;
 }) {
   const reduceMotion = useReducedMotion();
   const opacity = link.kind === "draw" ? 0.9 : 0.7;
   const pathClass = `${styles.timelinePath} ${
     link.kind === "draw" ? styles.timelinePathDraw : styles.timelinePathFade
   }`;
+
+  if (!play) {
+    return (
+      <path
+        className={pathClass}
+        d={`M${link.from.x} ${link.from.y} L${link.to.x} ${link.to.y}`}
+        data-communication-link={link.id}
+        opacity={opacity * 0.42}
+      />
+    );
+  }
 
   if (link.kind === "fade") {
     const times = [
@@ -185,14 +202,31 @@ function AnimatedLink({
 function ActiveDot({
   model,
   node,
+  play,
 }: {
   model: DerivedTimelineModel;
   node: DerivedTimelineNode;
+  play: boolean;
 }) {
   const reduceMotion = useReducedMotion();
 
   if (node.activeAt === undefined) {
     return <MutedDot x={node.x} y={node.y} />;
+  }
+
+  if (!play) {
+    return (
+      <g>
+        <MutedDot x={node.x} y={node.y} />
+        <circle
+          className={styles.node}
+          cx={node.x}
+          cy={node.y}
+          opacity="0.28"
+          r="8"
+        />
+      </g>
+    );
   }
 
   const times = nodeTimes(node.activeAt, model);
@@ -232,14 +266,31 @@ function ActiveDot({
 function DiscoveryDot({
   model,
   node,
+  play,
 }: {
   model: DerivedTimelineModel;
   node: DerivedTimelineNode;
+  play: boolean;
 }) {
   const reduceMotion = useReducedMotion();
 
   if (node.discoveryAt === undefined) {
     return <MutedDot x={node.x} y={node.y} />;
+  }
+
+  if (!play) {
+    return (
+      <g>
+        <MutedDot x={node.x} y={node.y} />
+        <circle
+          className={styles.nodeAmber}
+          cx={node.x}
+          cy={node.y}
+          opacity="0.42"
+          r="8"
+        />
+      </g>
+    );
   }
 
   const times = nodeTimes(node.discoveryAt, model);
