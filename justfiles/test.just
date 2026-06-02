@@ -183,13 +183,7 @@ _integration include_ignored:
       fi; \
       mkdir -p "$runtime_root" "$tmpdir"; \
       if ! docker --host "$docker_host" image inspect "$runner_image" >/dev/null 2>&1; then \
-        if ! docker image inspect "$runner_image" >/dev/null 2>&1; then \
-          docker build --platform linux/arm64 -t "$runner_image" docker/runner-images/linux-arm64-cpu; \
-        fi; \
-        image_tar="$runtime_root/runner-image.tar"; \
-        docker image save -o "$image_tar" "$runner_image"; \
-        docker --host "$docker_host" image load -i "$image_tar" >/dev/null; \
-        rm -f "$image_tar"; \
+        docker --host "$docker_host" build --network host --platform linux/arm64 -t "$runner_image" docker/runner-images/linux-arm64-cpu; \
       fi; \
       if [ "{{include_ignored}}" = "true" ] && ! docker --host "$docker_host" image inspect "$cuda_image" >/dev/null 2>&1; then \
         if docker image inspect "$cuda_image" >/dev/null 2>&1; then \
@@ -201,9 +195,25 @@ _integration include_ignored:
           docker --host "$docker_host" pull "$cuda_image" >/dev/null; \
         fi; \
       fi; \
+      compose_needs_sudo=false; \
+      if ! docker info >/dev/null 2>&1; then \
+        if sudo -n docker info >/dev/null 2>&1; then \
+          compose_needs_sudo=true; \
+        else \
+          printf 'Docker Compose integration requires access to the host Docker daemon, or passwordless sudo for docker compose.\n' >&2; \
+          exit 2; \
+        fi; \
+      fi; \
+      compose_test() { \
+        if [ "$compose_needs_sudo" = "true" ]; then \
+          sudo env AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" AGENTICS_COMPOSE_TEST_RUN_ID="$run_id" AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED="{{include_ignored}}" AGENTICS_S3_PREFIX="test/$run_id" docker compose --env-file deploy/compose/env/test.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.test.yml "$@"; \
+        else \
+          AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" AGENTICS_COMPOSE_TEST_RUN_ID="$run_id" AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED="{{include_ignored}}" AGENTICS_S3_PREFIX="test/$run_id" docker compose --env-file deploy/compose/env/test.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.test.yml "$@"; \
+        fi; \
+      }; \
       status=0; \
-      AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" AGENTICS_COMPOSE_TEST_RUN_ID="$run_id" AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED="{{include_ignored}}" AGENTICS_S3_PREFIX="test/$run_id" {{compose_test}} -p "$project" up --build --abort-on-container-exit --exit-code-from tests || status=$?; \
-      AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" AGENTICS_COMPOSE_TEST_RUN_ID="$run_id" AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED="{{include_ignored}}" AGENTICS_S3_PREFIX="test/$run_id" {{compose_test}} -p "$project" down -v --remove-orphans; \
+      compose_test -p "$project" up --build --abort-on-container-exit --exit-code-from tests || status=$?; \
+      compose_test -p "$project" down -v --remove-orphans; \
       exit "$status"
 
 # CPU-only full test suite
