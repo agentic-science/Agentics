@@ -5,8 +5,6 @@ use secrecy::{ExposeSecret, SecretString};
 
 use super::ProductionRehearsalError;
 
-const ADMIN_AUTOMATION_HEADER: &str = "X-Agentics-Admin-Automation";
-
 pub(super) async fn get_json(
     client: &Client,
     api_base_url: &Url,
@@ -24,13 +22,11 @@ pub(super) async fn admin_get_json(
     client: &Client,
     api_base_url: &Url,
     path: &str,
-    username: &str,
-    password: &SecretString,
+    service_token: &SecretString,
 ) -> Result<serde_json::Value, ProductionRehearsalError> {
     let response = client
         .get(join_url(api_base_url, path)?)
-        .basic_auth(username, Some(password.expose_secret()))
-        .header(ADMIN_AUTOMATION_HEADER, "true")
+        .bearer_auth(service_token.expose_secret())
         .send()
         .await
         .map_err(ProductionRehearsalError::HttpClient)?;
@@ -41,14 +37,12 @@ pub(super) async fn admin_post_json(
     client: &Client,
     api_base_url: &Url,
     path: &str,
-    username: &str,
-    password: &SecretString,
+    service_token: &SecretString,
     body: &serde_json::Value,
 ) -> Result<serde_json::Value, ProductionRehearsalError> {
     let response = client
         .post(join_url(api_base_url, path)?)
-        .basic_auth(username, Some(password.expose_secret()))
-        .header(ADMIN_AUTOMATION_HEADER, "true")
+        .bearer_auth(service_token.expose_secret())
         .json(body)
         .send()
         .await

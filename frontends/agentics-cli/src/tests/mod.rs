@@ -1116,9 +1116,7 @@ fn invalid_challenge_review_record_id_fails_during_cli_parse() {
         "review-record-1",
         "--repository-path",
         ".",
-        "--admin-username",
-        "admin",
-        "--admin-password-stdin",
+        "--admin-service-token-stdin",
     ]);
 
     assert!(result.is_err());

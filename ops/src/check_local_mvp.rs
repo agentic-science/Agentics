@@ -20,9 +20,7 @@ use std::process::ExitCode;
 use std::sync::Arc;
 use std::time::Duration;
 
-use agentics_config::{
-    DEFAULT_ADMIN_USERNAME, DEFAULT_API_HOST, DEFAULT_API_PORT, local_api_base_url,
-};
+use agentics_config::{DEFAULT_API_HOST, DEFAULT_API_PORT, local_api_base_url};
 use agentics_domain::models::HealthResponse;
 use agentics_domain::models::challenge::ChallengeListResponse;
 use agentics_domain::models::request::{AdminCapacityResponse, AdminServiceHeartbeatListResponse};
@@ -36,8 +34,6 @@ use thiserror::Error;
 use url::Url;
 
 const DEFAULT_TIMEOUT_SECONDS: u64 = 15;
-const ADMIN_AUTOMATION_HEADER: &str = "X-Agentics-Admin-Automation";
-
 type DockerProbeFuture = Pin<Box<dyn Future<Output = Result<String, String>> + Send>>;
 type DockerProbe = Arc<dyn Fn() -> DockerProbeFuture + Send + Sync>;
 
@@ -45,7 +41,7 @@ type DockerProbe = Arc<dyn Fn() -> DockerProbeFuture + Send + Sync>;
 #[derive(Debug, Clone, Parser)]
 #[command(
     about = "Checks the local Agentics MVP runtime surfaces.",
-    long_about = "Checks Docker daemon reachability, API health, public challenge catalog shape, optional admin surfaces, and optional web frontend reachability.\n\nConfiguration is accepted through flags with AGENTICS_* environment fallbacks. Admin checks run only when an admin password is supplied through AGENTICS_ADMIN_PASSWORD or --admin-password-stdin. Web checks run only when a web base URL is supplied."
+    long_about = "Checks Docker daemon reachability, API health, public challenge catalog shape, optional admin surfaces, and optional web frontend reachability.\n\nConfiguration is accepted through flags with AGENTICS_* environment fallbacks. Admin checks run only when an admin service token is supplied through AGENTICS_ADMIN_SERVICE_TOKEN or --admin-service-token-stdin. Web checks run only when a web base URL is supplied."
 )]
 pub struct Cli {
     /// API base URL. Falls back to AGENTICS_API_BASE_URL, then http://127.0.0.1:${AGENTICS_API_PORT:-3100}.
@@ -57,12 +53,9 @@ pub struct Cli {
     /// Web frontend base URL. Falls back to AGENTICS_WEB_BASE_URL. If absent, the web check is skipped.
     #[arg(long)]
     web_base_url: Option<String>,
-    /// Admin username. Falls back to AGENTICS_ADMIN_USERNAME, then admin.
+    /// Read the admin service token from stdin instead of AGENTICS_ADMIN_SERVICE_TOKEN.
     #[arg(long)]
-    admin_username: Option<String>,
-    /// Read the admin password from stdin instead of AGENTICS_ADMIN_PASSWORD.
-    #[arg(long)]
-    admin_password_stdin: bool,
+    admin_service_token_stdin: bool,
     /// Per-request timeout in seconds. Falls back to AGENTICS_CHECK_TIMEOUT_SECONDS, then 15.
     #[arg(long)]
     timeout_seconds: Option<u64>,
@@ -74,8 +67,7 @@ pub struct CheckEnv {
     pub api_base_url: Option<String>,
     pub api_port: Option<u16>,
     pub web_base_url: Option<String>,
-    pub admin_username: Option<String>,
-    pub admin_password: Option<SecretString>,
+    pub admin_service_token: Option<SecretString>,
     pub timeout_seconds: Option<u64>,
 }
 
@@ -84,8 +76,7 @@ struct RawCheckEnv {
     api_base_url: Option<String>,
     api_port: Option<u16>,
     web_base_url: Option<String>,
-    admin_username: Option<String>,
-    admin_password: Option<String>,
+    admin_service_token: Option<String>,
     check_timeout_seconds: Option<u64>,
 }
 
@@ -102,8 +93,7 @@ impl CheckEnv {
             api_base_url: non_empty_owned(raw.api_base_url),
             api_port: raw.api_port,
             web_base_url: non_empty_owned(raw.web_base_url),
-            admin_username: non_empty_owned(raw.admin_username),
-            admin_password: non_empty_owned(raw.admin_password).map(SecretString::from),
+            admin_service_token: non_empty_owned(raw.admin_service_token).map(SecretString::from),
             timeout_seconds: raw.check_timeout_seconds,
         })
     }
@@ -114,8 +104,7 @@ impl CheckEnv {
 pub struct CheckConfig {
     api_base_url: Url,
     web_base_url: Option<Url>,
-    admin_username: String,
-    admin_password: Option<SecretString>,
+    admin_service_token: Option<SecretString>,
     timeout: Duration,
 }
 
@@ -175,15 +164,15 @@ pub enum CheckError {
         field: &'static str,
         message: String,
     },
-    #[error("failed to read admin password from stdin: {0}")]
+    #[error("failed to read admin service token from stdin: {0}")]
     Stdin(io::Error),
 }
 
 /// Run the checker from process arguments and environment.
 pub async fn run_from_process() -> ExitCode {
     let cli = Cli::parse();
-    let stdin_password = match read_stdin_password(cli.admin_password_stdin) {
-        Ok(password) => password,
+    let stdin_service_token = match read_stdin_service_token(cli.admin_service_token_stdin) {
+        Ok(service_token) => service_token,
         Err(error) => {
             eprintln!("[agentics-check] ERROR: {error}");
             return ExitCode::from(2);
@@ -196,7 +185,7 @@ pub async fn run_from_process() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let config = match resolve_config(&cli, &env, stdin_password) {
+    let config = match resolve_config(&cli, &env, stdin_service_token) {
         Ok(config) => config,
         Err(error) => {
             eprintln!("[agentics-check] ERROR: {error}");
@@ -228,7 +217,7 @@ pub async fn run_from_process() -> ExitCode {
 pub fn resolve_config(
     cli: &Cli,
     env: &CheckEnv,
-    stdin_password: Option<SecretString>,
+    stdin_service_token: Option<SecretString>,
 ) -> Result<CheckConfig, CheckError> {
     let api_port = resolve_api_port(cli.api_port, env.api_port);
     let api_base_url =
@@ -244,19 +233,13 @@ pub fn resolve_config(
         .map(|value| parse_base_url("web base URL", value))
         .transpose()?;
 
-    let admin_username =
-        first_non_empty(cli.admin_username.as_deref(), env.admin_username.as_deref())
-            .unwrap_or(DEFAULT_ADMIN_USERNAME)
-            .to_string();
-
-    let admin_password = stdin_password.or_else(|| env.admin_password.clone());
+    let admin_service_token = stdin_service_token.or_else(|| env.admin_service_token.clone());
     let timeout_seconds = resolve_timeout_seconds(cli.timeout_seconds, env.timeout_seconds)?;
 
     Ok(CheckConfig {
         api_base_url,
         web_base_url,
-        admin_username,
-        admin_password,
+        admin_service_token,
         timeout: Duration::from_secs(timeout_seconds),
     })
 }
@@ -279,14 +262,12 @@ pub async fn run_checks(config: CheckConfig, docker_probe: DockerProbe) -> Vec<C
     let admin_capacity = check_optional_admin_capacity(
         client.clone(),
         config.api_base_url.clone(),
-        config.admin_username.clone(),
-        config.admin_password.clone(),
+        config.admin_service_token.clone(),
     );
     let admin_heartbeats = check_optional_admin_heartbeats(
         client.clone(),
         config.api_base_url.clone(),
-        config.admin_username,
-        config.admin_password,
+        config.admin_service_token,
     );
     let web = check_optional_web(client, config.web_base_url);
 
@@ -311,16 +292,13 @@ pub async fn run_checks(config: CheckConfig, docker_probe: DockerProbe) -> Vec<C
 async fn check_optional_admin_capacity(
     client: Client,
     api_base_url: Url,
-    admin_username: String,
-    admin_password: Option<SecretString>,
+    admin_service_token: Option<SecretString>,
 ) -> CheckReport {
-    match admin_password {
-        Some(password) => {
-            check_admin_capacity(client, api_base_url, admin_username, password).await
-        }
+    match admin_service_token {
+        Some(service_token) => check_admin_capacity(client, api_base_url, service_token).await,
         None => skipped(
             "admin capacity",
-            "AGENTICS_ADMIN_PASSWORD is unset and --admin-password-stdin was not used",
+            "AGENTICS_ADMIN_SERVICE_TOKEN is unset and --admin-service-token-stdin was not used",
         ),
     }
 }
@@ -328,16 +306,13 @@ async fn check_optional_admin_capacity(
 async fn check_optional_admin_heartbeats(
     client: Client,
     api_base_url: Url,
-    admin_username: String,
-    admin_password: Option<SecretString>,
+    admin_service_token: Option<SecretString>,
 ) -> CheckReport {
-    match admin_password {
-        Some(password) => {
-            check_admin_heartbeats(client, api_base_url, admin_username, password).await
-        }
+    match admin_service_token {
+        Some(service_token) => check_admin_heartbeats(client, api_base_url, service_token).await,
         None => skipped(
             "admin heartbeats",
-            "AGENTICS_ADMIN_PASSWORD is unset and --admin-password-stdin was not used",
+            "AGENTICS_ADMIN_SERVICE_TOKEN is unset and --admin-service-token-stdin was not used",
         ),
     }
 }
@@ -352,7 +327,7 @@ async fn check_optional_web(client: Client, web_base_url: Option<Url>) -> CheckR
     }
 }
 
-fn read_stdin_password(enabled: bool) -> Result<Option<SecretString>, CheckError> {
+fn read_stdin_service_token(enabled: bool) -> Result<Option<SecretString>, CheckError> {
     if !enabled {
         return Ok(None);
     }
@@ -477,15 +452,13 @@ async fn check_challenge_catalog(client: Client, base_url: Url) -> CheckReport {
 async fn check_admin_capacity(
     client: Client,
     base_url: Url,
-    username: String,
-    password: SecretString,
+    service_token: SecretString,
 ) -> CheckReport {
     match get_json_admin::<AdminCapacityResponse>(
         &client,
         &base_url,
         "admin/capacity",
-        &username,
-        &password,
+        &service_token,
     )
     .await
     {
@@ -505,15 +478,13 @@ async fn check_admin_capacity(
 async fn check_admin_heartbeats(
     client: Client,
     base_url: Url,
-    username: String,
-    password: SecretString,
+    service_token: SecretString,
 ) -> CheckReport {
     match get_json_admin::<AdminServiceHeartbeatListResponse>(
         &client,
         &base_url,
         "admin/service-heartbeats",
-        &username,
-        &password,
+        &service_token,
     )
     .await
     {
@@ -555,8 +526,7 @@ async fn get_json_admin<T>(
     client: &Client,
     base_url: &Url,
     path: &str,
-    username: &str,
-    password: &SecretString,
+    service_token: &SecretString,
 ) -> Result<T, String>
 where
     T: DeserializeOwned,
@@ -564,8 +534,7 @@ where
     let url = endpoint(base_url, path)?;
     let response = client
         .get(url)
-        .basic_auth(username, Some(password.expose_secret()))
-        .header(ADMIN_AUTOMATION_HEADER, "true")
+        .bearer_auth(service_token.expose_secret())
         .send()
         .await
         .map_err(|error| format!("request failed: {error}"))?;
@@ -641,7 +610,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use serde_json::json;
-    use wiremock::matchers::{basic_auth, header, method, path};
+    use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
     use super::*;
@@ -651,8 +620,7 @@ mod tests {
             api_base_url: None,
             api_port: None,
             web_base_url: None,
-            admin_username: None,
-            admin_password_stdin: false,
+            admin_service_token_stdin: false,
             timeout_seconds: None,
         }
     }
@@ -676,8 +644,7 @@ mod tests {
 
         assert_eq!(config.api_base_url.as_str(), "http://127.0.0.1:3100/");
         assert!(config.web_base_url.is_none());
-        assert_eq!(config.admin_username, "admin");
-        assert!(config.admin_password.is_none());
+        assert!(config.admin_service_token.is_none());
         assert_eq!(config.timeout, Duration::from_secs(DEFAULT_TIMEOUT_SECONDS));
     }
 
@@ -686,14 +653,12 @@ mod tests {
         let mut args = cli();
         args.api_base_url = Some("http://flag.example".to_string());
         args.web_base_url = Some("http://web.example".to_string());
-        args.admin_username = Some("flag-admin".to_string());
         args.timeout_seconds = Some(9);
         let env = CheckEnv {
             api_base_url: Some("http://env.example".to_string()),
             api_port: Some(9999),
             web_base_url: Some("http://env-web.example".to_string()),
-            admin_username: Some("env-admin".to_string()),
-            admin_password: Some(SecretString::from("env-secret")),
+            admin_service_token: Some(SecretString::from("env-secret")),
             timeout_seconds: Some(30),
         };
 
@@ -705,10 +670,9 @@ mod tests {
             config.web_base_url.as_ref().map(Url::as_str),
             Some("http://web.example/")
         );
-        assert_eq!(config.admin_username, "flag-admin");
         assert_eq!(
             config
-                .admin_password
+                .admin_service_token
                 .as_ref()
                 .map(ExposeSecret::expose_secret),
             Some("stdin-secret")
@@ -766,7 +730,7 @@ mod tests {
     async fn successful_run_reports_all_configured_checks() {
         let server = MockServer::start().await;
         mount_required_api_mocks(&server).await;
-        mount_admin_mocks(&server, "admin", "secret").await;
+        mount_admin_mocks(&server, "agentics_admin_secret").await;
         Mock::given(method("GET"))
             .and(path("/"))
             .respond_with(ResponseTemplate::new(200).set_body_string("ok"))
@@ -776,8 +740,7 @@ mod tests {
         let config = CheckConfig {
             api_base_url: Url::parse(&server.uri()).expect("server URL"),
             web_base_url: Some(Url::parse(&server.uri()).expect("server URL")),
-            admin_username: "admin".to_string(),
-            admin_password: Some(SecretString::from("secret")),
+            admin_service_token: Some(SecretString::from("agentics_admin_secret")),
             timeout: Duration::from_secs(5),
         };
 
@@ -797,8 +760,7 @@ mod tests {
         let config = CheckConfig {
             api_base_url: Url::parse(&server.uri()).expect("server URL"),
             web_base_url: None,
-            admin_username: "admin".to_string(),
-            admin_password: None,
+            admin_service_token: None,
             timeout: Duration::from_secs(5),
         };
 
@@ -852,7 +814,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn admin_failure_is_reported_when_password_configured() {
+    async fn admin_failure_is_reported_when_service_token_configured() {
         let server = MockServer::start().await;
         mount_required_api_mocks(&server).await;
         Mock::given(method("GET"))
@@ -868,8 +830,7 @@ mod tests {
         let config = CheckConfig {
             api_base_url: Url::parse(&server.uri()).expect("server URL"),
             web_base_url: None,
-            admin_username: "admin".to_string(),
-            admin_password: Some(SecretString::from("secret")),
+            admin_service_token: Some(SecretString::from("agentics_admin_secret")),
             timeout: Duration::from_secs(5),
         };
 
@@ -949,8 +910,7 @@ mod tests {
         CheckConfig {
             api_base_url: Url::parse(&server.uri()).expect("server URL"),
             web_base_url: None,
-            admin_username: "admin".to_string(),
-            admin_password: None,
+            admin_service_token: None,
             timeout: Duration::from_secs(5),
         }
     }
@@ -990,11 +950,10 @@ mod tests {
             .await;
     }
 
-    async fn mount_admin_mocks(server: &MockServer, username: &str, password: &str) {
+    async fn mount_admin_mocks(server: &MockServer, service_token: &str) {
         Mock::given(method("GET"))
             .and(path("/admin/capacity"))
-            .and(basic_auth(username, password))
-            .and(header(ADMIN_AUTOMATION_HEADER, "true"))
+            .and(header("authorization", format!("Bearer {service_token}")))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "quota_window_seconds": 86400,
                 "quotas": {
@@ -1014,8 +973,7 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path("/admin/service-heartbeats"))
-            .and(basic_auth(username, password))
-            .and(header(ADMIN_AUTOMATION_HEADER, "true"))
+            .and(header("authorization", format!("Bearer {service_token}")))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "items": [
                     {

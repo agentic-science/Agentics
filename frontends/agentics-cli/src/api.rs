@@ -248,11 +248,10 @@ impl ApiClient {
         &self,
         review_record_id: &ChallengeReviewRecordId,
         request: &ValidateChallengeReviewRecordRequest,
-        username: &str,
-        password: &SecretString,
+        admin_service_token: &SecretString,
     ) -> Result<ChallengeReviewRecordResponse> {
         let path = format!("/admin/challenge-review-records/{review_record_id}/validate");
-        self.post_json_admin(&path, request, username, password)
+        self.post_json_admin(&path, request, admin_service_token)
             .await
     }
 
@@ -261,11 +260,10 @@ impl ApiClient {
         &self,
         review_record_id: &ChallengeReviewRecordId,
         request: &ChallengeReviewDecisionRequest,
-        username: &str,
-        password: &SecretString,
+        admin_service_token: &SecretString,
     ) -> Result<ChallengeReviewRecordResponse> {
         let path = format!("/admin/challenge-review-records/{review_record_id}/approve");
-        self.post_json_admin(&path, request, username, password)
+        self.post_json_admin(&path, request, admin_service_token)
             .await
     }
 
@@ -274,11 +272,10 @@ impl ApiClient {
         &self,
         review_record_id: &ChallengeReviewRecordId,
         request: &ChallengeReviewDecisionRequest,
-        username: &str,
-        password: &SecretString,
+        admin_service_token: &SecretString,
     ) -> Result<ChallengeReviewRecordResponse> {
         let path = format!("/admin/challenge-review-records/{review_record_id}/reject");
-        self.post_json_admin(&path, request, username, password)
+        self.post_json_admin(&path, request, admin_service_token)
             .await
     }
 
@@ -287,11 +284,10 @@ impl ApiClient {
         &self,
         review_record_id: &ChallengeReviewRecordId,
         request: &ValidateChallengeReviewRecordRequest,
-        username: &str,
-        password: &SecretString,
+        admin_service_token: &SecretString,
     ) -> Result<ChallengeReviewRecordResponse> {
         let path = format!("/admin/challenge-review-records/{review_record_id}/publish");
-        self.post_json_admin(&path, request, username, password)
+        self.post_json_admin(&path, request, admin_service_token)
             .await
     }
 
@@ -300,25 +296,22 @@ impl ApiClient {
         &self,
         review_record_id: &ChallengeReviewRecordId,
         request: &ChallengeReviewDecisionRequest,
-        username: &str,
-        password: &SecretString,
+        admin_service_token: &SecretString,
     ) -> Result<ChallengeReviewRecordResponse> {
         let path = format!("/admin/challenge-review-records/{review_record_id}/abandon");
-        self.post_json_admin(&path, request, username, password)
+        self.post_json_admin(&path, request, admin_service_token)
             .await
     }
 
     /// Handles cleanup challenge review records admin for this module.
     pub(crate) async fn cleanup_challenge_review_records_admin(
         &self,
-        username: &str,
-        password: &SecretString,
+        admin_service_token: &SecretString,
     ) -> Result<ChallengeReviewRecordCleanupResponse> {
         self.post_json_admin(
             "/admin/challenge-review-records/cleanup",
             &serde_json::json!({}),
-            username,
-            password,
+            admin_service_token,
         )
         .await
     }
@@ -347,8 +340,7 @@ impl ApiClient {
         &self,
         path: &str,
         body: &B,
-        username: &str,
-        password: &SecretString,
+        admin_service_token: &SecretString,
     ) -> Result<T>
     where
         B: Serialize + Sync + ?Sized,
@@ -356,8 +348,7 @@ impl ApiClient {
     {
         let request = self
             .request(Method::POST, path, false)?
-            .basic_auth(username, Some(password.expose_secret()))
-            .header("X-Agentics-Admin-Automation", "true")
+            .bearer_auth(admin_service_token.expose_secret())
             .json(body);
         parse_response(request.send().await?).await
     }

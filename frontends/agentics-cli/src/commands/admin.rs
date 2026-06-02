@@ -43,14 +43,13 @@ pub(crate) async fn challenge_review_record(
             repository_path,
             admin,
         } => {
-            let admin_password = resolve_admin_password(&admin, settings)?;
+            let admin_service_token = resolve_admin_service_token(&admin, settings)?;
             let repository_path = admin_repository_path_to_wire(&repository_path)?;
             let response = client
                 .validate_challenge_review_record_admin(
                     &review_record_id,
                     &ValidateChallengeReviewRecordRequest { repository_path },
-                    &admin.admin_username,
-                    &admin_password,
+                    &admin_service_token,
                 )
                 .await?;
             output::render_challenge_review_record(&response, output_format)
@@ -99,14 +98,13 @@ pub(crate) async fn challenge_review_record(
             repository_path,
             admin,
         } => {
-            let admin_password = resolve_admin_password(&admin, settings)?;
+            let admin_service_token = resolve_admin_service_token(&admin, settings)?;
             let repository_path = admin_repository_path_to_wire(&repository_path)?;
             let response = client
                 .publish_challenge_review_record_admin(
                     &review_record_id,
                     &ValidateChallengeReviewRecordRequest { repository_path },
-                    &admin.admin_username,
-                    &admin_password,
+                    &admin_service_token,
                 )
                 .await?;
             output::render_challenge_review_record(&response, output_format)
@@ -131,9 +129,9 @@ pub(crate) async fn challenge_review_record(
             .await
         }
         ChallengeReviewRecordCommand::Cleanup { admin } => {
-            let admin_password = resolve_admin_password(&admin, settings)?;
+            let admin_service_token = resolve_admin_service_token(&admin, settings)?;
             let response = client
-                .cleanup_challenge_review_records_admin(&admin.admin_username, &admin_password)
+                .cleanup_challenge_review_records_admin(&admin_service_token)
                 .await?;
             output::render_challenge_review_record_cleanup(&response, output_format)
         }
@@ -150,23 +148,32 @@ fn admin_repository_path_to_wire(path: &Path) -> Result<String> {
     })
 }
 
-/// Resolve the admin password from a non-argv source.
-fn resolve_admin_password(
+/// Resolve the admin service token from an explicit source.
+fn resolve_admin_service_token(
     admin: &AdminAuthArgs,
     settings: &ResolvedSettings,
 ) -> Result<SecretString> {
-    let password = if admin.admin_password_stdin {
+    if let Some(token) = &admin.admin_service_token {
+        let token = token.trim();
+        if token.is_empty() {
+            bail!("--admin-service-token must not be empty");
+        }
+        return Ok(SecretString::from(token.to_string()));
+    }
+    let token = if admin.admin_service_token_stdin {
         let mut input = String::new();
         std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
-            .context("failed to read admin password from stdin")?;
+            .context("failed to read admin service token from stdin")?;
         SecretString::from(input.trim_end_matches(['\r', '\n']).to_string())
     } else {
-        settings.admin_password.clone().unwrap_or_default()
+        settings.admin_service_token.clone().unwrap_or_default()
     };
-    if password.expose_secret().is_empty() {
-        bail!("set AGENTICS_ADMIN_PASSWORD or pass --admin-password-stdin for admin commands");
+    if token.expose_secret().is_empty() {
+        bail!(
+            "set AGENTICS_ADMIN_SERVICE_TOKEN or pass --admin-service-token/--admin-service-token-stdin for admin commands"
+        );
     }
-    Ok(password)
+    Ok(token)
 }
 
 /// Enumerates review record decision variants supported by this module.
@@ -196,15 +203,14 @@ async fn review_record_decision(
         message: review.message,
         expected_validation_bundle_sha256: review.expected_validation_bundle_sha256,
     };
-    let admin_password = resolve_admin_password(&review.admin, settings)?;
+    let admin_service_token = resolve_admin_service_token(&review.admin, settings)?;
     let response = match review.action {
         ReviewRecordDecisionAction::Approve => {
             client
                 .approve_challenge_review_record_admin(
                     &review.review_record_id,
                     &request,
-                    &review.admin.admin_username,
-                    &admin_password,
+                    &admin_service_token,
                 )
                 .await?
         }
@@ -213,8 +219,7 @@ async fn review_record_decision(
                 .reject_challenge_review_record_admin(
                     &review.review_record_id,
                     &request,
-                    &review.admin.admin_username,
-                    &admin_password,
+                    &admin_service_token,
                 )
                 .await?
         }
@@ -223,8 +228,7 @@ async fn review_record_decision(
                 .abandon_challenge_review_record_admin(
                     &review.review_record_id,
                     &request,
-                    &review.admin.admin_username,
-                    &admin_password,
+                    &admin_service_token,
                 )
                 .await?
         }
