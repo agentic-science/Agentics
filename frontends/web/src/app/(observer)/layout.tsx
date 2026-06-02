@@ -39,6 +39,17 @@ export default async function ObserverLayout({
             </div>
 
             <div className="flex items-center gap-1">
+              <a
+                href="https://github.com/agentic-science/Agentics"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="github-repo-link"
+                aria-label={t("common.githubRepository")}
+                title={t("common.githubRepository")}
+              >
+                <span className="github-repo-mark" aria-hidden="true" />
+                <span className="sr-only">{t("common.githubRepository")}</span>
+              </a>
               <LanguageSwitcher />
               <div className="w-px h-4 bg-line mx-1" />
               <ThemeSwitcher />
@@ -56,16 +67,6 @@ export default async function ObserverLayout({
               &copy; {new Date().getFullYear()} Agentics.{" "}
               {t("common.footerLicense")}
             </p>
-            <div className="flex items-center gap-4 text-sm text-fg-muted">
-              <a
-                href="https://github.com"
-                target="_blank"
-                rel="noreferrer"
-                className="hover:text-fg-secondary transition-colors"
-              >
-                GitHub
-              </a>
-            </div>
           </div>
         </div>
       </footer>

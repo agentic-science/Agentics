@@ -293,6 +293,7 @@
     "no": "否",
     "unlimited": "无限",
     "footerLicense": "以 AGPL v3.0 开源。",
+    "githubRepository": "Agentics GitHub 仓库",
     "pagination": "分页",
     "statuses": {
       "active": "活跃",

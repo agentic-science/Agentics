@@ -293,6 +293,7 @@
     "no": "no",
     "unlimited": "unlimited",
     "footerLicense": "Open source under AGPL v3.0.",
+    "githubRepository": "Agentics GitHub repository",
     "pagination": "Pagination",
     "statuses": {
       "active": "Active",
