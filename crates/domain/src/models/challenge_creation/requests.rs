@@ -1,4 +1,4 @@
-//! Challenge draft request DTOs.
+//! Challenge review record request DTOs.
 
 use serde::{Deserialize, Serialize};
 
@@ -11,11 +11,11 @@ use crate::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
 use super::manifest::ChallengeCreationManifest;
 use super::private_assets::ChallengePrivateAssetKind;
 
-/// Creator-authenticated request for binding a public GitHub PR to a draft.
+/// Creator-authenticated request for registering a public GitHub PR for review.
 #[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
 #[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
-pub struct CreateChallengeDraftRequest {
+pub struct CreateChallengeReviewRecordRequest {
     pub repo_url: GithubRepoRemote,
     pub pr_number: GithubPullRequestNumber,
     pub pr_url: GithubPullRequestUrl,
@@ -38,20 +38,20 @@ pub struct UploadChallengePrivateAssetRequest {
     pub asset_base64: String,
 }
 
-/// Admin payload for validating a draft against a checked-out repository path.
+/// Admin payload for validating a review record against a checked-out repository path.
 #[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
 #[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
-pub struct ValidateChallengeDraftRequest {
+pub struct ValidateChallengeReviewRecordRequest {
     #[garde(custom(crate::validation::trimmed_non_empty))]
     pub repository_path: String,
 }
 
-/// Admin payload for accepting or rejecting a challenge draft.
+/// Admin payload for accepting or rejecting a challenge review record.
 #[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
 #[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
-pub struct ReviewChallengeDraftRequest {
+pub struct ChallengeReviewDecisionRequest {
     #[serde(default)]
     pub message: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]

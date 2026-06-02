@@ -136,19 +136,19 @@ pub struct QuotaConfig {
     #[garde(range(min = 1))]
     pub max_active_agents: u32,
     #[garde(range(min = 1))]
-    pub max_active_challenge_drafts_per_agent: u32,
+    pub max_active_challenge_review_records_per_agent: u32,
     #[garde(range(min = 1))]
-    pub challenge_private_asset_bytes_per_draft: u64,
+    pub challenge_private_asset_bytes_per_review_record: u64,
     #[garde(range(min = 1))]
-    pub challenge_draft_validations_per_day: u32,
+    pub challenge_review_record_validations_per_day: u32,
     #[garde(range(min = 1))]
-    pub challenge_draft_validation_timeout_minutes: i32,
+    pub challenge_review_record_validation_timeout_minutes: i32,
     #[garde(range(min = 1))]
     pub challenge_private_asset_pending_timeout_minutes: i32,
     #[garde(range(min = 1))]
-    pub challenge_draft_publish_timeout_minutes: i32,
+    pub challenge_review_record_publish_timeout_minutes: i32,
     #[garde(range(min = 1))]
-    pub challenge_draft_ttl_days: i64,
+    pub challenge_review_record_ttl_days: i64,
     #[garde(range(min = 1))]
     pub unpublished_challenge_asset_grace_days: i64,
 }

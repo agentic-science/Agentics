@@ -3,10 +3,10 @@ import type { ReactNode } from "react";
 import type { Mock } from "vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { adminFetchJson } from "@/lib/adminApi";
-import type { ChallengeDraftListItem } from "@/lib/schemas";
+import type { ChallengeReviewRecordListItem } from "@/lib/schemas";
 import messages from "../../../messages/en.json";
 import { ensureDomEnvironment } from "../../test/dom";
-import { ChallengeDraftReviewPanel } from "./ChallengeDraftReviewPanel";
+import { ChallengeReviewRecordPanel } from "./ChallengeReviewRecordPanel";
 
 vi.mock("@/lib/adminApi", () => {
   class MockAdminApiError extends Error {
@@ -21,7 +21,7 @@ vi.mock("@/lib/adminApi", () => {
   return {
     AdminApiError: MockAdminApiError,
     adminFetchJson: vi.fn(),
-    listAdminChallengeDraftPrivateAssets: vi.fn(),
+    listAdminChallengeReviewRecordPrivateAssets: vi.fn(),
   };
 });
 
@@ -32,7 +32,7 @@ const { cleanup, fireEvent, render, waitFor } = await import(
 
 const adminFetchJsonMock = adminFetchJson as Mock;
 
-describe("ChallengeDraftReviewPanel", () => {
+describe("ChallengeReviewRecordPanel", () => {
   afterEach(() => {
     cleanup();
     vi.clearAllMocks();
@@ -40,12 +40,12 @@ describe("ChallengeDraftReviewPanel", () => {
 
   it("uses action-specific reject and abandon review messages", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    adminFetchJsonMock.mockResolvedValue({ id: draft.id });
+    adminFetchJsonMock.mockResolvedValue({ id: reviewRecord.id });
     const onRefresh = vi.fn(async () => {});
-    const view = renderChallengeDraftReviewPanel(
-      <ChallengeDraftReviewPanel
+    const view = renderChallengeReviewRecordPanel(
+      <ChallengeReviewRecordPanel
         csrfToken="csrf-token"
-        drafts={[draft]}
+        reviewRecords={[reviewRecord]}
         locale="en"
         onRefresh={onRefresh}
         onError={vi.fn()}
@@ -56,7 +56,7 @@ describe("ChallengeDraftReviewPanel", () => {
     fireEvent.click(view.getByRole("button", { name: "Reject" }));
     await waitFor(() =>
       expect(adminFetchJsonMock).toHaveBeenCalledWith(
-        "/admin/challenge-drafts/44444444-4444-4444-8444-444444444444/reject",
+        "/admin/challenge-review-records/44444444-4444-4444-8444-444444444444/reject",
         expect.anything(),
         "csrf-token",
         expect.objectContaining({
@@ -69,7 +69,7 @@ describe("ChallengeDraftReviewPanel", () => {
     fireEvent.click(view.getByRole("button", { name: "Abandon" }));
     await waitFor(() =>
       expect(adminFetchJsonMock).toHaveBeenCalledWith(
-        "/admin/challenge-drafts/44444444-4444-4444-8444-444444444444/abandon",
+        "/admin/challenge-review-records/44444444-4444-4444-8444-444444444444/abandon",
         expect.anything(),
         "csrf-token",
         expect.objectContaining({
@@ -81,15 +81,15 @@ describe("ChallengeDraftReviewPanel", () => {
     confirm.mockRestore();
   });
 
-  it("sends the visible validation digest when approving a draft", async () => {
+  it("sends the visible validation digest when approving a review record", async () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    adminFetchJsonMock.mockResolvedValue({ id: draft.id });
-    const view = renderChallengeDraftReviewPanel(
-      <ChallengeDraftReviewPanel
+    adminFetchJsonMock.mockResolvedValue({ id: reviewRecord.id });
+    const view = renderChallengeReviewRecordPanel(
+      <ChallengeReviewRecordPanel
         csrfToken="csrf-token"
-        drafts={[
+        reviewRecords={[
           {
-            ...draft,
+            ...reviewRecord,
             status: "validated",
             validation_bundle_sha256:
               "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
@@ -106,7 +106,7 @@ describe("ChallengeDraftReviewPanel", () => {
 
     await waitFor(() =>
       expect(adminFetchJsonMock).toHaveBeenCalledWith(
-        "/admin/challenge-drafts/44444444-4444-4444-8444-444444444444/approve",
+        "/admin/challenge-review-records/44444444-4444-4444-8444-444444444444/approve",
         expect.anything(),
         "csrf-token",
         expect.objectContaining({
@@ -123,7 +123,7 @@ describe("ChallengeDraftReviewPanel", () => {
   });
 });
 
-function renderChallengeDraftReviewPanel(children: ReactNode) {
+function renderChallengeReviewRecordPanel(children: ReactNode) {
   return render(
     <NextIntlClientProvider locale="en" messages={messages}>
       {children}
@@ -131,11 +131,11 @@ function renderChallengeDraftReviewPanel(children: ReactNode) {
   );
 }
 
-const draft = {
+const reviewRecord = {
   id: "44444444-4444-4444-8444-444444444444",
   challenge_name: "matrix-multiplication",
   request: "new_challenge",
-  status: "draft",
+  status: "pending_review",
   creator_agent_id: "11111111-1111-4111-8111-111111111111",
   creator_github_user_id: 123,
   creator_github_login: "octocat",
@@ -171,4 +171,4 @@ const draft = {
   validation_records: [],
   created_at: "2026-05-15T00:00:00Z",
   updated_at: "2026-05-15T00:00:00Z",
-} satisfies ChallengeDraftListItem;
+} satisfies ChallengeReviewRecordListItem;

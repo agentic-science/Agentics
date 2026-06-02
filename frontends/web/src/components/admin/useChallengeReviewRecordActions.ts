@@ -7,81 +7,92 @@ import { adminErrorMessage } from "@/components/admin/errors";
 import {
   AdminApiError,
   adminFetchJson,
-  listAdminChallengeDraftPrivateAssets,
+  listAdminChallengeReviewRecordPrivateAssets,
 } from "@/lib/adminApi";
 import {
   type AdminChallengePrivateAssetListResponse,
-  type ChallengeDraftListItem,
-  challengeDraftCleanupResponseSchema,
-  challengeDraftResponseSchema,
-  type ReviewChallengeDraftRequest,
-  reviewChallengeDraftRequestSchema,
-  type ValidateChallengeDraftRequest,
-  validateChallengeDraftRequestSchema,
+  type ChallengeReviewDecisionRequest,
+  type ChallengeReviewRecordListItem,
+  challengeReviewDecisionRequestSchema,
+  challengeReviewRecordCleanupResponseSchema,
+  challengeReviewRecordResponseSchema,
+  type ValidateChallengeReviewRecordRequest,
+  validateChallengeReviewRecordRequestSchema,
 } from "@/lib/schemas";
 
 type RefreshOptions = { quiet?: boolean };
 type AdminRefresh = (options?: RefreshOptions) => Promise<void>;
-type DraftAction = "validate" | "approve" | "publish" | "reject" | "abandon";
-type DraftReviewTranslator = ReturnType<typeof useTranslations>;
+type ReviewRecordAction =
+  | "validate"
+  | "approve"
+  | "publish"
+  | "reject"
+  | "abandon";
+type ReviewRecordTranslator = ReturnType<typeof useTranslations>;
 
-interface UseChallengeDraftReviewActionsParams {
+interface UseChallengeReviewRecordActionsParams {
   csrfToken: string;
   onRefresh: AdminRefresh;
   onError: (message: string | null) => void;
   onMessage: (message: string | null) => void;
 }
 
-/** Owns admin draft-review mutation state and refresh behavior. */
-export function useChallengeDraftReviewActions({
+/** Owns admin review record mutation state and refresh behavior. */
+export function useChallengeReviewRecordActions({
   csrfToken,
   onRefresh,
   onError,
   onMessage,
-}: UseChallengeDraftReviewActionsParams) {
-  const t = useTranslations("admin.draftReview");
+}: UseChallengeReviewRecordActionsParams) {
+  const t = useTranslations("admin.reviewRecords");
   const [repositoryPath, setRepositoryPath] = useState(
     "challenge-repos/agentics-challenges",
   );
   const [reviewMessage, setReviewMessage] = useState("");
-  const [busyDraftId, setBusyDraftId] = useState<string | null>(null);
-  const [expandedDraftId, setExpandedDraftId] = useState<string | null>(null);
-  const [assetRowsByDraftId, setAssetRowsByDraftId] = useState<
-    Record<string, AdminChallengePrivateAssetListResponse>
-  >({});
-  const [loadingAssetsDraftId, setLoadingAssetsDraftId] = useState<
+  const [busyReviewRecordId, setBusyReviewRecordId] = useState<string | null>(
+    null,
+  );
+  const [expandedReviewRecordId, setExpandedReviewRecordId] = useState<
     string | null
   >(null);
+  const [assetRowsByReviewRecordId, setAssetRowsByReviewRecordId] = useState<
+    Record<string, AdminChallengePrivateAssetListResponse>
+  >({});
+  const [loadingAssetsReviewRecordId, setLoadingAssetsReviewRecordId] =
+    useState<string | null>(null);
 
-  const toggleAssetRows = async (draftId: string) => {
-    if (expandedDraftId === draftId) {
-      setExpandedDraftId(null);
+  const toggleAssetRows = async (reviewRecordId: string) => {
+    if (expandedReviewRecordId === reviewRecordId) {
+      setExpandedReviewRecordId(null);
       return;
     }
-    setExpandedDraftId(draftId);
-    if (assetRowsByDraftId[draftId] || !csrfToken) {
+    setExpandedReviewRecordId(reviewRecordId);
+    if (assetRowsByReviewRecordId[reviewRecordId] || !csrfToken) {
       return;
     }
 
-    setLoadingAssetsDraftId(draftId);
+    setLoadingAssetsReviewRecordId(reviewRecordId);
     try {
-      const rows = await listAdminChallengeDraftPrivateAssets(
-        draftId,
+      const rows = await listAdminChallengeReviewRecordPrivateAssets(
+        reviewRecordId,
         csrfToken,
       );
-      setAssetRowsByDraftId((current) => ({ ...current, [draftId]: rows }));
+      setAssetRowsByReviewRecordId((current) => ({
+        ...current,
+        [reviewRecordId]: rows,
+      }));
     } catch (e) {
       onError(adminErrorMessage(e, { unknown: t("unknown") }));
     } finally {
-      setLoadingAssetsDraftId(null);
+      setLoadingAssetsReviewRecordId(null);
     }
   };
 
-  const runDraftAction = async (
-    draft: ChallengeDraftListItem,
-    action: DraftAction,
+  const runReviewRecordAction = async (
+    reviewRecord: ChallengeReviewRecordListItem,
+    action: ReviewRecordAction,
   ) => {
-    const draftId = draft.id;
+    const reviewRecordId = reviewRecord.id;
     if (!csrfToken) {
       onError(t("signIn"));
       return;
@@ -93,33 +104,35 @@ export function useChallengeDraftReviewActions({
       onError(t("repositoryRequired"));
       return;
     }
-    if (!confirmDraftAction(draftId, action, t)) {
+    if (!confirmReviewRecordAction(reviewRecordId, action, t)) {
       return;
     }
 
-    setBusyDraftId(draftId);
+    setBusyReviewRecordId(reviewRecordId);
     try {
-      const body: ReviewChallengeDraftRequest | ValidateChallengeDraftRequest =
+      const body:
+        | ChallengeReviewDecisionRequest
+        | ValidateChallengeReviewRecordRequest =
         action === "validate" || action === "publish"
-          ? parseAdminDraftMutationRequest(
-              validateChallengeDraftRequestSchema,
+          ? parseAdminReviewRecordMutationRequest(
+              validateChallengeReviewRecordRequestSchema,
               { repository_path: repositoryPath.trim() },
               t("invalidRepository"),
             )
-          : parseAdminDraftMutationRequest(
-              reviewChallengeDraftRequestSchema,
+          : parseAdminReviewRecordMutationRequest(
+              challengeReviewDecisionRequestSchema,
               {
-                message: draftReviewMessage(action, reviewMessage, t),
+                message: reviewRecordDecisionMessage(action, reviewMessage, t),
                 expected_validation_bundle_sha256:
                   action === "approve"
-                    ? draft.validation_bundle_sha256
+                    ? reviewRecord.validation_bundle_sha256
                     : undefined,
               },
               t("invalidReview"),
             );
       const response = await adminFetchJson(
-        `/admin/challenge-drafts/${encodeURIComponent(draftId)}/${action}`,
-        challengeDraftResponseSchema,
+        `/admin/challenge-review-records/${encodeURIComponent(reviewRecordId)}/${action}`,
+        challengeReviewRecordResponseSchema,
         csrfToken,
         {
           method: "POST",
@@ -134,11 +147,11 @@ export function useChallengeDraftReviewActions({
     } catch (e) {
       onError(adminErrorMessage(e, { unknown: t("unknown") }));
     } finally {
-      setBusyDraftId(null);
+      setBusyReviewRecordId(null);
     }
   };
 
-  const cleanupDrafts = async () => {
+  const cleanupReviewRecords = async () => {
     if (!csrfToken) {
       onError(t("cleanupSignIn"));
       return;
@@ -147,18 +160,18 @@ export function useChallengeDraftReviewActions({
       return;
     }
 
-    setBusyDraftId("cleanup");
+    setBusyReviewRecordId("cleanup");
     try {
       const response = await adminFetchJson(
-        "/admin/challenge-drafts/cleanup",
-        challengeDraftCleanupResponseSchema,
+        "/admin/challenge-review-records/cleanup",
+        challengeReviewRecordCleanupResponseSchema,
         csrfToken,
         { method: "POST" },
       );
       onError(null);
       onMessage(
         t("cleanupResult", {
-          drafts: response.abandoned_drafts,
+          reviewRecords: response.abandoned_review_records,
           assets: response.purged_private_assets,
           tempObjects: response.purged_temporary_storage_objects,
         }),
@@ -167,7 +180,7 @@ export function useChallengeDraftReviewActions({
     } catch (e) {
       onError(adminErrorMessage(e, { unknown: t("unknown") }));
     } finally {
-      setBusyDraftId(null);
+      setBusyReviewRecordId(null);
     }
   };
 
@@ -176,17 +189,17 @@ export function useChallengeDraftReviewActions({
     setRepositoryPath,
     reviewMessage,
     setReviewMessage,
-    busyDraftId,
-    expandedDraftId,
-    assetRowsByDraftId,
-    loadingAssetsDraftId,
+    busyReviewRecordId,
+    expandedReviewRecordId,
+    assetRowsByReviewRecordId,
+    loadingAssetsReviewRecordId,
     toggleAssetRows,
-    runDraftAction,
-    cleanupDrafts,
+    runReviewRecordAction,
+    cleanupReviewRecords,
   };
 }
 
-function parseAdminDraftMutationRequest<T>(
+function parseAdminReviewRecordMutationRequest<T>(
   schema: ZodType<T>,
   value: unknown,
   fallbackMessage: string,
@@ -201,10 +214,10 @@ function parseAdminDraftMutationRequest<T>(
   return parsed.data;
 }
 
-function draftReviewMessage(
+function reviewRecordDecisionMessage(
   action: "approve" | "reject" | "abandon",
   input: string,
-  t: DraftReviewTranslator,
+  t: ReviewRecordTranslator,
 ): string {
   const message = input.trim();
   if (message) {
@@ -221,12 +234,12 @@ function draftReviewMessage(
   }
 }
 
-function confirmDraftAction(
-  draftId: string,
-  action: DraftAction,
-  t: DraftReviewTranslator,
+function confirmReviewRecordAction(
+  reviewRecordId: string,
+  action: ReviewRecordAction,
+  t: ReviewRecordTranslator,
 ): boolean {
-  const shortId = draftId.slice(0, 8);
+  const shortId = reviewRecordId.slice(0, 8);
   switch (action) {
     case "validate":
       return true;

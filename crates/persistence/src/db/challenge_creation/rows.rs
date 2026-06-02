@@ -3,13 +3,13 @@ use serde_json::Value;
 use sqlx::{PgPool, Row};
 
 use agentics_domain::models::challenge_creation::{
-    ChallengeCreationManifest, ChallengeCreationRequestKind, ChallengeDraftStatus,
-    ChallengeDraftValidationStatus, ChallengePrivateAssetKind, ChallengePrivateAssetStatus,
+    ChallengeCreationManifest, ChallengeCreationRequestKind, ChallengePrivateAssetKind,
+    ChallengePrivateAssetStatus, ChallengeReviewRecordStatus, ChallengeReviewValidationStatus,
 };
 use agentics_domain::models::github::GithubPullRequestNumber;
 use agentics_domain::models::hashes::{GitCommitSha, Sha256Digest};
 use agentics_domain::models::ids::{
-    AgentId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengePrivateAssetId,
+    AgentId, ChallengePrivateAssetId, ChallengeReviewRecordId, ChallengeReviewValidationRecordId,
 };
 use agentics_domain::models::names::{AssetName, ChallengeName};
 use agentics_domain::models::paths::RepoRelativePath;
@@ -18,17 +18,17 @@ use agentics_domain::storage::StorageKey;
 use agentics_error::{Result, ServiceError};
 
 use super::super::ids::{
-    agent_id_from_row, asset_name_from_row, challenge_draft_id_from_row,
-    challenge_draft_validation_record_id_from_row, challenge_name_from_row,
-    challenge_private_asset_id_from_row, optional_challenge_name_from_row,
+    agent_id_from_row, asset_name_from_row, challenge_name_from_row,
+    challenge_private_asset_id_from_row, challenge_review_record_id_from_row,
+    challenge_review_validation_record_id_from_row, optional_challenge_name_from_row,
 };
 
-/// Draft validation record before DTO projection.
+/// Review record validation row before DTO projection.
 #[derive(Debug, Clone)]
-pub struct ChallengeDraftValidationRecord {
-    pub id: ChallengeDraftValidationRecordId,
-    pub draft_id: ChallengeDraftId,
-    pub status: ChallengeDraftValidationStatus,
+pub struct ChallengeReviewValidationRecord {
+    pub id: ChallengeReviewValidationRecordId,
+    pub review_record_id: ChallengeReviewRecordId,
+    pub status: ChallengeReviewValidationStatus,
     pub message: String,
     pub repository_path: String,
     pub manifest_sha256: Sha256Digest,
@@ -40,7 +40,7 @@ pub struct ChallengeDraftValidationRecord {
 #[derive(Debug, Clone)]
 pub struct ChallengePrivateAssetRecord {
     pub id: ChallengePrivateAssetId,
-    pub draft_id: ChallengeDraftId,
+    pub review_record_id: ChallengeReviewRecordId,
     pub asset_name: AssetName,
     pub kind: ChallengePrivateAssetKind,
     pub required: bool,
@@ -55,7 +55,7 @@ pub struct ChallengePrivateAssetRecord {
 #[derive(Debug, Clone)]
 pub struct AdminChallengePrivateAssetRecord {
     pub id: ChallengePrivateAssetId,
-    pub draft_id: ChallengeDraftId,
+    pub review_record_id: ChallengeReviewRecordId,
     pub asset_name: AssetName,
     pub kind: ChallengePrivateAssetKind,
     pub required: bool,
@@ -71,13 +71,13 @@ pub struct AdminChallengePrivateAssetRecord {
     pub failure_message: Option<String>,
 }
 
-/// Challenge draft row plus active assets and validation records before DTO projection.
+/// Challenge review record row plus active assets and validation records before DTO projection.
 #[derive(Debug, Clone)]
-pub struct ChallengeDraftRecord {
-    pub id: ChallengeDraftId,
+pub struct ChallengeReviewRecordRecord {
+    pub id: ChallengeReviewRecordId,
     pub challenge_name: ChallengeName,
     pub request: ChallengeCreationRequestKind,
-    pub status: ChallengeDraftStatus,
+    pub status: ChallengeReviewRecordStatus,
     pub creator_agent_id: AgentId,
     pub creator_github_user_id: i64,
     pub creator_github_login: String,
@@ -94,25 +94,25 @@ pub struct ChallengeDraftRecord {
     pub validation_repository_path: Option<String>,
     pub published_challenge_name: Option<ChallengeName>,
     pub private_assets: Vec<ChallengePrivateAssetRecord>,
-    pub validation_records: Vec<ChallengeDraftValidationRecord>,
+    pub validation_records: Vec<ChallengeReviewValidationRecord>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
-/// List all private asset lifecycle records for an admin draft review.
+/// List all private asset lifecycle records for an admin review record review.
 pub async fn list_challenge_private_asset_states(
     pool: &PgPool,
-    draft_id: &str,
+    review_record_id: &str,
 ) -> Result<Vec<AdminChallengePrivateAssetRecord>> {
     let rows = sqlx::query(
         r#"
         SELECT *
         FROM challenge_private_assets
-        WHERE draft_id = $1::uuid
+        WHERE review_record_id = $1::uuid
         ORDER BY created_at ASC
         "#,
     )
-    .bind(draft_id)
+    .bind(review_record_id)
     .fetch_all(pool)
     .await?;
 
@@ -121,64 +121,64 @@ pub async fn list_challenge_private_asset_states(
         .collect()
 }
 
-/// Lists active private assets for draft using the configured query scope.
-pub(super) async fn list_private_assets_for_draft(
+/// Lists active private assets for review_record using the configured query scope.
+pub(super) async fn list_private_assets_for_review_record(
     pool: &PgPool,
-    draft_id: &str,
+    review_record_id: &str,
 ) -> Result<Vec<ChallengePrivateAssetRecord>> {
     let rows = sqlx::query(
         r#"
         SELECT *
         FROM challenge_private_assets
-        WHERE draft_id = $1::uuid
+        WHERE review_record_id = $1::uuid
           AND status = 'active'
         ORDER BY created_at ASC
         "#,
     )
-    .bind(draft_id)
+    .bind(review_record_id)
     .fetch_all(pool)
     .await?;
 
     rows.into_iter().map(row_to_private_asset_record).collect()
 }
 
-/// Lists validation records for draft using the configured query scope.
-pub(super) async fn list_validation_records_for_draft(
+/// Lists validation records for review_record using the configured query scope.
+pub(super) async fn list_validation_records_for_review_record(
     pool: &PgPool,
-    draft_id: &str,
-) -> Result<Vec<ChallengeDraftValidationRecord>> {
+    review_record_id: &str,
+) -> Result<Vec<ChallengeReviewValidationRecord>> {
     let rows = sqlx::query(
         r#"
         SELECT *
-        FROM challenge_draft_validation_records
-        WHERE draft_id = $1::uuid
+        FROM challenge_review_validation_records
+        WHERE review_record_id = $1::uuid
         ORDER BY created_at DESC
         "#,
     )
-    .bind(draft_id)
+    .bind(review_record_id)
     .fetch_all(pool)
     .await?;
 
     rows.into_iter().map(row_to_validation_record).collect()
 }
 
-/// Converts a database row into the draft record model.
-pub(super) fn row_to_draft_record(
+/// Converts a database row into the review_record record model.
+pub(super) fn row_to_review_record(
     row: sqlx::postgres::PgRow,
     private_assets: Vec<ChallengePrivateAssetRecord>,
-    validation_records: Vec<ChallengeDraftValidationRecord>,
-) -> Result<ChallengeDraftRecord> {
+    validation_records: Vec<ChallengeReviewValidationRecord>,
+) -> Result<ChallengeReviewRecordRecord> {
     let manifest_json: Value = row.try_get("manifest_json")?;
     let manifest: ChallengeCreationManifest =
         serde_json::from_value(manifest_json).map_err(|e| ServiceError::Internal(e.to_string()))?;
     let published_challenge_name =
         optional_challenge_name_from_row(&row, "published_challenge_name")?;
 
-    Ok(ChallengeDraftRecord {
-        id: challenge_draft_id_from_row(&row, "id")?,
+    Ok(ChallengeReviewRecordRecord {
+        id: challenge_review_record_id_from_row(&row, "id")?,
         challenge_name: challenge_name_from_row(&row, "challenge_name")?,
         request: request_kind_from_row(&row, "request_kind")?,
-        status: draft_status_from_row(&row, "status")?,
+        status: review_record_status_from_row(&row, "status")?,
         creator_agent_id: agent_id_from_row(&row, "creator_agent_id")?,
         creator_github_user_id: row.try_get("creator_github_user_id")?,
         creator_github_login: row.try_get("creator_github_login")?,
@@ -210,7 +210,7 @@ pub(super) fn row_to_private_asset_record(
 ) -> Result<ChallengePrivateAssetRecord> {
     Ok(ChallengePrivateAssetRecord {
         id: challenge_private_asset_id_from_row(&row, "id")?,
-        draft_id: challenge_draft_id_from_row(&row, "draft_id")?,
+        review_record_id: challenge_review_record_id_from_row(&row, "review_record_id")?,
         asset_name: asset_name_from_row(&row, "asset_name")?,
         kind: private_asset_kind_from_row(&row, "kind")?,
         required: row.try_get("required")?,
@@ -228,7 +228,7 @@ fn row_to_admin_private_asset_record(
 ) -> Result<AdminChallengePrivateAssetRecord> {
     Ok(AdminChallengePrivateAssetRecord {
         id: challenge_private_asset_id_from_row(&row, "id")?,
-        draft_id: challenge_draft_id_from_row(&row, "draft_id")?,
+        review_record_id: challenge_review_record_id_from_row(&row, "review_record_id")?,
         asset_name: asset_name_from_row(&row, "asset_name")?,
         kind: private_asset_kind_from_row(&row, "kind")?,
         required: row.try_get("required")?,
@@ -338,10 +338,10 @@ fn repo_relative_path_from_row(
 /// Converts a database row into the validation record model.
 pub(super) fn row_to_validation_record(
     row: sqlx::postgres::PgRow,
-) -> Result<ChallengeDraftValidationRecord> {
-    Ok(ChallengeDraftValidationRecord {
-        id: challenge_draft_validation_record_id_from_row(&row, "id")?,
-        draft_id: challenge_draft_id_from_row(&row, "draft_id")?,
+) -> Result<ChallengeReviewValidationRecord> {
+    Ok(ChallengeReviewValidationRecord {
+        id: challenge_review_validation_record_id_from_row(&row, "id")?,
+        review_record_id: challenge_review_record_id_from_row(&row, "review_record_id")?,
         status: validation_status_from_row(&row, "status")?,
         message: row.try_get("message")?,
         repository_path: row.try_get("repository_path")?,
@@ -361,13 +361,13 @@ fn request_kind_from_row(
         .ok_or_else(|| ServiceError::Internal(format!("unknown stored {column} `{value}`")))
 }
 
-/// Reads draft status from a database row and validates its domain shape.
-pub(super) fn draft_status_from_row(
+/// Reads review_record status from a database row and validates its domain shape.
+pub(super) fn review_record_status_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
-) -> Result<ChallengeDraftStatus> {
+) -> Result<ChallengeReviewRecordStatus> {
     let value: String = row.try_get(column)?;
-    ChallengeDraftStatus::from_storage_value(&value)
+    ChallengeReviewRecordStatus::from_storage_value(&value)
         .ok_or_else(|| ServiceError::Internal(format!("unknown stored {column} `{value}`")))
 }
 
@@ -375,9 +375,9 @@ pub(super) fn draft_status_from_row(
 fn validation_status_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
-) -> Result<ChallengeDraftValidationStatus> {
+) -> Result<ChallengeReviewValidationStatus> {
     let value: String = row.try_get(column)?;
-    ChallengeDraftValidationStatus::from_storage_value(&value)
+    ChallengeReviewValidationStatus::from_storage_value(&value)
         .ok_or_else(|| ServiceError::Internal(format!("unknown stored {column} `{value}`")))
 }
 

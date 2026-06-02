@@ -1,8 +1,8 @@
-CREATE TABLE IF NOT EXISTS challenge_drafts (
+CREATE TABLE IF NOT EXISTS challenge_review_records (
   id UUID PRIMARY KEY,
   challenge_name TEXT NOT NULL,
   request_kind TEXT NOT NULL CHECK (request_kind IN ('new_challenge', 'archive_challenge')),
-  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'validated', 'approved', 'publishing', 'rejected', 'published', 'abandoned')),
+  status TEXT NOT NULL DEFAULT 'pending_review' CHECK (status IN ('pending_review', 'validated', 'approved', 'publishing', 'rejected', 'published', 'abandoned')),
   creator_agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
   creator_github_user_id BIGINT NOT NULL,
   creator_github_login TEXT NOT NULL DEFAULT '',
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS challenge_drafts (
 
 CREATE TABLE IF NOT EXISTS challenge_private_assets (
   id UUID PRIMARY KEY,
-  draft_id UUID NOT NULL REFERENCES challenge_drafts(id) ON DELETE CASCADE,
+  review_record_id UUID NOT NULL REFERENCES challenge_review_records(id) ON DELETE CASCADE,
   asset_name TEXT NOT NULL,
   kind TEXT NOT NULL CHECK (kind IN ('private_benchmark_data', 'private_evaluator_package', 'private_seeds', 'private_reference_outputs')),
   required BOOLEAN NOT NULL DEFAULT FALSE,
@@ -43,9 +43,9 @@ CREATE TABLE IF NOT EXISTS challenge_private_assets (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS challenge_draft_validation_records (
+CREATE TABLE IF NOT EXISTS challenge_review_validation_records (
   id UUID PRIMARY KEY,
-  draft_id UUID NOT NULL REFERENCES challenge_drafts(id) ON DELETE CASCADE,
+  review_record_id UUID NOT NULL REFERENCES challenge_review_records(id) ON DELETE CASCADE,
   status TEXT NOT NULL CHECK (status IN ('running', 'passed', 'failed')),
   message TEXT NOT NULL DEFAULT '',
   repository_path TEXT NOT NULL,
@@ -54,9 +54,9 @@ CREATE TABLE IF NOT EXISTS challenge_draft_validation_records (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS challenge_draft_audit_events (
+CREATE TABLE IF NOT EXISTS challenge_review_audit_events (
   id UUID PRIMARY KEY,
-  draft_id UUID NOT NULL REFERENCES challenge_drafts(id) ON DELETE CASCADE,
+  review_record_id UUID NOT NULL REFERENCES challenge_review_records(id) ON DELETE CASCADE,
   actor_agent_id UUID REFERENCES agents(id) ON DELETE SET NULL,
   actor_admin_username TEXT,
   action TEXT NOT NULL,
@@ -65,29 +65,29 @@ CREATE TABLE IF NOT EXISTS challenge_draft_audit_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE challenge_drafts
+ALTER TABLE challenge_review_records
   ADD COLUMN IF NOT EXISTS active_validation_record_id UUID
-    REFERENCES challenge_draft_validation_records(id) ON DELETE SET NULL;
+    REFERENCES challenge_review_validation_records(id) ON DELETE SET NULL;
 
-CREATE INDEX IF NOT EXISTS idx_challenge_drafts_status_updated_at
-  ON challenge_drafts (status, updated_at DESC);
-CREATE INDEX IF NOT EXISTS idx_challenge_drafts_creator_agent_id
-  ON challenge_drafts (creator_agent_id, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_challenge_private_assets_draft_id
-  ON challenge_private_assets (draft_id);
-CREATE INDEX IF NOT EXISTS idx_challenge_draft_validation_records_draft_id
-  ON challenge_draft_validation_records (draft_id, created_at DESC);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_challenge_drafts_one_active_validation
-  ON challenge_drafts (id)
+CREATE INDEX IF NOT EXISTS idx_challenge_review_records_status_updated_at
+  ON challenge_review_records (status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_challenge_review_records_creator_agent_id
+  ON challenge_review_records (creator_agent_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_challenge_private_assets_review_record_id
+  ON challenge_private_assets (review_record_id);
+CREATE INDEX IF NOT EXISTS idx_challenge_review_validation_records_review_record_id
+  ON challenge_review_validation_records (review_record_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_challenge_review_records_one_active_validation
+  ON challenge_review_records (id)
   WHERE active_validation_record_id IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_challenge_draft_audit_events_draft_id
-  ON challenge_draft_audit_events (draft_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_challenge_review_audit_events_review_record_id
+  ON challenge_review_audit_events (review_record_id, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_challenge_private_assets_active_pending_name
-  ON challenge_private_assets (draft_id, asset_name)
+  ON challenge_private_assets (review_record_id, asset_name)
   WHERE status IN ('pending', 'active');
 CREATE INDEX IF NOT EXISTS idx_challenge_private_assets_pending_created_at
   ON challenge_private_assets (status, created_at)
   WHERE status = 'pending';
-CREATE UNIQUE INDEX IF NOT EXISTS idx_challenge_drafts_publish_claim_id
-  ON challenge_drafts (publish_claim_id)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_challenge_review_records_publish_claim_id
+  ON challenge_review_records (publish_claim_id)
   WHERE publish_claim_id IS NOT NULL;

@@ -12,53 +12,61 @@ import { Fragment, type ReactNode } from "react";
 import { formatDate } from "@/lib/format";
 import type {
   AdminChallengePrivateAssetListResponse,
-  ChallengeDraftListItem,
+  ChallengeReviewRecordListItem,
 } from "@/lib/schemas";
 import { StatusBadge } from "./StatusBadge";
 
 type AdminChallengePrivateAssetResponse =
   AdminChallengePrivateAssetListResponse["items"][number];
-type DraftAction = "validate" | "approve" | "publish" | "reject" | "abandon";
-type DraftReviewTranslator = ReturnType<typeof useTranslations>;
+type ReviewRecordAction =
+  | "validate"
+  | "approve"
+  | "publish"
+  | "reject"
+  | "abandon";
+type ReviewRecordTranslator = ReturnType<typeof useTranslations>;
 
-interface ChallengeDraftReviewTableProps {
-  drafts: ChallengeDraftListItem[];
+interface ChallengeReviewRecordTableProps {
+  reviewRecords: ChallengeReviewRecordListItem[];
   locale: string;
   csrfToken: string;
-  busyDraftId: string | null;
-  expandedDraftId: string | null;
-  assetRowsByDraftId: Record<string, AdminChallengePrivateAssetListResponse>;
-  loadingAssetsDraftId: string | null;
-  onToggleAssetRows: (draftId: string) => Promise<void>;
-  onRunDraftAction: (
-    draft: ChallengeDraftListItem,
-    action: DraftAction,
+  busyReviewRecordId: string | null;
+  expandedReviewRecordId: string | null;
+  assetRowsByReviewRecordId: Record<
+    string,
+    AdminChallengePrivateAssetListResponse
+  >;
+  loadingAssetsReviewRecordId: string | null;
+  onToggleAssetRows: (reviewRecordId: string) => Promise<void>;
+  onRunReviewRecordAction: (
+    reviewRecord: ChallengeReviewRecordListItem,
+    action: ReviewRecordAction,
   ) => Promise<void>;
 }
 
-/** Renders the admin challenge-draft review table. */
-export function ChallengeDraftReviewTable({
-  drafts,
+/** Renders the admin challenge-review-record review table. */
+export function ChallengeReviewRecordTable({
+  reviewRecords,
   locale,
   csrfToken,
-  busyDraftId,
-  expandedDraftId,
-  assetRowsByDraftId,
-  loadingAssetsDraftId,
+  busyReviewRecordId,
+  expandedReviewRecordId,
+  assetRowsByReviewRecordId,
+  loadingAssetsReviewRecordId,
   onToggleAssetRows,
-  onRunDraftAction,
-}: ChallengeDraftReviewTableProps) {
-  const t = useTranslations("admin.draftReview");
+  onRunReviewRecordAction,
+}: ChallengeReviewRecordTableProps) {
+  const t = useTranslations("admin.reviewRecords");
 
-  if (drafts.length === 0) {
-    return <div className="empty-state">{t("noDrafts")}</div>;
+  if (reviewRecords.length === 0) {
+    return <div className="empty-state">{t("noReviewRecords")}</div>;
   }
 
   return (
     <table className="data-table">
       <thead>
         <tr>
-          <th>{t("draft")}</th>
+          <th>{t("reviewRecord")}</th>
           <th>{t("status")}</th>
           <th>{t("creator")}</th>
           <th>{t("digests")}</th>
@@ -68,59 +76,67 @@ export function ChallengeDraftReviewTable({
         </tr>
       </thead>
       <tbody>
-        {drafts.map((draft) => {
-          const busy = busyDraftId === draft.id;
-          const assetRows = assetRowsByDraftId[draft.id];
-          const assetWarning = draftAssetWarning(draft, assetRows, t);
+        {reviewRecords.map((reviewRecord) => {
+          const busy = busyReviewRecordId === reviewRecord.id;
+          const assetRows = assetRowsByReviewRecordId[reviewRecord.id];
+          const assetWarning = reviewRecordAssetWarning(
+            reviewRecord,
+            assetRows,
+            t,
+          );
           return (
-            <Fragment key={draft.id}>
+            <Fragment key={reviewRecord.id}>
               <tr>
                 <td>
-                  <div className="font-medium">{draft.manifest.title}</div>
+                  <div className="font-medium">
+                    {reviewRecord.manifest.title}
+                  </div>
                   <div className="font-mono text-caption text-fg-muted">
-                    {draft.challenge_name} · {draft.request}
+                    {reviewRecord.challenge_name} · {reviewRecord.request}
                   </div>
                   <a
-                    href={draft.pr_url}
+                    href={reviewRecord.pr_url}
                     target="_blank"
                     rel="noreferrer"
                     className="text-caption text-data hover:underline"
                   >
-                    PR #{draft.pr_number}
+                    PR #{reviewRecord.pr_number}
                   </a>
                 </td>
                 <td>
-                  <LocalizedStatusBadge status={draft.status} />
+                  <LocalizedStatusBadge status={reviewRecord.status} />
                 </td>
                 <td>
-                  <div className="font-mono">{draft.creator_github_login}</div>
+                  <div className="font-mono">
+                    {reviewRecord.creator_github_login}
+                  </div>
                   <div className="text-caption text-fg-muted">
-                    {draft.creator_github_user_id}
+                    {reviewRecord.creator_github_user_id}
                   </div>
                 </td>
                 <td className="font-mono text-caption">
                   <Digest
                     displayLabel={t("manifestDigest")}
-                    value={draft.manifest_sha256}
+                    value={reviewRecord.manifest_sha256}
                   />
                   <Digest
                     displayLabel={t("validatedDigest")}
-                    value={draft.validation_bundle_sha256}
+                    value={reviewRecord.validation_bundle_sha256}
                   />
                   <Digest
                     displayLabel={t("approvedDigest")}
-                    value={draft.approved_bundle_sha256}
+                    value={reviewRecord.approved_bundle_sha256}
                   />
                 </td>
                 <td>
                   <div className="font-mono">
                     {t("activeAssets", {
-                      count: draft.private_assets.length,
+                      count: reviewRecord.private_assets.length,
                     })}
                   </div>
                   <div className="text-caption text-fg-muted">
                     {t("declaredAssets", {
-                      count: draft.manifest.private_assets.length,
+                      count: reviewRecord.manifest.private_assets.length,
                     })}
                   </div>
                   {assetWarning ? (
@@ -131,16 +147,16 @@ export function ChallengeDraftReviewTable({
                   <button
                     type="button"
                     className="mt-2 text-caption text-data hover:underline"
-                    onClick={() => void onToggleAssetRows(draft.id)}
+                    onClick={() => void onToggleAssetRows(reviewRecord.id)}
                     disabled={!csrfToken}
                   >
-                    {expandedDraftId === draft.id
+                    {expandedReviewRecordId === reviewRecord.id
                       ? t("hideLifecycle")
                       : t("inspectLifecycle")}
                   </button>
                 </td>
                 <td className="text-fg-muted">
-                  {formatDate(draft.updated_at, locale)}
+                  {formatDate(reviewRecord.updated_at, locale)}
                 </td>
                 <td>
                   <div className="flex flex-wrap gap-2">
@@ -148,7 +164,9 @@ export function ChallengeDraftReviewTable({
                       label={t("validate")}
                       icon={<RefreshCw className="w-3 h-3" />}
                       disabled={busy || !csrfToken || !!assetWarning}
-                      onClick={() => void onRunDraftAction(draft, "validate")}
+                      onClick={() =>
+                        void onRunReviewRecordAction(reviewRecord, "validate")
+                      }
                     />
                     <ActionButton
                       label={t("approve")}
@@ -157,38 +175,46 @@ export function ChallengeDraftReviewTable({
                         busy ||
                         !csrfToken ||
                         !!assetWarning ||
-                        !draft.validation_bundle_sha256
+                        !reviewRecord.validation_bundle_sha256
                       }
-                      onClick={() => void onRunDraftAction(draft, "approve")}
+                      onClick={() =>
+                        void onRunReviewRecordAction(reviewRecord, "approve")
+                      }
                     />
                     <ActionButton
                       label={t("publish")}
                       icon={<Send className="w-3 h-3" />}
                       disabled={busy || !csrfToken || !!assetWarning}
-                      onClick={() => void onRunDraftAction(draft, "publish")}
+                      onClick={() =>
+                        void onRunReviewRecordAction(reviewRecord, "publish")
+                      }
                     />
                     <ActionButton
                       label={t("reject")}
                       icon={<XCircle className="w-3 h-3" />}
                       disabled={busy || !csrfToken}
-                      onClick={() => void onRunDraftAction(draft, "reject")}
+                      onClick={() =>
+                        void onRunReviewRecordAction(reviewRecord, "reject")
+                      }
                       danger
                     />
                     <ActionButton
                       label={t("abandon")}
                       icon={<RotateCcw className="w-3 h-3" />}
                       disabled={busy || !csrfToken}
-                      onClick={() => void onRunDraftAction(draft, "abandon")}
+                      onClick={() =>
+                        void onRunReviewRecordAction(reviewRecord, "abandon")
+                      }
                     />
                   </div>
                 </td>
               </tr>
-              {expandedDraftId === draft.id ? (
+              {expandedReviewRecordId === reviewRecord.id ? (
                 <tr>
                   <td colSpan={7}>
                     <PrivateAssetLifecycleTable
                       assets={assetRows?.items ?? []}
-                      loading={loadingAssetsDraftId === draft.id}
+                      loading={loadingAssetsReviewRecordId === reviewRecord.id}
                       locale={locale}
                     />
                   </td>
@@ -202,15 +228,15 @@ export function ChallengeDraftReviewTable({
   );
 }
 
-function draftAssetWarning(
-  draft: ChallengeDraftListItem,
+function reviewRecordAssetWarning(
+  reviewRecord: ChallengeReviewRecordListItem,
   lifecycleRows: AdminChallengePrivateAssetListResponse | undefined,
-  t: DraftReviewTranslator,
+  t: ReviewRecordTranslator,
 ): string | null {
   const activeNames = new Set(
-    draft.private_assets.map((asset) => asset.asset_name),
+    reviewRecord.private_assets.map((asset) => asset.asset_name),
   );
-  const requiredManifestNames = draft.manifest.private_assets
+  const requiredManifestNames = reviewRecord.manifest.private_assets
     .filter((asset) => asset.required)
     .map((asset) => asset.asset_name);
   const missing = requiredManifestNames.filter(
@@ -241,7 +267,7 @@ function PrivateAssetLifecycleTable({
   loading: boolean;
   locale: string;
 }) {
-  const t = useTranslations("admin.draftReview");
+  const t = useTranslations("admin.reviewRecords");
   const common = useTranslations("common");
 
   if (loading) {
@@ -365,7 +391,7 @@ function LocalizedStatusBadge({ status }: { status: string }) {
     approved: t("approved"),
     completed: t("completed"),
     disabled: t("disabled"),
-    draft: t("draft"),
+    pending_review: t("pending_review"),
     failed: t("failed"),
     passed: t("passed"),
     pending: t("pending"),

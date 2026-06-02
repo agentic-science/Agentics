@@ -1,10 +1,10 @@
 use agentics_domain::models::ErrorResponse;
 use agentics_domain::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
 use agentics_domain::models::challenge_creation::{
-    ChallengeDraftCleanupResponse, ChallengeDraftResponse, ReviewChallengeDraftRequest,
-    ValidateChallengeDraftRequest,
+    ChallengeReviewDecisionRequest, ChallengeReviewRecordCleanupResponse,
+    ChallengeReviewRecordResponse, ValidateChallengeReviewRecordRequest,
 };
-use agentics_domain::models::ids::{ChallengeDraftId, SolutionSubmissionId};
+use agentics_domain::models::ids::{ChallengeReviewRecordId, SolutionSubmissionId};
 use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
 use agentics_domain::models::request::{
     CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse, LeaderboardResponse,
@@ -243,79 +243,79 @@ impl ApiClient {
         self.get_json(&path, false).await
     }
 
-    /// Validates challenge draft admin invariants for this contract.
-    pub(crate) async fn validate_challenge_draft_admin(
+    /// Validates challenge review record admin invariants for this contract.
+    pub(crate) async fn validate_challenge_review_record_admin(
         &self,
-        draft_id: &ChallengeDraftId,
-        request: &ValidateChallengeDraftRequest,
+        review_record_id: &ChallengeReviewRecordId,
+        request: &ValidateChallengeReviewRecordRequest,
         username: &str,
         password: &SecretString,
-    ) -> Result<ChallengeDraftResponse> {
-        let path = format!("/admin/challenge-drafts/{draft_id}/validate");
+    ) -> Result<ChallengeReviewRecordResponse> {
+        let path = format!("/admin/challenge-review-records/{review_record_id}/validate");
         self.post_json_admin(&path, request, username, password)
             .await
     }
 
-    /// Handles approve challenge draft admin for this module.
-    pub(crate) async fn approve_challenge_draft_admin(
+    /// Handles approve challenge review record admin for this module.
+    pub(crate) async fn approve_challenge_review_record_admin(
         &self,
-        draft_id: &ChallengeDraftId,
-        request: &ReviewChallengeDraftRequest,
+        review_record_id: &ChallengeReviewRecordId,
+        request: &ChallengeReviewDecisionRequest,
         username: &str,
         password: &SecretString,
-    ) -> Result<ChallengeDraftResponse> {
-        let path = format!("/admin/challenge-drafts/{draft_id}/approve");
+    ) -> Result<ChallengeReviewRecordResponse> {
+        let path = format!("/admin/challenge-review-records/{review_record_id}/approve");
         self.post_json_admin(&path, request, username, password)
             .await
     }
 
-    /// Handles reject challenge draft admin for this module.
-    pub(crate) async fn reject_challenge_draft_admin(
+    /// Handles reject challenge review record admin for this module.
+    pub(crate) async fn reject_challenge_review_record_admin(
         &self,
-        draft_id: &ChallengeDraftId,
-        request: &ReviewChallengeDraftRequest,
+        review_record_id: &ChallengeReviewRecordId,
+        request: &ChallengeReviewDecisionRequest,
         username: &str,
         password: &SecretString,
-    ) -> Result<ChallengeDraftResponse> {
-        let path = format!("/admin/challenge-drafts/{draft_id}/reject");
+    ) -> Result<ChallengeReviewRecordResponse> {
+        let path = format!("/admin/challenge-review-records/{review_record_id}/reject");
         self.post_json_admin(&path, request, username, password)
             .await
     }
 
-    /// Handles publish challenge draft admin for this module.
-    pub(crate) async fn publish_challenge_draft_admin(
+    /// Handles publish challenge review record admin for this module.
+    pub(crate) async fn publish_challenge_review_record_admin(
         &self,
-        draft_id: &ChallengeDraftId,
-        request: &ValidateChallengeDraftRequest,
+        review_record_id: &ChallengeReviewRecordId,
+        request: &ValidateChallengeReviewRecordRequest,
         username: &str,
         password: &SecretString,
-    ) -> Result<ChallengeDraftResponse> {
-        let path = format!("/admin/challenge-drafts/{draft_id}/publish");
+    ) -> Result<ChallengeReviewRecordResponse> {
+        let path = format!("/admin/challenge-review-records/{review_record_id}/publish");
         self.post_json_admin(&path, request, username, password)
             .await
     }
 
-    /// Handles abandon challenge draft admin for this module.
-    pub(crate) async fn abandon_challenge_draft_admin(
+    /// Handles abandon challenge review record admin for this module.
+    pub(crate) async fn abandon_challenge_review_record_admin(
         &self,
-        draft_id: &ChallengeDraftId,
-        request: &ReviewChallengeDraftRequest,
+        review_record_id: &ChallengeReviewRecordId,
+        request: &ChallengeReviewDecisionRequest,
         username: &str,
         password: &SecretString,
-    ) -> Result<ChallengeDraftResponse> {
-        let path = format!("/admin/challenge-drafts/{draft_id}/abandon");
+    ) -> Result<ChallengeReviewRecordResponse> {
+        let path = format!("/admin/challenge-review-records/{review_record_id}/abandon");
         self.post_json_admin(&path, request, username, password)
             .await
     }
 
-    /// Handles cleanup challenge drafts admin for this module.
-    pub(crate) async fn cleanup_challenge_drafts_admin(
+    /// Handles cleanup challenge review records admin for this module.
+    pub(crate) async fn cleanup_challenge_review_records_admin(
         &self,
         username: &str,
         password: &SecretString,
-    ) -> Result<ChallengeDraftCleanupResponse> {
+    ) -> Result<ChallengeReviewRecordCleanupResponse> {
         self.post_json_admin(
-            "/admin/challenge-drafts/cleanup",
+            "/admin/challenge-review-records/cleanup",
             &serde_json::json!({}),
             username,
             password,

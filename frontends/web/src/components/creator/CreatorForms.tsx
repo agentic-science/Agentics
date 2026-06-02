@@ -17,7 +17,7 @@ import {
 } from "@/components/ConsolePrimitives";
 import type { ChallengePrivateAssetKind } from "@/lib/creatorApi";
 
-export type CreatorDraftFormState = {
+export type CreatorReviewRecordFormState = {
   repoUrl: string;
   prNumber: string;
   prUrl: string;
@@ -27,7 +27,7 @@ export type CreatorDraftFormState = {
 };
 
 export type CreatorPrivateAssetFormState = {
-  draftId: string;
+  reviewRecordId: string;
   assetName: string;
   kind: ChallengePrivateAssetKind;
   required: boolean;
@@ -77,68 +77,76 @@ const assetKinds: ChallengePrivateAssetKind[] = [
   "private_reference_outputs",
 ];
 
-type DraftCreateFormProps = {
-  draftForm: CreatorDraftFormState;
-  setDraftForm: Dispatch<SetStateAction<CreatorDraftFormState>>;
+type ReviewRecordCreateFormProps = {
+  reviewRecordForm: CreatorReviewRecordFormState;
+  setReviewRecordForm: Dispatch<SetStateAction<CreatorReviewRecordFormState>>;
   loading: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 };
 
-export function DraftCreateForm({
-  draftForm,
-  setDraftForm,
+export function ReviewRecordCreateForm({
+  reviewRecordForm,
+  setReviewRecordForm,
   loading,
   onSubmit,
-}: DraftCreateFormProps) {
+}: ReviewRecordCreateFormProps) {
   const t = useTranslations("creator");
   return (
     <form className="card flex flex-col gap-4" onSubmit={onSubmit}>
       <SectionTitle
         icon={<GitPullRequest className="w-4 h-4" />}
-        title={t("draft.create")}
+        title={t("reviewRecord.create")}
       />
       <TextInput
-        label={t("draft.repositoryUrl")}
-        value={draftForm.repoUrl}
-        onChange={(repoUrl) => setDraftForm({ ...draftForm, repoUrl })}
+        label={t("reviewRecord.repositoryUrl")}
+        value={reviewRecordForm.repoUrl}
+        onChange={(repoUrl) =>
+          setReviewRecordForm({ ...reviewRecordForm, repoUrl })
+        }
         required
       />
       <TextInput
-        label={t("draft.prNumber")}
-        value={draftForm.prNumber}
-        onChange={(prNumber) => setDraftForm({ ...draftForm, prNumber })}
+        label={t("reviewRecord.prNumber")}
+        value={reviewRecordForm.prNumber}
+        onChange={(prNumber) =>
+          setReviewRecordForm({ ...reviewRecordForm, prNumber })
+        }
         required
       />
       <TextInput
-        label={t("draft.prUrl")}
-        value={draftForm.prUrl}
-        onChange={(prUrl) => setDraftForm({ ...draftForm, prUrl })}
+        label={t("reviewRecord.prUrl")}
+        value={reviewRecordForm.prUrl}
+        onChange={(prUrl) =>
+          setReviewRecordForm({ ...reviewRecordForm, prUrl })
+        }
         required
       />
       <TextInput
-        label={t("draft.commitSha")}
-        value={draftForm.commitSha}
-        onChange={(commitSha) => setDraftForm({ ...draftForm, commitSha })}
+        label={t("reviewRecord.commitSha")}
+        value={reviewRecordForm.commitSha}
+        onChange={(commitSha) =>
+          setReviewRecordForm({ ...reviewRecordForm, commitSha })
+        }
         required
       />
       <TextInput
-        label={t("draft.challengePath")}
-        value={draftForm.challengePath}
+        label={t("reviewRecord.challengePath")}
+        value={reviewRecordForm.challengePath}
         onChange={(challengePath) =>
-          setDraftForm({ ...draftForm, challengePath })
+          setReviewRecordForm({ ...reviewRecordForm, challengePath })
         }
         required
       />
       <label className="flex flex-col gap-1">
         <span className="text-caption uppercase tracking-wide text-fg-muted">
-          {t("draft.manifestJson")}
+          {t("reviewRecord.manifestJson")}
         </span>
         <textarea
           className="min-h-80 rounded-control border border-line bg-surface-2 px-3 py-2 font-mono text-caption leading-relaxed outline-none focus:border-action"
-          value={draftForm.manifestText}
+          value={reviewRecordForm.manifestText}
           onChange={(event) =>
-            setDraftForm({
-              ...draftForm,
+            setReviewRecordForm({
+              ...reviewRecordForm,
               manifestText: event.target.value,
             })
           }
@@ -147,40 +155,40 @@ export function DraftCreateForm({
       </label>
       <button type="submit" className="btn btn-primary" disabled={loading}>
         <GitPullRequest className="w-4 h-4" />
-        {t("draft.create")}
+        {t("reviewRecord.create")}
       </button>
     </form>
   );
 }
 
-type DraftInspectFormProps = {
-  draftLookupId: string;
-  setDraftLookupId: (draftId: string) => void;
+type ReviewRecordInspectFormProps = {
+  reviewRecordLookupId: string;
+  setReviewRecordLookupId: (reviewRecordId: string) => void;
   loading: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 };
 
-export function DraftInspectForm({
-  draftLookupId,
-  setDraftLookupId,
+export function ReviewRecordInspectForm({
+  reviewRecordLookupId,
+  setReviewRecordLookupId,
   loading,
   onSubmit,
-}: DraftInspectFormProps) {
+}: ReviewRecordInspectFormProps) {
   const t = useTranslations("creator");
   return (
     <form className="card flex flex-col gap-4" onSubmit={onSubmit}>
       <SectionTitle
         icon={<RefreshCw className="w-4 h-4" />}
-        title={t("draft.inspect")}
+        title={t("reviewRecord.inspect")}
       />
       <TextInput
-        label={t("draft.draftId")}
-        value={draftLookupId}
-        onChange={setDraftLookupId}
+        label={t("reviewRecord.reviewRecordId")}
+        value={reviewRecordLookupId}
+        onChange={setReviewRecordLookupId}
         required
       />
       <button type="submit" className="btn btn-secondary" disabled={loading}>
-        {t("draft.load")}
+        {t("reviewRecord.load")}
       </button>
     </form>
   );
@@ -204,23 +212,25 @@ export function PrivateAssetUploadForm({
     <form className="card flex flex-col gap-4" onSubmit={onSubmit}>
       <SectionTitle
         icon={<UploadCloud className="w-4 h-4" />}
-        title={t("draft.uploadPrivateAsset")}
+        title={t("reviewRecord.uploadPrivateAsset")}
       />
       <TextInput
-        label={t("draft.draftId")}
-        value={assetForm.draftId}
-        onChange={(draftId) => setAssetForm({ ...assetForm, draftId })}
+        label={t("reviewRecord.reviewRecordId")}
+        value={assetForm.reviewRecordId}
+        onChange={(reviewRecordId) =>
+          setAssetForm({ ...assetForm, reviewRecordId })
+        }
         required
       />
       <TextInput
-        label={t("draft.assetName")}
+        label={t("reviewRecord.assetName")}
         value={assetForm.assetName}
         onChange={(assetName) => setAssetForm({ ...assetForm, assetName })}
         required
       />
       <label className="flex flex-col gap-1">
         <span className="text-caption uppercase tracking-wide text-fg-muted">
-          {t("draft.assetKind")}
+          {t("reviewRecord.assetKind")}
         </span>
         <select
           className="rounded-control border border-line bg-surface-2 px-3 py-2 text-body-sm outline-none focus:border-action"
@@ -250,7 +260,7 @@ export function PrivateAssetUploadForm({
             })
           }
         />
-        {t("draft.requiredForPublish")}
+        {t("reviewRecord.requiredForPublish")}
       </label>
       <input
         type="file"
@@ -265,7 +275,7 @@ export function PrivateAssetUploadForm({
       />
       <button type="submit" className="btn btn-primary" disabled={loading}>
         <FileArchive className="w-4 h-4" />
-        {t("draft.uploadAsset")}
+        {t("reviewRecord.uploadAsset")}
       </button>
     </form>
   );

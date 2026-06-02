@@ -1,5 +1,5 @@
 use agentics_domain::models::challenge_creation::{
-    ChallengeDraftCleanupResponse, ChallengeDraftResponse,
+    ChallengeReviewRecordCleanupResponse, ChallengeReviewRecordResponse,
 };
 use agentics_domain::models::names::ChallengeName;
 use anyhow::Result;
@@ -8,15 +8,15 @@ use crate::cli::OutputFormat;
 
 use super::format::{pretty_json, status_label};
 
-/// Renders challenge draft for user-facing output.
-pub(crate) fn render_challenge_draft(
-    response: &ChallengeDraftResponse,
+/// Renders challenge review record for user-facing output.
+pub(crate) fn render_challenge_review_record(
+    response: &ChallengeReviewRecordResponse,
     format: OutputFormat,
 ) -> Result<String> {
     match format {
         OutputFormat::Json => pretty_json(response),
         OutputFormat::Table => Ok(format!(
-            "challenge_draft: {}\nchallenge: {}\nrequest: {}\nstatus: {}\nrepo: {}#{}\npath: {}\ncommit: {}\nmanifest_sha256: {}\npublished_challenge: {}\nprivate_assets: {}\nvalidation_records: {}",
+            "challenge_review_record: {}\nchallenge: {}\nrequest: {}\nstatus: {}\nrepo: {}#{}\npath: {}\ncommit: {}\nmanifest_sha256: {}\npublished_challenge: {}\nprivate_assets: {}\nvalidation_records: {}",
             response.id,
             response.challenge_name,
             status_label(&response.request),
@@ -36,16 +36,16 @@ pub(crate) fn render_challenge_draft(
     }
 }
 
-/// Renders challenge draft cleanup for user-facing output.
-pub(crate) fn render_challenge_draft_cleanup(
-    response: &ChallengeDraftCleanupResponse,
+/// Renders challenge review record cleanup for user-facing output.
+pub(crate) fn render_challenge_review_record_cleanup(
+    response: &ChallengeReviewRecordCleanupResponse,
     format: OutputFormat,
 ) -> Result<String> {
     match format {
         OutputFormat::Json => pretty_json(response),
         OutputFormat::Table => Ok(format!(
-            "abandoned_drafts: {}\npurged_private_assets: {}\npurged_temporary_storage_objects: {}",
-            response.abandoned_drafts,
+            "abandoned_review_records: {}\npurged_private_assets: {}\npurged_temporary_storage_objects: {}",
+            response.abandoned_review_records,
             response.purged_private_assets,
             response.purged_temporary_storage_objects
         )),

@@ -240,7 +240,7 @@ fn invalid_pr_number_fails_during_cli_parsing() {
     let result = Cli::try_parse_from([
         "agentics",
         "challenge-creator",
-        "draft",
+        "review-record",
         "create",
         "--repo-url",
         "git@github.com:agentics-reifying/agentics-challenges.git",

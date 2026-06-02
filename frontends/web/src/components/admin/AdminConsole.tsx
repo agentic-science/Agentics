@@ -10,7 +10,7 @@ import {
   OperationsPanel,
   OverviewPanel,
 } from "@/components/admin/AdminPanels";
-import { ChallengeDraftReviewPanel } from "@/components/admin/ChallengeDraftReviewPanel";
+import { ChallengeReviewRecordPanel } from "@/components/admin/ChallengeReviewRecordPanel";
 import { CredentialPanel } from "@/components/admin/CredentialPanel";
 import { adminErrorMessage } from "@/components/admin/errors";
 import { PioneerCodePanel } from "@/components/admin/PioneerCodePanel";
@@ -31,7 +31,7 @@ import {
 type AdminTab =
   | "overview"
   | "challenges"
-  | "drafts"
+  | "reviewRecords"
   | "pioneer-codes"
   | "capacity"
   | "operations";
@@ -227,7 +227,7 @@ export function AdminConsole() {
         {[
           ["overview", t("tabs.overview")],
           ["challenges", t("tabs.challenges")],
-          ["drafts", t("tabs.drafts")],
+          ["reviewRecords", t("tabs.reviewRecords")],
           ["pioneer-codes", t("tabs.pioneerCodes")],
           ["capacity", t("tabs.capacity")],
           ["operations", t("tabs.operations")],
@@ -252,10 +252,10 @@ export function AdminConsole() {
           locale={locale}
         />
       ) : null}
-      {activeTab === "drafts" ? (
-        <ChallengeDraftReviewPanel
+      {activeTab === "reviewRecords" ? (
+        <ChallengeReviewRecordPanel
           csrfToken={csrfToken}
-          drafts={data.drafts.items}
+          reviewRecords={data.reviewRecords.items}
           locale={locale}
           onRefresh={refresh}
           onError={setError}

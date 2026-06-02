@@ -12,7 +12,7 @@ mod admin;
 mod local_validation;
 mod submissions;
 
-pub(crate) use admin::challenge_draft;
+pub(crate) use admin::challenge_review_record;
 pub(crate) use submissions::{
     challenge_stats, list_public_solution_submissions, solution_submission_report, submit,
     validate, wait_for_solution_submission,

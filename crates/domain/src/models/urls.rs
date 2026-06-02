@@ -116,7 +116,7 @@ macro_rules! impl_string_url_schema {
     };
 }
 
-/// GitHub repository remote syntax accepted for challenge draft provenance.
+/// GitHub repository remote syntax accepted for challenge review record provenance.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum GithubRepoRemote {
     /// HTTPS repository URL such as `https://github.com/agentics-reifying/agentics-challenges`.

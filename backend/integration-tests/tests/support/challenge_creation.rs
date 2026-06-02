@@ -14,8 +14,8 @@ pub fn creator_auth(
         .header("X-Agentics-CSRF-Token", &creator.csrf_token)
 }
 
-/// Shared request context for validating, approving, and publishing one draft.
-pub struct DraftPublishFlow<'a> {
+/// Shared request context for validating, approving, and publishing one review_record.
+pub struct ReviewRecordPublishFlow<'a> {
     pub client: &'a reqwest::Client,
     pub app: &'a helpers::TestApp,
     pub creator: &'a TestCreatorSession,
@@ -23,14 +23,14 @@ pub struct DraftPublishFlow<'a> {
     pub public_repo: &'a Path,
 }
 
-/// Creates validate approve publish draft after validating caller inputs.
-pub async fn create_validate_approve_publish_draft(
-    flow: &DraftPublishFlow<'_>,
+/// Creates validate approve publish review_record after validating caller inputs.
+pub async fn create_validate_approve_publish_review_record(
+    flow: &ReviewRecordPublishFlow<'_>,
     commit_sha: &str,
     pr_number: i32,
     manifest: serde_json::Value,
 ) -> serde_json::Value {
-    let draft = create_draft_with_commit(
+    let review_record = create_review_record_with_commit(
         flow.client,
         flow.app,
         flow.creator,
@@ -39,12 +39,12 @@ pub async fn create_validate_approve_publish_draft(
         commit_sha,
     )
     .await;
-    let draft_id = draft["id"].as_str().expect("draft id");
-    if draft["request"] != "archive_challenge" {
+    let review_record_id = review_record["id"].as_str().expect("review_record id");
+    if review_record["request"] != "archive_challenge" {
         creator_auth(
             flow.client.post(api_url(
                 flow.app,
-                &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+                &format!("/api/creator/challenge-review-records/{review_record_id}/private-assets"),
             )),
             flow.creator,
         )
@@ -65,7 +65,7 @@ pub async fn create_validate_approve_publish_draft(
         .client
         .post(api_url(
             flow.app,
-            &format!("/admin/challenge-drafts/{draft_id}/validate"),
+            &format!("/admin/challenge-review-records/{review_record_id}/validate"),
         ))
         .header("Authorization", flow.admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -74,14 +74,14 @@ pub async fn create_validate_approve_publish_draft(
         .await
         .expect("validate request")
         .error_for_status()
-        .expect("draft should validate")
+        .expect("review_record should validate")
         .json()
         .await
-        .expect("validated draft json");
+        .expect("validated review_record json");
     flow.client
         .post(api_url(
             flow.app,
-            &format!("/admin/challenge-drafts/{draft_id}/approve"),
+            &format!("/admin/challenge-review-records/{review_record_id}/approve"),
         ))
         .header("Authorization", flow.admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -93,11 +93,11 @@ pub async fn create_validate_approve_publish_draft(
         .await
         .expect("approve request")
         .error_for_status()
-        .expect("draft should approve");
+        .expect("review_record should approve");
     flow.client
         .post(api_url(
             flow.app,
-            &format!("/admin/challenge-drafts/{draft_id}/publish"),
+            &format!("/admin/challenge-review-records/{review_record_id}/publish"),
         ))
         .header("Authorization", flow.admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -106,25 +106,25 @@ pub async fn create_validate_approve_publish_draft(
         .await
         .expect("publish request")
         .error_for_status()
-        .expect("draft should publish")
+        .expect("review_record should publish")
         .json()
         .await
         .expect("publish json")
 }
 
-/// Creates draft after validating caller inputs.
-pub async fn create_draft(
+/// Creates review_record after validating caller inputs.
+pub async fn create_review_record(
     client: &reqwest::Client,
     app: &helpers::TestApp,
     creator: &TestCreatorSession,
     pr_number: i32,
     manifest: serde_json::Value,
 ) -> serde_json::Value {
-    create_draft_with_author(client, app, creator, pr_number, manifest, 1001).await
+    create_review_record_with_author(client, app, creator, pr_number, manifest, 1001).await
 }
 
-/// Creates a draft whose reviewed commit is an actual Git checkout commit.
-pub async fn create_draft_with_commit(
+/// Creates a review_record whose reviewed commit is an actual Git checkout commit.
+pub async fn create_review_record_with_commit(
     client: &reqwest::Client,
     app: &helpers::TestApp,
     creator: &TestCreatorSession,
@@ -132,12 +132,14 @@ pub async fn create_draft_with_commit(
     manifest: serde_json::Value,
     commit_sha: &str,
 ) -> serde_json::Value {
-    create_draft_with_author_and_commit(client, app, creator, pr_number, manifest, 1001, commit_sha)
-        .await
+    create_review_record_with_author_and_commit(
+        client, app, creator, pr_number, manifest, 1001, commit_sha,
+    )
+    .await
 }
 
-/// Creates a draft with an explicit PR author id for ownership boundary tests.
-pub async fn create_draft_with_author(
+/// Creates a review_record with an explicit PR author id for ownership boundary tests.
+pub async fn create_review_record_with_author(
     client: &reqwest::Client,
     app: &helpers::TestApp,
     creator: &TestCreatorSession,
@@ -146,7 +148,7 @@ pub async fn create_draft_with_author(
     pr_author_github_user_id: i64,
 ) -> serde_json::Value {
     let commit_sha = format!("0123456789abcdef0123456789abcdef{pr_number:08x}");
-    create_draft_with_author_and_commit(
+    create_review_record_with_author_and_commit(
         client,
         app,
         creator,
@@ -158,8 +160,8 @@ pub async fn create_draft_with_author(
     .await
 }
 
-/// Creates a draft with explicit PR author and commit identity.
-pub async fn create_draft_with_author_and_commit(
+/// Creates a review_record with explicit PR author and commit identity.
+pub async fn create_review_record_with_author_and_commit(
     client: &reqwest::Client,
     app: &helpers::TestApp,
     creator: &TestCreatorSession,
@@ -169,7 +171,7 @@ pub async fn create_draft_with_author_and_commit(
     commit_sha: &str,
 ) -> serde_json::Value {
     creator_auth(
-        client.post(api_url(app, "/api/creator/challenge-drafts")),
+        client.post(api_url(app, "/api/creator/challenge-review-records")),
         creator,
     )
     .json(&json!({
@@ -183,12 +185,12 @@ pub async fn create_draft_with_author_and_commit(
     }))
     .send()
     .await
-    .expect("draft request")
+    .expect("review_record request")
     .error_for_status()
-    .expect("draft should create")
+    .expect("review_record should create")
     .json()
     .await
-    .expect("draft json")
+    .expect("review_record json")
 }
 
 /// Handles register agent for this module.

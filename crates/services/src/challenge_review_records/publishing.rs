@@ -1,4 +1,4 @@
-//! Draft publishing workflow helpers.
+//! Review-record publishing workflow helpers.
 
 use std::path::Path;
 
@@ -7,116 +7,124 @@ use uuid::Uuid;
 use agentics_config::Config;
 use agentics_contracts::challenge_bundle;
 use agentics_domain::models::challenge_creation::{
-    ChallengeCreationManifest, ChallengeCreationRequestKind, ChallengeDraftResponse,
-    ChallengeDraftStatus,
+    ChallengeCreationManifest, ChallengeCreationRequestKind, ChallengeReviewRecordResponse,
+    ChallengeReviewRecordStatus,
 };
 use agentics_domain::models::hashes::Sha256Digest;
-use agentics_domain::models::ids::{ChallengeDraftAuditEventId, ChallengeDraftPublishClaimId};
+use agentics_domain::models::ids::{ChallengeReviewAuditEventId, ChallengeReviewPublishClaimId};
 use agentics_domain::models::paths::RepositoryCheckoutPath;
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::{self as persistence, Repositories};
 use agentics_storage::{Storage, StorageKey, StorageWriteIntent, pack_directory_to_tar};
 
-use super::presentation::draft_response;
-use super::types::PublishChallengeDraftServiceRequest;
+use super::presentation::review_record_response;
+use super::types::PublishChallengeReviewRecordServiceRequest;
 use super::utils::{
     challenge_bundle_storage_key, cleanup_file, cleanup_runtime_bundle, cleanup_storage_key,
 };
 use super::{
     assemble_public_bundle, assemble_runtime_bundle, temporary_public_runtime_bundle_path,
-    temporary_runtime_bundle_path, validate_draft_repository,
+    temporary_runtime_bundle_path, validate_review_record_repository,
 };
 use crate::storage_errors::storage_error_to_service_error;
 
-/// Publish an approved draft into an immutable challenge contract.
-pub async fn publish_challenge_draft(
+/// Publish an approved review_record into an immutable challenge contract.
+pub async fn publish_challenge_review_record(
     pool: &sqlx::PgPool,
     storage: &dyn Storage,
     config: &Config,
-    request: PublishChallengeDraftServiceRequest,
-) -> Result<ChallengeDraftResponse> {
-    let PublishChallengeDraftServiceRequest {
+    request: PublishChallengeReviewRecordServiceRequest,
+) -> Result<ChallengeReviewRecordResponse> {
+    let PublishChallengeReviewRecordServiceRequest {
         admin,
-        draft_id,
+        review_record_id,
         body,
     } = request;
     let repository_path = RepositoryCheckoutPath::from_existing_dir(&body.repository_path)?;
     let repos = Repositories::new(pool);
     let claim = repos
-        .challenge_drafts()
+        .challenge_review_records()
         .claim_for_publish(
-            draft_id.as_str(),
-            config.quotas.challenge_draft_publish_timeout_minutes,
+            review_record_id.as_str(),
+            config
+                .quotas
+                .challenge_review_record_publish_timeout_minutes,
         )
         .await?;
-    let draft = draft_response(claim.draft);
-    if draft.status == ChallengeDraftStatus::Published {
-        return Ok(draft);
+    let review_record = review_record_response(claim.review_record);
+    if review_record.status == ChallengeReviewRecordStatus::Published {
+        return Ok(review_record);
     }
     let publish_claim_id = claim.publish_claim_id.ok_or_else(|| {
-        ServiceError::Internal("publishing draft claim missing publish claim id".to_string())
+        ServiceError::Internal(
+            "publishing review_record claim missing publish claim id".to_string(),
+        )
     })?;
-    let publish_result = publish_claimed_challenge_draft(
+    let publish_result = publish_claimed_challenge_review_record(
         pool,
         storage,
         config,
         &admin.username,
-        &draft,
+        &review_record,
         &publish_claim_id,
         &repository_path,
     )
     .await;
     if let Err(error) = publish_result {
         repos
-            .challenge_drafts()
-            .fail_publish(draft.id.as_str(), &publish_claim_id, &error.to_string())
+            .challenge_review_records()
+            .fail_publish(
+                review_record.id.as_str(),
+                &publish_claim_id,
+                &error.to_string(),
+            )
             .await?;
         return Err(error);
     }
 
     repos
-        .challenge_drafts()
-        .get(draft.id.as_str())
+        .challenge_review_records()
+        .get(review_record.id.as_str())
         .await?
-        .map(draft_response)
+        .map(review_record_response)
         .ok_or(ServiceError::NotFound)
 }
 
-/// Publish a draft that has already been claimed with `publishing` status.
-async fn publish_claimed_challenge_draft(
+/// Publish a review_record that has already been claimed with `publishing` status.
+async fn publish_claimed_challenge_review_record(
     pool: &sqlx::PgPool,
     storage: &dyn Storage,
     config: &Config,
     admin_username: &str,
-    draft: &ChallengeDraftResponse,
-    publish_claim_id: &ChallengeDraftPublishClaimId,
+    review_record: &ChallengeReviewRecordResponse,
+    publish_claim_id: &ChallengeReviewPublishClaimId,
     repository_path: &RepositoryCheckoutPath,
 ) -> Result<()> {
     let (manifest, bundle_sha256) =
-        validate_draft_repository(storage, config, draft, repository_path).await?;
-    let approved_bundle_sha256 = draft
+        validate_review_record_repository(storage, config, review_record, repository_path).await?;
+    let approved_bundle_sha256 = review_record
         .approved_bundle_sha256
         .as_ref()
         .ok_or_else(|| ServiceError::Conflict)?;
     if *approved_bundle_sha256 != bundle_sha256 {
         return Err(ServiceError::Validation(
-            "challenge draft content changed after approval; validate and approve the draft again before publishing"
+            "challenge review record content changed after approval; validate and approve the review_record again before publishing"
                 .to_string(),
         ));
     }
     let proposal_root = repository_path
         .as_path()
-        .join(draft.challenge_path.as_path());
+        .join(review_record.challenge_path.as_path());
     match manifest.request {
         ChallengeCreationRequestKind::ArchiveChallenge => {
             Repositories::new(pool)
-                .challenge_drafts()
-                .publish_archive(&persistence::PublishArchiveChallengeDraftInput {
-                    draft_id: draft.id.clone(),
+                .challenge_review_records()
+                .publish_archive(&persistence::PublishArchiveChallengeReviewRecordInput {
+                    review_record_id: review_record.id.clone(),
                     publish_claim_id: publish_claim_id.clone(),
                     challenge_name: manifest.challenge_name.clone(),
-                    owner_agent_id: draft.creator_agent_id.clone(),
-                    audit_event_id: ChallengeDraftAuditEventId::generate(),
+                    owner_agent_id: review_record.creator_agent_id.clone(),
+                    audit_event_id: ChallengeReviewAuditEventId::generate(),
                     admin_username: admin_username.to_string(),
                     repository_path: repository_path.to_string(),
                     bundle_sha256,
@@ -125,17 +133,17 @@ async fn publish_claimed_challenge_draft(
         }
         ChallengeCreationRequestKind::NewChallenge => {
             let temporary_bundle_path =
-                temporary_runtime_bundle_path(config, draft, publish_claim_id)?;
+                temporary_runtime_bundle_path(config, review_record, publish_claim_id)?;
             let temporary_public_bundle_path =
-                temporary_public_runtime_bundle_path(config, draft, publish_claim_id)?;
+                temporary_public_runtime_bundle_path(config, review_record, publish_claim_id)?;
 
-            let publish_new_result = prepare_and_publish_new_challenge_draft(
+            let publish_new_result = prepare_and_publish_new_challenge_review_record(
                 pool,
                 storage,
                 config,
-                PublishNewChallengeDraftContext {
+                PublishNewChallengeReviewRecordContext {
                     admin_username,
-                    draft,
+                    review_record,
                     publish_claim_id,
                     repository_path,
                     proposal_root: &proposal_root,
@@ -155,10 +163,10 @@ async fn publish_claimed_challenge_draft(
 }
 
 /// Borrowed inputs for one publish-new-challenge attempt.
-struct PublishNewChallengeDraftContext<'a> {
+struct PublishNewChallengeReviewRecordContext<'a> {
     admin_username: &'a str,
-    draft: &'a ChallengeDraftResponse,
-    publish_claim_id: &'a ChallengeDraftPublishClaimId,
+    review_record: &'a ChallengeReviewRecordResponse,
+    publish_claim_id: &'a ChallengeReviewPublishClaimId,
     repository_path: &'a RepositoryCheckoutPath,
     proposal_root: &'a Path,
     manifest: &'a ChallengeCreationManifest,
@@ -168,16 +176,16 @@ struct PublishNewChallengeDraftContext<'a> {
 }
 
 /// Assemble, validate, promote, and commit a new challenge publish attempt.
-async fn prepare_and_publish_new_challenge_draft(
+async fn prepare_and_publish_new_challenge_review_record(
     pool: &sqlx::PgPool,
     storage: &dyn Storage,
     config: &Config,
-    ctx: PublishNewChallengeDraftContext<'_>,
+    ctx: PublishNewChallengeReviewRecordContext<'_>,
 ) -> Result<()> {
     assemble_runtime_bundle(
         storage,
         config,
-        ctx.draft,
+        ctx.review_record,
         ctx.proposal_root,
         ctx.manifest,
         ctx.temporary_bundle_path,
@@ -197,18 +205,18 @@ async fn prepare_and_publish_new_challenge_draft(
     let bundle_key = challenge_bundle_storage_key(
         "challenge-bundles",
         ctx.manifest.challenge_name.as_str(),
-        ctx.draft.id.as_str(),
+        ctx.review_record.id.as_str(),
         ctx.publish_claim_id.as_str(),
     )?;
     let public_bundle_key = challenge_bundle_storage_key(
         "challenge-public-bundles",
         ctx.manifest.challenge_name.as_str(),
-        ctx.draft.id.as_str(),
+        ctx.review_record.id.as_str(),
         ctx.publish_claim_id.as_str(),
     )?;
     let statement_key = StorageKey::try_new(format!(
         "challenge-statements/{}/{}-{}.md",
-        ctx.manifest.challenge_name, ctx.draft.id, ctx.publish_claim_id
+        ctx.manifest.challenge_name, ctx.review_record.id, ctx.publish_claim_id
     ))?;
     let private_archive_path = config
         .storage_work_root()
@@ -283,9 +291,9 @@ async fn prepare_and_publish_new_challenge_draft(
         return Err(error);
     }
     let publish_result = Repositories::new(pool)
-        .challenge_drafts()
-        .publish_new(&persistence::PublishNewChallengeDraftInput {
-            draft_id: ctx.draft.id.clone(),
+        .challenge_review_records()
+        .publish_new(&persistence::PublishNewChallengeReviewRecordInput {
+            review_record_id: ctx.review_record.id.clone(),
             publish_claim_id: ctx.publish_claim_id.clone(),
             challenge_name: ctx.manifest.challenge_name.clone(),
             bundle_key: bundle_key.clone(),
@@ -294,8 +302,8 @@ async fn prepare_and_publish_new_challenge_draft(
             spec,
             title: ctx.manifest.title.clone(),
             summary: ctx.manifest.summary.clone(),
-            owner_agent_id: ctx.draft.creator_agent_id.clone(),
-            audit_event_id: ChallengeDraftAuditEventId::generate(),
+            owner_agent_id: ctx.review_record.creator_agent_id.clone(),
+            audit_event_id: ChallengeReviewAuditEventId::generate(),
             admin_username: ctx.admin_username.to_string(),
             repository_path: ctx.repository_path.to_string(),
             bundle_sha256: ctx.bundle_sha256,

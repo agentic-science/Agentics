@@ -147,8 +147,8 @@ async fn dispatch_challenge_creator(
     settings: &ResolvedSettings,
 ) -> Result<String> {
     match args.command {
-        ChallengeCreatorCommand::Draft { command } => {
-            commands::challenge_draft(command, output_format, settings).await
+        ChallengeCreatorCommand::ReviewRecord { command } => {
+            commands::challenge_review_record(command, output_format, settings).await
         }
         ChallengeCreatorCommand::Stats {
             challenge_name: _,

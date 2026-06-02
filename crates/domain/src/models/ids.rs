@@ -145,9 +145,9 @@ define_uuid_id_type!(
     "agent_pioneer_code_id must be a canonical UUID string"
 );
 define_uuid_id_type!(
-    ChallengeDraftId,
-    "ChallengeDraftId",
-    "challenge_draft_id must be a canonical UUID string"
+    ChallengeReviewRecordId,
+    "ChallengeReviewRecordId",
+    "challenge_review_record_id must be a canonical UUID string"
 );
 define_uuid_id_type!(
     ChallengePrivateAssetId,
@@ -155,19 +155,19 @@ define_uuid_id_type!(
     "challenge_private_asset_id must be a canonical UUID string"
 );
 define_uuid_id_type!(
-    ChallengeDraftValidationRecordId,
-    "ChallengeDraftValidationRecordId",
-    "challenge_draft_validation_record_id must be a canonical UUID string"
+    ChallengeReviewValidationRecordId,
+    "ChallengeReviewValidationRecordId",
+    "challenge_review_validation_record_id must be a canonical UUID string"
 );
 define_uuid_id_type!(
-    ChallengeDraftAuditEventId,
-    "ChallengeDraftAuditEventId",
-    "challenge_draft_audit_event_id must be a canonical UUID string"
+    ChallengeReviewAuditEventId,
+    "ChallengeReviewAuditEventId",
+    "challenge_review_audit_event_id must be a canonical UUID string"
 );
 define_uuid_id_type!(
-    ChallengeDraftPublishClaimId,
-    "ChallengeDraftPublishClaimId",
-    "challenge_draft_publish_claim_id must be a canonical UUID string"
+    ChallengeReviewPublishClaimId,
+    "ChallengeReviewPublishClaimId",
+    "challenge_review_publish_claim_id must be a canonical UUID string"
 );
 define_uuid_id_type!(
     ChallengeShortlistRevisionId,
@@ -192,7 +192,7 @@ define_uuid_id_type!(
 
 #[cfg(test)]
 mod tests {
-    use super::{AgentId, AgentTokenId, ChallengeDraftId, SolutionSubmissionId};
+    use super::{AgentId, AgentTokenId, ChallengeReviewRecordId, SolutionSubmissionId};
 
     /// Verifies that validates solution submission ids.
     #[test]
@@ -234,12 +234,12 @@ mod tests {
             canonical
         );
         assert_eq!(
-            ChallengeDraftId::try_new(canonical)
-                .expect("challenge draft id should parse")
+            ChallengeReviewRecordId::try_new(canonical)
+                .expect("challenge review record id should parse")
                 .as_str(),
             canonical
         );
-        assert!(ChallengeDraftId::try_new(format!(" {canonical}")).is_err());
-        assert!(ChallengeDraftId::try_new("f47ac10b58cc4372a5670e02b2c3d479").is_err());
+        assert!(ChallengeReviewRecordId::try_new(format!(" {canonical}")).is_err());
+        assert!(ChallengeReviewRecordId::try_new("f47ac10b58cc4372a5670e02b2c3d479").is_err());
     }
 }

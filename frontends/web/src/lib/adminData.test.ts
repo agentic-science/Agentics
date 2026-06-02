@@ -14,7 +14,7 @@ describe("adminData", () => {
   it("fetches dashboard resources with one shared csrf token", async () => {
     const responses: Record<string, unknown> = {
       "/admin-api/challenges": { items: [] },
-      "/admin-api/challenge-drafts": { items: [] },
+      "/admin-api/challenge-review-records": { items: [] },
       "/admin-api/solution-submissions": { items: [] },
       "/admin-api/service-heartbeats": { items: [] },
       "/admin-api/pioneer-codes": { items: [] },

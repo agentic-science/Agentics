@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use agentics_domain::models::github::GithubPullRequestNumber;
 use agentics_domain::models::hashes::{GitCommitSha, Sha256Digest};
-use agentics_domain::models::ids::{ChallengeDraftId, SolutionSubmissionId};
+use agentics_domain::models::ids::{ChallengeReviewRecordId, SolutionSubmissionId};
 use agentics_domain::models::names::{AssetName, ChallengeName, MetricName, TargetName};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
@@ -49,7 +49,7 @@ pub(crate) enum Commands {
     Config(ConfigArgs),
     /// Discover published challenges.
     Challenges(ChallengesArgs),
-    /// Create and review GitHub-backed challenge drafts.
+    /// Create and review GitHub-backed challenge review records.
     ChallengeCreator(ChallengeCreatorArgs),
     /// Initialize a local solution workspace for a challenge.
     InitSolution(InitSolutionArgs),
@@ -165,10 +165,10 @@ pub(crate) struct ChallengeCreatorArgs {
 #[derive(Debug, Clone, Subcommand)]
 /// Enumerates challenge creator command variants supported by this module.
 pub(crate) enum ChallengeCreatorCommand {
-    /// Create or inspect a challenge draft.
-    Draft {
+    /// Create or inspect a challenge review record.
+    ReviewRecord {
         #[command(subcommand)]
-        command: ChallengeDraftCommand,
+        command: ChallengeReviewRecordCommand,
     },
     /// Show owner-visible challenge statistics.
     Stats {
@@ -203,9 +203,9 @@ pub(crate) enum ChallengeShortlistCommand {
 }
 
 #[derive(Debug, Clone, Subcommand)]
-/// Enumerates challenge draft command variants supported by this module.
-pub(crate) enum ChallengeDraftCommand {
-    /// Create a draft from a checked-out challenge repository path.
+/// Enumerates challenge review record command variants supported by this module.
+pub(crate) enum ChallengeReviewRecordCommand {
+    /// Register a challenge PR review record from a checked-out challenge repository path.
     Create {
         #[arg(long)]
         repo_url: String,
@@ -222,11 +222,13 @@ pub(crate) enum ChallengeDraftCommand {
         #[arg(long)]
         pr_author_github_user_id: i64,
     },
-    /// Show a draft owned by this agent.
-    Status { draft_id: ChallengeDraftId },
+    /// Show a review record owned by this agent.
+    Status {
+        review_record_id: ChallengeReviewRecordId,
+    },
     /// Upload one private benchmark asset to Agentics storage.
     UploadPrivateAsset {
-        draft_id: ChallengeDraftId,
+        review_record_id: ChallengeReviewRecordId,
         #[arg(long)]
         asset_name: AssetName,
         #[arg(long, value_enum)]
@@ -238,7 +240,7 @@ pub(crate) enum ChallengeDraftCommand {
     },
     /// Admin validation against a checked-out repository path.
     Validate {
-        draft_id: ChallengeDraftId,
+        review_record_id: ChallengeReviewRecordId,
         #[arg(long, value_name = "PATH")]
         repository_path: PathBuf,
         #[command(flatten)]
@@ -246,7 +248,7 @@ pub(crate) enum ChallengeDraftCommand {
     },
     /// Admin approval after validation passes.
     Approve {
-        draft_id: ChallengeDraftId,
+        review_record_id: ChallengeReviewRecordId,
         #[arg(long)]
         expected_validation_bundle_sha256: Sha256Digest,
         #[arg(long, default_value = "")]
@@ -256,29 +258,29 @@ pub(crate) enum ChallengeDraftCommand {
     },
     /// Admin rejection with optional feedback.
     Reject {
-        draft_id: ChallengeDraftId,
+        review_record_id: ChallengeReviewRecordId,
         #[arg(long, default_value = "")]
         message: String,
         #[command(flatten)]
         admin: AdminAuthArgs,
     },
-    /// Admin publish of an approved draft.
+    /// Admin publish of an approved review record.
     Publish {
-        draft_id: ChallengeDraftId,
+        review_record_id: ChallengeReviewRecordId,
         #[arg(long, value_name = "PATH")]
         repository_path: PathBuf,
         #[command(flatten)]
         admin: AdminAuthArgs,
     },
-    /// Admin abandon for a closed or withdrawn draft.
+    /// Admin abandon for a closed or withdrawn review record.
     Abandon {
-        draft_id: ChallengeDraftId,
+        review_record_id: ChallengeReviewRecordId,
         #[arg(long, default_value = "")]
         message: String,
         #[command(flatten)]
         admin: AdminAuthArgs,
     },
-    /// Admin cleanup of stale drafts and expired unpublished assets.
+    /// Admin cleanup of stale review records and expired unpublished assets.
     Cleanup {
         #[command(flatten)]
         admin: AdminAuthArgs,

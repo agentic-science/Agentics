@@ -60,13 +60,13 @@ export async function adminSession(): Promise<AdminSessionResponse> {
   });
 }
 
-/** Lists every private asset lifecycle record for a challenge draft. */
-export async function listAdminChallengeDraftPrivateAssets(
-  draftId: string,
+/** Lists every private asset lifecycle record for a challenge review record. */
+export async function listAdminChallengeReviewRecordPrivateAssets(
+  reviewRecordId: string,
   csrfToken: string,
 ): Promise<AdminChallengePrivateAssetListResponse> {
   return adminFetchJson(
-    `/admin/challenge-drafts/${draftId}/private-assets`,
+    `/admin/challenge-review-records/${reviewRecordId}/private-assets`,
     adminChallengePrivateAssetListResponseSchema,
     csrfToken,
   );

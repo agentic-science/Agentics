@@ -75,7 +75,7 @@ describe("AdminConsole", () => {
               },
             ],
           });
-        case "/admin/challenge-drafts":
+        case "/admin/challenge-review-records":
           return { items: [] };
         case "/admin/solution-submissions":
           return {

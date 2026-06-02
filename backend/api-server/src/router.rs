@@ -95,15 +95,15 @@ pub fn router(config: &Config) -> Router<AppState> {
             get(crate::auth_handlers::creator_session),
         )
         .route(
-            "/api/creator/challenge-drafts",
-            post(crate::challenge_creation_handlers::create_challenge_draft),
+            "/api/creator/challenge-review-records",
+            post(crate::challenge_creation_handlers::create_challenge_review_record),
         )
         .route(
-            "/api/creator/challenge-drafts/{id}",
-            get(crate::challenge_creation_handlers::get_challenge_draft),
+            "/api/creator/challenge-review-records/{id}",
+            get(crate::challenge_creation_handlers::get_challenge_review_record),
         )
         .route(
-            "/api/creator/challenge-drafts/{id}/private-assets",
+            "/api/creator/challenge-review-records/{id}/private-assets",
             post(crate::challenge_creation_handlers::upload_challenge_private_asset)
                 .layer(DefaultBodyLimit::max(private_asset_json_body_limit(config))),
         )
@@ -172,36 +172,36 @@ pub fn router(config: &Config) -> Router<AppState> {
                 .delete(crate::handlers::clear_challenge_moltbook_discussion),
         )
         .route(
-            "/admin/challenge-drafts",
-            get(crate::challenge_creation_handlers::list_admin_challenge_drafts),
+            "/admin/challenge-review-records",
+            get(crate::challenge_creation_handlers::list_admin_challenge_review_records),
         )
         .route(
-            "/admin/challenge-drafts/cleanup",
-            post(crate::challenge_creation_handlers::cleanup_challenge_drafts),
+            "/admin/challenge-review-records/cleanup",
+            post(crate::challenge_creation_handlers::cleanup_challenge_review_records),
         )
         .route(
-            "/admin/challenge-drafts/{id}/private-assets",
-            get(crate::challenge_creation_handlers::list_admin_challenge_draft_private_assets),
+            "/admin/challenge-review-records/{id}/private-assets",
+            get(crate::challenge_creation_handlers::list_admin_challenge_review_record_private_assets),
         )
         .route(
-            "/admin/challenge-drafts/{id}/validate",
-            post(crate::challenge_creation_handlers::validate_challenge_draft),
+            "/admin/challenge-review-records/{id}/validate",
+            post(crate::challenge_creation_handlers::validate_challenge_review_record),
         )
         .route(
-            "/admin/challenge-drafts/{id}/approve",
-            post(crate::challenge_creation_handlers::approve_challenge_draft),
+            "/admin/challenge-review-records/{id}/approve",
+            post(crate::challenge_creation_handlers::approve_challenge_review_record),
         )
         .route(
-            "/admin/challenge-drafts/{id}/reject",
-            post(crate::challenge_creation_handlers::reject_challenge_draft),
+            "/admin/challenge-review-records/{id}/reject",
+            post(crate::challenge_creation_handlers::reject_challenge_review_record),
         )
         .route(
-            "/admin/challenge-drafts/{id}/abandon",
-            post(crate::challenge_creation_handlers::abandon_challenge_draft),
+            "/admin/challenge-review-records/{id}/abandon",
+            post(crate::challenge_creation_handlers::abandon_challenge_review_record),
         )
         .route(
-            "/admin/challenge-drafts/{id}/publish",
-            post(crate::challenge_creation_handlers::publish_challenge_draft),
+            "/admin/challenge-review-records/{id}/publish",
+            post(crate::challenge_creation_handlers::publish_challenge_review_record),
         )
         .route(
             "/admin/solution-submissions",
@@ -241,7 +241,9 @@ pub fn router(config: &Config) -> Router<AppState> {
 
 /// Return a JSON body limit that can carry one configured private asset after base64 encoding.
 fn private_asset_json_body_limit(config: &Config) -> usize {
-    let decoded_limit = config.quotas.challenge_private_asset_bytes_per_draft;
+    let decoded_limit = config
+        .quotas
+        .challenge_private_asset_bytes_per_review_record;
     let base64_limit = decoded_limit
         .saturating_add(2)
         .div_ceil(3)

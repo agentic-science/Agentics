@@ -1,7 +1,7 @@
 mod auth;
 mod challenges;
-mod drafts;
 mod format;
+mod review_records;
 mod submissions;
 mod validation;
 mod workspace;
@@ -11,7 +11,9 @@ pub(crate) use challenges::{
     render_challenge_detail, render_challenge_list, render_challenge_stats, render_leaderboard,
     render_score_distribution,
 };
-pub(crate) use drafts::{render_challenge_draft, render_challenge_draft_cleanup};
+pub(crate) use review_records::{
+    render_challenge_review_record, render_challenge_review_record_cleanup,
+};
 pub(crate) use submissions::{
     render_create_solution_submission_batch, render_create_validation_run_batch,
     render_public_solution_submission_list, render_ranking_context,

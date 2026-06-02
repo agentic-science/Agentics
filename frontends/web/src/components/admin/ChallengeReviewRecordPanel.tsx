@@ -6,34 +6,34 @@ import {
   ConsoleSectionTitle as SectionTitle,
   ConsoleTextInput as TextInput,
 } from "@/components/ConsolePrimitives";
-import type { ChallengeDraftListItem } from "@/lib/schemas";
-import { ChallengeDraftReviewTable } from "./ChallengeDraftReviewTable";
-import { useChallengeDraftReviewActions } from "./useChallengeDraftReviewActions";
+import type { ChallengeReviewRecordListItem } from "@/lib/schemas";
+import { ChallengeReviewRecordTable } from "./ChallengeReviewRecordTable";
+import { useChallengeReviewRecordActions } from "./useChallengeReviewRecordActions";
 
 type RefreshOptions = { quiet?: boolean };
 type AdminRefresh = (options?: RefreshOptions) => Promise<void>;
 
-interface ChallengeDraftReviewPanelProps {
+interface ChallengeReviewRecordPanelProps {
   csrfToken: string;
-  drafts: ChallengeDraftListItem[];
+  reviewRecords: ChallengeReviewRecordListItem[];
   locale: string;
   onRefresh: AdminRefresh;
   onError: (message: string | null) => void;
   onMessage: (message: string | null) => void;
 }
 
-/** Renders the admin challenge-draft review panel shell. */
-export function ChallengeDraftReviewPanel({
+/** Renders the admin challenge-review-record review panel shell. */
+export function ChallengeReviewRecordPanel({
   csrfToken,
-  drafts,
+  reviewRecords,
   locale,
   onRefresh,
   onError,
   onMessage,
-}: ChallengeDraftReviewPanelProps) {
-  const t = useTranslations("admin.draftReview");
+}: ChallengeReviewRecordPanelProps) {
+  const t = useTranslations("admin.reviewRecords");
   const common = useTranslations("common");
-  const reviewActions = useChallengeDraftReviewActions({
+  const reviewActions = useChallengeReviewRecordActions({
     csrfToken,
     onRefresh,
     onError,
@@ -67,8 +67,10 @@ export function ChallengeDraftReviewPanel({
             <button
               type="button"
               className="btn btn-secondary self-end"
-              onClick={() => void reviewActions.cleanupDrafts()}
-              disabled={!csrfToken || reviewActions.busyDraftId === "cleanup"}
+              onClick={() => void reviewActions.cleanupReviewRecords()}
+              disabled={
+                !csrfToken || reviewActions.busyReviewRecordId === "cleanup"
+              }
             >
               <Trash2 className="w-4 h-4" />
               {t("cleanupStale")}
@@ -80,19 +82,21 @@ export function ChallengeDraftReviewPanel({
       <div className="card overflow-x-auto">
         <div className="flex items-center justify-between gap-4 mb-4">
           <span className="badge badge-default">
-            {common("rows", { count: drafts.length })}
+            {common("rows", { count: reviewRecords.length })}
           </span>
         </div>
-        <ChallengeDraftReviewTable
-          drafts={drafts}
+        <ChallengeReviewRecordTable
+          reviewRecords={reviewRecords}
           locale={locale}
           csrfToken={csrfToken}
-          busyDraftId={reviewActions.busyDraftId}
-          expandedDraftId={reviewActions.expandedDraftId}
-          assetRowsByDraftId={reviewActions.assetRowsByDraftId}
-          loadingAssetsDraftId={reviewActions.loadingAssetsDraftId}
+          busyReviewRecordId={reviewActions.busyReviewRecordId}
+          expandedReviewRecordId={reviewActions.expandedReviewRecordId}
+          assetRowsByReviewRecordId={reviewActions.assetRowsByReviewRecordId}
+          loadingAssetsReviewRecordId={
+            reviewActions.loadingAssetsReviewRecordId
+          }
           onToggleAssetRows={reviewActions.toggleAssetRows}
-          onRunDraftAction={reviewActions.runDraftAction}
+          onRunReviewRecordAction={reviewActions.runReviewRecordAction}
         />
       </div>
     </section>

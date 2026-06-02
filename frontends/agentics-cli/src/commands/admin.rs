@@ -1,141 +1,141 @@
 use std::path::Path;
 
 use agentics_domain::models::challenge_creation::{
-    ChallengePrivateAssetKind, ReviewChallengeDraftRequest, ValidateChallengeDraftRequest,
+    ChallengePrivateAssetKind, ChallengeReviewDecisionRequest, ValidateChallengeReviewRecordRequest,
 };
 use agentics_domain::models::hashes::Sha256Digest;
-use agentics_domain::models::ids::ChallengeDraftId;
+use agentics_domain::models::ids::ChallengeReviewRecordId;
 use anyhow::{Context, Result, bail};
 use secrecy::{ExposeSecret, SecretString};
 
 use crate::api::ApiClient;
-use crate::cli::{self, AdminAuthArgs, ChallengeDraftCommand, ChallengePrivateAssetKindArg};
+use crate::cli::{self, AdminAuthArgs, ChallengePrivateAssetKindArg, ChallengeReviewRecordCommand};
 use crate::config::ResolvedSettings;
 use crate::output;
 
-/// Handles challenge draft for this module.
-pub(crate) async fn challenge_draft(
-    command: ChallengeDraftCommand,
+/// Handles challenge review record for this module.
+pub(crate) async fn challenge_review_record(
+    command: ChallengeReviewRecordCommand,
     output_format: cli::OutputFormat,
     settings: &ResolvedSettings,
 ) -> Result<String> {
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
     match command {
-        ChallengeDraftCommand::Create { .. } => {
+        ChallengeReviewRecordCommand::Create { .. } => {
             bail!(
-                "creator draft creation requires GitHub OAuth web-session support; use the creator web UI"
+                "creator review record creation requires GitHub OAuth web-session support; use the creator web UI"
             )
         }
-        ChallengeDraftCommand::Status {
-            draft_id: _draft_id,
+        ChallengeReviewRecordCommand::Status {
+            review_record_id: _review_record_id,
         } => {
             bail!(
-                "creator draft status requires GitHub OAuth web-session support; use the creator web UI"
+                "creator review record status requires GitHub OAuth web-session support; use the creator web UI"
             )
         }
-        ChallengeDraftCommand::UploadPrivateAsset { .. } => {
+        ChallengeReviewRecordCommand::UploadPrivateAsset { .. } => {
             bail!(
                 "creator private asset upload requires GitHub OAuth web-session support; use the creator web UI"
             )
         }
-        ChallengeDraftCommand::Validate {
-            draft_id,
+        ChallengeReviewRecordCommand::Validate {
+            review_record_id,
             repository_path,
             admin,
         } => {
             let admin_password = resolve_admin_password(&admin, settings)?;
             let repository_path = admin_repository_path_to_wire(&repository_path)?;
             let response = client
-                .validate_challenge_draft_admin(
-                    &draft_id,
-                    &ValidateChallengeDraftRequest { repository_path },
+                .validate_challenge_review_record_admin(
+                    &review_record_id,
+                    &ValidateChallengeReviewRecordRequest { repository_path },
                     &admin.admin_username,
                     &admin_password,
                 )
                 .await?;
-            output::render_challenge_draft(&response, output_format)
+            output::render_challenge_review_record(&response, output_format)
         }
-        ChallengeDraftCommand::Approve {
-            draft_id,
+        ChallengeReviewRecordCommand::Approve {
+            review_record_id,
             expected_validation_bundle_sha256,
             message,
             admin,
         } => {
-            review_draft(
+            review_record_decision(
                 &client,
                 output_format,
-                DraftReviewRequest {
+                ReviewRecordDecisionRequest {
                     admin,
-                    draft_id,
+                    review_record_id,
                     message,
                     expected_validation_bundle_sha256: Some(expected_validation_bundle_sha256),
-                    action: DraftReviewAction::Approve,
+                    action: ReviewRecordDecisionAction::Approve,
                 },
                 settings,
             )
             .await
         }
-        ChallengeDraftCommand::Reject {
-            draft_id,
+        ChallengeReviewRecordCommand::Reject {
+            review_record_id,
             message,
             admin,
         } => {
-            review_draft(
+            review_record_decision(
                 &client,
                 output_format,
-                DraftReviewRequest {
+                ReviewRecordDecisionRequest {
                     admin,
-                    draft_id,
+                    review_record_id,
                     message,
                     expected_validation_bundle_sha256: None,
-                    action: DraftReviewAction::Reject,
+                    action: ReviewRecordDecisionAction::Reject,
                 },
                 settings,
             )
             .await
         }
-        ChallengeDraftCommand::Publish {
-            draft_id,
+        ChallengeReviewRecordCommand::Publish {
+            review_record_id,
             repository_path,
             admin,
         } => {
             let admin_password = resolve_admin_password(&admin, settings)?;
             let repository_path = admin_repository_path_to_wire(&repository_path)?;
             let response = client
-                .publish_challenge_draft_admin(
-                    &draft_id,
-                    &ValidateChallengeDraftRequest { repository_path },
+                .publish_challenge_review_record_admin(
+                    &review_record_id,
+                    &ValidateChallengeReviewRecordRequest { repository_path },
                     &admin.admin_username,
                     &admin_password,
                 )
                 .await?;
-            output::render_challenge_draft(&response, output_format)
+            output::render_challenge_review_record(&response, output_format)
         }
-        ChallengeDraftCommand::Abandon {
-            draft_id,
+        ChallengeReviewRecordCommand::Abandon {
+            review_record_id,
             message,
             admin,
         } => {
-            review_draft(
+            review_record_decision(
                 &client,
                 output_format,
-                DraftReviewRequest {
+                ReviewRecordDecisionRequest {
                     admin,
-                    draft_id,
+                    review_record_id,
                     message,
                     expected_validation_bundle_sha256: None,
-                    action: DraftReviewAction::Abandon,
+                    action: ReviewRecordDecisionAction::Abandon,
                 },
                 settings,
             )
             .await
         }
-        ChallengeDraftCommand::Cleanup { admin } => {
+        ChallengeReviewRecordCommand::Cleanup { admin } => {
             let admin_password = resolve_admin_password(&admin, settings)?;
             let response = client
-                .cleanup_challenge_drafts_admin(&admin.admin_username, &admin_password)
+                .cleanup_challenge_review_records_admin(&admin.admin_username, &admin_password)
                 .await?;
-            output::render_challenge_draft_cleanup(&response, output_format)
+            output::render_challenge_review_record_cleanup(&response, output_format)
         }
     }
 }
@@ -169,59 +169,59 @@ fn resolve_admin_password(
     Ok(password)
 }
 
-/// Enumerates draft review action variants supported by this module.
-enum DraftReviewAction {
+/// Enumerates review record decision variants supported by this module.
+enum ReviewRecordDecisionAction {
     Approve,
     Reject,
     Abandon,
 }
 
-/// Carries draft review inputs through the command handler.
-struct DraftReviewRequest {
+/// Carries review record decision inputs through the command handler.
+struct ReviewRecordDecisionRequest {
     admin: AdminAuthArgs,
-    draft_id: ChallengeDraftId,
+    review_record_id: ChallengeReviewRecordId,
     message: String,
     expected_validation_bundle_sha256: Option<Sha256Digest>,
-    action: DraftReviewAction,
+    action: ReviewRecordDecisionAction,
 }
 
-/// Handles review draft for this module.
-async fn review_draft(
+/// Handles a review record decision.
+async fn review_record_decision(
     client: &ApiClient,
     output_format: cli::OutputFormat,
-    review: DraftReviewRequest,
+    review: ReviewRecordDecisionRequest,
     settings: &ResolvedSettings,
 ) -> Result<String> {
-    let request = ReviewChallengeDraftRequest {
+    let request = ChallengeReviewDecisionRequest {
         message: review.message,
         expected_validation_bundle_sha256: review.expected_validation_bundle_sha256,
     };
     let admin_password = resolve_admin_password(&review.admin, settings)?;
     let response = match review.action {
-        DraftReviewAction::Approve => {
+        ReviewRecordDecisionAction::Approve => {
             client
-                .approve_challenge_draft_admin(
-                    &review.draft_id,
+                .approve_challenge_review_record_admin(
+                    &review.review_record_id,
                     &request,
                     &review.admin.admin_username,
                     &admin_password,
                 )
                 .await?
         }
-        DraftReviewAction::Reject => {
+        ReviewRecordDecisionAction::Reject => {
             client
-                .reject_challenge_draft_admin(
-                    &review.draft_id,
+                .reject_challenge_review_record_admin(
+                    &review.review_record_id,
                     &request,
                     &review.admin.admin_username,
                     &admin_password,
                 )
                 .await?
         }
-        DraftReviewAction::Abandon => {
+        ReviewRecordDecisionAction::Abandon => {
             client
-                .abandon_challenge_draft_admin(
-                    &review.draft_id,
+                .abandon_challenge_review_record_admin(
+                    &review.review_record_id,
                     &request,
                     &review.admin.admin_username,
                     &admin_password,
@@ -229,7 +229,7 @@ async fn review_draft(
                 .await?
         }
     };
-    output::render_challenge_draft(&response, output_format)
+    output::render_challenge_review_record(&response, output_format)
 }
 
 impl From<ChallengePrivateAssetKindArg> for ChallengePrivateAssetKind {

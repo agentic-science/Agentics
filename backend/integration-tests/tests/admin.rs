@@ -316,7 +316,7 @@ async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
     assert_eq!(list_response.status(), reqwest::StatusCode::OK);
 
     let missing_csrf_response = client
-        .post(api_url(&app, "/admin/challenge-drafts/cleanup"))
+        .post(api_url(&app, "/admin/challenge-review-records/cleanup"))
         .header(reqwest::header::COOKIE, &session_cookie)
         .json(&serde_json::json!({}))
         .send()
@@ -328,7 +328,7 @@ async fn admin_session_cookie_authenticates_admin_routes(pool: sqlx::PgPool) {
     );
 
     let cleanup_response = client
-        .post(api_url(&app, "/admin/challenge-drafts/cleanup"))
+        .post(api_url(&app, "/admin/challenge-review-records/cleanup"))
         .header(reqwest::header::COOKIE, &session_cookie)
         .header("x-agentics-csrf-token", csrf_token)
         .json(&serde_json::json!({}))

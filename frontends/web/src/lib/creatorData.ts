@@ -2,7 +2,7 @@
 
 import useSWR, { mutate } from "swr";
 import {
-  getChallengeDraft,
+  getChallengeReviewRecord,
   getChallengeShortlist,
   getCreatorChallengeParticipants,
   getCreatorChallengeStats,
@@ -10,8 +10,8 @@ import {
 } from "@/lib/creatorApi";
 import type {
   ChallengeShortlistResponse,
-  CreatorChallengeDraftResponse,
   CreatorChallengeParticipantsResponse,
+  CreatorChallengeReviewRecordResponse,
   CreatorChallengeStatsResponse,
   CreatorSessionResponse,
 } from "@/lib/schemas";
@@ -46,16 +46,16 @@ export function useCreatorSession() {
   };
 }
 
-/** Loads one creator-owned draft when an id is available. */
-export function useCreatorDraft(draftId: string) {
-  const normalized = draftId.trim();
-  const swr = useSWR<CreatorChallengeDraftResponse>(
-    normalized ? creatorDraftKey(normalized) : null,
-    fetchCreatorDraftByKey,
+/** Loads one creator-owned review record when an id is available. */
+export function useCreatorReviewRecord(reviewRecordId: string) {
+  const normalized = reviewRecordId.trim();
+  const swr = useSWR<CreatorChallengeReviewRecordResponse>(
+    normalized ? creatorReviewRecordKey(normalized) : null,
+    fetchCreatorReviewRecordByKey,
     { shouldRetryOnError: false },
   );
   return {
-    draft: swr.data,
+    reviewRecord: swr.data,
     error: swr.error,
     isLoading: swr.isLoading,
     mutate: swr.mutate,
@@ -77,9 +77,9 @@ export function useCreatorOwnerBundle(scope: CreatorOwnerScope | null) {
   };
 }
 
-/** Refreshes one cached creator draft after asset upload or draft creation. */
-export function mutateCreatorDraft(draftId: string) {
-  return mutate(creatorDraftKey(draftId));
+/** Refreshes one cached creator review record after asset upload or review record creation. */
+export function mutateCreatorReviewRecord(reviewRecordId: string) {
+  return mutate(creatorReviewRecordKey(reviewRecordId));
 }
 
 /** Refreshes owner surfaces after shortlist mutation. */
@@ -99,8 +99,10 @@ export async function fetchCreatorOwnerBundle(
   return { stats, participants, shortlist };
 }
 
-function creatorDraftKey(draftId: string): readonly ["creator-draft", string] {
-  return ["creator-draft", draftId] as const;
+function creatorReviewRecordKey(
+  reviewRecordId: string,
+): readonly ["creator-review-record", string] {
+  return ["creator-review-record", reviewRecordId] as const;
 }
 
 function creatorOwnerBundleKey(
@@ -113,8 +115,10 @@ function creatorOwnerBundleKey(
   ] as const;
 }
 
-function fetchCreatorDraftByKey(key: readonly ["creator-draft", string]) {
-  return getChallengeDraft(key[1]);
+function fetchCreatorReviewRecordByKey(
+  key: readonly ["creator-review-record", string],
+) {
+  return getChallengeReviewRecord(key[1]);
 }
 
 function fetchCreatorOwnerBundleByKey(

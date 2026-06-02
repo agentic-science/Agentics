@@ -89,14 +89,14 @@ pub fn normalized_manifest_sha256(manifest: &ChallengeCreationManifest) -> Resul
     Ok(sha256_digest(&bytes))
 }
 
-/// Return a deterministic digest for the draft content a reviewer validated.
+/// Return a deterministic digest for the review_record content a reviewer validated.
 ///
 /// The digest covers the normalized public manifest, the public bundle tree for
 /// publishable requests, and the uploaded private asset nameentities. It is not a
 /// replacement for a future server-side Git checkout at `commit_sha`, but it
 /// gives validation, approval, and publish an exact content identity to compare
 /// within the MVP trust boundary.
-pub async fn draft_review_bundle_sha256(
+pub async fn challenge_review_bundle_sha256(
     proposal_root: &Path,
     manifest: &ChallengeCreationManifest,
     private_assets: &[ChallengePrivateAssetResponse],
@@ -105,10 +105,10 @@ pub async fn draft_review_bundle_sha256(
     let manifest = manifest.clone();
     let private_assets = private_assets.to_vec();
     tokio::task::spawn_blocking(move || {
-        draft_review_bundle_sha256_blocking(&proposal_root, &manifest, &private_assets)
+        challenge_review_bundle_sha256_blocking(&proposal_root, &manifest, &private_assets)
     })
     .await
-    .map_err(|e| ServiceError::Internal(format!("draft digest task failed: {e}")))?
+    .map_err(|e| ServiceError::Internal(format!("review_record digest task failed: {e}")))?
 }
 
 /// Return a deterministic digest for an assembled runtime bundle reviewed by an admin.
@@ -116,14 +116,14 @@ pub async fn draft_review_bundle_sha256(
 /// The digest covers the normalized public manifest and the fully assembled
 /// runtime bundle after private overlays have been applied. This is the digest
 /// approval and publish compare for publishable new challenges.
-pub async fn draft_review_runtime_bundle_sha256(
+pub async fn challenge_review_runtime_bundle_sha256(
     runtime_bundle_root: &Path,
     manifest: &ChallengeCreationManifest,
 ) -> Result<Sha256Digest> {
     let runtime_bundle_root = runtime_bundle_root.to_path_buf();
     let manifest = manifest.clone();
     tokio::task::spawn_blocking(move || {
-        draft_review_runtime_bundle_sha256_blocking(&runtime_bundle_root, &manifest)
+        challenge_review_runtime_bundle_sha256_blocking(&runtime_bundle_root, &manifest)
     })
     .await
     .map_err(|e| ServiceError::Internal(format!("runtime bundle digest task failed: {e}")))?
@@ -136,14 +136,14 @@ pub fn sha256_digest(bytes: &[u8]) -> Sha256Digest {
     Sha256Digest::from_bytes(hasher.finalize().into())
 }
 
-/// Handles draft review bundle sha256 blocking for this module.
-fn draft_review_bundle_sha256_blocking(
+/// Handles review_record review bundle sha256 blocking for this module.
+fn challenge_review_bundle_sha256_blocking(
     proposal_root: &Path,
     manifest: &ChallengeCreationManifest,
     private_assets: &[ChallengePrivateAssetResponse],
 ) -> Result<Sha256Digest> {
     let mut hasher = Sha256::new();
-    hash_field(&mut hasher, "format", b"agentics-draft-review-v1");
+    hash_field(&mut hasher, "format", b"agentics-review_record-review-v1");
 
     let manifest_bytes =
         serde_json::to_vec(manifest).map_err(|e| ServiceError::Internal(e.to_string()))?;
@@ -171,13 +171,17 @@ fn draft_review_bundle_sha256_blocking(
     Ok(Sha256Digest::from_bytes(hasher.finalize().into()))
 }
 
-/// Handles draft review runtime bundle sha256 blocking for this module.
-fn draft_review_runtime_bundle_sha256_blocking(
+/// Handles review_record review runtime bundle sha256 blocking for this module.
+fn challenge_review_runtime_bundle_sha256_blocking(
     runtime_bundle_root: &Path,
     manifest: &ChallengeCreationManifest,
 ) -> Result<Sha256Digest> {
     let mut hasher = Sha256::new();
-    hash_field(&mut hasher, "format", b"agentics-draft-runtime-review-v1");
+    hash_field(
+        &mut hasher,
+        "format",
+        b"agentics-review_record-runtime-review-v1",
+    );
 
     let manifest_bytes =
         serde_json::to_vec(manifest).map_err(|e| ServiceError::Internal(e.to_string()))?;

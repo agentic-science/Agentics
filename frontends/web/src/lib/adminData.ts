@@ -12,8 +12,8 @@ import {
   adminChallengeListResponseSchema,
   adminServiceHeartbeatListResponseSchema,
   adminSolutionSubmissionListResponseSchema,
-  type ChallengeDraftListResponse,
-  challengeDraftListResponseSchema,
+  type ChallengeReviewRecordListResponse,
+  challengeReviewRecordListResponseSchema,
   type PioneerCodeListResponse,
   pioneerCodeListResponseSchema,
 } from "@/lib/schemas";
@@ -21,7 +21,7 @@ import {
 /** Admin dashboard data fetched as one cacheable bundle. */
 export interface AdminData {
   challenges: AdminChallengeListResponse;
-  drafts: ChallengeDraftListResponse;
+  reviewRecords: ChallengeReviewRecordListResponse;
   submissions: AdminSolutionSubmissionListResponse;
   heartbeats: AdminServiceHeartbeatListResponse;
   pioneerCodes: PioneerCodeListResponse;
@@ -30,7 +30,7 @@ export interface AdminData {
 
 export const emptyAdminData: AdminData = {
   challenges: { items: [] },
-  drafts: { items: [] },
+  reviewRecords: { items: [] },
   submissions: { items: [] },
   heartbeats: { items: [] },
   pioneerCodes: { items: [] },
@@ -90,39 +90,45 @@ export function clearAdminDashboard(csrfToken: string) {
 export async function fetchAdminDashboardData(
   csrfToken: string,
 ): Promise<AdminData> {
-  const [challenges, drafts, submissions, heartbeats, pioneerCodes, capacity] =
-    await Promise.all([
-      adminFetchJson(
-        "/admin/challenges",
-        adminChallengeListResponseSchema,
-        csrfToken,
-      ),
-      adminFetchJson(
-        "/admin/challenge-drafts",
-        challengeDraftListResponseSchema,
-        csrfToken,
-      ),
-      adminFetchJson(
-        "/admin/solution-submissions",
-        adminSolutionSubmissionListResponseSchema,
-        csrfToken,
-      ),
-      adminFetchJson(
-        "/admin/service-heartbeats",
-        adminServiceHeartbeatListResponseSchema,
-        csrfToken,
-      ),
-      adminFetchJson(
-        "/admin/pioneer-codes",
-        pioneerCodeListResponseSchema,
-        csrfToken,
-      ),
-      adminFetchJson("/admin/capacity", adminCapacityResponseSchema, csrfToken),
-    ]);
+  const [
+    challenges,
+    reviewRecords,
+    submissions,
+    heartbeats,
+    pioneerCodes,
+    capacity,
+  ] = await Promise.all([
+    adminFetchJson(
+      "/admin/challenges",
+      adminChallengeListResponseSchema,
+      csrfToken,
+    ),
+    adminFetchJson(
+      "/admin/challenge-review-records",
+      challengeReviewRecordListResponseSchema,
+      csrfToken,
+    ),
+    adminFetchJson(
+      "/admin/solution-submissions",
+      adminSolutionSubmissionListResponseSchema,
+      csrfToken,
+    ),
+    adminFetchJson(
+      "/admin/service-heartbeats",
+      adminServiceHeartbeatListResponseSchema,
+      csrfToken,
+    ),
+    adminFetchJson(
+      "/admin/pioneer-codes",
+      pioneerCodeListResponseSchema,
+      csrfToken,
+    ),
+    adminFetchJson("/admin/capacity", adminCapacityResponseSchema, csrfToken),
+  ]);
 
   return {
     challenges,
-    drafts,
+    reviewRecords,
     submissions,
     heartbeats,
     pioneerCodes,

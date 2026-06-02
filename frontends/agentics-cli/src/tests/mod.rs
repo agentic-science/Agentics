@@ -1105,15 +1105,15 @@ fn invalid_submission_id_fails_during_cli_parse() {
     assert!(result.is_err());
 }
 
-/// Verifies that admin challenge-draft commands parse draft IDs before HTTP execution.
+/// Verifies that admin challenge-review-record commands parse review record IDs before HTTP execution.
 #[test]
-fn invalid_challenge_draft_id_fails_during_cli_parse() {
+fn invalid_challenge_review_record_id_fails_during_cli_parse() {
     let result = Cli::try_parse_from([
         "agentics",
         "challenge-creator",
-        "draft",
+        "review-record",
         "validate",
-        "draft-1",
+        "review-record-1",
         "--repository-path",
         ".",
         "--admin-username",

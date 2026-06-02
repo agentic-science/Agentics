@@ -2,8 +2,9 @@ use sqlx::Row;
 use uuid::Uuid;
 
 use agentics_domain::models::ids::{
-    AgentId, AgentTokenId, ChallengeDraftId, ChallengeDraftValidationRecordId,
-    ChallengePrivateAssetId, ChallengeShortlistRevisionId, EvaluationJobId, SolutionSubmissionId,
+    AgentId, AgentTokenId, ChallengePrivateAssetId, ChallengeReviewRecordId,
+    ChallengeReviewValidationRecordId, ChallengeShortlistRevisionId, EvaluationJobId,
+    SolutionSubmissionId,
 };
 use agentics_domain::models::names::{AssetName, ChallengeName, TargetName};
 use agentics_error::{Result, ServiceError};
@@ -76,12 +77,17 @@ pub(in crate::db) fn agent_token_id_from_row(
     parse_uuid_id_from_row(row, column, AgentTokenId::try_new, "agent token id")
 }
 
-/// Reads challenge draft id from a database row and validates its domain shape.
-pub(in crate::db) fn challenge_draft_id_from_row(
+/// Reads challenge review record id from a database row and validates its domain shape.
+pub(in crate::db) fn challenge_review_record_id_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
-) -> Result<ChallengeDraftId> {
-    parse_uuid_id_from_row(row, column, ChallengeDraftId::try_new, "challenge draft id")
+) -> Result<ChallengeReviewRecordId> {
+    parse_uuid_id_from_row(
+        row,
+        column,
+        ChallengeReviewRecordId::try_new,
+        "challenge review record id",
+    )
 }
 
 /// Reads challenge private asset id from a database row and validates its domain shape.
@@ -97,16 +103,16 @@ pub(in crate::db) fn challenge_private_asset_id_from_row(
     )
 }
 
-/// Reads challenge draft validation record id from a database row and validates its domain shape.
-pub(in crate::db) fn challenge_draft_validation_record_id_from_row(
+/// Reads challenge review record validation record id from a database row and validates its domain shape.
+pub(in crate::db) fn challenge_review_validation_record_id_from_row(
     row: &sqlx::postgres::PgRow,
     column: &str,
-) -> Result<ChallengeDraftValidationRecordId> {
+) -> Result<ChallengeReviewValidationRecordId> {
     parse_uuid_id_from_row(
         row,
         column,
-        ChallengeDraftValidationRecordId::try_new,
-        "challenge draft validation record id",
+        ChallengeReviewValidationRecordId::try_new,
+        "challenge review record validation record id",
     )
 }
 

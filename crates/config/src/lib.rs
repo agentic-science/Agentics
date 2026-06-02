@@ -106,20 +106,20 @@ pub const DEFAULT_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY: u32 = 5;
 pub const DEFAULT_MAX_ACTIVE_OFFICIAL_JOBS: u32 = 20;
 /// Default active agent limit.
 pub const DEFAULT_MAX_ACTIVE_AGENTS: u32 = 1_000;
-/// Default active challenge draft limit per agent.
-pub const DEFAULT_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT: u32 = 10;
-/// Default private asset byte budget per challenge draft.
-pub const DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT: u64 = 250 * 1024 * 1024;
-/// Default challenge draft validation count per day.
-pub const DEFAULT_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY: u32 = 10;
-/// Default challenge draft validation timeout in minutes.
-pub const DEFAULT_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES: i32 = 30;
+/// Default active challenge review record limit per agent.
+pub const DEFAULT_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_AGENT: u32 = 10;
+/// Default private asset byte budget per challenge review record.
+pub const DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD: u64 = 250 * 1024 * 1024;
+/// Default challenge review record validation count per day.
+pub const DEFAULT_CHALLENGE_REVIEW_RECORD_VALIDATIONS_PER_DAY: u32 = 10;
+/// Default challenge review record validation timeout in minutes.
+pub const DEFAULT_CHALLENGE_REVIEW_RECORD_VALIDATION_TIMEOUT_MINUTES: i32 = 30;
 /// Default pending private asset timeout in minutes.
 pub const DEFAULT_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES: i32 = 30;
-/// Default draft publish timeout in minutes.
-pub const DEFAULT_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES: i32 = 30;
-/// Default unpublished challenge draft TTL in days.
-pub const DEFAULT_CHALLENGE_DRAFT_TTL_DAYS: i64 = 14;
+/// Default review record publish timeout in minutes.
+pub const DEFAULT_CHALLENGE_REVIEW_RECORD_PUBLISH_TIMEOUT_MINUTES: i32 = 30;
+/// Default unpublished challenge review record TTL in days.
+pub const DEFAULT_CHALLENGE_REVIEW_RECORD_TTL_DAYS: i64 = 14;
 /// Default grace period for unpublished challenge assets in days.
 pub const DEFAULT_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS: i64 = 7;
 /// Default worker host-probe mode.
@@ -209,18 +209,19 @@ impl Default for Config {
                     DEFAULT_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY,
                 max_active_official_jobs: DEFAULT_MAX_ACTIVE_OFFICIAL_JOBS,
                 max_active_agents: DEFAULT_MAX_ACTIVE_AGENTS,
-                max_active_challenge_drafts_per_agent:
-                    DEFAULT_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT,
-                challenge_private_asset_bytes_per_draft:
-                    DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT,
-                challenge_draft_validations_per_day: DEFAULT_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY,
-                challenge_draft_validation_timeout_minutes:
-                    DEFAULT_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES,
+                max_active_challenge_review_records_per_agent:
+                    DEFAULT_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_AGENT,
+                challenge_private_asset_bytes_per_review_record:
+                    DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD,
+                challenge_review_record_validations_per_day:
+                    DEFAULT_CHALLENGE_REVIEW_RECORD_VALIDATIONS_PER_DAY,
+                challenge_review_record_validation_timeout_minutes:
+                    DEFAULT_CHALLENGE_REVIEW_RECORD_VALIDATION_TIMEOUT_MINUTES,
                 challenge_private_asset_pending_timeout_minutes:
                     DEFAULT_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES,
-                challenge_draft_publish_timeout_minutes:
-                    DEFAULT_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES,
-                challenge_draft_ttl_days: DEFAULT_CHALLENGE_DRAFT_TTL_DAYS,
+                challenge_review_record_publish_timeout_minutes:
+                    DEFAULT_CHALLENGE_REVIEW_RECORD_PUBLISH_TIMEOUT_MINUTES,
+                challenge_review_record_ttl_days: DEFAULT_CHALLENGE_REVIEW_RECORD_TTL_DAYS,
                 unpublished_challenge_asset_grace_days:
                     DEFAULT_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS,
             },

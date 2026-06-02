@@ -5,7 +5,10 @@ mod helpers;
 use agentics_domain::models::{
     challenge_creation::ChallengePrivateAssetKind,
     hashes::Sha256Digest,
-    ids::{AgentId, ChallengeDraftId, ChallengeDraftValidationRecordId, ChallengePrivateAssetId},
+    ids::{
+        AgentId, ChallengePrivateAssetId, ChallengeReviewRecordId,
+        ChallengeReviewValidationRecordId,
+    },
     names::AssetName,
 };
 use agentics_error::ServiceError;
@@ -39,13 +42,13 @@ async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
 
-    let draft = create_draft(&client, &app, &creator, 9, manifest_json()).await;
-    let draft_id = draft["id"].as_str().expect("draft id");
+    let review_record = create_review_record(&client, &app, &creator, 9, manifest_json()).await;
+    let review_record_id = review_record["id"].as_str().expect("review_record id");
 
     let first_response = creator_auth(
         client.post(api_url(
             &app,
-            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+            &format!("/api/creator/challenge-review-records/{review_record_id}/private-assets"),
         )),
         &creator,
     )
@@ -69,7 +72,7 @@ async fn private_asset_upload_rejects_duplicate_asset_name(pool: sqlx::PgPool) {
     let duplicate_response = creator_auth(
         client.post(api_url(
             &app,
-            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+            &format!("/api/creator/challenge-review-records/{review_record_id}/private-assets"),
         )),
         &creator,
     )
@@ -113,7 +116,7 @@ fn private_benchmark_asset_zip_base64_with_nonce(nonce: i32) -> String {
     )])
 }
 
-/// Verifies active draft validation blocks asset mutation until its lease expires.
+/// Verifies active review_record validation blocks asset mutation until its lease expires.
 #[sqlx::test(migrations = "../migrations")]
 async fn private_asset_upload_rejects_active_validation_and_recovers_stale_claim(
     pool: sqlx::PgPool,
@@ -121,27 +124,30 @@ async fn private_asset_upload_rejects_active_validation_and_recovers_stale_claim
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let mut config = test_config(storage.path(), seeded_challenges.path());
-    config.quotas.challenge_draft_validation_timeout_minutes = 30;
+    config
+        .quotas
+        .challenge_review_record_validation_timeout_minutes = 30;
     let app = spawn_app_with_config(pool.clone(), config).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
 
-    let draft = create_draft(&client, &app, &creator, 11, manifest_json()).await;
-    let draft_id =
-        ChallengeDraftId::try_new(draft["id"].as_str().expect("draft id")).expect("valid draft id");
+    let review_record = create_review_record(&client, &app, &creator, 11, manifest_json()).await;
+    let review_record_id =
+        ChallengeReviewRecordId::try_new(review_record["id"].as_str().expect("review_record id"))
+            .expect("valid review_record id");
     let manifest_sha256 = Sha256Digest::try_new(
-        draft["manifest_sha256"]
+        review_record["manifest_sha256"]
             .as_str()
             .expect("manifest sha should exist"),
     )
     .expect("manifest sha should parse");
-    let validation_record_id = ChallengeDraftValidationRecordId::generate();
+    let validation_record_id = ChallengeReviewValidationRecordId::generate();
     db::Repositories::new(&pool)
-        .challenge_drafts()
+        .challenge_review_records()
         .begin_validation(
-            &db::BeginChallengeDraftValidationInput {
+            &db::BeginChallengeReviewRecordValidationInput {
                 validation_record_id: validation_record_id.clone(),
-                draft_id: draft_id.clone(),
+                review_record_id: review_record_id.clone(),
                 repository_path: storage.path().to_string_lossy().to_string(),
                 manifest_sha256,
             },
@@ -153,23 +159,23 @@ async fn private_asset_upload_rejects_active_validation_and_recovers_stale_claim
         .expect("validation claim should reserve");
 
     let active_response =
-        upload_private_asset(&client, &app, &creator, draft_id.as_str(), 11).await;
+        upload_private_asset(&client, &app, &creator, review_record_id.as_str(), 11).await;
     assert_eq!(active_response.status(), reqwest::StatusCode::CONFLICT);
 
     sqlx::query(
-        "UPDATE challenge_draft_validation_records SET created_at = NOW() - INTERVAL '60 minutes' WHERE id = $1::uuid",
+        "UPDATE challenge_review_validation_records SET created_at = NOW() - INTERVAL '60 minutes' WHERE id = $1::uuid",
     )
     .bind(validation_record_id.as_str())
     .execute(&pool)
     .await
     .expect("failed to age validation claim");
     let recovered_response =
-        upload_private_asset(&client, &app, &creator, draft_id.as_str(), 12).await;
+        upload_private_asset(&client, &app, &creator, review_record_id.as_str(), 12).await;
     assert_eq!(recovered_response.status(), reqwest::StatusCode::CREATED);
     let active_validation: Option<String> = sqlx::query_scalar(
-        "SELECT active_validation_record_id::text FROM challenge_drafts WHERE id = $1::uuid",
+        "SELECT active_validation_record_id::text FROM challenge_review_records WHERE id = $1::uuid",
     )
-    .bind(draft_id.as_str())
+    .bind(review_record_id.as_str())
     .fetch_one(&pool)
     .await
     .expect("failed to query active validation");
@@ -199,21 +205,22 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
             "required": false
         }
     ]);
-    let draft = create_draft(&client, &app, &creator, 10, manifest).await;
-    let draft_id =
-        ChallengeDraftId::try_new(draft["id"].as_str().expect("draft id")).expect("valid draft id");
+    let review_record = create_review_record(&client, &app, &creator, 10, manifest).await;
+    let review_record_id =
+        ChallengeReviewRecordId::try_new(review_record["id"].as_str().expect("review_record id"))
+            .expect("valid review_record id");
     let uploader_agent_id = AgentId::try_new(&creator.agent_id).expect("valid creator agent id");
 
     let input_a = db::CreateChallengePrivateAssetInput {
         asset_row_id: ChallengePrivateAssetId::generate(),
-        draft_id: draft_id.clone(),
+        review_record_id: review_record_id.clone(),
         asset_name: AssetName::try_new("official-cases-a".to_string())
             .expect("test asset name is valid"),
         kind: ChallengePrivateAssetKind::PrivateBenchmarkData,
         required: false,
         size_bytes: 8,
         sha256: Sha256Digest::try_new("a".repeat(64)).expect("test digest is valid"),
-        storage_key: StorageKey::try_new("challenge-drafts/test/private-assets/a.bin")
+        storage_key: StorageKey::try_new("challenge-review-records/test/private-assets/a.bin")
             .expect("test storage key is valid"),
         temporary_storage_key: StorageKey::try_new("_tmp/challenge-private-assets/a.bin")
             .expect("test temporary storage key is valid"),
@@ -221,14 +228,14 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
     };
     let input_b = db::CreateChallengePrivateAssetInput {
         asset_row_id: ChallengePrivateAssetId::generate(),
-        draft_id: draft_id.clone(),
+        review_record_id: review_record_id.clone(),
         asset_name: AssetName::try_new("official-cases-b".to_string())
             .expect("test asset name is valid"),
         kind: ChallengePrivateAssetKind::PrivateBenchmarkData,
         required: false,
         size_bytes: 8,
         sha256: Sha256Digest::try_new("b".repeat(64)).expect("test digest is valid"),
-        storage_key: StorageKey::try_new("challenge-drafts/test/private-assets/b.bin")
+        storage_key: StorageKey::try_new("challenge-review-records/test/private-assets/b.bin")
             .expect("test storage key is valid"),
         temporary_storage_key: StorageKey::try_new("_tmp/challenge-private-assets/b.bin")
             .expect("test temporary storage key is valid"),
@@ -237,8 +244,8 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
 
     let repos_a = db::Repositories::new(&pool);
     let repos_b = db::Repositories::new(&pool);
-    let drafts_a = repos_a.challenge_drafts();
-    let drafts_b = repos_b.challenge_drafts();
+    let drafts_a = repos_a.challenge_review_records();
+    let drafts_b = repos_b.challenge_review_records();
     let create_a = drafts_a.reserve_private_asset(&input_a, 12, 30, 30);
     let create_b = drafts_b.reserve_private_asset(&input_b, 12, 30, 30);
     let (result_a, result_b) = tokio::join!(create_a, create_b);
@@ -262,16 +269,16 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
     assert_eq!(rejected, 1);
 
     let stored_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::BIGINT FROM challenge_private_assets WHERE draft_id = $1::uuid",
+        "SELECT COUNT(*)::BIGINT FROM challenge_private_assets WHERE review_record_id = $1::uuid",
     )
-    .bind(draft_id.as_str())
+    .bind(review_record_id.as_str())
     .fetch_one(&pool)
     .await
     .expect("asset count query");
     let stored_bytes: i64 = sqlx::query_scalar(
-        "SELECT COALESCE(SUM(size_bytes), 0)::BIGINT FROM challenge_private_assets WHERE draft_id = $1::uuid",
+        "SELECT COALESCE(SUM(size_bytes), 0)::BIGINT FROM challenge_private_assets WHERE review_record_id = $1::uuid",
     )
-    .bind(draft_id.as_str())
+    .bind(review_record_id.as_str())
     .fetch_one(&pool)
     .await
     .expect("asset byte query");
@@ -289,15 +296,21 @@ async fn stale_pending_private_asset_reservation_can_be_retried(pool: sqlx::PgPo
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
 
-    let draft = create_draft(&client, &app, &creator, 12, manifest_json()).await;
-    let draft_id =
-        ChallengeDraftId::try_new(draft["id"].as_str().expect("draft id")).expect("valid draft id");
+    let review_record = create_review_record(&client, &app, &creator, 12, manifest_json()).await;
+    let review_record_id =
+        ChallengeReviewRecordId::try_new(review_record["id"].as_str().expect("review_record id"))
+            .expect("valid review_record id");
     let uploader_agent_id = AgentId::try_new(&creator.agent_id).expect("valid creator agent id");
 
-    let first = private_asset_input(&draft_id, &uploader_agent_id, "official-cases", "first");
+    let first = private_asset_input(
+        &review_record_id,
+        &uploader_agent_id,
+        "official-cases",
+        "first",
+    );
     let repos = db::Repositories::new(&pool);
     repos
-        .challenge_drafts()
+        .challenge_review_records()
         .reserve_private_asset(&first, 64, 30, 30)
         .await
         .expect("first pending asset should reserve");
@@ -309,17 +322,22 @@ async fn stale_pending_private_asset_reservation_can_be_retried(pool: sqlx::PgPo
     .await
     .expect("failed to age pending asset");
 
-    let second = private_asset_input(&draft_id, &uploader_agent_id, "official-cases", "second");
+    let second = private_asset_input(
+        &review_record_id,
+        &uploader_agent_id,
+        "official-cases",
+        "second",
+    );
     repos
-        .challenge_drafts()
+        .challenge_review_records()
         .reserve_private_asset(&second, 64, 30, 30)
         .await
         .expect("stale pending asset should not block retry");
 
     let states: Vec<String> = sqlx::query_scalar(
-        "SELECT status FROM challenge_private_assets WHERE draft_id = $1::uuid ORDER BY created_at ASC",
+        "SELECT status FROM challenge_private_assets WHERE review_record_id = $1::uuid ORDER BY created_at ASC",
     )
-    .bind(draft_id.as_str())
+    .bind(review_record_id.as_str())
     .fetch_all(&pool)
     .await
     .expect("failed to query asset states");
@@ -340,9 +358,10 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
 
-    let draft = create_draft(&client, &app, &creator, 14, manifest_json()).await;
-    let draft_id =
-        ChallengeDraftId::try_new(draft["id"].as_str().expect("draft id")).expect("valid draft id");
+    let review_record = create_review_record(&client, &app, &creator, 14, manifest_json()).await;
+    let review_record_id =
+        ChallengeReviewRecordId::try_new(review_record["id"].as_str().expect("review_record id"))
+            .expect("valid review_record id");
     let uploader_agent_id = AgentId::try_new(&creator.agent_id).expect("valid creator agent id");
     let asset_base64 = private_benchmark_asset_zip_base64();
     let asset_bytes = STANDARD
@@ -350,13 +369,13 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
         .expect("test asset base64 should decode");
     let sha256 = agentics_contracts::challenge_creation::sha256_digest(&asset_bytes);
     let storage_key = StorageKey::try_new(format!(
-        "challenge-drafts/{}/private-assets/official-cases-{}.bin",
-        draft_id, sha256
+        "challenge-review-records/{}/private-assets/official-cases-{}.bin",
+        review_record_id, sha256
     ))
     .expect("deterministic private asset storage key should be valid");
     let first = db::CreateChallengePrivateAssetInput {
         asset_row_id: ChallengePrivateAssetId::generate(),
-        draft_id: draft_id.clone(),
+        review_record_id: review_record_id.clone(),
         asset_name: AssetName::try_new("official-cases".to_string())
             .expect("test asset name is valid"),
         kind: ChallengePrivateAssetKind::PrivateBenchmarkData,
@@ -369,7 +388,7 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
         uploader_agent_id,
     };
     db::Repositories::new(&pool)
-        .challenge_drafts()
+        .challenge_review_records()
         .reserve_private_asset(&first, 10_000_000, 30, 30)
         .await
         .expect("first pending asset should reserve");
@@ -386,8 +405,8 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
         client.post(api_url(
             &app,
             &format!(
-                "/api/creator/challenge-drafts/{}/private-assets",
-                draft_id.as_str()
+                "/api/creator/challenge-review-records/{}/private-assets",
+                review_record_id.as_str()
             ),
         )),
         &creator,
@@ -409,9 +428,9 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
     );
 
     let states: Vec<String> = sqlx::query_scalar(
-        "SELECT status FROM challenge_private_assets WHERE draft_id = $1::uuid ORDER BY created_at ASC",
+        "SELECT status FROM challenge_private_assets WHERE review_record_id = $1::uuid ORDER BY created_at ASC",
     )
-    .bind(draft_id.as_str())
+    .bind(review_record_id.as_str())
     .fetch_all(&pool)
     .await
     .expect("failed to query asset states");
@@ -433,8 +452,8 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
         .get(api_url(
             &app,
             &format!(
-                "/admin/challenge-drafts/{}/private-assets",
-                draft_id.as_str()
+                "/admin/challenge-review-records/{}/private-assets",
+                review_record_id.as_str()
             ),
         ))
         .header("Authorization", &admin_auth)
@@ -460,7 +479,7 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
     );
 }
 
-/// Verifies private asset lifecycle work refreshes the parent draft activity.
+/// Verifies private asset lifecycle work refreshes the parent review_record activity.
 #[sqlx::test(migrations = "../migrations")]
 async fn private_asset_lifecycle_refreshes_draft_activity(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
@@ -483,50 +502,61 @@ async fn private_asset_lifecycle_refreshes_draft_activity(pool: sqlx::PgPool) {
             "required": false
         }
     ]);
-    let draft = create_draft(&client, &app, &creator, 13, manifest).await;
-    let draft_id =
-        ChallengeDraftId::try_new(draft["id"].as_str().expect("draft id")).expect("valid draft id");
+    let review_record = create_review_record(&client, &app, &creator, 13, manifest).await;
+    let review_record_id =
+        ChallengeReviewRecordId::try_new(review_record["id"].as_str().expect("review_record id"))
+            .expect("valid review_record id");
     let uploader_agent_id = AgentId::try_new(&creator.agent_id).expect("valid creator agent id");
 
-    age_draft_for_cleanup(&pool, &draft_id).await;
-    let input_a = private_asset_input(&draft_id, &uploader_agent_id, "official-cases-a", "first");
+    age_draft_for_cleanup(&pool, &review_record_id).await;
+    let input_a = private_asset_input(
+        &review_record_id,
+        &uploader_agent_id,
+        "official-cases-a",
+        "first",
+    );
     let repos = db::Repositories::new(&pool);
     repos
-        .challenge_drafts()
+        .challenge_review_records()
         .reserve_private_asset(&input_a, 64, 30, 30)
         .await
         .expect("pending asset should reserve");
-    assert_draft_survives_stale_cleanup(&pool, &draft_id).await;
+    assert_draft_survives_stale_cleanup(&pool, &review_record_id).await;
 
-    age_draft_for_cleanup(&pool, &draft_id).await;
+    age_draft_for_cleanup(&pool, &review_record_id).await;
     repos
-        .challenge_drafts()
+        .challenge_review_records()
         .activate_private_asset(&input_a.asset_row_id)
         .await
         .expect("pending asset should activate");
-    assert_draft_survives_stale_cleanup(&pool, &draft_id).await;
+    assert_draft_survives_stale_cleanup(&pool, &review_record_id).await;
 
-    let input_b = private_asset_input(&draft_id, &uploader_agent_id, "official-cases-b", "second");
+    let input_b = private_asset_input(
+        &review_record_id,
+        &uploader_agent_id,
+        "official-cases-b",
+        "second",
+    );
     repos
-        .challenge_drafts()
+        .challenge_review_records()
         .reserve_private_asset(&input_b, 64, 30, 30)
         .await
         .expect("second pending asset should reserve");
-    age_draft_for_cleanup(&pool, &draft_id).await;
+    age_draft_for_cleanup(&pool, &review_record_id).await;
     repos
-        .challenge_drafts()
+        .challenge_review_records()
         .fail_private_asset(&input_b.asset_row_id, "test failure")
         .await
         .expect("pending asset should fail");
-    assert_draft_survives_stale_cleanup(&pool, &draft_id).await;
+    assert_draft_survives_stale_cleanup(&pool, &review_record_id).await;
 
-    age_draft_for_cleanup(&pool, &draft_id).await;
+    age_draft_for_cleanup(&pool, &review_record_id).await;
     repos
-        .challenge_drafts()
+        .challenge_review_records()
         .delete_private_asset(input_a.asset_row_id.as_str())
         .await
         .expect("active asset should delete");
-    assert_draft_survives_stale_cleanup(&pool, &draft_id).await;
+    assert_draft_survives_stale_cleanup(&pool, &review_record_id).await;
 }
 
 /// Verifies stale cleanup preserves explicit reviewer rejection outcomes.
@@ -539,58 +569,59 @@ async fn stale_cleanup_preserves_rejected_draft_review_outcome(pool: sqlx::PgPoo
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
 
-    let draft = create_draft(&client, &app, &creator, 14, manifest_json()).await;
-    let draft_id =
-        ChallengeDraftId::try_new(draft["id"].as_str().expect("draft id")).expect("valid draft id");
+    let review_record = create_review_record(&client, &app, &creator, 14, manifest_json()).await;
+    let review_record_id =
+        ChallengeReviewRecordId::try_new(review_record["id"].as_str().expect("review_record id"))
+            .expect("valid review_record id");
 
     sqlx::query(
         r#"
-        UPDATE challenge_drafts
+        UPDATE challenge_review_records
         SET status = 'rejected',
-            validation_message = 'reviewer rejected this draft',
+            validation_message = 'reviewer rejected this review_record',
             updated_at = NOW() - INTERVAL '2 days'
         WHERE id = $1::uuid
         "#,
     )
-    .bind(draft_id.as_str())
+    .bind(review_record_id.as_str())
     .execute(&pool)
     .await
-    .expect("failed to reject and age draft");
+    .expect("failed to reject and age review_record");
 
     let abandoned = db::Repositories::new(&pool)
-        .challenge_drafts()
+        .challenge_review_records()
         .abandon_stale(1)
         .await
         .expect("stale cleanup should run");
     assert_eq!(abandoned, 0);
 
     let row: (String, Option<String>) = sqlx::query_as(
-        "SELECT status, validation_message FROM challenge_drafts WHERE id = $1::uuid",
+        "SELECT status, validation_message FROM challenge_review_records WHERE id = $1::uuid",
     )
-    .bind(draft_id.as_str())
+    .bind(review_record_id.as_str())
     .fetch_one(&pool)
     .await
-    .expect("failed to query draft status");
+    .expect("failed to query review_record status");
     assert_eq!(row.0, "rejected");
     assert_eq!(
         row.1.as_deref(),
-        Some("reviewer rejected this draft"),
+        Some("reviewer rejected this review_record"),
         "stale cleanup must not erase review feedback"
     );
 }
 
-/// Upload a declared private benchmark asset to a draft.
+/// Upload a declared private benchmark asset to a review_record.
 async fn upload_private_asset(
     client: &reqwest::Client,
     app: &helpers::TestApp,
     creator: &TestCreatorSession,
-    draft_id: &str,
+    review_record_id: &str,
     nonce: i32,
 ) -> reqwest::Response {
     creator_auth(
         client.post(api_url(
             app,
-            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+            &format!("/api/creator/challenge-review-records/{review_record_id}/private-assets"),
         )),
         creator,
     )
@@ -605,50 +636,53 @@ async fn upload_private_asset(
     .expect("private asset request")
 }
 
-/// Age a draft enough that stale cleanup would abandon it without a later activity write.
-async fn age_draft_for_cleanup(pool: &sqlx::PgPool, draft_id: &ChallengeDraftId) {
+/// Age a review_record enough that stale cleanup would abandon it without a later activity write.
+async fn age_draft_for_cleanup(pool: &sqlx::PgPool, review_record_id: &ChallengeReviewRecordId) {
     sqlx::query(
-        "UPDATE challenge_drafts SET updated_at = NOW() - INTERVAL '2 days' WHERE id = $1::uuid",
+        "UPDATE challenge_review_records SET updated_at = NOW() - INTERVAL '2 days' WHERE id = $1::uuid",
     )
-    .bind(draft_id.as_str())
+    .bind(review_record_id.as_str())
     .execute(pool)
     .await
-    .expect("failed to age draft");
+    .expect("failed to age review_record");
 }
 
-/// Run stale cleanup and verify the draft remained active.
-async fn assert_draft_survives_stale_cleanup(pool: &sqlx::PgPool, draft_id: &ChallengeDraftId) {
+/// Run stale cleanup and verify the review_record remained active.
+async fn assert_draft_survives_stale_cleanup(
+    pool: &sqlx::PgPool,
+    review_record_id: &ChallengeReviewRecordId,
+) {
     db::Repositories::new(pool)
-        .challenge_drafts()
+        .challenge_review_records()
         .abandon_stale(1)
         .await
         .expect("stale cleanup should run");
     let status: String =
-        sqlx::query_scalar("SELECT status FROM challenge_drafts WHERE id = $1::uuid")
-            .bind(draft_id.as_str())
+        sqlx::query_scalar("SELECT status FROM challenge_review_records WHERE id = $1::uuid")
+            .bind(review_record_id.as_str())
             .fetch_one(pool)
             .await
-            .expect("failed to query draft status");
-    assert_eq!(status, "draft");
+            .expect("failed to query review_record status");
+    assert_eq!(status, "pending_review");
 }
 
 /// Build a private asset DB reservation input for direct admission tests.
 fn private_asset_input(
-    draft_id: &ChallengeDraftId,
+    review_record_id: &ChallengeReviewRecordId,
     uploader_agent_id: &AgentId,
     asset_name: &str,
     key_suffix: &str,
 ) -> db::CreateChallengePrivateAssetInput {
     db::CreateChallengePrivateAssetInput {
         asset_row_id: ChallengePrivateAssetId::generate(),
-        draft_id: draft_id.clone(),
+        review_record_id: review_record_id.clone(),
         asset_name: AssetName::try_new(asset_name.to_string()).expect("test asset name is valid"),
         kind: ChallengePrivateAssetKind::PrivateBenchmarkData,
         required: false,
         size_bytes: 8,
         sha256: Sha256Digest::try_new("c".repeat(64)).expect("test digest is valid"),
         storage_key: StorageKey::try_new(format!(
-            "challenge-drafts/test/private-assets/{key_suffix}.bin"
+            "challenge-review-records/test/private-assets/{key_suffix}.bin"
         ))
         .expect("test storage key is valid"),
         temporary_storage_key: StorageKey::try_new(format!(
@@ -659,8 +693,8 @@ fn private_asset_input(
     }
 }
 
-/// Create a draft for the public challenge creation test manifest.
-async fn create_draft(
+/// Create a review_record for the public challenge creation test manifest.
+async fn create_review_record(
     client: &reqwest::Client,
     app: &helpers::TestApp,
     creator: &TestCreatorSession,
@@ -668,7 +702,7 @@ async fn create_draft(
     manifest: serde_json::Value,
 ) -> serde_json::Value {
     creator_auth(
-        client.post(api_url(app, "/api/creator/challenge-drafts")),
+        client.post(api_url(app, "/api/creator/challenge-review-records")),
         creator,
     )
     .json(&json!({
@@ -682,12 +716,12 @@ async fn create_draft(
     }))
     .send()
     .await
-    .expect("draft request")
+    .expect("review_record request")
     .error_for_status()
-    .expect("draft should create")
+    .expect("review_record should create")
     .json()
     .await
-    .expect("draft json")
+    .expect("review_record json")
 }
 
 /// Return the minimum challenge creation manifest used by asset tests.

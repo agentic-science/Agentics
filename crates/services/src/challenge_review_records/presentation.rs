@@ -1,14 +1,16 @@
 use agentics_domain::models::challenge_creation::{
-    AdminChallengePrivateAssetResponse, ChallengeDraftResponse,
-    ChallengeDraftValidationRecordResponse, ChallengePrivateAssetResponse,
+    AdminChallengePrivateAssetResponse, ChallengePrivateAssetResponse,
+    ChallengeReviewRecordResponse, ChallengeReviewValidationRecordResponse,
 };
 use agentics_persistence::{
-    AdminChallengePrivateAssetRecord, ChallengeDraftRecord, ChallengeDraftValidationRecord,
-    ChallengePrivateAssetRecord,
+    AdminChallengePrivateAssetRecord, ChallengePrivateAssetRecord, ChallengeReviewRecordRecord,
+    ChallengeReviewValidationRecord,
 };
 
-pub(super) fn draft_response(record: ChallengeDraftRecord) -> ChallengeDraftResponse {
-    ChallengeDraftResponse {
+pub(super) fn review_record_response(
+    record: ChallengeReviewRecordRecord,
+) -> ChallengeReviewRecordResponse {
+    ChallengeReviewRecordResponse {
         id: record.id,
         challenge_name: record.challenge_name,
         request: record.request,
@@ -48,7 +50,7 @@ pub(super) fn private_asset_response(
 ) -> ChallengePrivateAssetResponse {
     ChallengePrivateAssetResponse {
         id: record.id,
-        draft_id: record.draft_id,
+        review_record_id: record.review_record_id,
         asset_name: record.asset_name,
         kind: record.kind,
         required: record.required,
@@ -65,7 +67,7 @@ pub(super) fn admin_private_asset_response(
 ) -> AdminChallengePrivateAssetResponse {
     AdminChallengePrivateAssetResponse {
         id: record.id,
-        draft_id: record.draft_id,
+        review_record_id: record.review_record_id,
         asset_name: record.asset_name,
         kind: record.kind,
         required: record.required,
@@ -83,11 +85,11 @@ pub(super) fn admin_private_asset_response(
 }
 
 fn validation_record_response(
-    record: ChallengeDraftValidationRecord,
-) -> ChallengeDraftValidationRecordResponse {
-    ChallengeDraftValidationRecordResponse {
+    record: ChallengeReviewValidationRecord,
+) -> ChallengeReviewValidationRecordResponse {
+    ChallengeReviewValidationRecordResponse {
         id: record.id,
-        draft_id: record.draft_id,
+        review_record_id: record.review_record_id,
         status: record.status,
         message: record.message,
         repository_path: record.repository_path,

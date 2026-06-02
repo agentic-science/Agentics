@@ -4,30 +4,30 @@ import { GitPullRequest } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type FormEvent, useEffect, useState } from "react";
 import {
-  type CreatorDraftFormState,
   type CreatorOwnerFormState,
   type CreatorPrivateAssetFormState,
-  DraftCreateForm,
-  DraftInspectForm,
+  type CreatorReviewRecordFormState,
   defaultCreatorManifest,
   OwnerStatsForm,
   PrivateAssetUploadForm,
+  ReviewRecordCreateForm,
+  ReviewRecordInspectForm,
   ShortlistUploadForm,
 } from "@/components/creator/CreatorForms";
 import {
   CreatorIdentityPanel,
-  DraftDetail,
   OwnerSurfaces,
+  ReviewRecordDetail,
 } from "@/components/creator/CreatorPanels";
 import {
   type ChallengeCreationManifest,
-  type CreateChallengeDraftRequest,
+  type CreateChallengeReviewRecordRequest,
   CreatorApiError,
-  createChallengeDraft,
-  createChallengeDraftRequestSchema,
+  createChallengeReviewRecord,
+  createChallengeReviewRecordRequestSchema,
   createChallengeShortlistRevision,
   createChallengeShortlistRevisionRequestSchema,
-  getChallengeDraft,
+  getChallengeReviewRecord,
   startGithubLogin,
   uploadChallengePrivateAssetRequestSchema,
   uploadPrivateAsset,
@@ -35,25 +35,25 @@ import {
 import {
   type CreatorOwnerScope,
   fetchCreatorOwnerBundle,
-  mutateCreatorDraft,
   mutateCreatorOwnerBundle,
-  useCreatorDraft,
+  mutateCreatorReviewRecord,
   useCreatorOwnerBundle,
+  useCreatorReviewRecord,
   useCreatorSession,
 } from "@/lib/creatorData";
 import type {
   ChallengeShortlistResponse,
   ChallengeShortlistRevisionResponse,
-  CreatorChallengeDraftResponse,
   CreatorChallengeParticipantsResponse,
+  CreatorChallengeReviewRecordResponse,
   CreatorChallengeStatsResponse,
   CreatorMeResponse,
 } from "@/lib/schemas";
 
-const LAST_DRAFT_STORAGE_KEY = "agentics.creator.last_draft_id";
+const LAST_REVIEW_RECORD_STORAGE_KEY = "agentics.creator.last_review_record_id";
 type CreatorPendingAction =
-  | "createDraft"
-  | "inspectDraft"
+  | "createReviewRecord"
+  | "inspectReviewRecord"
   | "loadOwner"
   | "refreshIdentity"
   | "signIn"
@@ -65,20 +65,20 @@ export function CreatorConsole() {
   const t = useTranslations("creator");
   const [creator, setCreator] = useState<CreatorMeResponse | null>(null);
   const [csrfToken, setCsrfToken] = useState("");
-  const [draft, setDraft] = useState<CreatorChallengeDraftResponse | null>(
-    null,
-  );
-  const [draftLookupId, setDraftLookupId] = useState("");
-  const [draftForm, setDraftForm] = useState<CreatorDraftFormState>({
-    repoUrl: "https://github.com/agentics-reifying/agentics-challenges",
-    prNumber: "",
-    prUrl: "",
-    commitSha: "",
-    challengePath: "challenges/frontier-cs-example-challenge",
-    manifestText: defaultCreatorManifest,
-  });
+  const [reviewRecord, setReviewRecord] =
+    useState<CreatorChallengeReviewRecordResponse | null>(null);
+  const [reviewRecordLookupId, setReviewRecordLookupId] = useState("");
+  const [reviewRecordForm, setReviewRecordForm] =
+    useState<CreatorReviewRecordFormState>({
+      repoUrl: "https://github.com/agentics-reifying/agentics-challenges",
+      prNumber: "",
+      prUrl: "",
+      commitSha: "",
+      challengePath: "challenges/frontier-cs-example-challenge",
+      manifestText: defaultCreatorManifest,
+    });
   const [assetForm, setAssetForm] = useState<CreatorPrivateAssetFormState>({
-    draftId: "",
+    reviewRecordId: "",
     assetName: "official-seed-config",
     kind: "private_seeds",
     required: true,
@@ -116,14 +116,19 @@ export function CreatorConsole() {
       unknown: t("messages.unknown"),
     });
   const creatorSession = useCreatorSession();
-  const draftResource = useCreatorDraft(draftLookupId);
+  const reviewRecordResource = useCreatorReviewRecord(reviewRecordLookupId);
   const ownerBundle = useCreatorOwnerBundle(ownerScope);
 
   useEffect(() => {
-    const lastDraftId = window.localStorage.getItem(LAST_DRAFT_STORAGE_KEY);
-    if (lastDraftId) {
-      setDraftLookupId(lastDraftId);
-      setAssetForm((current) => ({ ...current, draftId: lastDraftId }));
+    const lastReviewRecordId = window.localStorage.getItem(
+      LAST_REVIEW_RECORD_STORAGE_KEY,
+    );
+    if (lastReviewRecordId) {
+      setReviewRecordLookupId(lastReviewRecordId);
+      setAssetForm((current) => ({
+        ...current,
+        reviewRecordId: lastReviewRecordId,
+      }));
     }
   }, []);
 
@@ -138,10 +143,10 @@ export function CreatorConsole() {
   }, [creatorSession.error, creatorSession.session]);
 
   useEffect(() => {
-    if (draftResource.draft) {
-      setDraft(draftResource.draft);
+    if (reviewRecordResource.reviewRecord) {
+      setReviewRecord(reviewRecordResource.reviewRecord);
     }
-  }, [draftResource.draft]);
+  }, [reviewRecordResource.reviewRecord]);
 
   useEffect(() => {
     if (ownerBundle.bundle) {
@@ -184,19 +189,19 @@ export function CreatorConsole() {
     }
   };
 
-  /** Handles submit draft behavior for this component. */
-  const submitDraft = async (event: FormEvent) => {
+  /** Handles submit review record behavior for this component. */
+  const submitReviewRecord = async (event: FormEvent) => {
     event.preventDefault();
     if (!creator) {
-      setError(t("messages.signInBeforeDraft"));
+      setError(t("messages.signInBeforeReviewRecord"));
       return;
     }
     if (!csrfToken) {
-      setError(t("messages.refreshBeforeDraft"));
+      setError(t("messages.refreshBeforeReviewRecord"));
       return;
     }
 
-    const prNumberText = draftForm.prNumber.trim();
+    const prNumberText = reviewRecordForm.prNumber.trim();
     if (!/^[1-9]\d*$/.test(prNumberText)) {
       setError(t("messages.prNumberInvalid"));
       return;
@@ -210,7 +215,7 @@ export function CreatorConsole() {
     let manifest: ChallengeCreationManifest;
     try {
       manifest = JSON.parse(
-        draftForm.manifestText,
+        reviewRecordForm.manifestText,
       ) as ChallengeCreationManifest;
     } catch (e) {
       setError(displayCreatorError(e));
@@ -218,32 +223,34 @@ export function CreatorConsole() {
     }
 
     const request = {
-      repo_url: draftForm.repoUrl.trim(),
+      repo_url: reviewRecordForm.repoUrl.trim(),
       pr_number: prNumber,
-      pr_url: draftForm.prUrl.trim(),
-      commit_sha: draftForm.commitSha,
-      challenge_path: draftForm.challengePath.trim(),
+      pr_url: reviewRecordForm.prUrl.trim(),
+      commit_sha: reviewRecordForm.commitSha,
+      challenge_path: reviewRecordForm.challengePath.trim(),
       pr_author_github_user_id: creator.github_user_id,
       manifest,
     };
-    const parsedRequest = createChallengeDraftRequestSchema.safeParse(request);
+    const parsedRequest =
+      createChallengeReviewRecordRequestSchema.safeParse(request);
     if (!parsedRequest.success) {
       setError(
-        parsedRequest.error.issues[0]?.message ?? t("messages.invalidDraft"),
+        parsedRequest.error.issues[0]?.message ??
+          t("messages.invalidReviewRecord"),
       );
       return;
     }
 
-    setPendingAction("createDraft");
+    setPendingAction("createReviewRecord");
     setError(null);
     try {
-      const response = await createChallengeDraft(
-        parsedRequest.data as CreateChallengeDraftRequest,
+      const response = await createChallengeReviewRecord(
+        parsedRequest.data as CreateChallengeReviewRecordRequest,
         csrfToken,
       );
-      rememberDraft(response.id);
-      setDraft(response);
-      setMessage(t("messages.draftCreated", { id: response.id }));
+      rememberReviewRecord(response.id);
+      setReviewRecord(response);
+      setMessage(t("messages.reviewRecordCreated", { id: response.id }));
     } catch (e) {
       setError(displayCreatorError(e));
     } finally {
@@ -251,21 +258,23 @@ export function CreatorConsole() {
     }
   };
 
-  /** Handles inspect draft behavior for this component. */
-  const inspectDraft = async (event: FormEvent) => {
+  /** Handles inspect review record behavior for this component. */
+  const inspectReviewRecord = async (event: FormEvent) => {
     event.preventDefault();
-    if (!draftLookupId.trim()) {
-      setError(t("messages.enterDraft"));
+    if (!reviewRecordLookupId.trim()) {
+      setError(t("messages.enterReviewRecord"));
       return;
     }
 
-    setPendingAction("inspectDraft");
+    setPendingAction("inspectReviewRecord");
     setError(null);
     try {
-      const response = await getChallengeDraft(draftLookupId.trim());
-      rememberDraft(response.id);
-      setDraft(response);
-      setMessage(t("messages.draftLoaded", { id: response.id }));
+      const response = await getChallengeReviewRecord(
+        reviewRecordLookupId.trim(),
+      );
+      rememberReviewRecord(response.id);
+      setReviewRecord(response);
+      setMessage(t("messages.reviewRecordLoaded", { id: response.id }));
     } catch (e) {
       setError(displayCreatorError(e));
     } finally {
@@ -303,14 +312,16 @@ export function CreatorConsole() {
         return;
       }
       await uploadPrivateAsset(
-        assetForm.draftId.trim(),
+        assetForm.reviewRecordId.trim(),
         parsedRequest.data,
         csrfToken,
       );
-      const refreshed = await getChallengeDraft(assetForm.draftId.trim());
-      rememberDraft(refreshed.id);
-      setDraft(refreshed);
-      await mutateCreatorDraft(refreshed.id);
+      const refreshed = await getChallengeReviewRecord(
+        assetForm.reviewRecordId.trim(),
+      );
+      rememberReviewRecord(refreshed.id);
+      setReviewRecord(refreshed);
+      await mutateCreatorReviewRecord(refreshed.id);
       setMessage(t("messages.assetUploaded", { name: assetForm.assetName }));
     } catch (e) {
       setError(displayCreatorError(e));
@@ -400,11 +411,11 @@ export function CreatorConsole() {
     }
   };
 
-  /** Persists draft in local browser state. */
-  const rememberDraft = (id: string) => {
-    window.localStorage.setItem(LAST_DRAFT_STORAGE_KEY, id);
-    setDraftLookupId(id);
-    setAssetForm((current) => ({ ...current, draftId: id }));
+  /** Persists review record in local browser state. */
+  const rememberReviewRecord = (id: string) => {
+    window.localStorage.setItem(LAST_REVIEW_RECORD_STORAGE_KEY, id);
+    setReviewRecordLookupId(id);
+    setAssetForm((current) => ({ ...current, reviewRecordId: id }));
   };
 
   return (
@@ -448,18 +459,18 @@ export function CreatorConsole() {
 
       <section className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-6">
         <div className="flex flex-col gap-5">
-          <DraftCreateForm
-            draftForm={draftForm}
-            setDraftForm={setDraftForm}
-            loading={pendingAction === "createDraft"}
-            onSubmit={submitDraft}
+          <ReviewRecordCreateForm
+            reviewRecordForm={reviewRecordForm}
+            setReviewRecordForm={setReviewRecordForm}
+            loading={pendingAction === "createReviewRecord"}
+            onSubmit={submitReviewRecord}
           />
 
-          <DraftInspectForm
-            draftLookupId={draftLookupId}
-            setDraftLookupId={setDraftLookupId}
-            loading={pendingAction === "inspectDraft"}
-            onSubmit={inspectDraft}
+          <ReviewRecordInspectForm
+            reviewRecordLookupId={reviewRecordLookupId}
+            setReviewRecordLookupId={setReviewRecordLookupId}
+            loading={pendingAction === "inspectReviewRecord"}
+            onSubmit={inspectReviewRecord}
           />
 
           <PrivateAssetUploadForm
@@ -470,7 +481,7 @@ export function CreatorConsole() {
           />
         </div>
 
-        <DraftDetail draft={draft} />
+        <ReviewRecordDetail reviewRecord={reviewRecord} />
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-6">

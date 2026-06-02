@@ -1,12 +1,12 @@
-//! Challenge draft lifecycle values.
+//! Challenge review record lifecycle values.
 
 use serde::{Deserialize, Serialize};
 
-/// Draft status used by the review lifecycle.
+/// Status used by the challenge review record lifecycle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum ChallengeDraftStatus {
-    Draft,
+pub enum ChallengeReviewRecordStatus {
+    PendingReview,
     Validated,
     Approved,
     Publishing,
@@ -15,11 +15,11 @@ pub enum ChallengeDraftStatus {
     Abandoned,
 }
 
-impl ChallengeDraftStatus {
-    /// Stable database string for this draft status.
+impl ChallengeReviewRecordStatus {
+    /// Stable database string for this review record status.
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Draft => "draft",
+            Self::PendingReview => "pending_review",
             Self::Validated => "validated",
             Self::Approved => "approved",
             Self::Publishing => "publishing",
@@ -29,10 +29,10 @@ impl ChallengeDraftStatus {
         }
     }
 
-    /// Parse a stable database string for this draft status.
+    /// Parse a stable database string for this review record status.
     pub fn from_storage_value(value: &str) -> Option<Self> {
         match value {
-            "draft" => Some(Self::Draft),
+            "pending_review" => Some(Self::PendingReview),
             "validated" => Some(Self::Validated),
             "approved" => Some(Self::Approved),
             "publishing" => Some(Self::Publishing),
@@ -44,16 +44,16 @@ impl ChallengeDraftStatus {
     }
 }
 
-/// Validation record status for a challenge draft.
+/// Validation record status for a challenge review record.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
-pub enum ChallengeDraftValidationStatus {
+pub enum ChallengeReviewValidationStatus {
     Running,
     Passed,
     Failed,
 }
 
-impl ChallengeDraftValidationStatus {
+impl ChallengeReviewValidationStatus {
     /// Stable database string for this validation outcome.
     pub fn as_str(self) -> &'static str {
         match self {
