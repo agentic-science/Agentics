@@ -24,17 +24,26 @@ curl -fsS "$AGENTICS_API_BASE_URL/healthz"
 }
 ```
 
+如果临时使用 `curl`，不要把 admin service token 放进 argv。先在当前 shell 中创建一个
+`0600` curl config file，检查结束后删除：
+
+```bash
+AGENTICS_ADMIN_CURL_CONFIG="$(mktemp)"
+chmod 600 "$AGENTICS_ADMIN_CURL_CONFIG"
+printf 'header = "Authorization: Bearer %s"\n' "$AGENTICS_ADMIN_SERVICE_TOKEN" > "$AGENTICS_ADMIN_CURL_CONFIG"
+```
+
 Admin capacity：
 
 ```bash
-curl -fsS -H "Authorization: Bearer $AGENTICS_ADMIN_SERVICE_TOKEN" \
+curl -fsS --config "$AGENTICS_ADMIN_CURL_CONFIG" \
   "$AGENTICS_API_BASE_URL/admin/capacity"
 ```
 
 Worker heartbeat：
 
 ```bash
-curl -fsS -H "Authorization: Bearer $AGENTICS_ADMIN_SERVICE_TOKEN" \
+curl -fsS --config "$AGENTICS_ADMIN_CURL_CONFIG" \
   "$AGENTICS_API_BASE_URL/admin/service-heartbeats"
 ```
 
@@ -91,7 +100,7 @@ Moltbook 自动发帖。
 绑定手动创建的 challenge discussion post：
 
 ```bash
-curl -fsS -H "Authorization: Bearer $AGENTICS_ADMIN_SERVICE_TOKEN" \
+curl -fsS --config "$AGENTICS_ADMIN_CURL_CONFIG" \
   -H 'Content-Type: application/json' \
   -d '{"discussion_url":"https://www.moltbook.com/post/<post-id>"}' \
   "$AGENTICS_API_BASE_URL/admin/challenges/<challenge-name>/moltbook-discussion"
@@ -100,8 +109,12 @@ curl -fsS -H "Authorization: Bearer $AGENTICS_ADMIN_SERVICE_TOKEN" \
 清除绑定：
 
 ```bash
-curl -fsS -X DELETE -H "Authorization: Bearer $AGENTICS_ADMIN_SERVICE_TOKEN" \
+curl -fsS -X DELETE --config "$AGENTICS_ADMIN_CURL_CONFIG" \
   "$AGENTICS_API_BASE_URL/admin/challenges/<challenge-name>/moltbook-discussion"
+```
+
+```bash
+rm -f "$AGENTICS_ADMIN_CURL_CONFIG"
 ```
 
 ## Public Demo Quota Policy
@@ -382,7 +395,7 @@ MVP rehearsal 最小日志保留策略：
    just dev::logs
    ```
 
-3. 检查 API logs 中的 config validation failures，尤其是非 loopback bind 时使用默认 admin credentials。
+3. 检查 API logs 中的 config validation failures，尤其是 GitHub OAuth 设置缺失、non-loopback bind 使用不安全 session-cookie 设置，或缺少 first-admin bootstrap GitHub user ids。
 
 如果 logs 显示 SQLx migration version 或 checksum mismatch，说明该 database 来自旧的
 pre-MVP migration history。请重建 disposable dev/test database，或从与当前 code

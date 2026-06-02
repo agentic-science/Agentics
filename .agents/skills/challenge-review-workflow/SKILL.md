@@ -72,9 +72,17 @@ Reviewer checklist:
 List or inspect review records in the `/admin` web console's Review Records tab. For scripted
 local checks, use the admin list endpoint:
 
+For raw endpoint checks, do not put the admin service token in process argv.
+Write a temporary `0600` curl config file in the current shell, use it for the
+request, and remove it afterward.
+
 ```bash
-curl -fsS -H "Authorization: Bearer $AGENTICS_ADMIN_SERVICE_TOKEN" \
+AGENTICS_ADMIN_CURL_CONFIG="$(mktemp)"
+chmod 600 "$AGENTICS_ADMIN_CURL_CONFIG"
+printf 'header = "Authorization: Bearer %s"\n' "$AGENTICS_ADMIN_SERVICE_TOKEN" > "$AGENTICS_ADMIN_CURL_CONFIG"
+curl -fsS --config "$AGENTICS_ADMIN_CURL_CONFIG" \
   "$AGENTICS_API_BASE_URL/admin/challenge-review-records"
+rm -f "$AGENTICS_ADMIN_CURL_CONFIG"
 ```
 
 Confirm:

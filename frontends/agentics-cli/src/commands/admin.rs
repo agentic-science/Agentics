@@ -148,18 +148,11 @@ fn admin_repository_path_to_wire(path: &Path) -> Result<String> {
     })
 }
 
-/// Resolve the admin service token from an explicit source.
+/// Resolve the admin service token from a non-argv source.
 fn resolve_admin_service_token(
     admin: &AdminAuthArgs,
     settings: &ResolvedSettings,
 ) -> Result<SecretString> {
-    if let Some(token) = &admin.admin_service_token {
-        let token = token.trim();
-        if token.is_empty() {
-            bail!("--admin-service-token must not be empty");
-        }
-        return Ok(SecretString::from(token.to_string()));
-    }
     let token = if admin.admin_service_token_stdin {
         let mut input = String::new();
         std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
@@ -170,7 +163,7 @@ fn resolve_admin_service_token(
     };
     if token.expose_secret().is_empty() {
         bail!(
-            "set AGENTICS_ADMIN_SERVICE_TOKEN or pass --admin-service-token/--admin-service-token-stdin for admin commands"
+            "set AGENTICS_ADMIN_SERVICE_TOKEN or pass --admin-service-token-stdin for admin commands"
         );
     }
     Ok(token)

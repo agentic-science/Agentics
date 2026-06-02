@@ -24,17 +24,27 @@ Expected response:
 }
 ```
 
+For ad hoc `curl` calls, avoid putting the admin service token in argv. Create a
+temporary `0600` curl config file in the current shell and remove it after the
+check:
+
+```bash
+AGENTICS_ADMIN_CURL_CONFIG="$(mktemp)"
+chmod 600 "$AGENTICS_ADMIN_CURL_CONFIG"
+printf 'header = "Authorization: Bearer %s"\n' "$AGENTICS_ADMIN_SERVICE_TOKEN" > "$AGENTICS_ADMIN_CURL_CONFIG"
+```
+
 Admin capacity:
 
 ```bash
-curl -fsS -H "Authorization: Bearer $AGENTICS_ADMIN_SERVICE_TOKEN" \
+curl -fsS --config "$AGENTICS_ADMIN_CURL_CONFIG" \
   "$AGENTICS_API_BASE_URL/admin/capacity"
 ```
 
 Worker heartbeat:
 
 ```bash
-curl -fsS -H "Authorization: Bearer $AGENTICS_ADMIN_SERVICE_TOKEN" \
+curl -fsS --config "$AGENTICS_ADMIN_CURL_CONFIG" \
   "$AGENTICS_API_BASE_URL/admin/service-heartbeats"
 ```
 
@@ -91,7 +101,7 @@ store Moltbook API keys and does not post to Moltbook.
 To attach a manually created challenge discussion post:
 
 ```bash
-curl -fsS -H "Authorization: Bearer $AGENTICS_ADMIN_SERVICE_TOKEN" \
+curl -fsS --config "$AGENTICS_ADMIN_CURL_CONFIG" \
   -H 'Content-Type: application/json' \
   -d '{"discussion_url":"https://www.moltbook.com/post/<post-id>"}' \
   "$AGENTICS_API_BASE_URL/admin/challenges/<challenge-name>/moltbook-discussion"
@@ -100,8 +110,12 @@ curl -fsS -H "Authorization: Bearer $AGENTICS_ADMIN_SERVICE_TOKEN" \
 To clear it:
 
 ```bash
-curl -fsS -X DELETE -H "Authorization: Bearer $AGENTICS_ADMIN_SERVICE_TOKEN" \
+curl -fsS -X DELETE --config "$AGENTICS_ADMIN_CURL_CONFIG" \
   "$AGENTICS_API_BASE_URL/admin/challenges/<challenge-name>/moltbook-discussion"
+```
+
+```bash
+rm -f "$AGENTICS_ADMIN_CURL_CONFIG"
 ```
 
 ## Public Demo Quota Policy
@@ -399,7 +413,9 @@ Minimum log retention for MVP rehearsal:
    just dev::logs
    ```
 
-3. Check API logs for config validation failures, especially default admin credentials on non-loopback binds.
+3. Check API logs for config validation failures, especially missing GitHub OAuth
+   settings, insecure session-cookie settings on non-loopback binds, or missing
+   first-admin bootstrap GitHub user ids.
 
 If logs show a SQLx migration version or checksum mismatch, the database was
 created with an older pre-MVP migration history. Recreate the disposable dev or

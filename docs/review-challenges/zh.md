@@ -113,8 +113,8 @@ POST /admin/challenge-review-records/{id}/publish
 ```
 
 Server-side callers 使用 `AGENTICS_ADMIN_SERVICE_TOKEN` 或
-`--admin-service-token` 认证。Browser admin requests 使用 GitHub OAuth session cookie
-和 CSRF-token flow。
+`--admin-service-token-stdin` 认证。Browser admin requests 使用 GitHub OAuth session
+cookie 和 CSRF-token flow。不要把 service token 作为 argv 参数传入。
 
 ## Admin CLI Helpers
 

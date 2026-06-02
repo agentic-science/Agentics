@@ -123,8 +123,9 @@ POST /admin/challenge-review-records/{id}/publish
 ```
 
 Server-side callers authenticate with `AGENTICS_ADMIN_SERVICE_TOKEN` or
-`--admin-service-token`. Browser admin requests use the GitHub OAuth session
-cookie and CSRF-token flow instead.
+`--admin-service-token-stdin`. Browser admin requests use the GitHub OAuth
+session cookie and CSRF-token flow instead. Do not pass service tokens as argv
+values.
 
 ## Admin CLI Helpers
 

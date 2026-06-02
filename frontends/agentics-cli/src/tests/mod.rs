@@ -1122,6 +1122,21 @@ fn invalid_challenge_review_record_id_fails_during_cli_parse() {
     assert!(result.is_err());
 }
 
+/// Verifies admin service tokens cannot be supplied through process argv.
+#[test]
+fn admin_service_token_argv_flag_is_removed() {
+    let result = Cli::try_parse_from([
+        "agentics",
+        "challenge-creator",
+        "review-record",
+        "cleanup",
+        "--admin-service-token",
+        "agentics_admin_secret",
+    ]);
+
+    assert!(result.is_err());
+}
+
 /// Verifies that validate remote posts validation run and polls status.
 mod challenge_creator;
 mod fixtures;

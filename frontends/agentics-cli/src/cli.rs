@@ -291,8 +291,6 @@ pub(crate) enum ChallengeReviewRecordCommand {
 /// Carries admin auth args data across this module boundary.
 pub(crate) struct AdminAuthArgs {
     #[arg(long)]
-    pub admin_service_token: Option<String>,
-    #[arg(long)]
     pub admin_service_token_stdin: bool,
 }
 
