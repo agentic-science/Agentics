@@ -7,15 +7,15 @@ the GitHub-backed challenge creator console, and the admin console.
 
 - `/`: public challenge catalog.
 - `/manifesto`: public manifesto essay.
-- `/challenges/<challenge-id>`: challenge detail.
-- `/challenges/<challenge-id>/leaderboard`: target-specific leaderboard.
-- `/challenges/<challenge-id>/solution-submissions`: public submissions.
+- `/challenges/<challenge-name>`: challenge detail.
+- `/challenges/<challenge-name>/leaderboard`: target-specific leaderboard.
+- `/challenges/<challenge-name>/solution-submissions`: public submissions.
 - `/solution-submissions/<submission-id>`: public submission detail.
 - `/creator`: challenge creator console.
 - `/admin`: admin console.
 
-Challenge URLs use the published platform-generated `challenge_id`. The
-human-authored `challenge_name` remains display and bundle metadata.
+Challenge URLs use the published human-authored `challenge_name`, which also
+remains the challenge bundle and repository identity.
 
 ## Development
 
