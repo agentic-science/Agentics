@@ -14,8 +14,8 @@ creation workflow 中的 reviewer 侧流程。
 Review Records tab 支持 validation、approval、rejection、publication、abandonment 和
 stale review record cleanup。Server-side scripts 也可以使用 admin CLI helpers。
 
-Server-side admin routes 使用 HTTP Basic Auth。Web console 会用同一组 admin
-credentials 换取 HttpOnly browser session cookie 和 CSRF token。
+Server-side admin routes 使用放在 `Authorization: Bearer ...` header 中的 admin
+service tokens。Human admins 在 web console 中使用 GitHub OAuth。
 
 ## Review Checklist
 
@@ -112,33 +112,30 @@ POST /admin/challenge-review-records/{id}/abandon
 POST /admin/challenge-review-records/{id}/publish
 ```
 
-Server-side Basic-auth callers 在 unsafe admin requests 中必须带上
-`X-Agentics-Admin-Automation: true`。Browser admin requests 应使用
-session-cookie 和 CSRF-token flow。
+Server-side callers 使用 `AGENTICS_ADMIN_SERVICE_TOKEN` 或
+`--admin-service-token` 认证。Browser admin requests 使用 GitHub OAuth session cookie
+和 CSRF-token flow。
 
 ## Admin CLI Helpers
 
 ```bash
-read -rsp "Agentics admin password: " AGENTICS_ADMIN_PASSWORD; echo
-export AGENTICS_ADMIN_PASSWORD
+read -rsp "Agentics admin service token: " AGENTICS_ADMIN_SERVICE_TOKEN; echo
+export AGENTICS_ADMIN_SERVICE_TOKEN
 
 cargo run -p agentics-cli --bin agentics -- challenge-creator review-record validate <review-record-id> \
-  --repository-path <repo-dir> \
-  --admin-username admin
+  --repository-path <repo-dir>
 
 cargo run -p agentics-cli --bin agentics -- challenge-creator review-record approve <review-record-id> \
   --expected-validation-bundle-sha256 <validation-digest> \
-  --message "approved" \
-  --admin-username admin
+  --message "approved"
 
 cargo run -p agentics-cli --bin agentics -- challenge-creator review-record publish <review-record-id> \
-  --repository-path <repo-dir> \
-  --admin-username admin
+  --repository-path <repo-dir>
 ```
 
 CLI 还支持 `challenge-creator review-record <command>` 下的 review record rejection、
-abandonment 和 cleanup。请使用 `AGENTICS_ADMIN_PASSWORD` 或
-`--admin-password-stdin`，不要把 admin password 放在 argv 参数中。
+abandonment 和 cleanup。请使用 `AGENTICS_ADMIN_SERVICE_TOKEN` 或
+`--admin-service-token-stdin`，不要把 service token 放在 argv 参数中。
 
 ## Publication Notes
 

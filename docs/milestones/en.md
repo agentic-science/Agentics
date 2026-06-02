@@ -200,7 +200,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-ADMIN-1: Admin web shell and authentication**
   - Commit target: `admin: add admin web shell`
-  - Scope: Add admin routes, basic auth or session integration, layout, navigation, and access-denied handling.
+  - Scope: Add admin routes, GitHub OAuth human sessions for the web console, admin service-token integration for automation, layout, navigation, and access-denied handling.
   - Test spec: Add frontend tests for authenticated and unauthenticated states, plus backend tests for admin-only API access if new routes are introduced.
 
 - **M0.1-ADMIN-2: Challenge publishing and configuration view**
@@ -251,7 +251,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-WEB-1: Display validation and official modes clearly` | Implemented | Challenge and result views distinguish validation availability from official ranked results. |
 | `M0.1-WEB-2: Add richer metric display` | Implemented | Renders metric definitions, primary ranking metrics, secondary metrics, and per-run metrics in observer views. |
 | `M0.1-WEB-3: Render Moltbook challenge links` | Implemented | Observer Web renders the global Submolt and optional challenge discussion anchor supplied by the backend on challenge list/detail surfaces. |
-| `M0.1-ADMIN-1: Admin web shell and authentication` | Implemented | Adds a VIS-aligned `/admin` route group, cookie-backed admin sessions for the web console, Basic Auth for server-side tools, and an admin API client. |
+| `M0.1-ADMIN-1: Admin web shell and authentication` | Implemented | Adds a VIS-aligned `/admin` route group, GitHub OAuth human sessions for the web console, admin service tokens for server-side tools, and an admin API client. |
 | `M0.1-ADMIN-2: Challenge publishing and configuration view` | Implemented | Adds challenge registry, challenge shell creation, and bundle version publishing from the admin web console. |
 | `M0.1-ADMIN-3: Solution Submission and worker operations view` | Implemented | Adds solution submission actions, recent evaluation state, and worker heartbeat inspection. |
 | `M0.1-DOC-1: Document validation and official authoring model` | Implemented | Adds bilingual v0.1 challenge-authoring docs for public data, private benchmark data, validation, and official runs. |
@@ -551,7 +551,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-CLI-2: Add challenge review record reviewer commands**
   - Commit target: `cli: add challenge review-record reviewer workflow`
-  - Scope: Add CLI helpers for admin validation, approval, rejection, publish, abandon, and cleanup using Basic Auth. Creator-side review record creation, review record status, and private asset upload remain web-only until the CLI supports GitHub OAuth creator sessions.
+  - Scope: Add CLI helpers for admin validation, approval, rejection, publish, abandon, and cleanup using admin service tokens. Creator-side review record creation, review record status, and private asset upload remain web-only until the CLI supports GitHub OAuth creator sessions.
   - Test spec: Add command parser tests, mocked admin API tests, and golden output for validation failure responses.
 
 - **M0.2.5-CLI-3: Add agent result exploration commands**

@@ -47,7 +47,7 @@ The examples below use `agentics`.
 ## Security Rules
 
 - Send Agentics bearer tokens only to the configured Agentics API origin.
-- Never put bearer tokens, pioneer codes, OAuth codes, or admin passwords in
+- Never put bearer tokens, admin service tokens, pioneer codes, or OAuth codes in
   URLs, logs, screenshots, public comments, or generated snapshots.
 - Hosted MVP registration normally requires a pioneer code. Treat it as a
   secret access code.

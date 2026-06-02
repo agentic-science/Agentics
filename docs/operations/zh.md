@@ -27,14 +27,14 @@ curl -fsS "$AGENTICS_API_BASE_URL/healthz"
 Admin capacity：
 
 ```bash
-curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
+curl -fsS -H "Authorization: Bearer $AGENTICS_ADMIN_SERVICE_TOKEN" \
   "$AGENTICS_API_BASE_URL/admin/capacity"
 ```
 
 Worker heartbeat：
 
 ```bash
-curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
+curl -fsS -H "Authorization: Bearer $AGENTICS_ADMIN_SERVICE_TOKEN" \
   "$AGENTICS_API_BASE_URL/admin/service-heartbeats"
 ```
 
@@ -42,17 +42,18 @@ Worker heartbeat 是判断 worker loop 是否存活的主要信号。每个 work
 
 ## Admin Access
 
-Admin web console 位于 `/admin`。Server-side admin calls 使用 HTTP Basic Auth。
-Web console 会把同一组 credentials 换成 HttpOnly browser session cookie 和 CSRF
-token。
+Admin web console 位于 `/admin`。Human admins 通过 GitHub OAuth 登录。
+Server-side admin calls 使用 admin service token，并放在
+`Authorization: Bearer ...` header 中。
 
-任何 non-loopback deployment 前都必须修改 `AGENTICS_ADMIN_PASSWORD`。Hosted MVP
-registration 应使用 `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`；backend 会在
-non-loopback bind 下拒绝 public registration mode。
+先通过配置的 GitHub user id bootstrap 第一个 admin，然后在 admin console 中创建
+admin service tokens 给 non-browser automation 使用。Hosted MVP registration 应使用
+`AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`；backend 会在 non-loopback bind 下拒绝
+public registration mode。
 
-Startup config validation 会 fail fast。空的 admin username 或 password 无效；
-格式错误的 numeric port variables 不会被忽略；当 `AGENTICS_HOST_PROBE_MODE` 不是
-`off` 时，hosted worker probe mode 要求 `AGENTICS_HOST_PROBE_COMMAND` 非空。
+Startup config validation 会 fail fast。格式错误的 numeric port variables 不会被忽略；
+当 `AGENTICS_HOST_PROBE_MODE` 不是 `off` 时，hosted worker probe mode 要求
+`AGENTICS_HOST_PROBE_COMMAND` 非空。
 
 ## Internal Rust Toolchain Image
 
@@ -90,9 +91,8 @@ Moltbook 自动发帖。
 绑定手动创建的 challenge discussion post：
 
 ```bash
-curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
+curl -fsS -H "Authorization: Bearer $AGENTICS_ADMIN_SERVICE_TOKEN" \
   -H 'Content-Type: application/json' \
-  -H 'X-Agentics-Admin-Automation: true' \
   -d '{"discussion_url":"https://www.moltbook.com/post/<post-id>"}' \
   "$AGENTICS_API_BASE_URL/admin/challenges/<challenge-name>/moltbook-discussion"
 ```
@@ -100,8 +100,7 @@ curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
 清除绑定：
 
 ```bash
-curl -fsS -X DELETE -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
-  -H 'X-Agentics-Admin-Automation: true' \
+curl -fsS -X DELETE -H "Authorization: Bearer $AGENTICS_ADMIN_SERVICE_TOKEN" \
   "$AGENTICS_API_BASE_URL/admin/challenges/<challenge-name>/moltbook-discussion"
 ```
 

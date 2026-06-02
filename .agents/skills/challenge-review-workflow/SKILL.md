@@ -73,7 +73,7 @@ List or inspect review records in the `/admin` web console's Review Records tab.
 local checks, use the admin list endpoint:
 
 ```bash
-curl -fsS -u "<admin-username>:<admin-password>" \
+curl -fsS -H "Authorization: Bearer $AGENTICS_ADMIN_SERVICE_TOKEN" \
   "$AGENTICS_API_BASE_URL/admin/challenge-review-records"
 ```
 
@@ -101,16 +101,15 @@ For source-backed run inputs, confirm every public validation `input_files[].sou
 ## 3. Validate The Review Record
 
 Run validation against a checked-out repository at the reviewed commit. Provide
-the admin password through `AGENTICS_ADMIN_PASSWORD` or `--admin-password-stdin`;
-do not pass it as a command-line argument.
+the admin service token through `AGENTICS_ADMIN_SERVICE_TOKEN` or
+`--admin-service-token-stdin`; do not pass it as a command-line argument.
 
 ```bash
-read -rsp "Agentics admin password: " AGENTICS_ADMIN_PASSWORD; echo
-export AGENTICS_ADMIN_PASSWORD
+read -rsp "Agentics admin service token: " AGENTICS_ADMIN_SERVICE_TOKEN; echo
+export AGENTICS_ADMIN_SERVICE_TOKEN
 
 cargo run -p agentics-cli --bin agentics -- challenge-creator review-record validate <review-record-id> \
-  --repository-path <repo-dir> \
-  --admin-username <admin-username>
+  --repository-path <repo-dir>
 ```
 
 Reject validation failures unless the failure is clearly an operator path issue and can be retried with the correct checkout.
@@ -122,8 +121,7 @@ Approve only after PR review and Agentics validation both pass:
 ```bash
 cargo run -p agentics-cli --bin agentics -- challenge-creator review-record approve <review-record-id> \
   --expected-validation-bundle-sha256 <validation-digest> \
-  --message "approved for publish" \
-  --admin-username <admin-username>
+  --message "approved for publish"
 ```
 
 Use the `validation_bundle_sha256` returned by the validation response as the
@@ -137,8 +135,7 @@ Reject with actionable feedback:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- challenge-creator review-record reject <review-record-id> \
-  --message "reason" \
-  --admin-username <admin-username>
+  --message "reason"
 ```
 
 ## 5. Publish Or Archive
@@ -147,8 +144,7 @@ Publish an approved new-challenge review record:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- challenge-creator review-record publish <review-record-id> \
-  --repository-path <repo-dir> \
-  --admin-username <admin-username>
+  --repository-path <repo-dir>
 ```
 
 The published challenge contract is immutable. Material benchmark changes
@@ -166,15 +162,13 @@ Abandon review records when their backing PR is closed without merge or withdraw
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- challenge-creator review-record abandon <review-record-id> \
-  --message "closed without merge" \
-  --admin-username <admin-username>
+  --message "closed without merge"
 ```
 
 Run cleanup for stale review records and purge-eligible unpublished private assets:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- challenge-creator review-record cleanup \
-  --admin-username <admin-username>
+cargo run -p agentics-cli --bin agentics -- challenge-creator review-record cleanup
 ```
 
 Do not use cleanup as a substitute for review decisions. It is an operational maintenance action.

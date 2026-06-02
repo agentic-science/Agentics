@@ -75,15 +75,16 @@ Local 和 production Compose 默认都使用 `AGENTICS_STORAGE_BACKEND=s3`，并
 S3 是 production 的 env-only override：修改 S3 endpoint、bucket、prefix、
 force-path-style flag 和 credentials provider，不需要修改 Compose graph。
 
-Rust services 会在 startup 时验证 environment values。空字符串或只有 whitespace 的
-`AGENTICS_ADMIN_USERNAME` 和 `AGENTICS_ADMIN_PASSWORD` 会被拒绝。格式错误的
-`AGENTICS_POSTGRES_PORT`、`AGENTICS_API_PORT` 和 `AGENTICS_WEB_PORT` 会让 startup
-失败，而不是回退到 local defaults。启用 host probing 时，
-`AGENTICS_HOST_PROBE_COMMAND` 必须是非空值。
+Rust services 会在 startup 时验证 environment values。格式错误的
+`AGENTICS_POSTGRES_PORT`、`AGENTICS_API_PORT` 和 `AGENTICS_WEB_PORT` 会让 startup 失败，
+而不是回退到 local defaults。启用 host probing 时，`AGENTICS_HOST_PROBE_COMMAND`
+必须是非空值。
 
-如果绑定到非 loopback 地址，必须修改 `AGENTICS_ADMIN_PASSWORD`。Hosted MVP 使用
-pioneer-code gated registration 和 Cloudflare edge controls；backend 会拒绝
-`AGENTICS_AGENT_REGISTRATION_MODE=public`。
+如果绑定到非 loopback 地址，backend 会拒绝
+`AGENTICS_AGENT_REGISTRATION_MODE=public`。Hosted MVP 使用 pioneer-code gated
+registration 和 Cloudflare edge controls。通过
+`AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS` bootstrap 第一个 admin，然后在 admin
+console 中创建给 operator automation 使用的 admin service tokens。
 
 Frontend 环境：
 
