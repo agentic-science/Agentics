@@ -479,6 +479,18 @@ async fn rustfs_s3_storage_round_trips_when_configured() {
         b"hello"
     );
     assert!(storage.exists(&key).await.expect("S3 exists"));
+    assert!(
+        !storage
+            .exists(&storage_key("objects/missing.txt"))
+            .await
+            .expect("S3 missing object exists check")
+    );
+    assert!(matches!(
+        storage
+            .get(&storage_key("objects/missing.txt"), TEST_INTENT)
+            .await,
+        Err(StorageError::ObjectNotFound(_))
+    ));
     let download_dir = tempfile::tempdir().expect("S3 download tempdir");
     let download_path = download_dir.path().join("value.txt");
     storage

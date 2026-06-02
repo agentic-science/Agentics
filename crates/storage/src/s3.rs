@@ -4,6 +4,9 @@ use std::time::SystemTime;
 use async_trait::async_trait;
 use aws_config::BehaviorVersion;
 use aws_sdk_s3::config::Region;
+use aws_sdk_s3::error::{ProvideErrorMetadata, SdkError};
+use aws_sdk_s3::operation::head_object::HeadObjectError;
+use aws_sdk_s3::operation::put_object::PutObjectError;
 use aws_sdk_s3::primitives::ByteStream;
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 
@@ -82,7 +85,7 @@ impl S3Storage {
                     .map(Some)
                     .map_err(|_| StorageError::Internal("negative S3 content length".to_string()))
             }
-            Err(error) if s3_error_is_not_found(&error) => Ok(None),
+            Err(error) if s3_head_object_error_is_not_found(&error) => Ok(None),
             Err(error) => Err(StorageError::Backend(format!("{error:?}"))),
         }
     }
@@ -125,7 +128,7 @@ impl Storage for S3Storage {
             .if_none_match("*");
         let put_result = put_request.send().await;
         if let Err(error) = put_result {
-            if s3_error_is_conflict(&error) {
+            if s3_put_object_error_is_conflict(&error) {
                 return Err(StorageError::ObjectConflict(key.to_string()));
             }
             return Err(StorageError::Backend(format!("{error:?}")));
@@ -158,7 +161,7 @@ impl Storage for S3Storage {
             .if_none_match("*");
         let put_result = put_request.send().await;
         if let Err(error) = put_result {
-            if s3_error_is_conflict(&error) {
+            if s3_put_object_error_is_conflict(&error) {
                 return Err(StorageError::ObjectConflict(key.to_string()));
             }
             return Err(StorageError::Backend(format!("{error:?}")));
@@ -486,15 +489,37 @@ fn normalized_s3_prefix(value: Option<&str>) -> Result<Option<String>> {
         .map(|key| Some(key.to_string()))
 }
 
-fn s3_error_is_not_found<E: std::fmt::Debug + std::fmt::Display>(error: &E) -> bool {
-    let text = format!("{error} {error:?}");
-    text.contains("NotFound")
-        || text.contains("NoSuchKey")
-        || text.contains("NoSuchBucket")
-        || text.contains("404")
+fn s3_head_object_error_is_not_found(error: &SdkError<HeadObjectError>) -> bool {
+    if error
+        .as_service_error()
+        .is_some_and(HeadObjectError::is_not_found)
+    {
+        return true;
+    }
+    if error
+        .raw_response()
+        .is_some_and(|response| response.status().as_u16() == 404)
+    {
+        return true;
+    }
+    matches!(error.code(), Some("NotFound" | "NoSuchKey" | "404"))
 }
 
-fn s3_error_is_conflict<E: std::fmt::Debug + std::fmt::Display>(error: &E) -> bool {
-    let text = format!("{error} {error:?}");
-    text.contains("PreconditionFailed") || text.contains("AlreadyExists") || text.contains("412")
+fn s3_put_object_error_is_conflict(error: &SdkError<PutObjectError>) -> bool {
+    if error
+        .raw_response()
+        .is_some_and(|response| response.status().as_u16() == 412)
+    {
+        return true;
+    }
+    if error.raw_response().is_some_and(|response| {
+        response.status().as_u16() == 409
+            && matches!(error.code(), Some("ConditionalRequestConflict"))
+    }) {
+        return true;
+    }
+    matches!(
+        error.code(),
+        Some("ConditionalRequestConflict" | "PreconditionFailed")
+    )
 }
