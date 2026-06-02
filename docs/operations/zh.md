@@ -209,6 +209,23 @@ Permission-repair sidecars 使用与 runner containers 相同的 Docker hardenin
 baseline，保持 network disabled，将 root filesystem 设为 read-only，并且只写入它们
 要修复的 runner-owned bind mounts。
 
+## Migrated Private Bundle Backups
+
+Migrated Frontier-CS private assets 会备份在专用 private-bundle RustFS store 中，
+不放在 Agentics durable storage bucket 里。使用 `just storage::backup-up` 启动。
+刷新当前 Frontier-CS private asset batch 时，先运行
+`just storage::refresh-frontier-cs-private-assets --dry-run`，确认 report 后再用
+`just storage::refresh-frontier-cs-private-assets --confirm-overwrite` 上传。该命令会
+验证每个 generated ZIP overlay，并在 upload 后验证 object length 和 SHA-256。
+Generated ZIPs 只保存在 `target/` 下，绝不能 commit。
+
+Disposable rehearsal storage 使用
+`just rehearsal::restore-private-bundles --overwrite` 恢复 refreshed bundles。
+`--overwrite` 只能在 disposable 或明确批准的 refresh environments 中使用。部分
+migrated interactive official sessions 在 MVP 中会有意在 runtime 生成 hidden state，
+以匹配原始 Frontier-CS interactor 行为；这些 challenges 的 public validation 仍是
+deterministic。
+
 ## Operational Checks
 
 运行：

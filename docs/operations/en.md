@@ -215,6 +215,24 @@ Permission-repair sidecars use the same Docker hardening baseline as runner
 containers, keep networking disabled, mount their root filesystem read-only, and
 write only to the runner-owned bind mounts they repair.
 
+## Migrated Private Bundle Backups
+
+Migrated Frontier-CS private assets are backed up outside the Agentics durable
+storage bucket in the dedicated private-bundle RustFS store. Start it with
+`just storage::backup-up`. To refresh the current Frontier-CS private asset
+batch, first run `just storage::refresh-frontier-cs-private-assets --dry-run`,
+then upload with `just storage::refresh-frontier-cs-private-assets
+--confirm-overwrite` after reviewing the report. The command validates each
+generated ZIP overlay and verifies object length plus SHA-256 after upload.
+Generated ZIPs stay under `target/` and must not be committed.
+
+For disposable rehearsal storage, restore refreshed bundles with
+`just rehearsal::restore-private-bundles --overwrite`. Use the overwrite flag
+only in disposable or explicitly approved refresh environments. Some migrated
+interactive official sessions intentionally generate hidden state at runtime for
+MVP, matching the original Frontier-CS interactor behavior. Public validation
+for those challenges remains deterministic.
+
 ## Operational Checks
 
 Run:

@@ -302,8 +302,34 @@ network，然后运行一个一次性的 production Compose service；该 servic
 private RustFS endpoints。它会把 objects 复制到 production bucket 的
 `AGENTICS_S3_PREFIX` 下，并放在逻辑
 `private-bundle-backups/` prefix 中；已存在且 byte-identical 的 objects 会被跳过，
-每次 upload 后都会用 SHA-256 验证。`just storage::backup-down` 会停止 backup
+每次 upload 后都会用 SHA-256 验证。只有在 disposable rehearsal 或另一个明确批准的
+refresh window 中，才使用 `just prod::restore-private-bundles --overwrite` 来替换
+destination 中已有但内容不同的 objects。`just storage::backup-down` 会停止 backup
 container，但不会删除 objects。
+
+迁移后的 Frontier-CS algorithmic refresh batch 应使用专用 ops tool，不要手工创建
+ZIP overlays：
+
+```bash
+just storage::backup-up
+just storage::refresh-frontier-cs-private-assets --dry-run
+just storage::refresh-frontier-cs-private-assets --confirm-overwrite
+just rehearsal::restore-private-bundles --overwrite
+```
+
+refresh command 会读取
+`working-notes/frontier-cs-upstream-refresh-2026-06-02.md`，验证已经同步的
+Frontier-CS commit，为列表中的每个 challenge 生成一个
+`<challenge_name>/official-runs.zip` backup object，使用 Agentics challenge
+contract 验证每个 ZIP overlay，上传到 persistent backup RustFS store，并在 upload
+后验证 object length 和 SHA-256。Generated private ZIPs 只会 staged 到 `target/`
+下，绝不能 commit。
+
+部分 migrated interactive official benchmarks 在 MVP 中会有意使用 runtime-random
+hidden state，因为原始 Frontier-CS interactor 也是在 judging 时生成这些状态。Public
+validation 仍保持 deterministic，而 official sessions 的
+`private-benchmark/session.json` 只保存 public case parameters 和 random-policy
+metadata。
 
 Credentials 只通过 AWS SDK provider chain 获取，例如环境变量或 instance profile。
 不要把 S3 credentials 写入 Agentics DB rows 或 challenge specs。Agentics 仍会在

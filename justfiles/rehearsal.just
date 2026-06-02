@@ -56,6 +56,11 @@ logs:
 check:
     {{compose_rehearsal}} check
 
+# Restore backed-up migrated challenge private bundles into rehearsal storage
+[working-directory: repo]
+restore-private-bundles *args:
+    {{compose_rehearsal}} restore-private-bundles {{args}}
+
 # Run the full production rehearsal and require GPU worker evidence
 [working-directory: repo]
 run *args:

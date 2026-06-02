@@ -22,6 +22,7 @@ pub mod check_local_mvp;
 pub mod compose_prod;
 pub mod dgx;
 pub mod dgx_storage;
+pub mod frontier_cs_private_assets;
 pub mod local_dev;
 pub mod migrate;
 pub mod private_bundle_backups;
