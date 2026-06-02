@@ -161,7 +161,7 @@ that may touch private benchmark material, or deployments configured with
 availability state instead of a `runner_log_storage_key` or inline content.
 
 For `piped_stdio`, the worker also enforces
-`AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION=16777216` on each direction
+`AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION=268435456` on each direction
 of the interactive-evaluator/participant stdio protocol and
 `AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS=2` for attached stream cleanup.
 These are operator-owned runner controls, not challenge or submission settings.

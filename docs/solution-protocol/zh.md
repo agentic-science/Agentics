@@ -156,7 +156,7 @@ material 的 official runs，或者配置了 `AGENTICS_OFFICIAL_LOG_REDACTION=al
 `runner_log_storage_key` 或 inline content。
 
 对于 `piped_stdio`，worker 还会用
-`AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION=16777216` 限制
+`AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION=268435456` 限制
 interactive-evaluator/participant stdio protocol 每个方向的字节数，并用
 `AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS=2` 控制 attached stream cleanup。
 这些是 operator-owned runner controls，不是 challenge 或 submission settings。

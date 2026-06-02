@@ -173,7 +173,7 @@ evaluator-visible output caps are `AGENTICS_RUNNER_MAX_OUTPUT_FILES=8192`,
 `AGENTICS_RUNNER_MAX_RUNS=100`, `AGENTICS_RUNNER_MAX_RESULT_JSON_BYTES=4194304`,
 `AGENTICS_RUNNER_MAX_PUBLIC_RESULTS=1024`, and
 `AGENTICS_RUNNER_MAX_RESULT_LOG_BYTES=262144`. `piped_stdio` interaction bytes
-are capped by `AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION=16777216`
+are capped by `AGENTICS_RUNNER_MAX_INTERACTION_BYTES_PER_DIRECTION=268435456`
 per direction, with `AGENTICS_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS=2` for
 attached stream shutdown. Persisted runner logs are capped at the concrete run
 count times 1 MiB, so the default maximum is 100 MiB.
