@@ -90,6 +90,14 @@ workers. `just test-env-up` starts the dedicated test Docker daemon on
 Compose integration tests, while `just test-all` also requires NVIDIA GPU
 support and includes ignored CUDA/GPU tests.
 
+Compose integration tests keep Cargo registry, Git, and target caches in
+persistent default Docker volumes named `agentics-test-cargo-registry`,
+`agentics-test-cargo-git`, and `agentics-test-cargo-target`. These volumes are
+compile caches only; test databases, RustFS data, and runner runtime roots
+remain per-run. Set `AGENTICS_TEST_DISABLE_CARGO_CACHE=true` for an ephemeral
+cold-cache run, or use `just test-purge-cargo-cache` to remove the persistent
+cache volumes.
+
 The `/srv/agentics-rehearsal` root is disposable production-like staging state.
 Prepare it with `sudo just rehearsal::prepare-storage`, start its dedicated
 runner Docker daemon with `sudo just rehearsal::runner-docker-up`, and purge it

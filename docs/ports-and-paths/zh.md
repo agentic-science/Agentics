@@ -86,6 +86,13 @@ dedicated Docker daemon；它的默认 bridge network 由 host bridge `agentics0
 daemon；`just test-all-cpu` 使用它运行 CPU-only Compose integration tests，而
 `just test-all` 还要求 NVIDIA GPU support，并包含 ignored CUDA/GPU tests。
 
+Compose integration tests 默认把 Cargo registry、Git 和 target caches 保存在
+persistent default Docker volumes：`agentics-test-cargo-registry`、
+`agentics-test-cargo-git` 和 `agentics-test-cargo-target`。这些 volumes 只是 compile
+caches；test databases、RustFS data 和 runner runtime roots 仍然是 per-run 的。
+设置 `AGENTICS_TEST_DISABLE_CARGO_CACHE=true` 可以运行 ephemeral cold-cache 测试；
+使用 `just test-purge-cargo-cache` 可以删除这些 persistent cache volumes。
+
 `/srv/agentics-rehearsal` 是 disposable production-like staging state。用
 `sudo just rehearsal::prepare-storage` 准备，用
 `sudo just rehearsal::runner-docker-up` 启动专用 runner Docker daemon，并且只能用

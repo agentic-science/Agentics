@@ -105,3 +105,12 @@ services:
 
 volumes:
   rustfs_data:
+  cargo_registry:
+    name: ${AGENTICS_TEST_CARGO_REGISTRY_VOLUME:-agentics-test-cargo-registry}
+    external: ${AGENTICS_TEST_CARGO_CACHE_EXTERNAL:-true}
+  cargo_git:
+    name: ${AGENTICS_TEST_CARGO_GIT_VOLUME:-agentics-test-cargo-git}
+    external: ${AGENTICS_TEST_CARGO_CACHE_EXTERNAL:-true}
+  cargo_target:
+    name: ${AGENTICS_TEST_CARGO_TARGET_VOLUME:-agentics-test-cargo-target}
+    external: ${AGENTICS_TEST_CARGO_CACHE_EXTERNAL:-true}

@@ -154,7 +154,11 @@ Docker daemon at `unix:///srv/agentics-test/docker.sock`, backed by
 `/srv/agentics-test/docker-data-root`, so Docker layer quotas are tested against
 overlay2 on XFS with `prjquota` instead of the workstation daemon. The wrapper
 uses a unique Compose project and runner namespace for each run, then removes
-test-scoped Compose volumes after the test service exits. Stop only the
+test-scoped Compose volumes after the test service exits. Cargo registry, Git,
+and target caches are persistent Docker volumes by default so repeated local
+runs stay warm. Set `AGENTICS_TEST_DISABLE_CARGO_CACHE=true` for a cold-cache
+run, or use `just test-purge-cargo-cache` to remove the persistent Cargo cache
+volumes. Stop only the
 dedicated test daemon with:
 
 ```bash

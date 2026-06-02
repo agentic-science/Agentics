@@ -219,6 +219,16 @@ just test-env-status-cpu
 just test-all-cpu
 ```
 
+The Compose test harness keeps Cargo registry, Git, and target caches in
+persistent Docker volumes by default so repeated local runs do not rebuild Rust
+from scratch. Test-scoped Postgres, RustFS, and runtime volumes are still
+removed after each run. Set `AGENTICS_TEST_DISABLE_CARGO_CACHE=true` for a
+cold-cache run, or clear the persistent caches with:
+
+```bash
+just test-purge-cargo-cache
+```
+
 On Linux hosts with NVIDIA GPU support, check GPU readiness and run the full
 suite, including ignored CUDA/GPU tests:
 

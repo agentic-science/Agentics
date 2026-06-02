@@ -1,4 +1,4 @@
-set fallback := true
+set fallback
 
 # Canonical full-suite test workflows.
 mod test 'justfiles/test.just'
@@ -53,3 +53,7 @@ test-env-status-cpu:
 # Check the full GPU test environment
 test-env-status:
     @just test::env-status
+
+# Remove persistent Cargo cache volumes used by the Compose test harness
+test-purge-cargo-cache:
+    @just test::purge-cargo-cache

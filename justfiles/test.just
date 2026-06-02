@@ -204,17 +204,69 @@ _integration include_ignored:
           exit 2; \
         fi; \
       fi; \
+      cache_disabled="${AGENTICS_TEST_DISABLE_CARGO_CACHE:-false}"; \
+      case "$cache_disabled" in \
+        true|1|yes|on) \
+          cargo_cache_external=false; \
+          cargo_registry_volume="${project}_cargo_registry"; \
+          cargo_git_volume="${project}_cargo_git"; \
+          cargo_target_volume="${project}_cargo_target"; \
+          ;; \
+        false|0|no|off|"") \
+          cargo_cache_external=true; \
+          cargo_registry_volume="${AGENTICS_TEST_CARGO_REGISTRY_VOLUME:-agentics-test-cargo-registry}"; \
+          cargo_git_volume="${AGENTICS_TEST_CARGO_GIT_VOLUME:-agentics-test-cargo-git}"; \
+          cargo_target_volume="${AGENTICS_TEST_CARGO_TARGET_VOLUME:-agentics-test-cargo-target}"; \
+          if [ "$compose_needs_sudo" = "true" ]; then \
+            sudo docker volume create "$cargo_registry_volume" >/dev/null; \
+            sudo docker volume create "$cargo_git_volume" >/dev/null; \
+            sudo docker volume create "$cargo_target_volume" >/dev/null; \
+          else \
+            docker volume create "$cargo_registry_volume" >/dev/null; \
+            docker volume create "$cargo_git_volume" >/dev/null; \
+            docker volume create "$cargo_target_volume" >/dev/null; \
+          fi; \
+          ;; \
+        *) \
+          printf 'AGENTICS_TEST_DISABLE_CARGO_CACHE must be true or false, got %s.\n' "$cache_disabled" >&2; \
+          exit 2; \
+          ;; \
+      esac; \
       compose_test() { \
         if [ "$compose_needs_sudo" = "true" ]; then \
-          sudo env AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" AGENTICS_COMPOSE_TEST_RUN_ID="$run_id" AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED="{{include_ignored}}" AGENTICS_S3_PREFIX="test/$run_id" docker compose --env-file deploy/compose/env/test.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.test.yml "$@"; \
+          sudo env AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" AGENTICS_COMPOSE_TEST_RUN_ID="$run_id" AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED="{{include_ignored}}" AGENTICS_S3_PREFIX="test/$run_id" AGENTICS_TEST_CARGO_CACHE_EXTERNAL="$cargo_cache_external" AGENTICS_TEST_CARGO_REGISTRY_VOLUME="$cargo_registry_volume" AGENTICS_TEST_CARGO_GIT_VOLUME="$cargo_git_volume" AGENTICS_TEST_CARGO_TARGET_VOLUME="$cargo_target_volume" docker compose --env-file deploy/compose/env/test.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.test.yml "$@"; \
         else \
-          AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" AGENTICS_COMPOSE_TEST_RUN_ID="$run_id" AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED="{{include_ignored}}" AGENTICS_S3_PREFIX="test/$run_id" docker compose --env-file deploy/compose/env/test.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.test.yml "$@"; \
+          AGENTICS_REPO_ROOT="$PWD" AGENTICS_TEST_ROOT="$root" AGENTICS_TEST_RUNNER_RUNTIME_ROOT="$runtime_root" AGENTICS_TEST_RUNNER_PHASE_MOUNT_ROOT="$phase_root" AGENTICS_TEST_TMPDIR="$tmpdir" AGENTICS_TEST_DOCKER_HOST="$docker_host" AGENTICS_TEST_DOCKER_SOCKET_PATH="$docker_socket" AGENTICS_RUNNER_NAMESPACE="$project" AGENTICS_COMPOSE_TEST_RUN_ID="$run_id" AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED="{{include_ignored}}" AGENTICS_S3_PREFIX="test/$run_id" AGENTICS_TEST_CARGO_CACHE_EXTERNAL="$cargo_cache_external" AGENTICS_TEST_CARGO_REGISTRY_VOLUME="$cargo_registry_volume" AGENTICS_TEST_CARGO_GIT_VOLUME="$cargo_git_volume" AGENTICS_TEST_CARGO_TARGET_VOLUME="$cargo_target_volume" docker compose --env-file deploy/compose/env/test.env.example -f deploy/compose/compose.yml -f deploy/compose/compose.test.yml "$@"; \
         fi; \
       }; \
       status=0; \
       compose_test -p "$project" up --build --abort-on-container-exit --exit-code-from tests || status=$?; \
       compose_test -p "$project" down -v --remove-orphans; \
       exit "$status"
+
+# Remove persistent Cargo cache volumes used by the Compose test harness
+[working-directory: repo]
+purge-cargo-cache:
+    @set -eu; \
+      registry="${AGENTICS_TEST_CARGO_REGISTRY_VOLUME:-agentics-test-cargo-registry}"; \
+      git="${AGENTICS_TEST_CARGO_GIT_VOLUME:-agentics-test-cargo-git}"; \
+      target="${AGENTICS_TEST_CARGO_TARGET_VOLUME:-agentics-test-cargo-target}"; \
+      if docker info >/dev/null 2>&1; then \
+        docker_cmd=docker; \
+      elif sudo -n docker info >/dev/null 2>&1; then \
+        docker_cmd="sudo docker"; \
+      else \
+        printf 'Docker access is required to purge Cargo cache volumes.\n' >&2; \
+        exit 2; \
+      fi; \
+      for volume in "$registry" "$git" "$target"; do \
+        if $docker_cmd volume inspect "$volume" >/dev/null 2>&1; then \
+          $docker_cmd volume rm "$volume" >/dev/null; \
+          printf 'Removed %s\n' "$volume"; \
+        else \
+          printf 'No such volume: %s\n' "$volume"; \
+        fi; \
+      done
 
 # CPU-only full test suite
 [working-directory: repo]
