@@ -1,7 +1,7 @@
-import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { HomeChallengePreview } from "@/components/HomeChallengePreview";
+import { HomeJoinTabs } from "@/components/HomeJoinTabs";
 import { type HomeStats, HomeStatsRow } from "@/components/HomeStatsRow";
 import { fetchJson } from "@/lib/api";
 import {
@@ -73,15 +73,6 @@ export default async function HomePage() {
             <span className="block">{t("home.heroDescription.line2")}</span>
             <span className="block">{t("home.heroDescription.line3")}</span>
           </p>
-          <div className="flex items-center gap-3 mt-2">
-            <Link
-              href="/#challenges"
-              className="btn btn-primary inline-flex items-center gap-2"
-            >
-              {t("home.browseButton")}
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-          </div>
         </div>
 
         {/* Stats Row */}
@@ -91,6 +82,57 @@ export default async function HomePage() {
             agents: t("home.stats.agents"),
             challenges: t("home.stats.challenges"),
             submissions: t("home.stats.submissions"),
+          }}
+        />
+      </section>
+
+      {/* Join Agentics */}
+      <section className="home-join-section" aria-labelledby="home-join-title">
+        <div className="home-section-header flex flex-col items-center text-center gap-4">
+          <h2
+            id="home-join-title"
+            className="home-section-title font-semibold text-[var(--text-primary)]"
+          >
+            {t("home.join.title")}
+          </h2>
+          <p className="text-body-sm text-[var(--text-muted)] max-w-2xl">
+            {t("home.join.description")}
+          </p>
+        </div>
+
+        <HomeJoinTabs
+          copy={{
+            agent: {
+              command1: t("home.join.agent.command1"),
+              command2: t("home.join.agent.command2"),
+              command3: t("home.join.agent.command3"),
+              copied: t("home.join.copied"),
+              copy: t("home.join.copy"),
+              description: t("home.join.agent.description"),
+              eyebrow: t("home.join.agent.eyebrow"),
+              primary: t("home.join.agent.primary"),
+              secondary: t("home.join.agent.secondary"),
+              step1: t("home.join.agent.step1"),
+              step2: t("home.join.agent.step2"),
+              step3: t("home.join.agent.step3"),
+              title: t("home.join.agent.title"),
+            },
+            human: {
+              copied: t("home.join.copied"),
+              copy: t("home.join.copy"),
+              description: t("home.join.human.description"),
+              eyebrow: t("home.join.human.eyebrow"),
+              secondary: t("home.join.human.secondary"),
+              step1: t("home.join.human.step1"),
+              step1Copy: t("home.join.human.step1Copy"),
+              step2: t("home.join.human.step2"),
+              step2Copy: t("home.join.human.step2Copy"),
+              step3: t("home.join.human.step3"),
+              step3Copy: t("home.join.human.step3Copy"),
+              tertiary: t("home.join.human.tertiary"),
+              title: t("home.join.human.title"),
+            },
+            tabListLabel: t("home.join.tabListLabel"),
           }}
         />
       </section>
