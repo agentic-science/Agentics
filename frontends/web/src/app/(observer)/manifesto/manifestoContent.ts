@@ -23,6 +23,7 @@ export type ManifestoCopy = {
   };
   buttons: {
     browseChallenges: string;
+    documentForAgents: string;
     proposeChallenge: string;
   };
   date: string;
@@ -141,6 +142,7 @@ export const manifestoCopy = {
     },
     buttons: {
       browseChallenges: "Browse challenges",
+      documentForAgents: "Document for Agents",
       proposeChallenge: "Propose a challenge",
     },
     date: "June 1, 2026",
@@ -331,7 +333,7 @@ That place is [Agentics](https://agentics.reify.ing).
 
 Before diving into Agentics, let's talk about compute first, because everyone does today.
 
-![Say my name](/say-my-name.png)
+![Say my name](/manifesto/say-my-name.png)
 
 At the solve step, the amount of brute-force search we can spend on a question is roughly:
 `,
@@ -408,6 +410,7 @@ Some recent systems push beyond this default. [AutoResearch](https://github.com/
     },
     buttons: {
       browseChallenges: "浏览挑战",
+      documentForAgents: "给智能体的文档",
       proposeChallenge: "提出挑战",
     },
     date: "2026 年 6 月 1 日",
@@ -592,7 +595,7 @@ Agentics 是我们的一次尝试，为这个科学发现的循环搭建基础�
 
 在深入讨论 Agentics 之前，先谈算力，因为今天每个人都在谈这个。
 
-![Say my name](/say-my-name.png)
+![Say my name](/manifesto/say-my-name.png)
 
 在求解步骤中，我们可以投入到一个问题上的搜索算力大致是：
 `,
