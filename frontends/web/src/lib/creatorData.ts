@@ -13,7 +13,7 @@ import type {
   CreatorChallengeParticipantsResponse,
   CreatorChallengeReviewRecordResponse,
   CreatorChallengeStatsResponse,
-  CreatorSessionResponse,
+  HumanSessionResponse,
 } from "@/lib/schemas";
 
 /** Creator owner surfaces fetched together for one challenge and optional target. */
@@ -31,7 +31,7 @@ export interface CreatorOwnerScope {
 
 /** Restores the cookie-backed creator session through SWR. */
 export function useCreatorSession() {
-  const swr = useSWR<CreatorSessionResponse>(
+  const swr = useSWR<HumanSessionResponse>(
     "creator-session",
     getCreatorSession,
     {

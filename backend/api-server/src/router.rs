@@ -17,8 +17,6 @@ use agentics_config::Config;
 const ZIP_SUBMISSION_JSON_BODY_LIMIT_BYTES: usize = 32 * 1024 * 1024;
 const PRIVATE_ASSET_JSON_OVERHEAD_BYTES: u64 = 1024 * 1024;
 const X_AGENTICS_CSRF_TOKEN: HeaderName = HeaderName::from_static("x-agentics-csrf-token");
-const X_AGENTICS_ADMIN_AUTOMATION: HeaderName =
-    HeaderName::from_static("x-agentics-admin-automation");
 
 /// Build the application router with public, agent, admin, and health routes.
 pub fn router(config: &Config) -> Router<AppState> {
@@ -77,23 +75,8 @@ pub fn router(config: &Config) -> Router<AppState> {
             "/api/auth/github/callback",
             post(crate::auth_handlers::github_oauth_callback),
         )
-        .route(
-            "/api/auth/admin/login",
-            post(crate::auth_handlers::admin_login),
-        )
-        .route(
-            "/api/auth/admin/logout",
-            post(crate::auth_handlers::admin_logout),
-        )
-        .route(
-            "/api/auth/admin/session",
-            get(crate::auth_handlers::admin_session),
-        )
-        .route("/api/creator/me", get(crate::auth_handlers::creator_me))
-        .route(
-            "/api/creator/session",
-            get(crate::auth_handlers::creator_session),
-        )
+        .route("/api/auth/logout", post(crate::auth_handlers::human_logout))
+        .route("/api/auth/session", get(crate::auth_handlers::human_session))
         .route(
             "/api/creator/challenge-review-records",
             post(crate::challenge_creation_handlers::create_challenge_review_record),
@@ -161,7 +144,7 @@ pub fn router(config: &Config) -> Router<AppState> {
             "/api/public/solution-submissions/{id}/artifact",
             get(crate::handlers::get_public_artifact),
         )
-        // Admin routes (Basic auth via extractor)
+        // Admin routes (human admin session or service-token auth via extractor)
         .route(
             "/admin/challenges",
             get(crate::handlers::list_admin_challenges),
@@ -212,6 +195,24 @@ pub fn router(config: &Config) -> Router<AppState> {
             get(crate::handlers::list_admin_service_heartbeats),
         )
         .route("/admin/capacity", get(crate::handlers::get_admin_capacity))
+        .route("/admin/humans", get(crate::handlers::list_humans))
+        .route(
+            "/admin/humans/{id}/roles/admin/grant",
+            post(crate::handlers::grant_human_admin_role),
+        )
+        .route(
+            "/admin/humans/{id}/roles/admin/revoke",
+            post(crate::handlers::revoke_human_admin_role),
+        )
+        .route(
+            "/admin/admin-service-tokens",
+            get(crate::handlers::list_admin_service_tokens)
+                .post(crate::handlers::create_admin_service_token),
+        )
+        .route(
+            "/admin/admin-service-tokens/{id}/revoke",
+            post(crate::handlers::revoke_admin_service_token),
+        )
         .route(
             "/admin/pioneer-codes",
             get(crate::handlers::list_pioneer_codes).post(crate::handlers::create_pioneer_code),
@@ -261,12 +262,7 @@ fn cors_layer(config: &Config) -> CorsLayer {
         .collect::<Vec<_>>();
     let layer = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST, Method::DELETE])
-        .allow_headers([
-            AUTHORIZATION,
-            CONTENT_TYPE,
-            X_AGENTICS_CSRF_TOKEN,
-            X_AGENTICS_ADMIN_AUTOMATION,
-        ])
+        .allow_headers([AUTHORIZATION, CONTENT_TYPE, X_AGENTICS_CSRF_TOKEN])
         .allow_credentials(true);
 
     if origins.is_empty() {

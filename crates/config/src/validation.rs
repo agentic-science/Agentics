@@ -26,8 +26,7 @@ where
 fn env_name_for_field(field: &str) -> Option<&'static str> {
     let leaf = field.rsplit('.').next().unwrap_or(field);
     Some(match leaf {
-        "admin_username" => "AGENTICS_ADMIN_USERNAME",
-        "admin_password" => "AGENTICS_ADMIN_PASSWORD",
+        "bootstrap_admin_github_user_ids" => "AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS",
         "web_session_cookie_name" => "AGENTICS_WEB_SESSION_COOKIE_NAME",
         "web_csrf_cookie_name" => "AGENTICS_WEB_CSRF_COOKIE_NAME",
         "web_session_ttl_hours" => "AGENTICS_WEB_SESSION_TTL_HOURS",
@@ -38,8 +37,8 @@ fn env_name_for_field(field: &str) -> Option<&'static str> {
         "official_runs_per_agent_challenge_day" => "AGENTICS_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY",
         "max_active_official_jobs" => "AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS",
         "max_active_agents" => "AGENTICS_MAX_ACTIVE_AGENTS",
-        "max_active_challenge_review_records_per_agent" => {
-            "AGENTICS_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_AGENT"
+        "max_active_challenge_review_records_per_human" => {
+            "AGENTICS_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_HUMAN"
         }
         "challenge_private_asset_bytes_per_review_record" => {
             "AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD"
@@ -93,13 +92,6 @@ fn env_name_for_field(field: &str) -> Option<&'static str> {
 
 pub(crate) fn trimmed_non_empty(value: &str, _ctx: &()) -> Result<(), Error> {
     if value.trim().is_empty() {
-        return Err(Error::new("must not be empty"));
-    }
-    Ok(())
-}
-
-pub(crate) fn secret_non_empty(value: &SecretString, _ctx: &()) -> Result<(), Error> {
-    if value.expose_secret().trim().is_empty() {
         return Err(Error::new("must not be empty"));
     }
     Ok(())

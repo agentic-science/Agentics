@@ -28,13 +28,11 @@ fn loopback_bind_allows_local_default_credentials() {
 fn config_debug_redacts_secrets() {
     let mut config = test_config();
     config.database.url = SecretString::from("postgres://agentics:secret@localhost/agentics");
-    config.auth.admin_password = SecretString::from("secret-admin-password");
     config.github_oauth.client_secret = Some(SecretString::from("secret-oauth-client"));
 
     let debug = format!("{config:?}");
 
     assert!(!debug.contains("secret@localhost"));
-    assert!(!debug.contains("secret-admin-password"));
     assert!(!debug.contains("secret-oauth-client"));
     assert!(debug.contains("[REDACTED"));
 }
@@ -58,12 +56,16 @@ fn raw_app_env_deserializes_prefixed_values() {
     let raw = super::RawAppEnv::from_env_iter([
         ("AGENTICS_API_PORT".to_string(), "3222".to_string()),
         (
-            "AGENTICS_ADMIN_PASSWORD".to_string(),
-            "changed-password".to_string(),
+            "AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS".to_string(),
+            "123,456".to_string(),
         ),
         (
             "AGENTICS_CHALLENGES_ROOT".to_string(),
             "/tmp/agentics-challenges".to_string(),
+        ),
+        (
+            "AGENTICS_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_HUMAN".to_string(),
+            "7".to_string(),
         ),
         ("AGENTICS_POSTGRES_PORT".to_string(), "6543".to_string()),
     ])
@@ -80,7 +82,11 @@ fn raw_app_env_deserializes_prefixed_values() {
             .contains(":6543/agentics")
     );
     assert_eq!(config.storage.challenges_root, "/tmp/agentics-challenges");
-    assert!(config.admin_password_matches("changed-password"));
+    assert_eq!(config.auth.bootstrap_admin_github_user_ids, vec![123, 456]);
+    assert_eq!(
+        config.quotas.max_active_challenge_review_records_per_human,
+        7
+    );
 }
 
 /// Verifies malformed derived-default ports fail instead of falling back silently.
@@ -120,19 +126,9 @@ fn bool_env_values_use_generic_deserialization() {
     assert!(error.to_string().contains("S3_FORCE_PATH_STYLE"));
 }
 
-/// Verifies secret and hosted-probe env values fail closed when blank.
+/// Verifies hosted-probe env values fail closed when blank.
 #[test]
-fn blank_admin_and_probe_env_values_are_rejected() {
-    let admin_error = Config::try_from(super::RawAppEnv {
-        auth: super::RawAuthEnv {
-            admin_password: Some("   ".to_string()),
-            ..Default::default()
-        },
-        ..Default::default()
-    })
-    .expect_err("blank admin password should fail");
-    assert!(admin_error.to_string().contains("AGENTICS_ADMIN_PASSWORD"));
-
+fn blank_probe_env_values_are_rejected() {
     let probe_error = Config::try_from(super::RawAppEnv {
         runner: super::RawRunnerEnv {
             host_probe_command: Some(" ".to_string()),
@@ -246,15 +242,12 @@ fn storage_defaults_use_rustfs_s3() {
     assert!(config.validate_object_storage_config().is_ok());
 }
 
-/// Verifies that default admin credentials are rejected on wildcard bind.
+/// Verifies that hosted API binds require secure cookies and invited registration.
 #[test]
-fn rejects_default_admin_credentials_on_wildcard_bind() {
+fn hosted_bind_requires_secure_cookies_and_invited_registration() {
     let mut config = test_config();
     config.api_web.api_host = "0.0.0.0".to_string();
 
-    assert!(config.validate_api_security().is_err());
-
-    config.auth.admin_password = SecretString::from("changed");
     assert!(config.validate_api_security().is_err());
 
     config.auth.agent_registration_mode = super::AgentRegistrationMode::PioneerCode;
@@ -270,7 +263,6 @@ fn rejects_default_admin_credentials_on_wildcard_bind() {
 fn hosted_bind_rejects_public_agent_registration_mode() {
     let mut config = test_config();
     config.api_web.api_host = "0.0.0.0".to_string();
-    config.auth.admin_password = SecretString::from("changed");
     config.api_web.web_session_cookie_secure = true;
     config.auth.agent_registration_mode = super::AgentRegistrationMode::Public;
 

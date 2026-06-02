@@ -241,7 +241,6 @@ python main.py
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
@@ -266,7 +265,6 @@ python main.py
             &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get validation run")
@@ -329,7 +327,6 @@ python main.py
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
@@ -354,7 +351,6 @@ python main.py
             &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get validation run")
@@ -470,7 +466,6 @@ printf built > build/generated.txt
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
@@ -495,7 +490,6 @@ printf built > build/generated.txt
             &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get validation run")

@@ -1,11 +1,16 @@
 //! Admin read and capacity workflows.
 
 use agentics_config::Config;
+use agentics_domain::models::auth::{
+    AdminHumanDto, AdminHumanListResponse, AdminHumanRoleResponse,
+    AdminServiceTokenCreatedResponse, AdminServiceTokenDto, AdminServiceTokenListResponse,
+    CreateAdminServiceTokenRequest, HumanStatus, RevokeAdminServiceTokenResponse,
+};
 use agentics_domain::models::challenge::{
     AdminChallengeListItemDto, AdminChallengeListResponse, ChallengeBundleSpec,
 };
 use agentics_domain::models::evaluation::ScoringMode;
-use agentics_domain::models::ids::AgentPioneerCodeId;
+use agentics_domain::models::ids::{AdminServiceTokenId, HumanId, PioneerCodeId};
 use agentics_domain::models::pioneer_codes::{PioneerCode, PioneerCodeStatus, PioneerCodeUseKind};
 use agentics_domain::models::request::{
     AdminCapacityResponse, AdminCapacityUsageDto, AdminQuotaSettingsDto, AdminServiceHeartbeatDto,
@@ -16,19 +21,55 @@ use agentics_domain::models::request::{
 };
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::{
-    AdminChallengeListItemRecord, AdminSolutionSubmissionListItemRecord, CreatePioneerCodeInput,
-    PioneerCodeRecord, PioneerCodeUseRecord, Repositories,
+    AdminChallengeListItemRecord, AdminServiceTokenRecord, AdminSolutionSubmissionListItemRecord,
+    CreateAdminServiceTokenInput, CreatePioneerCodeInput, HumanRecord, PioneerCodeRecord,
+    PioneerCodeUseRecord, Repositories,
 };
 
 use crate::auth;
 
 const SUBMISSION_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 
+/// Admin actor metadata needed by service-level audit and creation records.
+#[derive(Debug, Clone)]
+pub enum AdminActorInput {
+    Human {
+        human_id: HumanId,
+        display: String,
+    },
+    ServiceToken {
+        token_id: AdminServiceTokenId,
+        display: String,
+    },
+}
+
+impl AdminActorInput {
+    fn human_id(&self) -> Option<HumanId> {
+        match self {
+            Self::Human { human_id, .. } => Some(human_id.clone()),
+            Self::ServiceToken { .. } => None,
+        }
+    }
+
+    fn service_token_id(&self) -> Option<AdminServiceTokenId> {
+        match self {
+            Self::Human { .. } => None,
+            Self::ServiceToken { token_id, .. } => Some(token_id.clone()),
+        }
+    }
+
+    fn display(&self) -> String {
+        match self {
+            Self::Human { display, .. } | Self::ServiceToken { display, .. } => display.clone(),
+        }
+    }
+}
+
 /// Create a pioneer code for MVP-gated agent registration.
 pub async fn create_pioneer_code(
     pool: &sqlx::PgPool,
     config: &Config,
-    admin_username: String,
+    actor: AdminActorInput,
     body: CreatePioneerCodeRequest,
 ) -> Result<PioneerCodeDetailResponse> {
     let CreatePioneerCodeRequest {
@@ -54,14 +95,16 @@ pub async fn create_pioneer_code(
     let record = Repositories::new(pool)
         .pioneer_codes()
         .create(&CreatePioneerCodeInput {
-            id: AgentPioneerCodeId::generate(),
+            id: PioneerCodeId::generate(),
             code_hash: auth::hash_opaque_token(code.expose_secret()),
             code_display: code.expose_secret().to_string(),
             label: code.label().map(ToOwned::to_owned),
             note: note.unwrap_or_default(),
             max_uses,
             expires_at: parse_optional_rfc3339(expires_at.as_deref(), "expires_at")?,
-            created_by_admin_username: admin_username,
+            created_by_human_id: actor.human_id(),
+            created_by_admin_service_token_id: actor.service_token_id(),
+            created_by_display: actor.display(),
         })
         .await
         .map_err(ServiceError::unique_violation_as_conflict)?;
@@ -78,7 +121,7 @@ pub async fn list_pioneer_codes(pool: &sqlx::PgPool) -> Result<PioneerCodeListRe
 /// Fetch one pioneer code with the agents created through it.
 pub async fn get_pioneer_code(
     pool: &sqlx::PgPool,
-    id: &AgentPioneerCodeId,
+    id: &PioneerCodeId,
 ) -> Result<PioneerCodeDetailResponse> {
     let (code, uses) = Repositories::new(pool).pioneer_codes().detail(id).await?;
     present_pioneer_code_detail(&code, &uses)
@@ -87,14 +130,109 @@ pub async fn get_pioneer_code(
 /// Revoke a pioneer code and disable all agents created through it.
 pub async fn revoke_pioneer_code(
     pool: &sqlx::PgPool,
-    id: AgentPioneerCodeId,
+    id: PioneerCodeId,
 ) -> Result<RevokePioneerCodeResponse> {
     let outcome = Repositories::new(pool).pioneer_codes().revoke(&id).await?;
     Ok(RevokePioneerCodeResponse {
         id,
         status: PioneerCodeStatus::Revoked,
+        revoked_human_count: outcome.revoked_human_count,
+        revoked_human_session_count: outcome.revoked_human_session_count,
         revoked_agent_count: outcome.revoked_agent_count,
         revoked_token_count: outcome.revoked_token_count,
+    })
+}
+
+/// List human accounts and roles for admin identity management.
+pub async fn list_humans(pool: &sqlx::PgPool) -> Result<AdminHumanListResponse> {
+    let items = Repositories::new(pool)
+        .sessions()
+        .list_humans()
+        .await?
+        .into_iter()
+        .map(present_human)
+        .collect::<Result<Vec<_>>>()?;
+    Ok(AdminHumanListResponse { items })
+}
+
+/// Grant a human account the admin role.
+pub async fn grant_human_admin_role(
+    pool: &sqlx::PgPool,
+    target_human_id: &HumanId,
+    granted_by_human_id: &HumanId,
+) -> Result<AdminHumanRoleResponse> {
+    let human = Repositories::new(pool)
+        .sessions()
+        .grant_admin_role(target_human_id, granted_by_human_id)
+        .await?;
+    Ok(AdminHumanRoleResponse {
+        human: present_human(human)?,
+    })
+}
+
+/// Revoke a human account's admin role.
+pub async fn revoke_human_admin_role(
+    pool: &sqlx::PgPool,
+    target_human_id: &HumanId,
+) -> Result<AdminHumanRoleResponse> {
+    let human = Repositories::new(pool)
+        .sessions()
+        .revoke_admin_role(target_human_id)
+        .await?;
+    Ok(AdminHumanRoleResponse {
+        human: present_human(human)?,
+    })
+}
+
+/// Create an admin service token for non-browser automation.
+pub async fn create_admin_service_token(
+    pool: &sqlx::PgPool,
+    human_id: &HumanId,
+    body: CreateAdminServiceTokenRequest,
+) -> Result<AdminServiceTokenCreatedResponse> {
+    let expires_at = parse_optional_rfc3339(body.expires_at.as_deref(), "expires_at")?;
+    let token = auth::create_admin_service_token();
+    let record = Repositories::new(pool)
+        .sessions()
+        .create_admin_service_token(&CreateAdminServiceTokenInput {
+            id: AdminServiceTokenId::generate(),
+            token_hash: auth::hash_opaque_token(&token),
+            label: body.label.trim().to_string(),
+            created_by_human_id: human_id.clone(),
+            expires_at,
+        })
+        .await?;
+    Ok(AdminServiceTokenCreatedResponse {
+        token,
+        token_record: present_admin_service_token(record),
+    })
+}
+
+/// List admin service tokens.
+pub async fn list_admin_service_tokens(
+    pool: &sqlx::PgPool,
+) -> Result<AdminServiceTokenListResponse> {
+    let items = Repositories::new(pool)
+        .sessions()
+        .list_admin_service_tokens()
+        .await?
+        .into_iter()
+        .map(present_admin_service_token)
+        .collect();
+    Ok(AdminServiceTokenListResponse { items })
+}
+
+/// Revoke one admin service token.
+pub async fn revoke_admin_service_token(
+    pool: &sqlx::PgPool,
+    id: &AdminServiceTokenId,
+) -> Result<RevokeAdminServiceTokenResponse> {
+    let record = Repositories::new(pool)
+        .sessions()
+        .revoke_admin_service_token(id)
+        .await?;
+    Ok(RevokeAdminServiceTokenResponse {
+        token_record: present_admin_service_token(record),
     })
 }
 
@@ -319,7 +457,7 @@ fn present_pioneer_code(code: &PioneerCodeRecord) -> Result<PioneerCodeDto> {
             ))
         })?,
         expires_at: code.expires_at.map(|expires_at| expires_at.to_rfc3339()),
-        created_by_admin_username: code.created_by_admin_username.clone(),
+        created_by_display: code.created_by_display.clone(),
         created_at: code.created_at.to_rfc3339(),
         revoked_at: code.revoked_at.map(|revoked_at| revoked_at.to_rfc3339()),
     })
@@ -327,6 +465,9 @@ fn present_pioneer_code(code: &PioneerCodeRecord) -> Result<PioneerCodeDto> {
 
 fn present_pioneer_code_use(use_record: &PioneerCodeUseRecord) -> Result<PioneerCodeUseDto> {
     Ok(PioneerCodeUseDto {
+        subject_kind: use_record.subject_kind,
+        human_id: use_record.human_id.clone(),
+        human_github_login: use_record.human_github_login.clone(),
         agent_id: use_record.agent_id.clone(),
         agent_display_name: use_record.agent_display_name.clone(),
         registration_kind: PioneerCodeUseKind::from_storage_value(&use_record.registration_kind)
@@ -338,4 +479,35 @@ fn present_pioneer_code_use(use_record: &PioneerCodeUseRecord) -> Result<Pioneer
             })?,
         used_at: use_record.used_at.to_rfc3339(),
     })
+}
+
+fn present_human(record: HumanRecord) -> Result<AdminHumanDto> {
+    Ok(AdminHumanDto {
+        human_id: record.human_id,
+        status: HumanStatus::from_storage_value(&record.status).ok_or_else(|| {
+            ServiceError::Internal(format!("stored invalid human status `{}`", record.status))
+        })?,
+        github_user_id: record.github_user_id,
+        github_login: record.github_login,
+        roles: record.roles,
+        created_at: record.created_at.to_rfc3339(),
+        disabled_at: record
+            .disabled_at
+            .map(|disabled_at| disabled_at.to_rfc3339()),
+    })
+}
+
+fn present_admin_service_token(record: AdminServiceTokenRecord) -> AdminServiceTokenDto {
+    AdminServiceTokenDto {
+        id: record.id,
+        label: record.label,
+        status: record.status,
+        created_by_human_id: record.created_by_human_id,
+        created_at: record.created_at.to_rfc3339(),
+        last_used_at: record
+            .last_used_at
+            .map(|last_used_at| last_used_at.to_rfc3339()),
+        expires_at: record.expires_at.map(|expires_at| expires_at.to_rfc3339()),
+        revoked_at: record.revoked_at.map(|revoked_at| revoked_at.to_rfc3339()),
+    }
 }

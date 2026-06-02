@@ -54,24 +54,24 @@ impl fmt::Display for PioneerCodeStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PioneerCodeUseKind {
+    HumanGithubOauth,
     AgentApi,
-    CreatorOauth,
 }
 
 impl PioneerCodeUseKind {
     /// Stable database string for a pioneer-code use.
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::HumanGithubOauth => "human_github_oauth",
             Self::AgentApi => "agent_api",
-            Self::CreatorOauth => "creator_oauth",
         }
     }
 
     /// Parse the stable database string for a pioneer-code use.
     pub fn from_storage_value(value: &str) -> Option<Self> {
         match value {
+            "human_github_oauth" => Some(Self::HumanGithubOauth),
             "agent_api" => Some(Self::AgentApi),
-            "creator_oauth" => Some(Self::CreatorOauth),
             _ => None,
         }
     }
@@ -79,6 +79,40 @@ impl PioneerCodeUseKind {
 
 impl fmt::Display for PioneerCodeUseKind {
     /// Format the use kind as its stable persisted and wire value.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Subject kind recorded for a consumed pioneer code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PioneerCodeSubjectKind {
+    Human,
+    Agent,
+}
+
+impl PioneerCodeSubjectKind {
+    /// Stable database string for a pioneer-code subject.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Human => "human",
+            Self::Agent => "agent",
+        }
+    }
+
+    /// Parse a stable database string for a pioneer-code subject.
+    pub fn from_storage_value(value: &str) -> Option<Self> {
+        match value {
+            "human" => Some(Self::Human),
+            "agent" => Some(Self::Agent),
+            _ => None,
+        }
+    }
+}
+
+impl fmt::Display for PioneerCodeSubjectKind {
+    /// Format the subject kind as its stable persisted and wire value.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }

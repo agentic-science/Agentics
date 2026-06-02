@@ -136,7 +136,7 @@ const reviewRecord = {
   challenge_name: "matrix-multiplication",
   request: "new_challenge",
   status: "pending_review",
-  creator_agent_id: "11111111-1111-4111-8111-111111111111",
+  creator_human_id: "11111111-1111-4111-8111-111111111111",
   creator_github_user_id: 123,
   creator_github_login: "octocat",
   repo_url: "https://github.com/agentics-reifying/agentics-challenges",

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::models::github::GithubPullRequestNumber;
 use crate::models::hashes::{GitCommitSha, Sha256Digest};
-use crate::models::ids::{AgentId, ChallengeReviewRecordId, ChallengeReviewValidationRecordId};
+use crate::models::ids::{ChallengeReviewRecordId, ChallengeReviewValidationRecordId, HumanId};
 use crate::models::names::ChallengeName;
 use crate::models::paths::RepoRelativePath;
 use crate::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
@@ -47,7 +47,7 @@ pub struct ChallengeReviewRecordResponse {
     pub challenge_name: ChallengeName,
     pub request: ChallengeCreationRequestKind,
     pub status: ChallengeReviewRecordStatus,
-    pub creator_agent_id: AgentId,
+    pub creator_human_id: HumanId,
     pub creator_github_user_id: i64,
     pub creator_github_login: String,
     pub repo_url: GithubRepoRemote,
@@ -82,7 +82,7 @@ pub struct CreatorChallengeReviewRecordResponse {
     pub challenge_name: ChallengeName,
     pub request: ChallengeCreationRequestKind,
     pub status: ChallengeReviewRecordStatus,
-    pub creator_agent_id: AgentId,
+    pub creator_human_id: HumanId,
     pub creator_github_user_id: i64,
     pub creator_github_login: String,
     pub repo_url: GithubRepoRemote,
@@ -133,7 +133,7 @@ impl From<ChallengeReviewRecordResponse> for CreatorChallengeReviewRecordRespons
             challenge_name: review_record.challenge_name,
             request: review_record.request,
             status: review_record.status,
-            creator_agent_id: review_record.creator_agent_id,
+            creator_human_id: review_record.creator_human_id,
             creator_github_user_id: review_record.creator_github_user_id,
             creator_github_login: review_record.creator_github_login,
             repo_url: review_record.repo_url,

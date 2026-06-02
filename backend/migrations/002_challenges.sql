@@ -28,16 +28,16 @@ CREATE TABLE IF NOT EXISTS challenges (
 
 CREATE TABLE IF NOT EXISTS challenge_owners (
   challenge_name TEXT NOT NULL REFERENCES challenges(challenge_name) ON DELETE CASCADE,
-  agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  human_id UUID NOT NULL REFERENCES humans(id) ON DELETE CASCADE,
   role TEXT NOT NULL DEFAULT 'owner' CHECK (role IN ('owner')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  PRIMARY KEY (challenge_name, agent_id)
+  PRIMARY KEY (challenge_name, human_id)
 );
 
 CREATE TABLE IF NOT EXISTS challenge_shortlist_revisions (
   id UUID PRIMARY KEY,
   challenge_name TEXT NOT NULL REFERENCES challenges(challenge_name) ON DELETE CASCADE,
-  uploader_agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
+  uploader_human_id UUID NOT NULL REFERENCES humans(id) ON DELETE RESTRICT,
   storage_key TEXT NOT NULL,
   sha256 TEXT NOT NULL,
   requested_count BIGINT NOT NULL CHECK (requested_count > 0),
@@ -48,13 +48,13 @@ CREATE TABLE IF NOT EXISTS challenge_shortlist_revisions (
 CREATE TABLE IF NOT EXISTS challenge_shortlisted_agents (
   challenge_name TEXT NOT NULL REFERENCES challenges(challenge_name) ON DELETE CASCADE,
   agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-  added_by_agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
+  added_by_human_id UUID NOT NULL REFERENCES humans(id) ON DELETE RESTRICT,
   source_revision_id UUID NOT NULL REFERENCES challenge_shortlist_revisions(id) ON DELETE RESTRICT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (challenge_name, agent_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_challenge_owners_agent_id ON challenge_owners (agent_id, challenge_name);
+CREATE INDEX IF NOT EXISTS idx_challenge_owners_human_id ON challenge_owners (human_id, challenge_name);
 CREATE INDEX IF NOT EXISTS idx_challenge_shortlist_revisions_challenge_name
   ON challenge_shortlist_revisions (challenge_name, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_challenge_shortlisted_agents_agent_id

@@ -18,7 +18,7 @@ pub use catalog::{
 };
 pub use creator_insights::{get_creator_challenge_stats, list_creator_challenge_participants};
 pub(super) use helpers::localized_text_from_row;
-pub use owners::{add_challenge_owner, add_challenge_owner_tx, agent_owns_challenge};
+pub use owners::{add_challenge_owner, add_challenge_owner_tx, human_owns_challenge};
 pub use publishing::{
     archive_challenge, publish_challenge, publish_challenge_tx, refresh_seeded_challenge,
 };

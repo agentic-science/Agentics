@@ -8,18 +8,17 @@ use secrecy::ExposeSecret;
 use serde::de::DeserializeOwned;
 
 use agentics_domain::models::ErrorDetail;
+use agentics_domain::models::auth::HumanRole;
 use agentics_domain::models::ids::{
-    AgentId, AgentTokenId, ChallengeReviewRecordId, SolutionSubmissionId,
+    AdminServiceTokenId, AgentId, AgentTokenId, ChallengeReviewRecordId, HumanId, HumanSessionId,
+    SolutionSubmissionId,
 };
 use agentics_error::ServiceError;
-use agentics_persistence::{AuthenticatedAdminSession, AuthenticatedCreatorSession, Repositories};
+use agentics_persistence::{AuthenticatedHumanSession, Repositories};
 use agentics_services::auth;
 
-use crate::admin_auth_throttle::remote_addr_from_parts;
 use crate::error::ApiError;
 use crate::state::AppState;
-
-const X_AGENTICS_ADMIN_AUTOMATION: &str = "x-agentics-admin-automation";
 
 /// Validated solution-submission id extracted from a route path.
 ///
@@ -113,20 +112,54 @@ impl FromRequestParts<AppState> for AgentAuth {
     }
 }
 
+/// Actor that authenticated one admin request.
+#[derive(Debug, Clone)]
+pub enum AdminActor {
+    Human {
+        human_id: HumanId,
+        github_user_id: i64,
+        github_login: String,
+    },
+    ServiceToken {
+        token_id: AdminServiceTokenId,
+        label: String,
+    },
+}
+
+impl AdminActor {
+    /// Stable display string for audit events.
+    pub fn display(&self) -> String {
+        match self {
+            Self::Human { github_login, .. } => format!("@{github_login}"),
+            Self::ServiceToken { label, .. } => format!("service-token:{label}"),
+        }
+    }
+
+    pub fn human_id(&self) -> Option<&HumanId> {
+        match self {
+            Self::Human { human_id, .. } => Some(human_id),
+            Self::ServiceToken { .. } => None,
+        }
+    }
+
+    pub fn service_token_id(&self) -> Option<&AdminServiceTokenId> {
+        match self {
+            Self::Human { .. } => None,
+            Self::ServiceToken { token_id, .. } => Some(token_id),
+        }
+    }
+}
+
 /// Marker extractor for routes that require administrator authentication.
-///
-/// Server-side tools can continue to use Basic auth. Browser routes should use
-/// the session-cookie path issued by `/api/auth/admin/login`, which keeps the
-/// reusable admin password out of browser storage and request logs.
 #[derive(Debug, Clone)]
 pub struct AdminAuth {
-    pub username: String,
+    pub actor: AdminActor,
 }
 
 impl FromRequestParts<AppState> for AdminAuth {
     type Rejection = ApiError;
 
-    /// Authenticates admin requests through Basic auth or session cookies plus CSRF.
+    /// Authenticates admin requests through human sessions or service-token bearer auth.
     async fn from_request_parts(
         parts: &mut Parts,
         state: &AppState,
@@ -136,86 +169,61 @@ impl FromRequestParts<AppState> for AdminAuth {
             .get(header::AUTHORIZATION)
             .and_then(|h| h.to_str().ok());
 
-        if let Some(parsed) = auth::parse_basic_auth(auth_header) {
-            if parsed.username == state.config.auth.admin_username
-                && state
-                    .config
-                    .admin_password_matches(parsed.password.expose_secret())
-            {
-                require_basic_admin_automation_header(parts)?;
-                return Ok(AdminAuth {
-                    username: parsed.username,
-                });
-            }
-            let remote_addr = remote_addr_from_parts(parts);
-            if let Err(ServiceError::TooManyRequests(message)) = state
-                .admin_auth_throttle
-                .record_failed_attempt(&parsed.username, &remote_addr)
-            {
-                return Err(ServiceError::too_many_requests(message).into());
-            }
-            return Err(unauthorized("需要有效的 admin basic auth"));
+        if let Some(parsed) = auth::parse_bearer_token(auth_header) {
+            let token_hash = auth::hash_opaque_token(parsed.token.expose_secret());
+            let token = Repositories::new(&state.db)
+                .sessions()
+                .authenticate_admin_service_token(&token_hash)
+                .await
+                .map_err(|_| unauthorized("admin service token 无效或已被撤销"))?
+                .ok_or_else(|| unauthorized("admin service token 无效或已被撤销"))?;
+            return Ok(AdminAuth {
+                actor: AdminActor::ServiceToken {
+                    token_id: token.token_id,
+                    label: token.label,
+                },
+            });
         }
 
-        let session_token = cookie_value(
-            parts
-                .headers
-                .get(header::COOKIE)
-                .and_then(|h| h.to_str().ok()),
-            &state.config.api_web.web_session_cookie_name,
-        )
-        .ok_or_else(|| unauthorized("需要有效的 admin session 或 basic auth"))?;
-
-        let session = Repositories::new(&state.db)
-            .sessions()
-            .authenticate_admin(&session_token)
-            .await
-            .map_err(|_| unauthorized("admin session 无效或已过期"))?
-            .ok_or_else(|| unauthorized("admin session 无效或已过期"))?;
-
+        let session =
+            authenticate_human_session_parts(parts, state, "admin session 无效或已过期").await?;
         require_session_csrf(parts, &session)?;
+        if !session.roles.contains(&HumanRole::Admin) {
+            return Err(forbidden("需要 admin 权限"));
+        }
 
         Ok(AdminAuth {
-            username: session.admin_username,
+            actor: AdminActor::Human {
+                human_id: session.human_id,
+                github_user_id: session.github_user_id,
+                github_login: session.github_login,
+            },
         })
     }
 }
 
-/// GitHub OAuth-authenticated challenge creator context from a web session.
+/// GitHub OAuth-authenticated human context from a web session.
 #[derive(Debug, Clone)]
-pub struct CreatorAuth {
-    pub session_id: String,
-    pub agent_id: AgentId,
+pub struct HumanAuth {
+    pub session_id: HumanSessionId,
+    pub human_id: HumanId,
     pub github_user_id: i64,
     pub github_login: String,
+    pub roles: Vec<HumanRole>,
     pub csrf_token: Option<String>,
     pub expires_at: chrono::DateTime<chrono::Utc>,
 }
 
-impl FromRequestParts<AppState> for CreatorAuth {
+impl FromRequestParts<AppState> for HumanAuth {
     type Rejection = ApiError;
 
-    /// Authenticates creator web requests through the GitHub-linked session cookie.
+    /// Authenticates human web requests through the GitHub-linked session cookie.
     async fn from_request_parts(
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let session_token = cookie_value(
-            parts
-                .headers
-                .get(header::COOKIE)
-                .and_then(|h| h.to_str().ok()),
-            &state.config.api_web.web_session_cookie_name,
-        )
-        .ok_or_else(|| unauthorized("需要有效的 creator session"))?;
-
-        let session = Repositories::new(&state.db)
-            .sessions()
-            .authenticate_creator(&session_token)
-            .await
-            .map_err(|_| unauthorized("creator session 无效或已过期"))?
-            .ok_or_else(|| unauthorized("creator session 无效或已过期"))?;
-
+        let session =
+            authenticate_human_session_parts(parts, state, "human session 无效或已过期").await?;
         require_session_csrf(parts, &session)?;
         let csrf_token = cookie_value(
             parts
@@ -225,14 +233,50 @@ impl FromRequestParts<AppState> for CreatorAuth {
             &state.config.api_web.web_csrf_cookie_name,
         );
 
-        Ok(CreatorAuth {
+        Ok(HumanAuth {
             session_id: session.session_id,
-            agent_id: AgentId::try_new(session.agent_id)
-                .map_err(|_| unauthorized("creator session 无效或已过期"))?,
+            human_id: session.human_id,
             github_user_id: session.github_user_id,
             github_login: session.github_login,
+            roles: session.roles,
             csrf_token,
             expires_at: session.expires_at,
+        })
+    }
+}
+
+/// Human-authenticated challenge creator context from a web session.
+#[derive(Debug, Clone)]
+pub struct CreatorAuth {
+    pub session_id: HumanSessionId,
+    pub human_id: HumanId,
+    pub github_user_id: i64,
+    pub github_login: String,
+    pub roles: Vec<HumanRole>,
+    pub csrf_token: Option<String>,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl FromRequestParts<AppState> for CreatorAuth {
+    type Rejection = ApiError;
+
+    /// Authenticates creator web requests through a human session with creator role.
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let human = HumanAuth::from_request_parts(parts, state).await?;
+        if !human.roles.contains(&HumanRole::Creator) {
+            return Err(forbidden("需要 creator 权限"));
+        }
+        Ok(Self {
+            session_id: human.session_id,
+            human_id: human.human_id,
+            github_user_id: human.github_user_id,
+            github_login: human.github_login,
+            roles: human.roles,
+            csrf_token: human.csrf_token,
+            expires_at: human.expires_at,
         })
     }
 }
@@ -243,15 +287,8 @@ trait WebSessionCsrf {
     fn csrf_token_hash(&self) -> &str;
 }
 
-impl WebSessionCsrf for AuthenticatedAdminSession {
-    /// Returns the hashed CSRF token for an admin web session.
-    fn csrf_token_hash(&self) -> &str {
-        &self.csrf_token_hash
-    }
-}
-
-impl WebSessionCsrf for AuthenticatedCreatorSession {
-    /// Returns the hashed CSRF token for a creator web session.
+impl WebSessionCsrf for AuthenticatedHumanSession {
+    /// Returns the hashed CSRF token for a human web session.
     fn csrf_token_hash(&self) -> &str {
         &self.csrf_token_hash
     }
@@ -272,25 +309,6 @@ fn require_session_csrf<S: WebSessionCsrf>(parts: &Parts, session: &S) -> Result
         return Err(forbidden("缺少有效的 CSRF token"));
     }
     Ok(())
-}
-
-/// Requires an explicit non-simple header before Basic-auth admin mutations.
-fn require_basic_admin_automation_header(parts: &Parts) -> Result<(), ApiError> {
-    if !requires_csrf(&parts.method) {
-        return Ok(());
-    }
-    let allowed = parts
-        .headers
-        .get(X_AGENTICS_ADMIN_AUTOMATION)
-        .and_then(|h| h.to_str().ok())
-        .is_some_and(|value| value == "true" || value == "1");
-    if allowed {
-        Ok(())
-    } else {
-        Err(forbidden(
-            "admin Basic-auth mutations require x-agentics-admin-automation: true",
-        ))
-    }
 }
 
 /// Builds a localized unauthorized API rejection.
@@ -319,6 +337,28 @@ fn cookie_value(cookie_header: Option<&str>, name: &str) -> Option<String> {
         }
     }
     None
+}
+
+async fn authenticate_human_session_parts(
+    parts: &Parts,
+    state: &AppState,
+    unauthorized_message: &str,
+) -> Result<AuthenticatedHumanSession, ApiError> {
+    let session_token = cookie_value(
+        parts
+            .headers
+            .get(header::COOKIE)
+            .and_then(|h| h.to_str().ok()),
+        &state.config.api_web.web_session_cookie_name,
+    )
+    .ok_or_else(|| unauthorized(unauthorized_message))?;
+
+    Repositories::new(&state.db)
+        .sessions()
+        .authenticate_human(&session_token)
+        .await
+        .map_err(|_| unauthorized(unauthorized_message))?
+        .ok_or_else(|| unauthorized(unauthorized_message))
 }
 
 /// Request-body validation hook used after JSON deserialization succeeds.

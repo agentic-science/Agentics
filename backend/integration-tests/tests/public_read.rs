@@ -47,7 +47,6 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     let pending_solution_submission: serde_json::Value = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token_a}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": &sample_sum_id,
             "target": "linux-arm64-cpu",
@@ -85,7 +84,6 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     let second_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token_b}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": &sample_sum_id,
             "target": "linux-arm64-cpu",
@@ -223,7 +221,6 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     let third_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token_b}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": &sample_sum_id,
             "target": "linux-arm64-cpu",
@@ -553,7 +550,6 @@ async fn public_artifact_respects_solution_publication_policy(pool: sqlx::PgPool
     let submission: serde_json::Value = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": private_artifact_id,
             "target": "linux-arm64-cpu",

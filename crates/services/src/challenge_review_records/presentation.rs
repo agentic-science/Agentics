@@ -15,7 +15,7 @@ pub(super) fn review_record_response(
         challenge_name: record.challenge_name,
         request: record.request,
         status: record.status,
-        creator_agent_id: record.creator_agent_id,
+        creator_human_id: record.creator_human_id,
         creator_github_user_id: record.creator_github_user_id,
         creator_github_login: record.creator_github_login,
         repo_url: record.repo_url,
@@ -57,7 +57,7 @@ pub(super) fn private_asset_response(
         size_bytes: record.size_bytes,
         sha256: record.sha256,
         storage_key: record.storage_key,
-        uploader_agent_id: record.uploader_agent_id,
+        uploader_human_id: record.uploader_human_id,
         created_at: record.created_at.to_rfc3339(),
     }
 }
@@ -76,7 +76,7 @@ pub(super) fn admin_private_asset_response(
         sha256: record.sha256,
         storage_key: record.storage_key,
         temporary_storage_key: record.temporary_storage_key,
-        uploader_agent_id: record.uploader_agent_id,
+        uploader_human_id: record.uploader_human_id,
         created_at: record.created_at.to_rfc3339(),
         activated_at: record.activated_at.map(|value| value.to_rfc3339()),
         failed_at: record.failed_at.map(|value| value.to_rfc3339()),

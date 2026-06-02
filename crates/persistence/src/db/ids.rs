@@ -2,9 +2,9 @@ use sqlx::Row;
 use uuid::Uuid;
 
 use agentics_domain::models::ids::{
-    AgentId, AgentTokenId, ChallengePrivateAssetId, ChallengeReviewRecordId,
-    ChallengeReviewValidationRecordId, ChallengeShortlistRevisionId, EvaluationJobId,
-    SolutionSubmissionId,
+    AdminServiceTokenId, AgentId, AgentTokenId, ChallengePrivateAssetId, ChallengeReviewRecordId,
+    ChallengeReviewValidationRecordId, ChallengeShortlistRevisionId, EvaluationJobId, HumanId,
+    PioneerCodeId, SolutionSubmissionId,
 };
 use agentics_domain::models::names::{AssetName, ChallengeName, TargetName};
 use agentics_error::{Result, ServiceError};
@@ -75,6 +75,35 @@ pub(in crate::db) fn agent_token_id_from_row(
     column: &str,
 ) -> Result<AgentTokenId> {
     parse_uuid_id_from_row(row, column, AgentTokenId::try_new, "agent token id")
+}
+
+/// Reads human id from a database row and validates its domain shape.
+pub(in crate::db) fn human_id_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<HumanId> {
+    parse_uuid_id_from_row(row, column, HumanId::try_new, "human id")
+}
+
+/// Reads admin service-token id from a database row and validates its domain shape.
+pub(in crate::db) fn admin_service_token_id_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<AdminServiceTokenId> {
+    parse_uuid_id_from_row(
+        row,
+        column,
+        AdminServiceTokenId::try_new,
+        "admin service-token id",
+    )
+}
+
+/// Reads pioneer-code id from a database row and validates its domain shape.
+pub(in crate::db) fn pioneer_code_id_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<PioneerCodeId> {
+    parse_uuid_id_from_row(row, column, PioneerCodeId::try_new, "pioneer-code id")
 }
 
 /// Reads challenge review record id from a database row and validates its domain shape.

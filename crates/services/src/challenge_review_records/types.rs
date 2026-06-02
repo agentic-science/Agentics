@@ -4,12 +4,12 @@ use agentics_domain::models::challenge_creation::{
     ChallengeReviewDecisionRequest, CreateChallengeReviewRecordRequest,
     UploadChallengePrivateAssetRequest, ValidateChallengeReviewRecordRequest,
 };
-use agentics_domain::models::ids::{AgentId, ChallengeReviewRecordId};
+use agentics_domain::models::ids::{AdminServiceTokenId, ChallengeReviewRecordId, HumanId};
 
 /// Authenticated creator identity passed in from the HTTP boundary.
 #[derive(Debug, Clone)]
 pub struct ChallengeReviewRecordCreator {
-    pub agent_id: AgentId,
+    pub human_id: HumanId,
     pub github_user_id: i64,
     pub github_login: String,
 }
@@ -17,7 +17,9 @@ pub struct ChallengeReviewRecordCreator {
 /// Authenticated admin identity passed in from the HTTP boundary.
 #[derive(Debug, Clone)]
 pub struct ChallengeReviewRecordAdmin {
-    pub username: String,
+    pub human_id: Option<HumanId>,
+    pub admin_service_token_id: Option<AdminServiceTokenId>,
+    pub display: String,
 }
 
 /// Request to create a GitHub-backed challenge review record.
@@ -30,7 +32,7 @@ pub struct CreateChallengeReviewRecordServiceRequest {
 /// Request to upload one private asset ZIP for a review_record.
 #[derive(Debug, Clone)]
 pub struct UploadChallengePrivateAssetServiceRequest {
-    pub creator_agent_id: AgentId,
+    pub creator_human_id: HumanId,
     pub review_record_id: ChallengeReviewRecordId,
     pub body: UploadChallengePrivateAssetRequest,
 }

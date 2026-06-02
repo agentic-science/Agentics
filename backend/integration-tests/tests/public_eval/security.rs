@@ -62,7 +62,6 @@ async fn validation_rejects_private_benchmark_bundle_alias(pool: sqlx::PgPool) {
     let validation_response = client
         .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "coexecuted-sum").await,
             "target": "linux-arm64-cpu",
@@ -117,7 +116,6 @@ async fn worker_rejects_piped_stdio_interaction_limit(pool: sqlx::PgPool) {
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "interactive-sum").await,
             "target": "linux-arm64-cpu",
@@ -142,7 +140,6 @@ async fn worker_rejects_piped_stdio_interaction_limit(pool: sqlx::PgPool) {
             &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get validation run")
@@ -191,7 +188,6 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
@@ -216,7 +212,6 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
             &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get validation run");
@@ -273,7 +268,6 @@ async fn worker_completes_file_mode_validation_run(pool: sqlx::PgPool) {
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "grid-routing").await,
             "target": "linux-arm64-cpu",
@@ -298,7 +292,6 @@ async fn worker_completes_file_mode_validation_run(pool: sqlx::PgPool) {
             &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get validation run")
@@ -338,7 +331,6 @@ async fn worker_rejects_symlink_declared_output(pool: sqlx::PgPool) {
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "grid-routing").await,
             "target": "linux-arm64-cpu",
@@ -363,7 +355,6 @@ async fn worker_rejects_symlink_declared_output(pool: sqlx::PgPool) {
             &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get validation run")
@@ -411,7 +402,6 @@ async fn worker_reports_build_phase_failure(pool: sqlx::PgPool) {
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
@@ -436,7 +426,6 @@ async fn worker_reports_build_phase_failure(pool: sqlx::PgPool) {
             &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get validation run")
@@ -510,7 +499,6 @@ python main.py
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
@@ -535,7 +523,6 @@ python main.py
             &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get validation run")
@@ -580,7 +567,6 @@ python main.py
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
@@ -605,7 +591,6 @@ python main.py
             &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get validation run")

@@ -7,8 +7,10 @@ use serde_json::{Map, Value};
 
 use agentics_domain::models::ErrorResponse;
 use agentics_domain::models::auth::{
-    AdminLoginRequest, AdminSessionResponse, CreatorMeResponse, CreatorSessionResponse,
-    GithubOauthCallbackRequest, GithubOauthLoginRequest, GithubOauthLoginResponse,
+    AdminHumanListResponse, AdminHumanRoleResponse, AdminServiceTokenCreatedResponse,
+    AdminServiceTokenListResponse, CreateAdminServiceTokenRequest, GithubOauthCallbackRequest,
+    GithubOauthCallbackResponse, GithubOauthLoginRequest, GithubOauthLoginResponse,
+    HumanSessionResponse, RevokeAdminServiceTokenResponse,
 };
 use agentics_domain::models::challenge::{
     AdminChallengeListResponse, ChallengeAdminResponse, ChallengeDetailResponse,
@@ -59,12 +61,20 @@ web_schema_exports! {
         AdminChallengePrivateAssetListResponse,
         "adminChallengePrivateAssetListResponseSchema",
     ),
-    (AdminLoginRequest, "adminLoginRequestSchema"),
+    (AdminHumanListResponse, "adminHumanListResponseSchema"),
+    (AdminHumanRoleResponse, "adminHumanRoleResponseSchema"),
+    (
+        AdminServiceTokenCreatedResponse,
+        "adminServiceTokenCreatedResponseSchema",
+    ),
+    (
+        AdminServiceTokenListResponse,
+        "adminServiceTokenListResponseSchema",
+    ),
     (
         AdminServiceHeartbeatListResponse,
         "adminServiceHeartbeatListResponseSchema",
     ),
-    (AdminSessionResponse, "adminSessionResponseSchema"),
     (
         AdminSolutionSubmissionListResponse,
         "adminSolutionSubmissionListResponseSchema",
@@ -111,6 +121,10 @@ web_schema_exports! {
     ),
     (CreatePioneerCodeRequest, "createPioneerCodeRequestSchema"),
     (
+        CreateAdminServiceTokenRequest,
+        "createAdminServiceTokenRequestSchema",
+    ),
+    (
         ChallengeReviewDecisionRequest,
         "challengeReviewDecisionRequestSchema",
     ),
@@ -123,8 +137,6 @@ web_schema_exports! {
         "validateChallengeReviewRecordRequestSchema",
     ),
     (PublishChallengeResponse, "publishChallengeResponseSchema"),
-    (CreatorMeResponse, "creatorMeResponseSchema"),
-    (CreatorSessionResponse, "creatorSessionResponseSchema"),
     (
         CreatorChallengeParticipantsResponse,
         "creatorChallengeParticipantsResponseSchema",
@@ -140,8 +152,13 @@ web_schema_exports! {
         GithubOauthCallbackRequest,
         "githubOauthCallbackRequestSchema",
     ),
+    (
+        GithubOauthCallbackResponse,
+        "githubOauthCallbackResponseSchema",
+    ),
     (GithubOauthLoginRequest, "githubOauthLoginRequestSchema"),
     (GithubOauthLoginResponse, "githubOauthLoginResponseSchema"),
+    (HumanSessionResponse, "humanSessionResponseSchema"),
     (LeaderboardResponse, "leaderboardResponseSchema"),
     (PioneerCodeDetailResponse, "pioneerCodeDetailResponseSchema"),
     (PioneerCodeListResponse, "pioneerCodeListResponseSchema"),
@@ -153,6 +170,10 @@ web_schema_exports! {
     (RankingContextResponse, "rankingContextResponseSchema"),
     (RegisterAgentRequest, "registerAgentRequestSchema"),
     (RevokePioneerCodeResponse, "revokePioneerCodeResponseSchema"),
+    (
+        RevokeAdminServiceTokenResponse,
+        "revokeAdminServiceTokenResponseSchema",
+    ),
     (ScoreDistributionResponse, "scoreDistributionResponseSchema"),
     (
         SetChallengeMoltbookDiscussionRequest,

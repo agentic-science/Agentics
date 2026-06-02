@@ -8,9 +8,7 @@ use agentics_domain::models::challenge_creation::{
 use agentics_domain::models::github::GithubPullRequestNumber;
 use agentics_domain::models::hashes::GitCommitSha;
 use agentics_domain::models::hashes::Sha256Digest;
-use agentics_domain::models::ids::{
-    AgentId, ChallengePrivateAssetId, ChallengeReviewAuditEventId, ChallengeReviewRecordId,
-};
+use agentics_domain::models::ids::{ChallengePrivateAssetId, ChallengeReviewRecordId, HumanId};
 use agentics_domain::models::names::AssetName;
 use agentics_domain::models::paths::RepoRelativePath;
 use agentics_domain::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
@@ -55,7 +53,7 @@ use super::ids::{challenge_private_asset_id_from_row, challenge_review_record_id
 #[derive(Debug, Clone)]
 pub struct CreateChallengeReviewRecordInput {
     pub review_record_id: ChallengeReviewRecordId,
-    pub creator_agent_id: AgentId,
+    pub creator_human_id: HumanId,
     pub max_active_review_records: i64,
     pub creator_github_user_id: i64,
     pub creator_github_login: String,
@@ -80,7 +78,7 @@ pub struct CreateChallengePrivateAssetInput {
     pub sha256: Sha256Digest,
     pub storage_key: StorageKey,
     pub temporary_storage_key: StorageKey,
-    pub uploader_agent_id: AgentId,
+    pub uploader_human_id: HumanId,
 }
 
 /// Internal private asset cleanup candidate.
@@ -105,10 +103,10 @@ pub async fn create_challenge_review_record(
     let manifest_json =
         serde_json::to_value(&input.manifest).map_err(|e| ServiceError::Internal(e.to_string()))?;
     let mut tx = pool.begin().await?;
-    let scope = format!("challenge-review-records:agent:{}", input.creator_agent_id);
+    let scope = format!("challenge-review-records:human:{}", input.creator_human_id);
     lock_quota_scope(&mut tx, &scope).await?;
     let active_review_records =
-        count_active_challenge_review_records_for_agent_tx(&mut tx, &input.creator_agent_id)
+        count_active_challenge_review_records_for_human_tx(&mut tx, &input.creator_human_id)
             .await?;
     if active_review_records >= input.max_active_review_records {
         return Err(ServiceError::TooManyRequests(format!(
@@ -123,7 +121,7 @@ pub async fn create_challenge_review_record(
             challenge_name,
             request_kind,
             status,
-            creator_agent_id,
+            creator_human_id,
             creator_github_user_id,
             creator_github_login,
             repo_url,
@@ -142,7 +140,7 @@ pub async fn create_challenge_review_record(
     .bind(input.review_record_id.as_str())
     .bind(input.manifest.challenge_name.as_str())
     .bind(input.manifest.request.as_str())
-    .bind(input.creator_agent_id.as_str())
+    .bind(input.creator_human_id.as_str())
     .bind(input.creator_github_user_id)
     .bind(&input.creator_github_login)
     .bind(input.repo_url.as_str())
@@ -214,20 +212,20 @@ pub async fn list_challenge_review_records(
     Ok(review_records)
 }
 
-/// Count non-terminal review_records owned by an agent for creator quota enforcement.
-async fn count_active_challenge_review_records_for_agent_tx(
+/// Count non-terminal review_records owned by a human for creator quota enforcement.
+async fn count_active_challenge_review_records_for_human_tx(
     tx: &mut Transaction<'_, Postgres>,
-    agent_id: &AgentId,
+    human_id: &HumanId,
 ) -> Result<i64> {
     let count = sqlx::query_scalar::<_, i64>(
         r#"
         SELECT COUNT(*)::BIGINT
         FROM challenge_review_records
-        WHERE creator_agent_id = $1::uuid
+        WHERE creator_human_id = $1::uuid
           AND status IN ('pending_review', 'validated', 'approved', 'publishing')
         "#,
     )
-    .bind(agent_id.as_str())
+    .bind(human_id.as_str())
     .fetch_one(&mut **tx)
     .await?;
 
@@ -358,9 +356,13 @@ pub async fn approve_validated_challenge_review_record_with_audit(
     review_record_id: &ChallengeReviewRecordId,
     expected_validation_bundle_sha256: &Sha256Digest,
     message: Option<&str>,
-    admin_username: String,
-    event_id: ChallengeReviewAuditEventId,
+    audit_event: &CreateChallengeReviewRecordAuditEventInput,
 ) -> Result<()> {
+    if audit_event.review_record_id != *review_record_id {
+        return Err(ServiceError::Internal(
+            "review record approval audit event targets a different review record".to_string(),
+        ));
+    }
     let mut tx = pool.begin().await?;
     let row = sqlx::query(
         r#"
@@ -390,10 +392,11 @@ pub async fn approve_validated_challenge_review_record_with_audit(
     create_challenge_review_audit_event_tx(
         &mut tx,
         &CreateChallengeReviewRecordAuditEventInput {
-            event_id,
+            event_id: audit_event.event_id.clone(),
             review_record_id: review_record_id.clone(),
-            actor_agent_id: None,
-            actor_admin_username: Some(admin_username),
+            actor_human_id: audit_event.actor_human_id.clone(),
+            actor_admin_service_token_id: audit_event.actor_admin_service_token_id.clone(),
+            actor_display: audit_event.actor_display.clone(),
             action: "review_record_approved".to_string(),
             message: message.unwrap_or_default().to_string(),
             metadata: serde_json::json!({ "approved_bundle_sha256": approved_bundle_sha256 }),

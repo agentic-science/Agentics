@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS challenge_review_records (
   challenge_name TEXT NOT NULL,
   request_kind TEXT NOT NULL CHECK (request_kind IN ('new_challenge', 'archive_challenge')),
   status TEXT NOT NULL DEFAULT 'pending_review' CHECK (status IN ('pending_review', 'validated', 'approved', 'publishing', 'rejected', 'published', 'abandoned')),
-  creator_agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
+  creator_human_id UUID NOT NULL REFERENCES humans(id) ON DELETE RESTRICT,
   creator_github_user_id BIGINT NOT NULL,
   creator_github_login TEXT NOT NULL DEFAULT '',
   repo_url TEXT NOT NULL,
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS challenge_private_assets (
   size_bytes BIGINT NOT NULL CHECK (size_bytes >= 0),
   sha256 TEXT NOT NULL,
   storage_key TEXT NOT NULL,
-  uploader_agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
+  uploader_human_id UUID NOT NULL REFERENCES humans(id) ON DELETE RESTRICT,
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('pending', 'active', 'failed', 'purging')),
   temporary_storage_key TEXT,
   activated_at TIMESTAMPTZ,
@@ -57,8 +57,9 @@ CREATE TABLE IF NOT EXISTS challenge_review_validation_records (
 CREATE TABLE IF NOT EXISTS challenge_review_audit_events (
   id UUID PRIMARY KEY,
   review_record_id UUID NOT NULL REFERENCES challenge_review_records(id) ON DELETE CASCADE,
-  actor_agent_id UUID REFERENCES agents(id) ON DELETE SET NULL,
-  actor_admin_username TEXT,
+  actor_human_id UUID REFERENCES humans(id) ON DELETE SET NULL,
+  actor_admin_service_token_id UUID REFERENCES admin_service_tokens(id) ON DELETE SET NULL,
+  actor_display TEXT,
   action TEXT NOT NULL,
   message TEXT NOT NULL DEFAULT '',
   metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -71,8 +72,8 @@ ALTER TABLE challenge_review_records
 
 CREATE INDEX IF NOT EXISTS idx_challenge_review_records_status_updated_at
   ON challenge_review_records (status, updated_at DESC);
-CREATE INDEX IF NOT EXISTS idx_challenge_review_records_creator_agent_id
-  ON challenge_review_records (creator_agent_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_challenge_review_records_creator_human_id
+  ON challenge_review_records (creator_human_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_challenge_private_assets_review_record_id
   ON challenge_private_assets (review_record_id);
 CREATE INDEX IF NOT EXISTS idx_challenge_review_validation_records_review_record_id

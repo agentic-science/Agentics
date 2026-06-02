@@ -103,7 +103,7 @@ describe("CreatorConsole", () => {
     createChallengeShortlistRevisionMock.mockResolvedValue({
       id: "33333333-3333-4333-8333-333333333333",
       challenge_name: "frontier-cs-example-challenge",
-      uploader_agent_id: "11111111-1111-4111-8111-111111111111",
+      uploader_human_id: "11111111-1111-4111-8111-111111111111",
       requested_count: 1,
       added_count: 1,
       sha256:
@@ -141,7 +141,9 @@ describe("CreatorConsole", () => {
 
     fireEvent.click(view.getByRole("button", { name: "Sign in with GitHub" }));
 
-    await waitFor(() => expect(startGithubLoginMock).toHaveBeenCalledWith(""));
+    await waitFor(() =>
+      expect(startGithubLoginMock).toHaveBeenCalledWith("", "/creator"),
+    );
   });
 
   it("starts GitHub OAuth with a pioneer code", async () => {
@@ -153,15 +155,19 @@ describe("CreatorConsole", () => {
     fireEvent.click(view.getByRole("button", { name: "Sign in with GitHub" }));
 
     await waitFor(() =>
-      expect(startGithubLoginMock).toHaveBeenCalledWith("jack-deadbeef"),
+      expect(startGithubLoginMock).toHaveBeenCalledWith(
+        "jack-deadbeef",
+        "/creator",
+      ),
     );
   });
 
   it("creates a review record with the loaded creator identity and CSRF token", async () => {
     getCreatorSessionMock.mockResolvedValue({
-      agent_id: "11111111-1111-4111-8111-111111111111",
+      human_id: "11111111-1111-4111-8111-111111111111",
       github_user_id: 123,
       github_login: "octocat",
+      roles: ["creator"],
       csrf_token: "csrf-token",
       expires_at: "2026-05-16T00:00:00Z",
     });
@@ -203,9 +209,10 @@ describe("CreatorConsole", () => {
 
   it("rejects malformed PR numbers before creating a review record", async () => {
     getCreatorSessionMock.mockResolvedValue({
-      agent_id: "11111111-1111-4111-8111-111111111111",
+      human_id: "11111111-1111-4111-8111-111111111111",
       github_user_id: 123,
       github_login: "octocat",
+      roles: ["creator"],
       csrf_token: "csrf-token",
       expires_at: "2026-05-16T00:00:00Z",
     });
@@ -336,7 +343,7 @@ const challengeReviewRecordResponse = {
   challenge_name: "frontier-cs-example-challenge",
   request: "new_challenge",
   status: "pending_review",
-  creator_agent_id: "11111111-1111-4111-8111-111111111111",
+  creator_human_id: "11111111-1111-4111-8111-111111111111",
   creator_github_user_id: 123,
   creator_github_login: "octocat",
   repo_url: "https://github.com/agentics-reifying/agentics-challenges",
@@ -372,9 +379,10 @@ const challengeReviewRecordResponse = {
 } satisfies CreatorChallengeReviewRecordResponse;
 
 const creatorSessionResponse = {
-  agent_id: "11111111-1111-4111-8111-111111111111",
+  human_id: "11111111-1111-4111-8111-111111111111",
   github_user_id: 123,
   github_login: "octocat",
+  roles: ["creator"],
   csrf_token: "csrf-token",
   expires_at: "2026-05-16T00:00:00Z",
 };
@@ -387,7 +395,7 @@ const privateAssetResponse = {
   required: true,
   storage_key:
     "challenge-review-records/44444444-4444-4444-8444-444444444444/private-assets/official-seed-config.zip",
-  uploader_agent_id: "11111111-1111-4111-8111-111111111111",
+  uploader_human_id: "11111111-1111-4111-8111-111111111111",
   size_bytes: 9,
   sha256: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
   created_at: "2026-05-15T00:00:00Z",
@@ -404,7 +412,7 @@ const shortlistWithAgent = {
     {
       agent_id: "11111111-1111-4111-8111-111111111111",
       agent_display_name: "Ada Agent",
-      added_by_agent_id: "22222222-2222-4222-8222-222222222222",
+      added_by_human_id: "22222222-2222-4222-8222-222222222222",
       created_at: "2026-05-15T00:00:00Z",
     },
   ],

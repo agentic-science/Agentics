@@ -487,7 +487,7 @@ export const adminChallengePrivateAssetListResponseSchema = z
               /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
             )
             .optional(),
-          uploader_agent_id: z
+          uploader_human_id: z
             .string()
             .uuid()
             .regex(
@@ -509,10 +509,65 @@ export const adminChallengePrivateAssetListResponseSchema = z
     "Admin-only list response for private asset upload lifecycle records.",
   );
 
-export const adminLoginRequestSchema = z
-  .object({ username: z.string(), password: z.string() })
+export const adminHumanListResponseSchema = z
+  .object({
+    items: z.array(
+      z
+        .object({
+          human_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
+          status: z
+            .enum(["active", "disabled"])
+            .describe("Persistent lifecycle state for a human account."),
+          github_user_id: z.number().int(),
+          github_login: z.string(),
+          roles: z.array(
+            z
+              .enum(["creator", "admin"])
+              .describe("Role granted to a human account."),
+          ),
+          created_at: z.string(),
+          disabled_at: z.string().optional(),
+        })
+        .strict()
+        .describe("Admin-visible human identity row."),
+    ),
+  })
   .strict()
-  .describe("Browser-submitted admin login credentials.");
+  .describe("Admin list response for human identities.");
+
+export const adminHumanRoleResponseSchema = z
+  .object({
+    human: z
+      .object({
+        human_id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
+        status: z
+          .enum(["active", "disabled"])
+          .describe("Persistent lifecycle state for a human account."),
+        github_user_id: z.number().int(),
+        github_login: z.string(),
+        roles: z.array(
+          z
+            .enum(["creator", "admin"])
+            .describe("Role granted to a human account."),
+        ),
+        created_at: z.string(),
+        disabled_at: z.string().optional(),
+      })
+      .strict()
+      .describe("Admin-visible human identity row."),
+  })
+  .strict()
+  .describe("Response returned after granting or revoking a human admin role.");
 
 export const adminServiceHeartbeatListResponseSchema = z
   .object({
@@ -532,14 +587,66 @@ export const adminServiceHeartbeatListResponseSchema = z
   .strict()
   .describe("Admin service heartbeat list response.");
 
-export const adminSessionResponseSchema = z
+export const adminServiceTokenCreatedResponseSchema = z
   .object({
-    username: z.string(),
-    csrf_token: z.string(),
-    expires_at: z.string(),
+    token: z.string(),
+    token_record: z
+      .object({
+        id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
+        label: z.string(),
+        status: z.string(),
+        created_by_human_id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
+        created_at: z.string(),
+        last_used_at: z.string().optional(),
+        expires_at: z.string().optional(),
+        revoked_at: z.string().optional(),
+      })
+      .strict()
+      .describe("Admin service-token metadata."),
   })
   .strict()
-  .describe("Admin session material returned after a successful login.");
+  .describe("Response returned after creating an admin service token.");
+
+export const adminServiceTokenListResponseSchema = z
+  .object({
+    items: z.array(
+      z
+        .object({
+          id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
+          label: z.string(),
+          status: z.string(),
+          created_by_human_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
+          created_at: z.string(),
+          last_used_at: z.string().optional(),
+          expires_at: z.string().optional(),
+          revoked_at: z.string().optional(),
+        })
+        .strict()
+        .describe("Admin service-token metadata."),
+    ),
+  })
+  .strict()
+  .describe("Admin list response for admin service tokens.");
 
 export const adminSolutionSubmissionListResponseSchema = z
   .object({
@@ -1590,7 +1697,7 @@ export const challengePrivateAssetResponseSchema = z
       .regex(
         /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
       ),
-    uploader_agent_id: z
+    uploader_human_id: z
       .string()
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
@@ -1655,7 +1762,7 @@ export const challengeReviewRecordListResponseSchema = z
               "abandoned",
             ])
             .describe("Status used by the challenge review record lifecycle."),
-          creator_agent_id: z
+          creator_human_id: z
             .string()
             .uuid()
             .regex(
@@ -1836,7 +1943,7 @@ export const challengeReviewRecordListResponseSchema = z
                     .regex(
                       /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
                     ),
-                  uploader_agent_id: z
+                  uploader_human_id: z
                     .string()
                     .uuid()
                     .regex(
@@ -1919,7 +2026,7 @@ export const challengeReviewRecordResponseSchema = z
         "abandoned",
       ])
       .describe("Status used by the challenge review record lifecycle."),
-    creator_agent_id: z
+    creator_human_id: z
       .string()
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
@@ -2094,7 +2201,7 @@ export const challengeReviewRecordResponseSchema = z
               .regex(
                 /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
               ),
-            uploader_agent_id: z
+            uploader_human_id: z
               .string()
               .uuid()
               .regex(
@@ -2165,7 +2272,7 @@ export const challengeShortlistResponseSchema = z
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
           agent_display_name: z.string(),
-          added_by_agent_id: z
+          added_by_human_id: z
             .string()
             .uuid()
             .regex(
@@ -2191,7 +2298,7 @@ export const challengeShortlistRevisionResponseSchema = z
       .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
       .min(3)
       .max(63),
-    uploader_agent_id: z
+    uploader_human_id: z
       .string()
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
@@ -2207,6 +2314,11 @@ export const challengeShortlistRevisionResponseSchema = z
   })
   .strict()
   .describe("Persisted shortlist revision response.");
+
+export const createAdminServiceTokenRequestSchema = z
+  .object({ label: z.string(), expires_at: z.string().optional() })
+  .strict()
+  .describe("Browser-submitted request to create an admin service token.");
 
 export const createChallengeReviewRecordRequestSchema = z
   .object({
@@ -2432,7 +2544,7 @@ export const creatorChallengeReviewRecordResponseSchema = z
         "abandoned",
       ])
       .describe("Status used by the challenge review record lifecycle."),
-    creator_agent_id: z
+    creator_human_id: z
       .string()
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
@@ -2606,7 +2718,7 @@ export const creatorChallengeReviewRecordResponseSchema = z
               .regex(
                 /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
               ),
-            uploader_agent_id: z
+            uploader_human_id: z
               .string()
               .uuid()
               .regex(
@@ -2690,34 +2802,6 @@ export const creatorChallengeStatsResponseSchema = z
   .strict()
   .describe(
     "Challenge-owner statistics for one challenge and optional target.",
-  );
-
-export const creatorMeResponseSchema = z
-  .object({
-    agent_id: z
-      .string()
-      .uuid()
-      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
-    github_user_id: z.number().int(),
-    github_login: z.string(),
-  })
-  .strict()
-  .describe("Current creator session identity.");
-
-export const creatorSessionResponseSchema = z
-  .object({
-    agent_id: z
-      .string()
-      .uuid()
-      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
-    github_user_id: z.number().int(),
-    github_login: z.string(),
-    csrf_token: z.string(),
-    expires_at: z.string(),
-  })
-  .strict()
-  .describe(
-    "Creator identity returned after a successful GitHub OAuth callback.",
   );
 
 export const disableAgentResponseSchema = z
@@ -2852,8 +2936,38 @@ export const githubOauthCallbackRequestSchema = z
   .strict()
   .describe("Browser-submitted request that completes GitHub OAuth.");
 
+export const githubOauthCallbackResponseSchema = z
+  .object({
+    session: z
+      .object({
+        human_id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
+        github_user_id: z.number().int(),
+        github_login: z.string(),
+        roles: z.array(
+          z
+            .enum(["creator", "admin"])
+            .describe("Role granted to a human account."),
+        ),
+        csrf_token: z.string(),
+        expires_at: z.string(),
+      })
+      .strict()
+      .describe("Current human browser session identity."),
+    return_to: z.string().optional(),
+  })
+  .strict()
+  .describe("Response returned after completing GitHub OAuth.");
+
 export const githubOauthLoginRequestSchema = z
-  .object({ pioneer_code: z.string().optional() })
+  .object({
+    pioneer_code: z.string().optional(),
+    return_to: z.string().optional(),
+  })
   .strict()
   .describe("Browser-submitted request to start GitHub OAuth.");
 
@@ -2866,6 +2980,23 @@ export const githubOauthLoginResponseSchema = z
   })
   .strict()
   .describe("URL returned to a browser or CLI so it can start GitHub OAuth.");
+
+export const humanSessionResponseSchema = z
+  .object({
+    human_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    github_user_id: z.number().int(),
+    github_login: z.string(),
+    roles: z.array(
+      z.enum(["creator", "admin"]).describe("Role granted to a human account."),
+    ),
+    csrf_token: z.string(),
+    expires_at: z.string(),
+  })
+  .strict()
+  .describe("Current human browser session identity.");
 
 export const leaderboardResponseSchema = z
   .object({
@@ -2941,7 +3072,7 @@ export const pioneerCodeDetailResponseSchema = z
           .enum(["active", "revoked"])
           .describe("Lifecycle state for an admin-created pioneer code."),
         expires_at: z.string().optional(),
-        created_by_admin_username: z.string(),
+        created_by_display: z.string(),
         created_at: z.string(),
         revoked_at: z.string().optional(),
       })
@@ -2950,22 +3081,34 @@ export const pioneerCodeDetailResponseSchema = z
     uses: z.array(
       z
         .object({
+          subject_kind: z
+            .enum(["human", "agent"])
+            .describe("Subject kind recorded for a consumed pioneer code."),
+          human_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            )
+            .optional(),
+          human_github_login: z.string().optional(),
           agent_id: z
             .string()
             .uuid()
             .regex(
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-            ),
-          agent_display_name: z.string(),
+            )
+            .optional(),
+          agent_display_name: z.string().optional(),
           registration_kind: z
-            .enum(["agent_api", "creator_oauth"])
+            .enum(["human_github_oauth", "agent_api"])
             .describe(
               "Registration flow recorded for a consumed pioneer code.",
             ),
           used_at: z.string(),
         })
         .strict()
-        .describe("Agent account created through a pioneer code."),
+        .describe("Account created through a pioneer code."),
     ),
   })
   .strict()
@@ -2991,7 +3134,7 @@ export const pioneerCodeListResponseSchema = z
             .enum(["active", "revoked"])
             .describe("Lifecycle state for an admin-created pioneer code."),
           expires_at: z.string().optional(),
-          created_by_admin_username: z.string(),
+          created_by_display: z.string(),
           created_at: z.string(),
           revoked_at: z.string().optional(),
         })
@@ -3224,6 +3367,35 @@ export const registerAgentRequestSchema = z
   .strict()
   .describe("Agent registration payload accepted by the public API.");
 
+export const revokeAdminServiceTokenResponseSchema = z
+  .object({
+    token_record: z
+      .object({
+        id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
+        label: z.string(),
+        status: z.string(),
+        created_by_human_id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
+        created_at: z.string(),
+        last_used_at: z.string().optional(),
+        expires_at: z.string().optional(),
+        revoked_at: z.string().optional(),
+      })
+      .strict()
+      .describe("Admin service-token metadata."),
+  })
+  .strict()
+  .describe("Response returned after revoking an admin service token.");
+
 export const revokePioneerCodeResponseSchema = z
   .object({
     id: z
@@ -3233,6 +3405,8 @@ export const revokePioneerCodeResponseSchema = z
     status: z
       .enum(["active", "revoked"])
       .describe("Lifecycle state for an admin-created pioneer code."),
+    revoked_human_count: z.number().int(),
+    revoked_human_session_count: z.number().int(),
     revoked_agent_count: z.number().int(),
     revoked_token_count: z.number().int(),
   })
@@ -4717,11 +4891,21 @@ export type AdminChallengeListResponse = z.infer<
 export type AdminChallengePrivateAssetListResponse = z.infer<
   typeof adminChallengePrivateAssetListResponseSchema
 >;
-export type AdminLoginRequest = z.infer<typeof adminLoginRequestSchema>;
+export type AdminHumanListResponse = z.infer<
+  typeof adminHumanListResponseSchema
+>;
+export type AdminHumanRoleResponse = z.infer<
+  typeof adminHumanRoleResponseSchema
+>;
 export type AdminServiceHeartbeatListResponse = z.infer<
   typeof adminServiceHeartbeatListResponseSchema
 >;
-export type AdminSessionResponse = z.infer<typeof adminSessionResponseSchema>;
+export type AdminServiceTokenCreatedResponse = z.infer<
+  typeof adminServiceTokenCreatedResponseSchema
+>;
+export type AdminServiceTokenListResponse = z.infer<
+  typeof adminServiceTokenListResponseSchema
+>;
 export type AdminSolutionSubmissionListResponse = z.infer<
   typeof adminSolutionSubmissionListResponseSchema
 >;
@@ -4756,6 +4940,9 @@ export type ChallengeShortlistResponse = z.infer<
 export type ChallengeShortlistRevisionResponse = z.infer<
   typeof challengeShortlistRevisionResponseSchema
 >;
+export type CreateAdminServiceTokenRequest = z.infer<
+  typeof createAdminServiceTokenRequestSchema
+>;
 export type CreateChallengeReviewRecordRequest = z.infer<
   typeof createChallengeReviewRecordRequestSchema
 >;
@@ -4774,15 +4961,14 @@ export type CreatorChallengeReviewRecordResponse = z.infer<
 export type CreatorChallengeStatsResponse = z.infer<
   typeof creatorChallengeStatsResponseSchema
 >;
-export type CreatorMeResponse = z.infer<typeof creatorMeResponseSchema>;
-export type CreatorSessionResponse = z.infer<
-  typeof creatorSessionResponseSchema
->;
 export type DisableAgentResponse = z.infer<typeof disableAgentResponseSchema>;
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;
 export type EvaluationJobResponse = z.infer<typeof evaluationJobResponseSchema>;
 export type GithubOauthCallbackRequest = z.infer<
   typeof githubOauthCallbackRequestSchema
+>;
+export type GithubOauthCallbackResponse = z.infer<
+  typeof githubOauthCallbackResponseSchema
 >;
 export type GithubOauthLoginRequest = z.infer<
   typeof githubOauthLoginRequestSchema
@@ -4790,6 +4976,7 @@ export type GithubOauthLoginRequest = z.infer<
 export type GithubOauthLoginResponse = z.infer<
   typeof githubOauthLoginResponseSchema
 >;
+export type HumanSessionResponse = z.infer<typeof humanSessionResponseSchema>;
 export type LeaderboardResponse = z.infer<typeof leaderboardResponseSchema>;
 export type PioneerCodeDetailResponse = z.infer<
   typeof pioneerCodeDetailResponseSchema
@@ -4808,6 +4995,9 @@ export type RankingContextResponse = z.infer<
   typeof rankingContextResponseSchema
 >;
 export type RegisterAgentRequest = z.infer<typeof registerAgentRequestSchema>;
+export type RevokeAdminServiceTokenResponse = z.infer<
+  typeof revokeAdminServiceTokenResponseSchema
+>;
 export type RevokePioneerCodeResponse = z.infer<
   typeof revokePioneerCodeResponseSchema
 >;

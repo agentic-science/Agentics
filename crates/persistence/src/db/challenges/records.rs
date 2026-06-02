@@ -4,7 +4,9 @@ use serde_json::Value;
 use agentics_domain::models::challenge::{ChallengeBundleSpec, ChallengeLifecycleStatus};
 use agentics_domain::models::evaluation::SolutionSubmissionStatus;
 use agentics_domain::models::hashes::Sha256Digest;
-use agentics_domain::models::ids::{AgentId, ChallengeShortlistRevisionId, SolutionSubmissionId};
+use agentics_domain::models::ids::{
+    AgentId, ChallengeShortlistRevisionId, HumanId, SolutionSubmissionId,
+};
 use agentics_domain::models::localization::LocalizedText;
 use agentics_domain::models::names::{ChallengeKeyword, ChallengeName, TargetName};
 use agentics_domain::models::urls::MoltbookPostUrl;
@@ -97,7 +99,7 @@ pub struct PublishChallengeRecord {
 pub struct CreateChallengeShortlistRevisionInput {
     pub revision_id: ChallengeShortlistRevisionId,
     pub challenge_name: ChallengeName,
-    pub uploader_agent_id: AgentId,
+    pub uploader_human_id: HumanId,
     pub storage_key: StorageKey,
     pub sha256: Sha256Digest,
     pub requested_count: i64,
@@ -109,7 +111,7 @@ pub struct CreateChallengeShortlistRevisionInput {
 pub struct ChallengeShortlistRevisionRecord {
     pub id: ChallengeShortlistRevisionId,
     pub challenge_name: ChallengeName,
-    pub uploader_agent_id: AgentId,
+    pub uploader_human_id: HumanId,
     pub requested_count: i64,
     pub added_count: i64,
     pub sha256: Sha256Digest,
@@ -122,7 +124,7 @@ pub struct ChallengeShortlistRevisionRecord {
 pub struct ChallengeShortlistedAgentRecord {
     pub agent_id: AgentId,
     pub agent_display_name: String,
-    pub added_by_agent_id: AgentId,
+    pub added_by_human_id: HumanId,
     pub created_at: DateTime<Utc>,
 }
 

@@ -2,16 +2,16 @@ use agentics_domain::models::challenge_creation::{
     AdminChallengePrivateAssetListResponse, ChallengeReviewRecordListResponse,
     CreatorChallengeReviewRecordResponse,
 };
-use agentics_domain::models::ids::{AgentId, ChallengeReviewRecordId};
+use agentics_domain::models::ids::{ChallengeReviewRecordId, HumanId};
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::Repositories;
 
 use super::presentation::{admin_private_asset_response, review_record_response};
 
-/// Fetch a challenge review record owned by the authenticated agent.
+/// Fetch a challenge review record owned by the authenticated human.
 pub async fn get_challenge_review_record(
     pool: &sqlx::PgPool,
-    creator_agent_id: &AgentId,
+    creator_human_id: &HumanId,
     review_record_id: &ChallengeReviewRecordId,
 ) -> Result<CreatorChallengeReviewRecordResponse> {
     let review_record = Repositories::new(pool)
@@ -20,7 +20,7 @@ pub async fn get_challenge_review_record(
         .await?
         .ok_or(ServiceError::NotFound)?;
     let review_record = review_record_response(review_record);
-    if review_record.creator_agent_id != *creator_agent_id {
+    if review_record.creator_human_id != *creator_human_id {
         return Err(ServiceError::NotFound);
     }
     Ok(review_record.into())

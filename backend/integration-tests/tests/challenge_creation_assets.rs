@@ -6,8 +6,8 @@ use agentics_domain::models::{
     challenge_creation::ChallengePrivateAssetKind,
     hashes::Sha256Digest,
     ids::{
-        AgentId, ChallengePrivateAssetId, ChallengeReviewRecordId,
-        ChallengeReviewValidationRecordId,
+        ChallengePrivateAssetId, ChallengeReviewRecordId, ChallengeReviewValidationRecordId,
+        HumanId,
     },
     names::AssetName,
 };
@@ -16,8 +16,8 @@ use agentics_persistence as db;
 use agentics_storage::StorageKey;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use helpers::{
-    TestCreatorSession, api_url, basic_auth_header, create_creator_session, put_storage_key,
-    read_storage_key, spawn_app_with_config, storage_key_exists, test_config,
+    TestCreatorSession, admin_service_token_header, api_url, create_creator_session,
+    put_storage_key, read_storage_key, spawn_app_with_config, storage_key_exists, test_config,
     zip_project_zip_base64,
 };
 use serde_json::json;
@@ -209,7 +209,7 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
     let review_record_id =
         ChallengeReviewRecordId::try_new(review_record["id"].as_str().expect("review_record id"))
             .expect("valid review_record id");
-    let uploader_agent_id = AgentId::try_new(&creator.agent_id).expect("valid creator agent id");
+    let uploader_human_id = HumanId::try_new(&creator.human_id).expect("valid creator human id");
 
     let input_a = db::CreateChallengePrivateAssetInput {
         asset_row_id: ChallengePrivateAssetId::generate(),
@@ -224,7 +224,7 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
             .expect("test storage key is valid"),
         temporary_storage_key: StorageKey::try_new("_tmp/challenge-private-assets/a.bin")
             .expect("test temporary storage key is valid"),
-        uploader_agent_id: uploader_agent_id.clone(),
+        uploader_human_id: uploader_human_id.clone(),
     };
     let input_b = db::CreateChallengePrivateAssetInput {
         asset_row_id: ChallengePrivateAssetId::generate(),
@@ -239,7 +239,7 @@ async fn private_asset_quota_admission_serializes_concurrent_inserts(pool: sqlx:
             .expect("test storage key is valid"),
         temporary_storage_key: StorageKey::try_new("_tmp/challenge-private-assets/b.bin")
             .expect("test temporary storage key is valid"),
-        uploader_agent_id,
+        uploader_human_id,
     };
 
     let repos_a = db::Repositories::new(&pool);
@@ -300,11 +300,11 @@ async fn stale_pending_private_asset_reservation_can_be_retried(pool: sqlx::PgPo
     let review_record_id =
         ChallengeReviewRecordId::try_new(review_record["id"].as_str().expect("review_record id"))
             .expect("valid review_record id");
-    let uploader_agent_id = AgentId::try_new(&creator.agent_id).expect("valid creator agent id");
+    let uploader_human_id = HumanId::try_new(&creator.human_id).expect("valid creator human id");
 
     let first = private_asset_input(
         &review_record_id,
-        &uploader_agent_id,
+        &uploader_human_id,
         "official-cases",
         "first",
     );
@@ -324,7 +324,7 @@ async fn stale_pending_private_asset_reservation_can_be_retried(pool: sqlx::PgPo
 
     let second = private_asset_input(
         &review_record_id,
-        &uploader_agent_id,
+        &uploader_human_id,
         "official-cases",
         "second",
     );
@@ -350,11 +350,8 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let config = test_config(storage.path(), seeded_challenges.path());
-    let admin_auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let admin_auth = admin_service_token_header(&app);
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
 
@@ -362,7 +359,7 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
     let review_record_id =
         ChallengeReviewRecordId::try_new(review_record["id"].as_str().expect("review_record id"))
             .expect("valid review_record id");
-    let uploader_agent_id = AgentId::try_new(&creator.agent_id).expect("valid creator agent id");
+    let uploader_human_id = HumanId::try_new(&creator.human_id).expect("valid creator human id");
     let asset_base64 = private_benchmark_asset_zip_base64();
     let asset_bytes = STANDARD
         .decode(&asset_base64)
@@ -385,7 +382,7 @@ async fn stale_pending_private_asset_retry_replaces_unreferenced_object(pool: sq
         storage_key: storage_key.clone(),
         temporary_storage_key: StorageKey::try_new("_tmp/challenge-private-assets/stale.bin")
             .expect("test temporary storage key is valid"),
-        uploader_agent_id,
+        uploader_human_id,
     };
     db::Repositories::new(&pool)
         .challenge_review_records()
@@ -506,12 +503,12 @@ async fn private_asset_lifecycle_refreshes_draft_activity(pool: sqlx::PgPool) {
     let review_record_id =
         ChallengeReviewRecordId::try_new(review_record["id"].as_str().expect("review_record id"))
             .expect("valid review_record id");
-    let uploader_agent_id = AgentId::try_new(&creator.agent_id).expect("valid creator agent id");
+    let uploader_human_id = HumanId::try_new(&creator.human_id).expect("valid creator human id");
 
     age_draft_for_cleanup(&pool, &review_record_id).await;
     let input_a = private_asset_input(
         &review_record_id,
-        &uploader_agent_id,
+        &uploader_human_id,
         "official-cases-a",
         "first",
     );
@@ -533,7 +530,7 @@ async fn private_asset_lifecycle_refreshes_draft_activity(pool: sqlx::PgPool) {
 
     let input_b = private_asset_input(
         &review_record_id,
-        &uploader_agent_id,
+        &uploader_human_id,
         "official-cases-b",
         "second",
     );
@@ -669,7 +666,7 @@ async fn assert_draft_survives_stale_cleanup(
 /// Build a private asset DB reservation input for direct admission tests.
 fn private_asset_input(
     review_record_id: &ChallengeReviewRecordId,
-    uploader_agent_id: &AgentId,
+    uploader_human_id: &HumanId,
     asset_name: &str,
     key_suffix: &str,
 ) -> db::CreateChallengePrivateAssetInput {
@@ -689,7 +686,7 @@ fn private_asset_input(
             "_tmp/challenge-private-assets/{key_suffix}.bin"
         ))
         .expect("test temporary storage key is valid"),
-        uploader_agent_id: uploader_agent_id.clone(),
+        uploader_human_id: uploader_human_id.clone(),
     }
 }
 

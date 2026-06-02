@@ -5,7 +5,7 @@ mod helpers;
 use std::path::Path;
 
 use helpers::{
-    TestCreatorSession, api_url, basic_auth_header, copy_dir_all, create_creator_session,
+    TestCreatorSession, admin_service_token_header, api_url, copy_dir_all, create_creator_session,
     examples_challenges_root, published_challenge_name, run_worker_once, sample_sum_solution,
     solution_zip_base64, spawn_app, spawn_app_with_config, test_config, zip_project_zip_base64,
 };
@@ -88,36 +88,32 @@ async fn request_validation_returns_contract_error_shape(pool: sqlx::PgPool) {
     );
 }
 
-/// Verifies Basic-auth admin mutations require the automation header.
+/// Verifies admin mutations reject invalid service tokens.
 #[sqlx::test(migrations = "../migrations")]
-async fn admin_basic_mutation_requires_automation_header(pool: sqlx::PgPool) {
+async fn admin_mutation_rejects_invalid_service_token(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let config = helpers::test_config(storage.path(), &helpers::examples_challenges_root());
-    let app = helpers::spawn_app_with_config(pool, config.clone()).await;
+    let app = helpers::spawn_app_with_config(pool, config).await;
     let client = reqwest::Client::new();
-    let admin_auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
 
     let response = client
         .post(helpers::api_url(
             &app,
             "/admin/challenge-review-records/cleanup",
         ))
-        .header("Authorization", admin_auth)
+        .header("Authorization", "Bearer agentics_admin_missing")
         .send()
         .await
         .expect("failed to send admin mutation");
 
-    assert_eq!(response.status(), reqwest::StatusCode::FORBIDDEN);
+    assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
     let body: serde_json::Value = response.json().await.expect("failed to decode error");
-    assert_eq!(body["error"]["code"], "forbidden");
+    assert_eq!(body["error"]["code"], "unauthorized");
     assert!(
         body["error"]["message"]
             .as_str()
             .expect("message should be a string")
-            .contains("x-agentics-admin-automation")
+            .contains("admin service token")
     );
 }
 
@@ -147,7 +143,6 @@ async fn zip_submission_routes_accept_declared_large_json_bodies(pool: sqlx::PgP
     let response = client
         .post(helpers::api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "target": "linux-arm64-cpu",
@@ -187,7 +182,6 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
     let malformed_response = client
         .post(helpers::api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": &sample_sum_id,
             "target": "linux arm64",
@@ -213,7 +207,6 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
     let response = client
         .post(helpers::api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": &sample_sum_id,
             "target": "cpu-linux-ppc64le",
@@ -284,7 +277,6 @@ async fn solution_submission_rejects_oversized_manifest_note_before_storage(pool
     let response = client
         .post(helpers::api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": &sample_sum_id,
             "target": "linux-arm64-cpu",
@@ -361,7 +353,6 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
     let no_round_field = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": &sample_sum_id,
             "target": "linux-arm64-cpu",
@@ -375,7 +366,6 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
     let unknown_round_field = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": &sample_sum_id,
             "round_id": "missing-round",
@@ -400,7 +390,6 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
     let malformed_round_field = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": &sample_sum_id,
             "round_id": "Main Round!",
@@ -472,7 +461,6 @@ async fn solution_submission_rejects_unstarted_and_closed_challenges_before_arti
         let response = client
             .post(api_url(&app, "/api/agent/solution-submissions"))
             .header("Authorization", format!("Bearer {token}"))
-            .header("X-Agentics-Admin-Automation", "true")
             .json(&serde_json::json!({
                 "challenge_name": challenge_name,
                 "target": "linux-arm64-cpu",
@@ -516,11 +504,11 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
         published_challenge_name(&pool, "shortlist-challenge").await,
     )
     .expect("test challenge name is valid");
-    let owner_agent_id = agentics_domain::models::ids::AgentId::try_new(&owner.agent_id)
-        .expect("valid owner agent id");
+    let owner_human_id = agentics_domain::models::ids::HumanId::try_new(&owner.human_id)
+        .expect("valid owner human id");
     agentics_persistence::Repositories::new(&pool)
         .challenges()
-        .add_owner(&challenge_name, &owner_agent_id)
+        .add_owner(&challenge_name, &owner_human_id)
         .await
         .expect("owner should be granted");
 
@@ -720,15 +708,11 @@ async fn admin_direct_publish_is_disabled(pool: sqlx::PgPool) {
     let config = test_config(storage.path(), challenges.path());
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
-    let admin_auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
+    let admin_auth = admin_service_token_header(&app);
 
     let response = client
         .post(api_url(&app, "/admin/challenges/shortlist-direct/publish"))
         .header("Authorization", admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "bundle_path": challenges
                 .path()
@@ -773,7 +757,6 @@ async fn parent_solution_submission_must_match_agent_and_scope(pool: sqlx::PgPoo
     let response = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {}", child_agent.token))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": &sample_sum_id,
             "target": "linux-arm64-cpu",
@@ -860,7 +843,6 @@ async fn submit_solution_with_target(
     client
         .post(api_url(app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": challenge_name,
             "target": target,

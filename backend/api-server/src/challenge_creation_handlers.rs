@@ -31,7 +31,7 @@ pub async fn create_challenge_review_record(
         &state.config,
         CreateChallengeReviewRecordServiceRequest {
             creator: ChallengeReviewRecordCreator {
-                agent_id: creator.agent_id,
+                human_id: creator.human_id,
                 github_user_id: creator.github_user_id,
                 github_login: creator.github_login,
             },
@@ -50,7 +50,7 @@ pub async fn get_challenge_review_record(
 ) -> Result<Json<CreatorChallengeReviewRecordResponse>> {
     let review_record = challenge_review_records::get_challenge_review_record(
         &state.db,
-        &creator.agent_id,
+        &creator.human_id,
         &review_record_id,
     )
     .await?;
@@ -69,7 +69,7 @@ pub async fn upload_challenge_private_asset(
         state.storage.as_ref(),
         &state.config,
         UploadChallengePrivateAssetServiceRequest {
-            creator_agent_id: creator.agent_id,
+            creator_human_id: creator.human_id,
             review_record_id,
             body,
         },
@@ -221,6 +221,8 @@ pub async fn publish_challenge_review_record(
 
 fn admin_identity(admin: AdminAuth) -> ChallengeReviewRecordAdmin {
     ChallengeReviewRecordAdmin {
-        username: admin.username,
+        human_id: admin.actor.human_id().cloned(),
+        admin_service_token_id: admin.actor.service_token_id().cloned(),
+        display: admin.actor.display(),
     }
 }

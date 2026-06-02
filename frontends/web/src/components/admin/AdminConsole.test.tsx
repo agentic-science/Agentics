@@ -2,12 +2,8 @@ import { NextIntlClientProvider } from "next-intl";
 import { SWRConfig } from "swr";
 import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  adminFetchJson,
-  adminLogin,
-  adminLogout,
-  adminSession,
-} from "@/lib/adminApi";
+import { adminFetchJson } from "@/lib/adminApi";
+import { getHumanSession, logoutHuman, startGithubLogin } from "@/lib/authApi";
 import { adminChallengeListResponseSchema } from "@/lib/schemas";
 import messages from "../../../messages/en.json";
 import { ensureDomEnvironment } from "../../test/dom";
@@ -27,11 +23,14 @@ vi.mock("@/lib/adminApi", () => {
   return {
     AdminApiError: MockAdminApiError,
     adminFetchJson: vi.fn(),
-    adminLogin: vi.fn(),
-    adminLogout: vi.fn(),
-    adminSession: vi.fn(),
   };
 });
+
+vi.mock("@/lib/authApi", () => ({
+  getHumanSession: vi.fn(),
+  logoutHuman: vi.fn(),
+  startGithubLogin: vi.fn(),
+}));
 
 ensureDomEnvironment();
 const { cleanup, fireEvent, render, waitFor } = await import(
@@ -39,19 +38,18 @@ const { cleanup, fireEvent, render, waitFor } = await import(
 );
 
 const adminFetchJsonMock = adminFetchJson as Mock;
-const adminLoginMock = adminLogin as Mock;
-const adminLogoutMock = adminLogout as Mock;
-const adminSessionMock = adminSession as Mock;
+const getHumanSessionMock = getHumanSession as Mock;
+const logoutHumanMock = logoutHuman as Mock;
+const startGithubLoginMock = startGithubLogin as Mock;
 
 describe("AdminConsole", () => {
   beforeEach(() => {
-    adminLoginMock.mockResolvedValue({
-      username: "root",
-      csrf_token: "csrf-token",
-      expires_at: "2026-05-15T00:00:00Z",
+    startGithubLoginMock.mockResolvedValue({
+      authorization_url:
+        "https://github.com/login/oauth/authorize?client_id=test",
     });
-    adminLogoutMock.mockResolvedValue(undefined);
-    adminSessionMock.mockRejectedValue(
+    logoutHumanMock.mockResolvedValue(undefined);
+    getHumanSessionMock.mockRejectedValue(
       Object.assign(new Error("Unauthorized"), { status: 401 }),
     );
     adminFetchJsonMock.mockImplementation(async (path: string) => {
@@ -129,11 +127,26 @@ describe("AdminConsole", () => {
                 max_uses: 5,
                 use_count: 1,
                 status: "active",
-                created_by_admin_username: "admin",
+                created_by_display: "@root",
                 created_at: "2026-05-15T00:00:00Z",
               },
             ],
           };
+        case "/admin/humans":
+          return {
+            items: [
+              {
+                human_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                status: "active",
+                github_user_id: 123,
+                github_login: "root",
+                roles: ["creator", "admin"],
+                created_at: "2026-05-15T00:00:00Z",
+              },
+            ],
+          };
+        case "/admin/admin-service-tokens":
+          return { items: [] };
         case "/admin/capacity":
           return {
             quota_window_seconds: 86_400,
@@ -160,34 +173,35 @@ describe("AdminConsole", () => {
     vi.clearAllMocks();
   });
 
-  it("validates credentials before calling the admin API", async () => {
+  it("does not load operator data before a restored admin session exists", async () => {
     const view = renderAdminConsole();
 
-    fireEvent.click(await view.findByRole("button", { name: "Sign in" }));
-
     expect(
-      await view.findByText(
-        "Enter admin credentials before loading operator data.",
-      ),
+      await view.findByRole("button", { name: "Sign in with GitHub" }),
     ).toBeTruthy();
-    expect(adminLoginMock).not.toHaveBeenCalled();
+
     expect(adminFetchJsonMock).not.toHaveBeenCalled();
   });
 
-  it("loads operator data after a successful sign-in", async () => {
+  it("starts GitHub OAuth when signing in", async () => {
     const view = renderAdminConsole();
 
-    fireEvent.input(view.getByLabelText("Password"), {
-      target: { value: "secret" },
-    });
-    fireEvent.click(await view.findByRole("button", { name: "Sign in" }));
+    fireEvent.click(
+      await view.findByRole("button", { name: "Sign in with GitHub" }),
+    );
 
     await waitFor(() =>
-      expect(adminLoginMock).toHaveBeenCalledWith({
-        username: "admin",
-        password: "secret",
-      }),
+      expect(startGithubLoginMock).toHaveBeenCalledWith("", "/admin"),
     );
+    expect(await view.findByText("Redirecting to GitHub.")).toBeTruthy();
+  });
+
+  it("restores an existing admin session and loads operator data", async () => {
+    getHumanSessionMock.mockResolvedValueOnce(humanAdminSession());
+
+    const view = renderAdminConsole();
+
+    expect(await view.findByText("Signed in as root")).toBeTruthy();
     await waitFor(() =>
       expect(adminFetchJsonMock).toHaveBeenCalledWith(
         "/admin/challenges",
@@ -195,15 +209,13 @@ describe("AdminConsole", () => {
         "csrf-token",
       ),
     );
-    expect(adminFetchJsonMock).toHaveBeenCalledWith(
-      "/admin/capacity",
-      expect.anything(),
-      "csrf-token",
+    await waitFor(() =>
+      expect(adminFetchJsonMock).toHaveBeenCalledWith(
+        "/admin/capacity",
+        expect.anything(),
+        "csrf-token",
+      ),
     );
-    expect(await view.findByText("Signed in as root")).toBeTruthy();
-    expect(
-      view.getByText("Admin session started and operator data refreshed."),
-    ).toBeTruthy();
     expect(view.getByText("1 / 1")).toBeTruthy();
     expect(view.getByText("1/20")).toBeTruthy();
 
@@ -212,32 +224,26 @@ describe("AdminConsole", () => {
     expect(view.getByText("open")).toBeTruthy();
   });
 
-  it("restores an existing cookie-backed admin session", async () => {
-    adminSessionMock.mockResolvedValueOnce({
-      username: "root",
-      csrf_token: "restored-csrf-token",
-      expires_at: "2026-05-15T01:00:00Z",
+  it("renders forbidden state for signed-in non-admin humans", async () => {
+    getHumanSessionMock.mockResolvedValueOnce({
+      ...humanAdminSession(),
+      roles: ["creator"],
     });
 
     const view = renderAdminConsole();
 
-    expect(await view.findByText("Signed in as root")).toBeTruthy();
-    expect(adminLoginMock).not.toHaveBeenCalled();
-    expect(adminFetchJsonMock).toHaveBeenCalledWith(
-      "/admin/challenges",
-      expect.anything(),
-      "restored-csrf-token",
-    );
-    expect(view.queryByRole("button", { name: "Sign in" })).toBeNull();
+    expect(
+      await view.findByText(
+        "Access denied. Your GitHub account does not have admin access.",
+      ),
+    ).toBeTruthy();
+    expect(adminFetchJsonMock).not.toHaveBeenCalled();
   });
 
   it("renders the pioneer-code admin panel", async () => {
+    getHumanSessionMock.mockResolvedValueOnce(humanAdminSession());
     const view = renderAdminConsole();
 
-    fireEvent.input(view.getByLabelText("Password"), {
-      target: { value: "secret" },
-    });
-    fireEvent.click(await view.findByRole("button", { name: "Sign in" }));
     await view.findByText("Signed in as root");
 
     fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
@@ -247,12 +253,9 @@ describe("AdminConsole", () => {
   });
 
   it("validates pioneer-code create input before posting", async () => {
+    getHumanSessionMock.mockResolvedValueOnce(humanAdminSession());
     const view = renderAdminConsole();
 
-    fireEvent.input(view.getByLabelText("Password"), {
-      target: { value: "secret" },
-    });
-    fireEvent.click(await view.findByRole("button", { name: "Sign in" }));
     await view.findByText("Signed in as root");
     fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
 
@@ -273,20 +276,17 @@ describe("AdminConsole", () => {
   });
 
   it("requires confirmation before revoking a pioneer code", async () => {
+    getHumanSessionMock.mockResolvedValueOnce(humanAdminSession());
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     const view = renderAdminConsole();
 
-    fireEvent.input(view.getByLabelText("Password"), {
-      target: { value: "secret" },
-    });
-    fireEvent.click(await view.findByRole("button", { name: "Sign in" }));
     await view.findByText("Signed in as root");
     fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
 
     fireEvent.click(await view.findByRole("button", { name: "Revoke" }));
 
     expect(confirm).toHaveBeenCalledWith(
-      "Revoke jack-deadbeef and disable 1 created agents?",
+      "Revoke jack-deadbeef and disable 1 created accounts?",
     );
     expect(adminFetchJsonMock).not.toHaveBeenCalledWith(
       "/admin/pioneer-codes/99999999-9999-4999-8999-999999999999/revoke",
@@ -307,4 +307,15 @@ function renderAdminConsole() {
       </NextIntlClientProvider>
     </SWRConfig>,
   );
+}
+
+function humanAdminSession() {
+  return {
+    human_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    github_user_id: 123,
+    github_login: "root",
+    roles: ["creator", "admin"],
+    csrf_token: "csrf-token",
+    expires_at: "2026-05-15T00:00:00Z",
+  };
 }

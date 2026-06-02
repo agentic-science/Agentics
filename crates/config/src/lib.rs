@@ -44,10 +44,9 @@ pub const ENV_AGENTICS_API_PORT: &str = "AGENTICS_API_PORT";
 pub const ENV_AGENTICS_API_BASE_URL: &str = "AGENTICS_API_BASE_URL";
 /// Environment variable that configures the web frontend base URL for checks.
 pub const ENV_AGENTICS_WEB_BASE_URL: &str = "AGENTICS_WEB_BASE_URL";
-/// Environment variable that configures the administrator username.
-pub const ENV_AGENTICS_ADMIN_USERNAME: &str = "AGENTICS_ADMIN_USERNAME";
-/// Environment variable that configures the administrator password.
-pub const ENV_AGENTICS_ADMIN_PASSWORD: &str = "AGENTICS_ADMIN_PASSWORD";
+/// Environment variable that configures GitHub users allowed to bootstrap the first admin.
+pub const ENV_AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS: &str =
+    "AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS";
 /// Environment variable that overrides the hosted runner profile probe command.
 pub const ENV_AGENTICS_HOST_PROBE_COMMAND: &str = "AGENTICS_HOST_PROBE_COMMAND";
 /// Environment variable used to derive the default local Postgres URL.
@@ -69,10 +68,6 @@ pub const DEFAULT_API_HOST: &str = "127.0.0.1";
 pub const DEFAULT_API_PORT: u16 = 3100;
 /// Default web listen port for local development.
 pub const DEFAULT_WEB_PORT: u16 = 3001;
-/// Default administrator username for local development.
-pub const DEFAULT_ADMIN_USERNAME: &str = "admin";
-/// Insecure default administrator password for local-only development.
-pub const INSECURE_DEFAULT_ADMIN_PASSWORD: &str = "agentics-admin";
 /// Default hosted runner profile probe command in packaged deployments.
 pub const DEFAULT_HOST_PROBE_COMMAND: &str = "bin/agentics-check-dgx-spark-profile";
 /// Default local Postgres port used to derive the local database URL.
@@ -87,8 +82,6 @@ pub const DEFAULT_WEB_CSRF_COOKIE_NAME: &str = "agentics_csrf";
 pub const DEFAULT_WEB_SESSION_TTL_HOURS: i64 = 24;
 /// Default secure-cookie requirement for local development.
 pub const DEFAULT_WEB_SESSION_COOKIE_SECURE: bool = false;
-/// Default opt-in flag for allowing local insecure admin credentials.
-pub const DEFAULT_ALLOW_INSECURE_DEFAULT_ADMIN_CREDENTIALS: bool = false;
 /// Default unauthenticated agent registration policy.
 pub const DEFAULT_AGENT_REGISTRATION_MODE: AgentRegistrationMode =
     AgentRegistrationMode::PioneerCode;
@@ -106,8 +99,8 @@ pub const DEFAULT_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY: u32 = 5;
 pub const DEFAULT_MAX_ACTIVE_OFFICIAL_JOBS: u32 = 20;
 /// Default active agent limit.
 pub const DEFAULT_MAX_ACTIVE_AGENTS: u32 = 1_000;
-/// Default active challenge review record limit per agent.
-pub const DEFAULT_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_AGENT: u32 = 10;
+/// Default active challenge review record limit per human creator.
+pub const DEFAULT_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_HUMAN: u32 = 10;
 /// Default private asset byte budget per challenge review record.
 pub const DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD: u64 = 250 * 1024 * 1024;
 /// Default challenge review record validation count per day.
@@ -186,10 +179,7 @@ impl Default for Config {
                 challenges_root: DEFAULT_CHALLENGES_ROOT.to_string(),
             },
             auth: AuthConfig {
-                admin_username: DEFAULT_ADMIN_USERNAME.to_string(),
-                admin_password: SecretString::from(INSECURE_DEFAULT_ADMIN_PASSWORD),
-                allow_insecure_default_admin_credentials:
-                    DEFAULT_ALLOW_INSECURE_DEFAULT_ADMIN_CREDENTIALS,
+                bootstrap_admin_github_user_ids: Vec::new(),
                 agent_registration_mode: DEFAULT_AGENT_REGISTRATION_MODE,
             },
             moltbook: MoltbookConfig {
@@ -209,8 +199,8 @@ impl Default for Config {
                     DEFAULT_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY,
                 max_active_official_jobs: DEFAULT_MAX_ACTIVE_OFFICIAL_JOBS,
                 max_active_agents: DEFAULT_MAX_ACTIVE_AGENTS,
-                max_active_challenge_review_records_per_agent:
-                    DEFAULT_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_AGENT,
+                max_active_challenge_review_records_per_human:
+                    DEFAULT_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_HUMAN,
                 challenge_private_asset_bytes_per_review_record:
                     DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD,
                 challenge_review_record_validations_per_day:
@@ -382,16 +372,6 @@ impl Config {
         validation::validate_report(&self.api_web)?;
         validation::validate_report(&self.quotas)?;
         validation::validate_report(&self.github_oauth)?;
-        if self.uses_default_admin_credentials()
-            && !self.auth.allow_insecure_default_admin_credentials
-            && !local_urls::is_loopback_host(&self.api_web.api_host)
-        {
-            anyhow::bail!(
-                "refusing to bind API to `{}` with default admin credentials; set AGENTICS_ADMIN_PASSWORD or explicitly set AGENTICS_ALLOW_INSECURE_DEFAULT_ADMIN_CREDENTIALS=true for local-only development",
-                self.api_web.api_host
-            );
-        }
-
         if !local_urls::is_loopback_host(&self.api_web.api_host)
             && self.auth.agent_registration_mode == AgentRegistrationMode::Public
         {
@@ -768,26 +748,6 @@ impl Config {
             .filter(|origin| !origin.is_empty())
             .map(ToOwned::to_owned)
             .collect()
-    }
-
-    /// Handles uses default admin credentials for this module.
-    fn uses_default_admin_credentials(&self) -> bool {
-        self.auth.admin_username == DEFAULT_ADMIN_USERNAME
-            && self.auth.admin_password.expose_secret() == INSECURE_DEFAULT_ADMIN_PASSWORD
-    }
-
-    /// Compare a candidate admin password against the configured secret.
-    pub fn admin_password_matches(&self, candidate: &str) -> bool {
-        self.auth.admin_password.expose_secret() == candidate
-    }
-
-    /// Expose the admin password for integration-test Basic auth construction.
-    ///
-    /// Production callers should prefer `admin_password_matches`; this accessor
-    /// exists for test clients that must send the configured password over the
-    /// same HTTP boundary as real clients.
-    pub fn expose_admin_password_for_http_basic(&self) -> &str {
-        self.auth.admin_password.expose_secret()
     }
 
     /// Return whether GitHub OAuth is fully configured for creator login.

@@ -2,59 +2,28 @@
 
 use axum::{
     Json,
-    extract::{ConnectInfo, State},
+    extract::State,
     http::{HeaderMap, HeaderName, StatusCode, header},
     response::AppendHeaders,
 };
 
 use crate::error::ApiResult as Result;
 use agentics_domain::models::auth::{
-    AdminLoginRequest, AdminSessionResponse, CreatorMeResponse, CreatorSessionResponse,
-    GithubOauthCallbackRequest, GithubOauthLoginRequest, GithubOauthLoginResponse,
+    GithubOauthCallbackRequest, GithubOauthCallbackResponse, GithubOauthLoginRequest,
+    GithubOauthLoginResponse, HumanSessionResponse,
 };
 use agentics_error::ServiceError;
 use agentics_services::auth;
 
-use crate::extractors::{AdminAuth, CreatorAuth, ValidatedJson};
+use crate::extractors::{HumanAuth, ValidatedJson};
 use crate::state::AppState;
 
 const OAUTH_STATE_TTL_MINUTES: i64 = 10;
 const OAUTH_NONCE_COOKIE_NAME: &str = "agentics_oauth_nonce";
 
-/// Authenticate an administrator and issue a browser session.
-pub async fn admin_login(
-    State(state): State<AppState>,
-    ConnectInfo(remote_addr): ConnectInfo<std::net::SocketAddr>,
-    ValidatedJson(request): ValidatedJson<AdminLoginRequest>,
-) -> Result<(
-    StatusCode,
-    AppendHeaders<[(HeaderName, String); 2]>,
-    Json<AdminSessionResponse>,
-)> {
-    let issued_session = match auth::issue_admin_session(&state.db, &state.config, &request).await {
-        Ok(session) => session,
-        Err(ServiceError::Unauthorized) => {
-            state
-                .admin_auth_throttle
-                .record_failed_attempt(&request.username, &remote_addr.ip().to_string())?;
-            return Err(ServiceError::Unauthorized.into());
-        }
-        Err(error) => return Err(error.into()),
-    };
-
-    let headers = AppendHeaders(session_cookies(
-        &state,
-        &issued_session.session_token,
-        &issued_session.csrf_token,
-        issued_session.ttl_seconds,
-    ));
-
-    Ok((StatusCode::OK, headers, Json(issued_session.response)))
-}
-
-/// End an administrator browser session and clear auth cookies.
-pub async fn admin_logout(
-    _admin: AdminAuth,
+/// End a human browser session and clear auth cookies.
+pub async fn human_logout(
+    _human: HumanAuth,
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<(StatusCode, AppendHeaders<[(HeaderName, String); 2]>)> {
@@ -71,18 +40,18 @@ pub async fn admin_logout(
     ))
 }
 
-/// Return the current admin session when browser cookies are still valid.
-pub async fn admin_session(
+/// Return the current human session when browser cookies are still valid.
+pub async fn human_session(
     State(state): State<AppState>,
     headers: HeaderMap,
-) -> Result<Json<AdminSessionResponse>> {
+) -> Result<Json<HumanSessionResponse>> {
     let cookie_header = headers.get(header::COOKIE).and_then(|h| h.to_str().ok());
     let session_token = cookie_value(cookie_header, &state.config.api_web.web_session_cookie_name)
         .ok_or(ServiceError::Unauthorized)?;
     let csrf_token = cookie_value(cookie_header, &state.config.api_web.web_csrf_cookie_name)
         .ok_or(ServiceError::Unauthorized)?;
     Ok(Json(
-        auth::authenticate_admin_session(&state.db, &session_token, &csrf_token).await?,
+        auth::authenticate_human_session(&state.db, &session_token, &csrf_token).await?,
     ))
 }
 
@@ -112,7 +81,7 @@ pub async fn github_oauth_callback(
 ) -> Result<(
     StatusCode,
     AppendHeaders<[(HeaderName, String); 3]>,
-    Json<CreatorSessionResponse>,
+    Json<GithubOauthCallbackResponse>,
 )> {
     let cookie_header = headers.get(header::COOKIE).and_then(|h| h.to_str().ok());
     let browser_nonce =
@@ -142,27 +111,6 @@ pub async fn github_oauth_callback(
         ]),
         Json(issued_session.response),
     ))
-}
-
-/// Return the current creator identity for a session cookie.
-pub async fn creator_me(creator: CreatorAuth) -> Result<Json<CreatorMeResponse>> {
-    Ok(Json(CreatorMeResponse {
-        agent_id: creator.agent_id,
-        github_user_id: creator.github_user_id,
-        github_login: creator.github_login,
-    }))
-}
-
-/// Return the current creator identity and CSRF token for browser session bootstrap.
-pub async fn creator_session(creator: CreatorAuth) -> Result<Json<CreatorSessionResponse>> {
-    let csrf_token = creator.csrf_token.ok_or(ServiceError::Unauthorized)?;
-    Ok(Json(CreatorSessionResponse {
-        agent_id: creator.agent_id,
-        github_user_id: creator.github_user_id,
-        github_login: creator.github_login,
-        csrf_token,
-        expires_at: creator.expires_at.to_rfc3339(),
-    }))
 }
 
 /// Builds a browser-binding OAuth nonce cookie.

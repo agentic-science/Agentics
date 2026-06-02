@@ -42,9 +42,9 @@ pub async fn create_challenge_review_record(
         .create(
             &persistence::CreateChallengeReviewRecordInput {
                 review_record_id: review_record_id.clone(),
-                creator_agent_id: creator.agent_id.clone(),
+                creator_human_id: creator.human_id.clone(),
                 max_active_review_records: i64::from(
-                    config.quotas.max_active_challenge_review_records_per_agent,
+                    config.quotas.max_active_challenge_review_records_per_human,
                 ),
                 creator_github_user_id: creator.github_user_id,
                 creator_github_login: creator.github_login.clone(),
@@ -59,8 +59,9 @@ pub async fn create_challenge_review_record(
             &persistence::CreateChallengeReviewRecordAuditEventInput {
                 event_id: ChallengeReviewAuditEventId::generate(),
                 review_record_id,
-                actor_agent_id: Some(creator.agent_id.clone()),
-                actor_admin_username: None,
+                actor_human_id: Some(creator.human_id.clone()),
+                actor_admin_service_token_id: None,
+                actor_display: Some(creator.github_login.clone()),
                 action: "draft_created".to_string(),
                 message: "challenge review record created from GitHub PR".to_string(),
                 metadata: serde_json::json!({

@@ -3,9 +3,10 @@
 mod helpers;
 
 use agentics_config::AgentRegistrationMode;
-use agentics_domain::models::ids::AgentPioneerCodeId;
+use agentics_domain::models::ids::{HumanId, PioneerCodeId};
 use helpers::{
-    api_url, basic_auth_header, examples_challenges_root, spawn_app_with_config, test_config,
+    admin_service_token_header, api_url, examples_challenges_root, spawn_app_with_config,
+    test_config,
 };
 use reqwest::StatusCode;
 
@@ -17,10 +18,7 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
     config.auth.agent_registration_mode = AgentRegistrationMode::PioneerCode;
     let app = spawn_app_with_config(pool, config.clone()).await;
     let client = reqwest::Client::new();
-    let auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
+    let auth = admin_service_token_header(&app);
 
     let missing_code = client
         .post(api_url(&app, "/api/agents/register"))
@@ -44,7 +42,6 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
     let created: serde_json::Value = client
         .post(api_url(&app, "/admin/pioneer-codes"))
         .header("Authorization", auth.clone())
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "code": "jack-deadbeef",
             "note": "early private beta",
@@ -92,7 +89,6 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
     let detail: serde_json::Value = client
         .get(api_url(&app, &format!("/admin/pioneer-codes/{code_id}")))
         .header("Authorization", auth.clone())
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to fetch pioneer code detail")
@@ -109,7 +105,6 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
             &format!("/admin/pioneer-codes/{code_id}/revoke"),
         ))
         .header("Authorization", auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to revoke pioneer code")
@@ -123,7 +118,6 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
     let disabled_agent = client
         .get(api_url(&app, "/api/agent/challenges"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to call agent route with revoked token");
@@ -138,15 +132,11 @@ async fn finite_pioneer_code_consumption_is_atomic(pool: sqlx::PgPool) {
     config.auth.agent_registration_mode = AgentRegistrationMode::PioneerCode;
     let app = spawn_app_with_config(pool, config.clone()).await;
     let client = reqwest::Client::new();
-    let auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
+    let auth = admin_service_token_header(&app);
 
     client
         .post(api_url(&app, "/admin/pioneer-codes"))
         .header("Authorization", auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({ "code": "deadbeef", "max_uses": 1 }))
         .send()
         .await
@@ -193,15 +183,11 @@ async fn github_oauth_login_start_uses_post_body(pool: sqlx::PgPool) {
     config.auth.agent_registration_mode = AgentRegistrationMode::PioneerCode;
     let app = spawn_app_with_config(pool, config.clone()).await;
     let client = reqwest::Client::new();
-    let auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
+    let auth = admin_service_token_header(&app);
 
     client
         .post(api_url(&app, "/admin/pioneer-codes"))
         .header("Authorization", auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({ "code": "deadbeef", "max_uses": 1 }))
         .send()
         .await
@@ -265,6 +251,7 @@ async fn github_oauth_state_requires_browser_nonce(pool: sqlx::PgPool) {
             state_hash: agentics_services::auth::hash_opaque_token(state),
             browser_nonce_hash: agentics_services::auth::hash_opaque_token(nonce),
             pioneer_code_hash: None,
+            return_to: None,
             expires_at: chrono::Utc::now() + chrono::Duration::minutes(10),
         })
         .await
@@ -291,12 +278,12 @@ async fn github_oauth_state_requires_browser_nonce(pool: sqlx::PgPool) {
     assert!(consumed.is_some());
 }
 
-/// Verifies creator OAuth account creation uses the same code consumption primitive.
+/// Verifies human OAuth account creation uses the same code consumption primitive.
 #[sqlx::test(migrations = "../migrations")]
-async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
+async fn human_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
     let code = "team-deadbeef";
     let code_hash = agentics_services::auth::hash_opaque_token(code);
-    let code_id = AgentPioneerCodeId::generate();
+    let code_id = PioneerCodeId::generate();
     let repos = agentics_persistence::Repositories::new(&pool);
     repos
         .pioneer_codes()
@@ -305,68 +292,69 @@ async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
             code_display: code.to_string(),
             code_hash: code_hash.clone(),
             label: Some("team".to_string()),
-            note: "creator oauth".to_string(),
+            note: "human oauth".to_string(),
             max_uses: 1,
             expires_at: None,
-            created_by_admin_username: "admin".to_string(),
+            created_by_human_id: None,
+            created_by_admin_service_token_id: None,
+            created_by_display: "integration-admin".to_string(),
         })
         .await
         .expect("pioneer code should insert");
 
-    let first_agent_id = agentics_domain::models::ids::AgentId::generate();
-    let stored_agent_id = repos
+    let first_human_id = HumanId::generate();
+    let stored_human = repos
         .sessions()
-        .upsert_github_creator_agent_with_pioneer_code(
-            &first_agent_id,
-            42,
-            "creator-login",
-            Some(&code_hash),
-            true,
-            1_000,
-        )
+        .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
+            fallback_human_id: first_human_id.clone(),
+            github_user_id: 42,
+            github_login: "creator-login".to_string(),
+            pioneer_code_hash: Some(code_hash.clone()),
+            pioneer_code_required_for_new_human: true,
+            bootstrap_admin_candidate: false,
+        })
         .await
-        .expect("first oauth login should create agent");
-    assert_eq!(stored_agent_id, first_agent_id);
+        .expect("first oauth login should create human");
+    assert_eq!(stored_human.human_id, first_human_id);
 
-    let repeated_agent_id = agentics_domain::models::ids::AgentId::generate();
     let repeated = repos
         .sessions()
-        .upsert_github_creator_agent_with_pioneer_code(
-            &repeated_agent_id,
-            42,
-            "creator-login-renamed",
-            Some("not-a-valid-code-hash"),
-            true,
-            1_000,
-        )
+        .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
+            fallback_human_id: HumanId::generate(),
+            github_user_id: 42,
+            github_login: "creator-login-renamed".to_string(),
+            pioneer_code_hash: Some("not-a-valid-code-hash".to_string()),
+            pioneer_code_required_for_new_human: true,
+            bootstrap_admin_candidate: false,
+        })
         .await
         .expect("repeat oauth login should not consume another code");
-    assert_eq!(repeated, first_agent_id);
+    assert_eq!(repeated.human_id, first_human_id);
 
     let repeated_without_code = repos
         .sessions()
-        .upsert_github_creator_agent_with_pioneer_code(
-            &agentics_domain::models::ids::AgentId::generate(),
-            42,
-            "creator-login-returned",
-            None,
-            true,
-            1_000,
-        )
+        .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
+            fallback_human_id: HumanId::generate(),
+            github_user_id: 42,
+            github_login: "creator-login-returned".to_string(),
+            pioneer_code_hash: None,
+            pioneer_code_required_for_new_human: true,
+            bootstrap_admin_candidate: false,
+        })
         .await
         .expect("existing oauth creator should not need another pioneer code");
-    assert_eq!(repeated_without_code, first_agent_id);
+    assert_eq!(repeated_without_code.human_id, first_human_id);
 
     let missing_code = repos
         .sessions()
-        .upsert_github_creator_agent_with_pioneer_code(
-            &agentics_domain::models::ids::AgentId::generate(),
-            43,
-            "new-creator-without-code",
-            None,
-            true,
-            1_000,
-        )
+        .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
+            fallback_human_id: HumanId::generate(),
+            github_user_id: 43,
+            github_login: "new-creator-without-code".to_string(),
+            pioneer_code_hash: None,
+            pioneer_code_required_for_new_human: true,
+            bootstrap_admin_candidate: false,
+        })
         .await
         .expect_err("new creator must still provide a pioneer code");
     assert!(
@@ -382,28 +370,29 @@ async fn creator_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
         .expect("pioneer code detail should load");
     assert_eq!(detail.use_count, 1);
     assert_eq!(uses.len(), 1);
-    assert_eq!(uses[0].registration_kind, "creator_oauth");
+    assert_eq!(uses[0].registration_kind, "human_github_oauth");
+    assert_eq!(uses[0].human_id.as_ref(), Some(&first_human_id));
 
-    repos
-        .agents()
-        .disable(first_agent_id.as_str())
+    sqlx::query("UPDATE humans SET status = 'disabled', disabled_at = NOW() WHERE id = $1::uuid")
+        .bind(first_human_id.as_str())
+        .execute(&pool)
         .await
-        .expect("agent should disable");
+        .expect("human should disable");
     let disabled = repos
         .sessions()
-        .upsert_github_creator_agent_with_pioneer_code(
-            &agentics_domain::models::ids::AgentId::generate(),
-            42,
-            "creator-login",
-            Some(&code_hash),
-            true,
-            1_000,
-        )
+        .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
+            fallback_human_id: HumanId::generate(),
+            github_user_id: 42,
+            github_login: "creator-login".to_string(),
+            pioneer_code_hash: Some(code_hash),
+            pioneer_code_required_for_new_human: true,
+            bootstrap_admin_candidate: false,
+        })
         .await
-        .expect_err("disabled linked agent should block oauth login");
+        .expect_err("disabled linked human should block oauth login");
     assert!(
         disabled
             .to_string()
-            .contains("linked GitHub creator agent is disabled")
+            .contains("linked human account is disabled")
     );
 }

@@ -55,11 +55,15 @@ describe("creatorApi", () => {
       async (_input: RequestInfo | URL, _init?: RequestInit) => {
         return new Response(
           JSON.stringify({
-            agent_id: "11111111-1111-4111-8111-111111111111",
-            github_user_id: 123,
-            github_login: "octocat",
-            csrf_token: "csrf-token",
-            expires_at: "2026-05-15T00:00:00Z",
+            session: {
+              human_id: "11111111-1111-4111-8111-111111111111",
+              github_user_id: 123,
+              github_login: "octocat",
+              roles: ["creator"],
+              csrf_token: "csrf-token",
+              expires_at: "2026-05-15T00:00:00Z",
+            },
+            return_to: "/creator",
           }),
           {
             status: 200,

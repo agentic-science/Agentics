@@ -24,8 +24,9 @@ pub async fn abandon_challenge_review_record(
     let audit_event = persistence::CreateChallengeReviewRecordAuditEventInput {
         event_id: ChallengeReviewAuditEventId::generate(),
         review_record_id: review_record_id.clone(),
-        actor_agent_id: None,
-        actor_admin_username: Some(admin.username),
+        actor_human_id: admin.human_id.clone(),
+        actor_admin_service_token_id: admin.admin_service_token_id.clone(),
+        actor_display: Some(admin.display.clone()),
         action: "review_record_abandoned".to_string(),
         message: body.message.trim().to_string(),
         metadata: serde_json::json!({}),
@@ -73,8 +74,16 @@ pub async fn approve_challenge_review_record(
             &review_record_id,
             expected_validation_bundle_sha256,
             non_empty_message(&body.message),
-            admin.username,
-            ChallengeReviewAuditEventId::generate(),
+            &persistence::CreateChallengeReviewRecordAuditEventInput {
+                event_id: ChallengeReviewAuditEventId::generate(),
+                review_record_id: review_record_id.clone(),
+                actor_human_id: admin.human_id.clone(),
+                actor_admin_service_token_id: admin.admin_service_token_id.clone(),
+                actor_display: Some(admin.display.clone()),
+                action: "review_record_approved".to_string(),
+                message: body.message.trim().to_string(),
+                metadata: serde_json::json!({}),
+            },
         )
         .await?;
     repos
@@ -107,8 +116,9 @@ pub async fn reject_challenge_review_record(
     let audit_event = persistence::CreateChallengeReviewRecordAuditEventInput {
         event_id: ChallengeReviewAuditEventId::generate(),
         review_record_id: review_record.id.clone(),
-        actor_agent_id: None,
-        actor_admin_username: Some(admin.username),
+        actor_human_id: admin.human_id.clone(),
+        actor_admin_service_token_id: admin.admin_service_token_id.clone(),
+        actor_display: Some(admin.display.clone()),
         action: "review_record_rejected".to_string(),
         message: body.message.trim().to_string(),
         metadata: serde_json::json!({}),

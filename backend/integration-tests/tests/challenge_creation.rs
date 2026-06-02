@@ -16,7 +16,7 @@ use agentics_storage::{StorageWriteIntent, build_storage, unpack_tar_to_director
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use challenge_creation_helpers::*;
 use helpers::{
-    api_url, basic_auth_header, create_creator_session, spawn_app_with_config, test_config,
+    admin_service_token_header, api_url, create_creator_session, spawn_app_with_config, test_config,
 };
 use serde_json::json;
 
@@ -166,10 +166,7 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
-    let admin_auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
+    let admin_auth = admin_service_token_header(&app);
     let review_record = create_review_record(&client, &app, &creator, 9, manifest_json()).await;
     let review_record_id =
         ChallengeReviewRecordId::try_new(review_record["id"].as_str().expect("review_record id"))
@@ -225,7 +222,6 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
             &format!("/admin/challenge-review-records/{review_record_id}/approve"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({
             "message": "too early",
             "expected_validation_bundle_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -241,7 +237,6 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
             &format!("/admin/challenge-review-records/{review_record_id}/reject"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "message": "wait for validation" }))
         .send()
         .await
@@ -254,7 +249,6 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
             &format!("/admin/challenge-review-records/{review_record_id}/abandon"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "message": "wait for validation" }))
         .send()
         .await
@@ -276,8 +270,9 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
             &agentics_persistence::CreateChallengeReviewRecordAuditEventInput {
                 event_id: ChallengeReviewAuditEventId::generate(),
                 review_record_id,
-                actor_agent_id: None,
-                actor_admin_username: Some("admin".to_string()),
+                actor_human_id: None,
+                actor_admin_service_token_id: None,
+                actor_display: Some("integration-admin".to_string()),
                 action: "draft_validated".to_string(),
                 message: "passed".to_string(),
                 metadata: json!({}),
@@ -299,10 +294,7 @@ async fn challenge_review_record_can_be_validated_approved_and_published(pool: s
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
-    let admin_auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
+    let admin_auth = admin_service_token_header(&app);
 
     let review_record: serde_json::Value = creator_auth(
         client.post(api_url(&app, "/api/creator/challenge-review-records")),
@@ -358,7 +350,6 @@ async fn challenge_review_record_can_be_validated_approved_and_published(pool: s
             &format!("/admin/challenge-review-records/{review_record_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -430,7 +421,6 @@ async fn challenge_review_record_can_be_validated_approved_and_published(pool: s
             &format!("/admin/challenge-review-records/{review_record_id}/approve"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({
             "message": "looks good",
             "expected_validation_bundle_sha256": validated["validation_bundle_sha256"]
@@ -475,7 +465,6 @@ async fn challenge_review_record_can_be_validated_approved_and_published(pool: s
             &format!("/admin/challenge-review-records/{review_record_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -491,7 +480,6 @@ async fn challenge_review_record_can_be_validated_approved_and_published(pool: s
             &format!("/admin/challenge-review-records/{review_record_id}/publish"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -542,10 +530,10 @@ async fn challenge_review_record_can_be_validated_approved_and_published(pool: s
     assert_eq!(public_challenge["spec"]["eligibility"]["type"], "open");
 
     let owner_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::BIGINT FROM challenge_owners WHERE challenge_name = $1 AND agent_id = $2::uuid",
+        "SELECT COUNT(*)::BIGINT FROM challenge_owners WHERE challenge_name = $1 AND human_id = $2::uuid",
     )
     .bind(published_challenge_name)
-    .bind(&creator.agent_id)
+    .bind(&creator.human_id)
     .fetch_one(&pool)
     .await
     .expect("owner count");
@@ -615,10 +603,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
-    let admin_auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
+    let admin_auth = admin_service_token_header(&app);
 
     let review_record =
         create_review_record_with_commit(&client, &app, &creator, 17, manifest_json(), &commit_sha)
@@ -650,7 +635,6 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
             &format!("/admin/challenge-review-records/{review_record_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -666,7 +650,6 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
             &format!("/admin/challenge-review-records/{review_record_id}/approve"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({
             "message": "approved",
             "expected_validation_bundle_sha256": validated["validation_bundle_sha256"]
@@ -690,7 +673,6 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
             &format!("/admin/challenge-review-records/{review_record_id}/publish"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -719,10 +701,7 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
-    let admin_auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
+    let admin_auth = admin_service_token_header(&app);
 
     let review_record =
         create_review_record_with_commit(&client, &app, &creator, 23, manifest_json(), &commit_sha)
@@ -752,7 +731,6 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
             &format!("/admin/challenge-review-records/{review_record_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -768,7 +746,6 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
             &format!("/admin/challenge-review-records/{review_record_id}/approve"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({
             "message": "approved",
             "expected_validation_bundle_sha256": validated["validation_bundle_sha256"]
@@ -787,12 +764,10 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
     let publish_a = client
         .post(publish_url.clone())
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": repository_path }));
     let publish_b = client
         .post(publish_url)
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": repository_path }));
 
     let (response_a, response_b) = tokio::join!(publish_a.send(), publish_b.send());
@@ -852,10 +827,7 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
-    let admin_auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
+    let admin_auth = admin_service_token_header(&app);
 
     let review_record =
         create_review_record_with_commit(&client, &app, &creator, 24, manifest_json(), &commit_sha)
@@ -885,7 +857,6 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
             &format!("/admin/challenge-review-records/{review_record_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -901,7 +872,6 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
             &format!("/admin/challenge-review-records/{review_record_id}/approve"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({
             "message": "approved",
             "expected_validation_bundle_sha256": validated["validation_bundle_sha256"]
@@ -968,7 +938,6 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
             &format!("/admin/challenge-review-records/{review_record_id}/publish"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await

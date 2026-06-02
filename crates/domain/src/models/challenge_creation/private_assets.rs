@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::models::hashes::Sha256Digest;
-use crate::models::ids::{AgentId, ChallengePrivateAssetId, ChallengeReviewRecordId};
+use crate::models::ids::{ChallengePrivateAssetId, ChallengeReviewRecordId, HumanId};
 use crate::models::names::AssetName;
 use crate::models::paths::BundleRelativePath;
 use crate::storage::StorageKey;
@@ -65,7 +65,7 @@ pub struct ChallengePrivateAssetResponse {
     pub size_bytes: i64,
     pub sha256: Sha256Digest,
     pub storage_key: StorageKey,
-    pub uploader_agent_id: AgentId,
+    pub uploader_human_id: HumanId,
     pub created_at: String,
 }
 
@@ -116,7 +116,7 @@ pub struct AdminChallengePrivateAssetResponse {
     pub storage_key: StorageKey,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub temporary_storage_key: Option<StorageKey>,
-    pub uploader_agent_id: AgentId,
+    pub uploader_human_id: HumanId,
     pub created_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub activated_at: Option<String>,

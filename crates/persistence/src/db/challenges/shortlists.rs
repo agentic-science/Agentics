@@ -10,7 +10,7 @@ use super::records::{
     ChallengeShortlistRecord, ChallengeShortlistRevisionRecord, ChallengeShortlistedAgentRecord,
     CreateChallengeShortlistRevisionInput,
 };
-use crate::db::ids::{agent_id_from_row, challenge_name_from_row};
+use crate::db::ids::{agent_id_from_row, challenge_name_from_row, human_id_from_row};
 
 /// Return whether a challenge has any effective shortlisted agents.
 pub async fn challenge_has_shortlist(
@@ -69,14 +69,14 @@ pub async fn create_challenge_shortlist_revision(
     sqlx::query(
         r#"
         INSERT INTO challenge_shortlist_revisions (
-            id, challenge_name, uploader_agent_id, storage_key, sha256, requested_count, added_count
+            id, challenge_name, uploader_human_id, storage_key, sha256, requested_count, added_count
         )
         VALUES ($1::uuid, $2, $3::uuid, $4, $5, $6, 0)
         "#,
     )
     .bind(input.revision_id.as_str())
     .bind(input.challenge_name.as_str())
-    .bind(input.uploader_agent_id.as_str())
+    .bind(input.uploader_human_id.as_str())
     .bind(input.storage_key.as_str())
     .bind(input.sha256.to_string())
     .bind(input.requested_count)
@@ -88,7 +88,7 @@ pub async fn create_challenge_shortlist_revision(
         let result = sqlx::query(
             r#"
             INSERT INTO challenge_shortlisted_agents (
-                challenge_name, agent_id, added_by_agent_id, source_revision_id
+                challenge_name, agent_id, added_by_human_id, source_revision_id
             )
             VALUES ($1, $2::uuid, $3::uuid, $4::uuid)
             ON CONFLICT (challenge_name, agent_id) DO NOTHING
@@ -96,7 +96,7 @@ pub async fn create_challenge_shortlist_revision(
         )
         .bind(input.challenge_name.as_str())
         .bind(agent_id.as_str())
-        .bind(input.uploader_agent_id.as_str())
+        .bind(input.uploader_human_id.as_str())
         .bind(input.revision_id.as_str())
         .execute(&mut *tx)
         .await?;
@@ -115,7 +115,7 @@ pub async fn create_challenge_shortlist_revision(
         RETURNING
             id,
             challenge_name,
-            uploader_agent_id,
+            uploader_human_id,
             storage_key,
             sha256,
             requested_count,
@@ -176,7 +176,7 @@ pub async fn list_challenge_shortlist(
         .ok_or(ServiceError::NotFound)?;
     let rows = sqlx::query(
         r#"
-        SELECT s.agent_id::text AS agent_id, a.display_name AS agent_display_name, s.added_by_agent_id::text AS added_by_agent_id, s.created_at
+        SELECT s.agent_id::text AS agent_id, a.display_name AS agent_display_name, s.added_by_human_id::text AS added_by_human_id, s.created_at
         FROM challenge_shortlisted_agents s
         JOIN agents a ON a.id = s.agent_id
         WHERE s.challenge_name = $1
@@ -193,7 +193,7 @@ pub async fn list_challenge_shortlist(
             Ok(ChallengeShortlistedAgentRecord {
                 agent_id: agent_id_from_row(&row, "agent_id")?,
                 agent_display_name: row.try_get("agent_display_name")?,
-                added_by_agent_id: agent_id_from_row(&row, "added_by_agent_id")?,
+                added_by_human_id: human_id_from_row(&row, "added_by_human_id")?,
                 created_at: row.try_get("created_at")?,
             })
         })
@@ -212,7 +212,7 @@ fn row_to_shortlist_revision_record(
     Ok(ChallengeShortlistRevisionRecord {
         id: crate::db::ids::challenge_shortlist_revision_id_from_row(&row, "id")?,
         challenge_name: challenge_name_from_row(&row, "challenge_name")?,
-        uploader_agent_id: agent_id_from_row(&row, "uploader_agent_id")?,
+        uploader_human_id: human_id_from_row(&row, "uploader_human_id")?,
         requested_count: row.try_get("requested_count")?,
         added_count: row.try_get("added_count")?,
         sha256: sha256_digest_from_row(&row, "sha256")?,

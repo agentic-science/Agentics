@@ -18,7 +18,7 @@ use agentics_persistence::{self as persistence, Repositories};
 use agentics_storage::{Storage, StorageKey, StorageWriteIntent, pack_directory_to_tar};
 
 use super::presentation::review_record_response;
-use super::types::PublishChallengeReviewRecordServiceRequest;
+use super::types::{ChallengeReviewRecordAdmin, PublishChallengeReviewRecordServiceRequest};
 use super::utils::{
     challenge_bundle_storage_key, cleanup_file, cleanup_runtime_bundle, cleanup_storage_key,
 };
@@ -64,7 +64,7 @@ pub async fn publish_challenge_review_record(
         pool,
         storage,
         config,
-        &admin.username,
+        &admin,
         &review_record,
         &publish_claim_id,
         &repository_path,
@@ -95,7 +95,7 @@ async fn publish_claimed_challenge_review_record(
     pool: &sqlx::PgPool,
     storage: &dyn Storage,
     config: &Config,
-    admin_username: &str,
+    admin: &ChallengeReviewRecordAdmin,
     review_record: &ChallengeReviewRecordResponse,
     publish_claim_id: &ChallengeReviewPublishClaimId,
     repository_path: &RepositoryCheckoutPath,
@@ -123,9 +123,11 @@ async fn publish_claimed_challenge_review_record(
                     review_record_id: review_record.id.clone(),
                     publish_claim_id: publish_claim_id.clone(),
                     challenge_name: manifest.challenge_name.clone(),
-                    owner_agent_id: review_record.creator_agent_id.clone(),
+                    owner_human_id: review_record.creator_human_id.clone(),
                     audit_event_id: ChallengeReviewAuditEventId::generate(),
-                    admin_username: admin_username.to_string(),
+                    actor_human_id: admin.human_id.clone(),
+                    actor_admin_service_token_id: admin.admin_service_token_id.clone(),
+                    actor_display: admin.display.clone(),
                     repository_path: repository_path.to_string(),
                     bundle_sha256,
                 })
@@ -142,7 +144,7 @@ async fn publish_claimed_challenge_review_record(
                 storage,
                 config,
                 PublishNewChallengeReviewRecordContext {
-                    admin_username,
+                    admin,
                     review_record,
                     publish_claim_id,
                     repository_path,
@@ -164,7 +166,7 @@ async fn publish_claimed_challenge_review_record(
 
 /// Borrowed inputs for one publish-new-challenge attempt.
 struct PublishNewChallengeReviewRecordContext<'a> {
-    admin_username: &'a str,
+    admin: &'a ChallengeReviewRecordAdmin,
     review_record: &'a ChallengeReviewRecordResponse,
     publish_claim_id: &'a ChallengeReviewPublishClaimId,
     repository_path: &'a RepositoryCheckoutPath,
@@ -302,9 +304,11 @@ async fn prepare_and_publish_new_challenge_review_record(
             spec,
             title: ctx.manifest.title.clone(),
             summary: ctx.manifest.summary.clone(),
-            owner_agent_id: ctx.review_record.creator_agent_id.clone(),
+            owner_human_id: ctx.review_record.creator_human_id.clone(),
             audit_event_id: ChallengeReviewAuditEventId::generate(),
-            admin_username: ctx.admin_username.to_string(),
+            actor_human_id: ctx.admin.human_id.clone(),
+            actor_admin_service_token_id: ctx.admin.admin_service_token_id.clone(),
+            actor_display: ctx.admin.display.clone(),
             repository_path: ctx.repository_path.to_string(),
             bundle_sha256: ctx.bundle_sha256,
         })

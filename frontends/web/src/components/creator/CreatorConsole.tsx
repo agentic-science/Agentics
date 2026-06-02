@@ -47,7 +47,7 @@ import type {
   CreatorChallengeParticipantsResponse,
   CreatorChallengeReviewRecordResponse,
   CreatorChallengeStatsResponse,
-  CreatorMeResponse,
+  HumanSessionResponse,
 } from "@/lib/schemas";
 
 const LAST_REVIEW_RECORD_STORAGE_KEY = "agentics.creator.last_review_record_id";
@@ -63,7 +63,7 @@ type CreatorPendingAction =
 /** Renders the creator console component. */
 export function CreatorConsole() {
   const t = useTranslations("creator");
-  const [creator, setCreator] = useState<CreatorMeResponse | null>(null);
+  const [creator, setCreator] = useState<HumanSessionResponse | null>(null);
   const [csrfToken, setCsrfToken] = useState("");
   const [reviewRecord, setReviewRecord] =
     useState<CreatorChallengeReviewRecordResponse | null>(null);
@@ -161,7 +161,7 @@ export function CreatorConsole() {
     setPendingAction("signIn");
     setError(null);
     try {
-      const response = await startGithubLogin(pioneerCode.trim());
+      const response = await startGithubLogin(pioneerCode.trim(), "/creator");
       window.location.href = response.authorization_url;
     } catch (e) {
       setError(displayCreatorError(e));

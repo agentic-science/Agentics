@@ -68,7 +68,6 @@ pub async fn create_validate_approve_publish_review_record(
             &format!("/admin/challenge-review-records/{review_record_id}/validate"),
         ))
         .header("Authorization", flow.admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": flow.public_repo.to_string_lossy() }))
         .send()
         .await
@@ -84,7 +83,6 @@ pub async fn create_validate_approve_publish_review_record(
             &format!("/admin/challenge-review-records/{review_record_id}/approve"),
         ))
         .header("Authorization", flow.admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({
             "message": "approved",
             "expected_validation_bundle_sha256": validated["validation_bundle_sha256"]
@@ -100,7 +98,6 @@ pub async fn create_validate_approve_publish_review_record(
             &format!("/admin/challenge-review-records/{review_record_id}/publish"),
         ))
         .header("Authorization", flow.admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": flow.public_repo.to_string_lossy() }))
         .send()
         .await

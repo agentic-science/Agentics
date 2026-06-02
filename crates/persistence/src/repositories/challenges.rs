@@ -9,7 +9,7 @@ use crate::repositories::{
     PublishedChallengeAdmission, PublishedChallengeList,
 };
 use agentics_domain::models::evaluation::ScoringMode;
-use agentics_domain::models::ids::AgentId;
+use agentics_domain::models::ids::{AgentId, HumanId};
 use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::models::urls::MoltbookPostUrl;
 use agentics_error::Result;
@@ -58,17 +58,17 @@ impl ChallengesRepository<'_> {
     pub async fn add_owner(
         &self,
         challenge_name: &ChallengeName,
-        agent_id: &AgentId,
+        human_id: &HumanId,
     ) -> Result<()> {
-        db::challenges::add_challenge_owner(self.pool, challenge_name, agent_id).await
+        db::challenges::add_challenge_owner(self.pool, challenge_name, human_id).await
     }
 
-    pub async fn agent_owns(
+    pub async fn human_owns(
         &self,
         challenge_name: &ChallengeName,
-        agent_id: &AgentId,
+        human_id: &HumanId,
     ) -> Result<bool> {
-        db::challenges::agent_owns_challenge(self.pool, challenge_name, agent_id).await
+        db::challenges::human_owns_challenge(self.pool, challenge_name, human_id).await
     }
 
     pub async fn has_shortlist(&self, challenge_name: &ChallengeName) -> Result<bool> {

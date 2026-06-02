@@ -66,10 +66,7 @@ async fn archive_review_record_hides_challenge_and_rejects_new_submissions(pool:
             .fetch_one(&pool)
             .await
             .expect("participant agent id");
-    let admin_auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
+    let admin_auth = admin_service_token_header(&app);
 
     let publish_flow = ReviewRecordPublishFlow {
         client: &client,
@@ -226,7 +223,6 @@ async fn archive_review_record_hides_challenge_and_rejects_new_submissions(pool:
     let response = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", participant_bearer)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({
             "challenge_name": sample_sum_name,
             "target": "linux-arm64-cpu",
@@ -251,10 +247,7 @@ async fn archive_review_record_requires_challenge_owner(pool: sqlx::PgPool) {
     let client = reqwest::Client::new();
     let owner = create_creator_session(&pool, 1001, "owner").await;
     let non_owner = create_creator_session(&pool, 1002, "non-owner").await;
-    let admin_auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
+    let admin_auth = admin_service_token_header(&app);
 
     let publish_flow = ReviewRecordPublishFlow {
         client: &client,
@@ -287,7 +280,6 @@ async fn archive_review_record_requires_challenge_owner(pool: sqlx::PgPool) {
             &format!("/admin/challenge-review-records/{archive_review_record_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -303,7 +295,6 @@ async fn archive_review_record_requires_challenge_owner(pool: sqlx::PgPool) {
             &format!("/admin/challenge-review-records/{archive_review_record_id}/approve"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({
             "message": "approved",
             "expected_validation_bundle_sha256": archive_validated["validation_bundle_sha256"]
@@ -320,7 +311,6 @@ async fn archive_review_record_requires_challenge_owner(pool: sqlx::PgPool) {
             &format!("/admin/challenge-review-records/{archive_review_record_id}/publish"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -404,7 +394,6 @@ async fn challenge_creator_routes_require_oauth_session_and_csrf(pool: sqlx::PgP
     let old_self_link_route = client
         .post(api_url(&app, "/api/challenge-creator/github-identity"))
         .header("Authorization", "Bearer self-asserted-token")
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({
             "github_user_id": 1001,
             "github_login": "creator"
@@ -448,7 +437,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     .expect("asset length fits u64");
 
     let mut config = test_config(storage.path(), seeded_challenges.path());
-    config.quotas.max_active_challenge_review_records_per_agent = 1;
+    config.quotas.max_active_challenge_review_records_per_human = 1;
     config.quotas.challenge_review_record_validations_per_day = 1;
     config
         .quotas
@@ -456,10 +445,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
-    let admin_auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
+    let admin_auth = admin_service_token_header(&app);
 
     let review_record: serde_json::Value = create_review_record_with_commit(
         &client,
@@ -539,7 +525,6 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
             &format!("/admin/challenge-review-records/{review_record_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -552,7 +537,6 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
             &format!("/admin/challenge-review-records/{review_record_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "repository_path": public_repo.path().to_string_lossy() }))
         .send()
         .await
@@ -573,10 +557,7 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
-    let admin_auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
+    let admin_auth = admin_service_token_header(&app);
 
     let review_record = create_review_record(&client, &app, &creator, 51, manifest_json()).await;
     let review_record_id = review_record["id"].as_str().expect("review_record id");
@@ -614,7 +595,6 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
             &format!("/admin/challenge-review-records/{review_record_id}/abandon"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&json!({ "message": "closed PR" }))
         .send()
         .await
@@ -632,7 +612,6 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     let cleanup: serde_json::Value = client
         .post(api_url(&app, "/admin/challenge-review-records/cleanup"))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("cleanup")

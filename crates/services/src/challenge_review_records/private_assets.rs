@@ -25,7 +25,7 @@ use crate::storage_errors::storage_error_to_service_error;
 
 const MAX_PRIVATE_ASSET_FILE_COUNT: usize = 1024;
 
-/// Upload a private benchmark asset for a review_record owned by the authenticated agent.
+/// Upload a private benchmark asset for a review_record owned by the authenticated human.
 pub async fn upload_challenge_private_asset(
     pool: &sqlx::PgPool,
     storage: &dyn Storage,
@@ -33,7 +33,7 @@ pub async fn upload_challenge_private_asset(
     request: UploadChallengePrivateAssetServiceRequest,
 ) -> Result<ChallengePrivateAssetResponse> {
     let UploadChallengePrivateAssetServiceRequest {
-        creator_agent_id,
+        creator_human_id,
         review_record_id,
         body,
     } = request;
@@ -44,7 +44,7 @@ pub async fn upload_challenge_private_asset(
         .await?
         .ok_or(ServiceError::NotFound)?;
     let review_record = review_record_response(review_record);
-    if review_record.creator_agent_id != creator_agent_id {
+    if review_record.creator_human_id != creator_human_id {
         return Err(ServiceError::NotFound);
     }
     if matches!(
@@ -128,7 +128,7 @@ pub async fn upload_challenge_private_asset(
                 sha256,
                 storage_key: storage_key.clone(),
                 temporary_storage_key: temporary_asset_key.clone(),
-                uploader_agent_id: creator_agent_id.clone(),
+                uploader_human_id: creator_human_id.clone(),
             },
             config
                 .quotas
@@ -181,7 +181,7 @@ pub async fn upload_challenge_private_asset(
         .activate_private_asset_with_audit(
             &asset_row_id,
             ChallengeReviewAuditEventId::generate(),
-            &creator_agent_id,
+            &creator_human_id,
         )
         .await
     {

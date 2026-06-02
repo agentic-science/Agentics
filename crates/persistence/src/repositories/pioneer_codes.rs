@@ -4,7 +4,7 @@ use crate::db;
 use crate::repositories::{
     CreatePioneerCodeInput, PioneerCodeRecord, PioneerCodeUseRecord, RevokePioneerCodeOutcome,
 };
-use agentics_domain::models::ids::AgentPioneerCodeId;
+use agentics_domain::models::ids::PioneerCodeId;
 use agentics_error::Result;
 
 #[derive(Debug, Clone, Copy)]
@@ -23,12 +23,12 @@ impl PioneerCodesRepository<'_> {
 
     pub async fn detail(
         &self,
-        id: &AgentPioneerCodeId,
+        id: &PioneerCodeId,
     ) -> Result<(PioneerCodeRecord, Vec<PioneerCodeUseRecord>)> {
         db::pioneer_codes::get_pioneer_code_detail(self.pool, id).await
     }
 
-    pub async fn revoke(&self, id: &AgentPioneerCodeId) -> Result<RevokePioneerCodeOutcome> {
+    pub async fn revoke(&self, id: &PioneerCodeId) -> Result<RevokePioneerCodeOutcome> {
         db::pioneer_codes::revoke_pioneer_code(self.pool, id).await
     }
 }

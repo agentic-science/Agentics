@@ -140,9 +140,24 @@ define_uuid_id_type!(
     "agent_token_id must be a canonical UUID string"
 );
 define_uuid_id_type!(
-    AgentPioneerCodeId,
-    "AgentPioneerCodeId",
-    "agent_pioneer_code_id must be a canonical UUID string"
+    HumanId,
+    "HumanId",
+    "human_id must be a canonical UUID string"
+);
+define_uuid_id_type!(
+    HumanSessionId,
+    "HumanSessionId",
+    "human_session_id must be a canonical UUID string"
+);
+define_uuid_id_type!(
+    AdminServiceTokenId,
+    "AdminServiceTokenId",
+    "admin_service_token_id must be a canonical UUID string"
+);
+define_uuid_id_type!(
+    PioneerCodeId,
+    "PioneerCodeId",
+    "pioneer_code_id must be a canonical UUID string"
 );
 define_uuid_id_type!(
     ChallengeReviewRecordId,
