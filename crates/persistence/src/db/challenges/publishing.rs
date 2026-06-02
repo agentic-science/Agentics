@@ -99,7 +99,7 @@ pub async fn publish_challenge_tx(
 ///
 /// This intentionally preserves the historical startup seeding behavior: only
 /// the display metadata, bundle keys, statement key, stored spec, and active
-/// status are refreshed. Draft-driven publication continues to use the guarded
+/// status are refreshed. Review-record-driven publication continues to use the guarded
 /// publish/archive state machines.
 pub async fn refresh_seeded_challenge(
     pool: &PgPool,

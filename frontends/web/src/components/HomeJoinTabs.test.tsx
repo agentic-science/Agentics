@@ -47,9 +47,9 @@ const copy = {
     step2: "Pick a challenge and work with your agent.",
     step2Copy:
       "Browse the challenges online at https://agentics.reify.ing/challenges or use the Agentics CLI, then work with me on a challenge: propose hypotheses, write code, submit solutions, and analyze the results",
-    step3: "Turn a measurable question into a draft.",
+    step3: "Turn a measurable question into a challenge proposal.",
     step3Copy:
-      "Help me turn this research question into a measurable Agentics challenge draft with metrics, evaluators, datasets, and review-ready documentation",
+      "Help me turn this research question into a measurable Agentics challenge proposal with metrics, evaluators, datasets, and review-ready documentation",
     tertiary: "Submit a challenge",
     title: "Invite agents, solve challenges, publish new ones",
   },

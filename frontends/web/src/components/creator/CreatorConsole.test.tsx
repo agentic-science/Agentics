@@ -4,9 +4,9 @@ import { SWRConfig } from "swr";
 import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  createChallengeDraft,
+  createChallengeReviewRecord,
   createChallengeShortlistRevision,
-  getChallengeDraft,
+  getChallengeReviewRecord,
   getChallengeShortlist,
   getCreatorChallengeParticipants,
   getCreatorChallengeStats,
@@ -16,7 +16,7 @@ import {
 } from "@/lib/creatorApi";
 import type {
   ChallengePrivateAssetResponse,
-  CreatorChallengeDraftResponse,
+  CreatorChallengeReviewRecordResponse,
 } from "@/lib/schemas";
 import messages from "../../../messages/en.json";
 import { ensureDomEnvironment } from "../../test/dom";
@@ -39,11 +39,11 @@ vi.mock("@/lib/creatorApi", () => {
 
   return {
     CreatorApiError: MockCreatorApiError,
-    createChallengeDraft: vi.fn(),
-    createChallengeDraftRequestSchema: passthroughSchema,
+    createChallengeReviewRecord: vi.fn(),
+    createChallengeReviewRecordRequestSchema: passthroughSchema,
     createChallengeShortlistRevision: vi.fn(),
     createChallengeShortlistRevisionRequestSchema: passthroughSchema,
-    getChallengeDraft: vi.fn(),
+    getChallengeReviewRecord: vi.fn(),
     getChallengeShortlist: vi.fn(),
     getCreatorChallengeParticipants: vi.fn(),
     getCreatorChallengeStats: vi.fn(),
@@ -59,10 +59,10 @@ const { cleanup, fireEvent, render, waitFor, within } = await import(
   "@testing-library/react"
 );
 
-const createChallengeDraftMock = createChallengeDraft as Mock;
+const createChallengeReviewRecordMock = createChallengeReviewRecord as Mock;
 const createChallengeShortlistRevisionMock =
   createChallengeShortlistRevision as Mock;
-const getChallengeDraftMock = getChallengeDraft as Mock;
+const getChallengeReviewRecordMock = getChallengeReviewRecord as Mock;
 const getChallengeShortlistMock = getChallengeShortlist as Mock;
 const getCreatorChallengeParticipantsMock =
   getCreatorChallengeParticipants as Mock;
@@ -78,7 +78,7 @@ describe("CreatorConsole", () => {
     startGithubLoginMock.mockResolvedValue({
       authorization_url: "https://github.com/login/oauth/authorize",
     });
-    getChallengeDraftMock.mockRejectedValue(new Error("not configured"));
+    getChallengeReviewRecordMock.mockRejectedValue(new Error("not configured"));
     getChallengeShortlistMock.mockResolvedValue({
       challenge_name: "frontier-cs-example-challenge",
       items: [],
@@ -120,18 +120,20 @@ describe("CreatorConsole", () => {
     vi.clearAllMocks();
   });
 
-  it("blocks draft creation until a GitHub creator session is loaded", async () => {
+  it("blocks review record creation until a GitHub creator session is loaded", async () => {
     const view = renderCreatorConsole();
-    fillDraftRequiredFields(view);
+    fillReviewRecordRequiredFields(view);
 
-    fireEvent.click(view.getByRole("button", { name: "Create draft" }));
+    fireEvent.click(
+      view.getByRole("button", { name: "Register PR for review" }),
+    );
 
     expect(
       await view.findByText(
-        "Sign in with GitHub before creating a challenge draft.",
+        "Sign in with GitHub before creating a challenge review record.",
       ),
     ).toBeTruthy();
-    expect(createChallengeDraftMock).not.toHaveBeenCalled();
+    expect(createChallengeReviewRecordMock).not.toHaveBeenCalled();
   });
 
   it("starts GitHub OAuth without a pioneer code for returning creators", async () => {
@@ -155,7 +157,7 @@ describe("CreatorConsole", () => {
     );
   });
 
-  it("creates a draft with the loaded creator identity and CSRF token", async () => {
+  it("creates a review record with the loaded creator identity and CSRF token", async () => {
     getCreatorSessionMock.mockResolvedValue({
       agent_id: "11111111-1111-4111-8111-111111111111",
       github_user_id: 123,
@@ -163,16 +165,20 @@ describe("CreatorConsole", () => {
       csrf_token: "csrf-token",
       expires_at: "2026-05-16T00:00:00Z",
     });
-    createChallengeDraftMock.mockResolvedValue(challengeDraftResponse);
+    createChallengeReviewRecordMock.mockResolvedValue(
+      challengeReviewRecordResponse,
+    );
 
     const view = renderCreatorConsole();
 
     expect(await view.findByText(/octocat/)).toBeTruthy();
-    fillDraftRequiredFields(view);
-    fireEvent.click(view.getByRole("button", { name: "Create draft" }));
+    fillReviewRecordRequiredFields(view);
+    fireEvent.click(
+      view.getByRole("button", { name: "Register PR for review" }),
+    );
 
     await waitFor(() =>
-      expect(createChallengeDraftMock).toHaveBeenCalledWith(
+      expect(createChallengeReviewRecordMock).toHaveBeenCalledWith(
         expect.objectContaining({
           repo_url: "https://github.com/agentics-reifying/agentics-challenges",
           pr_number: 42,
@@ -187,15 +193,15 @@ describe("CreatorConsole", () => {
     );
     expect(
       view.getByText(
-        "Challenge draft created: 44444444-4444-4444-8444-444444444444",
+        "Challenge review record created: 44444444-4444-4444-8444-444444444444",
       ),
     ).toBeTruthy();
-    expect(window.localStorage.getItem("agentics.creator.last_draft_id")).toBe(
-      "44444444-4444-4444-8444-444444444444",
-    );
+    expect(
+      window.localStorage.getItem("agentics.creator.last_review_record_id"),
+    ).toBe("44444444-4444-4444-8444-444444444444");
   });
 
-  it("rejects malformed PR numbers before creating a draft", async () => {
+  it("rejects malformed PR numbers before creating a review record", async () => {
     getCreatorSessionMock.mockResolvedValue({
       agent_id: "11111111-1111-4111-8111-111111111111",
       github_user_id: 123,
@@ -207,22 +213,26 @@ describe("CreatorConsole", () => {
     const view = renderCreatorConsole();
 
     expect(await view.findByText(/octocat/)).toBeTruthy();
-    fillDraftRequiredFields(view);
+    fillReviewRecordRequiredFields(view);
     fireEvent.input(view.getByLabelText("PR number"), {
       target: { value: "42abc" },
     });
-    fireEvent.click(view.getByRole("button", { name: "Create draft" }));
+    fireEvent.click(
+      view.getByRole("button", { name: "Register PR for review" }),
+    );
 
     expect(
       await view.findByText("PR number must be a positive integer."),
     ).toBeTruthy();
-    expect(createChallengeDraftMock).not.toHaveBeenCalled();
+    expect(createChallengeReviewRecordMock).not.toHaveBeenCalled();
   });
 
-  it("uploads a private asset and refreshes the draft detail", async () => {
+  it("uploads a private asset and refreshes the review record detail", async () => {
     getCreatorSessionMock.mockResolvedValue(creatorSessionResponse);
     uploadPrivateAssetMock.mockResolvedValue(privateAssetResponse);
-    getChallengeDraftMock.mockResolvedValue(challengeDraftWithPrivateAsset);
+    getChallengeReviewRecordMock.mockResolvedValue(
+      challengeReviewRecordWithPrivateAsset,
+    );
 
     const view = renderCreatorConsole();
 
@@ -234,8 +244,8 @@ describe("CreatorConsole", () => {
       throw new Error("private asset upload form was not rendered");
     }
     const privateAssetFields = within(privateAssetForm);
-    fireEvent.input(privateAssetFields.getByLabelText("Draft ID"), {
-      target: { value: challengeDraftResponse.id },
+    fireEvent.input(privateAssetFields.getByLabelText("Review record ID"), {
+      target: { value: challengeReviewRecordResponse.id },
     });
     const fileInput =
       privateAssetForm.querySelector<HTMLInputElement>('input[type="file"]');
@@ -251,7 +261,7 @@ describe("CreatorConsole", () => {
 
     await waitFor(() =>
       expect(uploadPrivateAssetMock).toHaveBeenCalledWith(
-        challengeDraftResponse.id,
+        challengeReviewRecordResponse.id,
         expect.objectContaining({
           asset_name: "official-seed-config",
           kind: "private_seeds",
@@ -306,8 +316,8 @@ function renderCreatorConsole() {
   );
 }
 
-/** Builds the fill draft required fields test fixture. */
-function fillDraftRequiredFields(view: RenderResult) {
+/** Builds the fill review record required fields test fixture. */
+function fillReviewRecordRequiredFields(view: RenderResult) {
   fireEvent.input(view.getByLabelText("PR number"), {
     target: { value: "42" },
   });
@@ -321,11 +331,11 @@ function fillDraftRequiredFields(view: RenderResult) {
   });
 }
 
-const challengeDraftResponse = {
+const challengeReviewRecordResponse = {
   id: "44444444-4444-4444-8444-444444444444",
   challenge_name: "frontier-cs-example-challenge",
   request: "new_challenge",
-  status: "draft",
+  status: "pending_review",
   creator_agent_id: "11111111-1111-4111-8111-111111111111",
   creator_github_user_id: 123,
   creator_github_login: "octocat",
@@ -359,7 +369,7 @@ const challengeDraftResponse = {
   validation_records: [],
   created_at: "2026-05-15T00:00:00Z",
   updated_at: "2026-05-15T00:00:00Z",
-} satisfies CreatorChallengeDraftResponse;
+} satisfies CreatorChallengeReviewRecordResponse;
 
 const creatorSessionResponse = {
   agent_id: "11111111-1111-4111-8111-111111111111",
@@ -371,22 +381,22 @@ const creatorSessionResponse = {
 
 const privateAssetResponse = {
   id: "55555555-5555-4555-8555-555555555555",
-  draft_id: challengeDraftResponse.id,
+  review_record_id: challengeReviewRecordResponse.id,
   asset_name: "official-seed-config",
   kind: "private_seeds",
   required: true,
   storage_key:
-    "challenge-drafts/44444444-4444-4444-8444-444444444444/private-assets/official-seed-config.zip",
+    "challenge-review-records/44444444-4444-4444-8444-444444444444/private-assets/official-seed-config.zip",
   uploader_agent_id: "11111111-1111-4111-8111-111111111111",
   size_bytes: 9,
   sha256: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
   created_at: "2026-05-15T00:00:00Z",
 } satisfies ChallengePrivateAssetResponse;
 
-const challengeDraftWithPrivateAsset = {
-  ...challengeDraftResponse,
+const challengeReviewRecordWithPrivateAsset = {
+  ...challengeReviewRecordResponse,
   private_assets: [privateAssetResponse],
-} satisfies CreatorChallengeDraftResponse;
+} satisfies CreatorChallengeReviewRecordResponse;
 
 const shortlistWithAgent = {
   challenge_name: "frontier-cs-example-challenge",

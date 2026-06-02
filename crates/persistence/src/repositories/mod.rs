@@ -5,7 +5,7 @@
 //! broad bag of free functions.
 
 mod agents;
-mod challenge_drafts;
+mod challenge_review_records;
 mod challenges;
 mod evaluation_jobs;
 mod leaderboard;
@@ -17,7 +17,7 @@ mod solution_submissions;
 use sqlx::PgPool;
 
 pub use agents::AgentsRepository;
-pub use challenge_drafts::ChallengeDraftsRepository;
+pub use challenge_review_records::ChallengeReviewRecordsRepository;
 pub use challenges::ChallengesRepository;
 pub use evaluation_jobs::EvaluationJobsRepository;
 pub use leaderboard::LeaderboardRepository;
@@ -28,12 +28,12 @@ pub use solution_submissions::SolutionSubmissionsRepository;
 
 pub use crate::db::agents::{AgentRecord, AuthenticatedAgent, RegisterAgentInput};
 pub use crate::db::challenge_creation::{
-    AdminChallengePrivateAssetRecord, BeginChallengeDraftValidationInput, ChallengeDraftRecord,
-    ChallengeDraftValidationRecord, ChallengePrivateAssetPurgeRecord, ChallengePrivateAssetRecord,
-    ClaimedChallengeDraftForPublish, CreateChallengeDraftAuditEventInput,
-    CreateChallengeDraftInput, CreateChallengePrivateAssetInput,
-    FinishChallengeDraftValidationInput, PublishArchiveChallengeDraftInput,
-    PublishNewChallengeDraftInput,
+    AdminChallengePrivateAssetRecord, BeginChallengeReviewRecordValidationInput,
+    ChallengePrivateAssetPurgeRecord, ChallengePrivateAssetRecord, ChallengeReviewRecordRecord,
+    ChallengeReviewValidationRecord, ClaimedChallengeReviewRecordForPublish,
+    CreateChallengePrivateAssetInput, CreateChallengeReviewRecordAuditEventInput,
+    CreateChallengeReviewRecordInput, FinishChallengeReviewRecordValidationInput,
+    PublishArchiveChallengeReviewRecordInput, PublishNewChallengeReviewRecordInput,
 };
 pub use crate::db::challenges::{
     AdminChallengeListItemRecord, ChallengeCatalogFilters, ChallengeMoltbookDiscussionRecord,
@@ -84,8 +84,8 @@ impl Repositories {
         ChallengesRepository { pool: &self.pool }
     }
 
-    pub fn challenge_drafts(&self) -> ChallengeDraftsRepository<'_> {
-        ChallengeDraftsRepository { pool: &self.pool }
+    pub fn challenge_review_records(&self) -> ChallengeReviewRecordsRepository<'_> {
+        ChallengeReviewRecordsRepository { pool: &self.pool }
     }
 
     pub fn solution_submissions(&self) -> SolutionSubmissionsRepository<'_> {

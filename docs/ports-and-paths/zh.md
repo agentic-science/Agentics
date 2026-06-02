@@ -101,7 +101,7 @@ production project，并拒绝这个 root 之外的 destructive paths。
 
 Production Compose 会把 standalone `agentics-challenges` checkout 从
 `AGENTICS_CHALLENGE_REVIEW_REPOSITORY_HOST_ROOT` bind-mount 到
-`AGENTICS_CHALLENGE_REVIEW_REPOSITORY_CONTAINER_ROOT`。Challenge draft validation 和
+`AGENTICS_CHALLENGE_REVIEW_REPOSITORY_CONTAINER_ROOT`。Challenge review record validation 和
 publishing 的 admin `repository_path` 应使用这个 container path。Host checkout 必须
 clean、位于 reviewed commit，并且 production API runtime user 可读。
 
@@ -121,7 +121,7 @@ bundle archives、unpacked bundles 和 S3 downloads。Stale `_tmp/` durable obje
 | --- | --- |
 | `solution-submissions/` | Uploaded solution ZIPs |
 | `eval-artifacts/` | Runner logs 和 evaluation artifacts |
-| `challenge-drafts/<draft-id>/private-assets/` | Uploaded private asset ZIP overlays |
+| `challenge-review-records/<review-record-id>/private-assets/` | Uploaded private asset ZIP overlays |
 | `challenge-bundles/` | 不可变 private challenge bundle tar archives |
 | `challenge-public-bundles/` | 不可变 public-only challenge bundle tar archives |
 | `challenge-statements/` | Public `statement.md` objects |

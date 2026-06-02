@@ -51,8 +51,8 @@ export function OverviewPanel({
       />
       <StatCard
         icon={<GitPullRequest className="w-5 h-5" />}
-        label={t("drafts")}
-        value={data.drafts.items.length.toString()}
+        label={t("reviewRecords")}
+        value={data.reviewRecords.items.length.toString()}
         tone="teal"
       />
       <StatCard

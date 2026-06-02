@@ -15,10 +15,11 @@ use agentics_domain::models::challenge::{
     ChallengeListResponse, PublishChallengeResponse,
 };
 use agentics_domain::models::challenge_creation::{
-    AdminChallengePrivateAssetListResponse, ChallengeDraftCleanupResponse,
-    ChallengeDraftListResponse, ChallengeDraftResponse, ChallengePrivateAssetResponse,
-    CreateChallengeDraftRequest, CreatorChallengeDraftResponse, ReviewChallengeDraftRequest,
-    UploadChallengePrivateAssetRequest, ValidateChallengeDraftRequest,
+    AdminChallengePrivateAssetListResponse, ChallengePrivateAssetResponse,
+    ChallengeReviewDecisionRequest, ChallengeReviewRecordCleanupResponse,
+    ChallengeReviewRecordListResponse, ChallengeReviewRecordResponse,
+    CreateChallengeReviewRecordRequest, CreatorChallengeReviewRecordResponse,
+    UploadChallengePrivateAssetRequest, ValidateChallengeReviewRecordRequest,
 };
 use agentics_domain::models::request::{
     AdminCapacityResponse, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
@@ -71,11 +72,17 @@ web_schema_exports! {
     (ChallengeAdminResponse, "challengeAdminResponseSchema"),
     (ChallengeDetailResponse, "challengeDetailResponseSchema"),
     (
-        ChallengeDraftCleanupResponse,
-        "challengeDraftCleanupResponseSchema",
+        ChallengeReviewRecordCleanupResponse,
+        "challengeReviewRecordCleanupResponseSchema",
     ),
-    (ChallengeDraftListResponse, "challengeDraftListResponseSchema"),
-    (ChallengeDraftResponse, "challengeDraftResponseSchema"),
+    (
+        ChallengeReviewRecordListResponse,
+        "challengeReviewRecordListResponseSchema",
+    ),
+    (
+        ChallengeReviewRecordResponse,
+        "challengeReviewRecordResponseSchema",
+    ),
     (ChallengeListResponse, "challengeListResponseSchema"),
     (
         ChallengeMoltbookDiscussionResponse,
@@ -91,12 +98,12 @@ web_schema_exports! {
         "challengeShortlistRevisionResponseSchema",
     ),
     (
-        CreateChallengeDraftRequest,
-        "createChallengeDraftRequestSchema",
+        CreateChallengeReviewRecordRequest,
+        "createChallengeReviewRecordRequestSchema",
     ),
     (
-        CreatorChallengeDraftResponse,
-        "creatorChallengeDraftResponseSchema",
+        CreatorChallengeReviewRecordResponse,
+        "creatorChallengeReviewRecordResponseSchema",
     ),
     (
         CreateChallengeShortlistRevisionRequest,
@@ -104,16 +111,16 @@ web_schema_exports! {
     ),
     (CreatePioneerCodeRequest, "createPioneerCodeRequestSchema"),
     (
-        ReviewChallengeDraftRequest,
-        "reviewChallengeDraftRequestSchema",
+        ChallengeReviewDecisionRequest,
+        "challengeReviewDecisionRequestSchema",
     ),
     (
         UploadChallengePrivateAssetRequest,
         "uploadChallengePrivateAssetRequestSchema",
     ),
     (
-        ValidateChallengeDraftRequest,
-        "validateChallengeDraftRequestSchema",
+        ValidateChallengeReviewRecordRequest,
+        "validateChallengeReviewRecordRequestSchema",
     ),
     (PublishChallengeResponse, "publishChallengeResponseSchema"),
     (CreatorMeResponse, "creatorMeResponseSchema"),
@@ -279,7 +286,8 @@ mod tests {
         for expected in [
             "adminCapacityResponseSchema",
             "challengeDetailResponseSchema",
-            "creatorChallengeDraftResponseSchema",
+            "challengeReviewRecordResponseSchema",
+            "creatorChallengeReviewRecordResponseSchema",
             "solutionSubmissionResultReportResponseSchema",
         ] {
             assert!(

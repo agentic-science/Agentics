@@ -203,9 +203,9 @@ console.
    targets, metrics, eligibility, visibility, and one to six keywords.
 4. Sign in to `/creator` with GitHub OAuth. New creators need a pioneer code
    before OAuth starts.
-5. Create the draft from PR metadata and upload declared private asset ZIP
+5. Create the review record from PR metadata and upload declared private asset ZIP
    overlays through the creator console.
-6. Ask an admin reviewer to validate, approve, and publish the draft.
+6. Ask an admin reviewer to validate, approve, and publish the review record.
 
 Start from the full authoring guide:
 

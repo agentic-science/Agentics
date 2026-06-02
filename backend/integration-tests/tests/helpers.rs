@@ -170,15 +170,21 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
     config.quotas.official_runs_per_agent_challenge_day = 5;
     config.quotas.max_active_official_jobs = 20;
     config.quotas.max_active_agents = 1_000;
-    config.quotas.max_active_challenge_drafts_per_agent = 10;
-    config.quotas.challenge_private_asset_bytes_per_draft = 250 * 1024 * 1024;
-    config.quotas.challenge_draft_validations_per_day = 10;
-    config.quotas.challenge_draft_validation_timeout_minutes = 30;
+    config.quotas.max_active_challenge_review_records_per_agent = 10;
+    config
+        .quotas
+        .challenge_private_asset_bytes_per_review_record = 250 * 1024 * 1024;
+    config.quotas.challenge_review_record_validations_per_day = 10;
+    config
+        .quotas
+        .challenge_review_record_validation_timeout_minutes = 30;
     config
         .quotas
         .challenge_private_asset_pending_timeout_minutes = 30;
-    config.quotas.challenge_draft_publish_timeout_minutes = 30;
-    config.quotas.challenge_draft_ttl_days = 14;
+    config
+        .quotas
+        .challenge_review_record_publish_timeout_minutes = 30;
+    config.quotas.challenge_review_record_ttl_days = 14;
     config.quotas.unpublished_challenge_asset_grace_days = 7;
 
     config.github_oauth.client_id = Some("test-client-id".to_string());

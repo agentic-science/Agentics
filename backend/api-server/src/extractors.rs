@@ -8,7 +8,9 @@ use secrecy::ExposeSecret;
 use serde::de::DeserializeOwned;
 
 use agentics_domain::models::ErrorDetail;
-use agentics_domain::models::ids::{AgentId, AgentTokenId, ChallengeDraftId, SolutionSubmissionId};
+use agentics_domain::models::ids::{
+    AgentId, AgentTokenId, ChallengeReviewRecordId, SolutionSubmissionId,
+};
 use agentics_error::ServiceError;
 use agentics_persistence::{AuthenticatedAdminSession, AuthenticatedCreatorSession, Repositories};
 use agentics_services::auth;
@@ -42,27 +44,27 @@ impl FromRequestParts<AppState> for SolutionSubmissionPath {
     }
 }
 
-/// Validated challenge-draft id extracted from a route path parameter.
+/// Validated challenge-review-record id extracted from a route path parameter.
 ///
 /// This is HTTP framework glue, not a filesystem or storage path. Its only
-/// responsibility is to parse `challenge_draft_id` before handlers perform
+/// responsibility is to parse `challenge_review_record_id` before handlers perform
 /// authorization or database lookup, so malformed UUIDs fail as `400 bad_request`
 /// instead of surfacing later as SQL cast errors.
 #[derive(Debug, Clone)]
-pub struct ChallengeDraftIdPath(pub ChallengeDraftId);
+pub struct ChallengeReviewRecordIdPath(pub ChallengeReviewRecordId);
 
-impl FromRequestParts<AppState> for ChallengeDraftIdPath {
+impl FromRequestParts<AppState> for ChallengeReviewRecordIdPath {
     type Rejection = ApiError;
 
-    /// Parses the path segment as a canonical challenge-draft id.
+    /// Parses the path segment as a canonical challenge-review-record id.
     async fn from_request_parts(
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
         let Path(raw) = Path::<String>::from_request_parts(parts, state)
             .await
-            .map_err(|_| bad_request("challenge_draft_id path parameter is required"))?;
-        let id = ChallengeDraftId::try_new(raw).map_err(|e| bad_request(&e.to_string()))?;
+            .map_err(|_| bad_request("challenge_review_record_id path parameter is required"))?;
+        let id = ChallengeReviewRecordId::try_new(raw).map_err(|e| bad_request(&e.to_string()))?;
         Ok(Self(id))
     }
 }

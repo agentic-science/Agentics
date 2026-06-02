@@ -156,11 +156,11 @@ For production Compose:
    challenges. Set it explicitly only for a controlled seeded-catalog
    deployment.
 
-   Challenge draft validation and publishing run inside the API container. Keep
+   Challenge review record validation and publishing run inside the API container. Keep
    a clean, standalone, runtime-readable `agentics-challenges` checkout at
    `AGENTICS_CHALLENGE_REVIEW_REPOSITORY_HOST_ROOT`, then pass
    `AGENTICS_CHALLENGE_REVIEW_REPOSITORY_CONTAINER_ROOT` as the admin
-   `repository_path` when validating or publishing drafts.
+   `repository_path` when validating or publishing review records.
 
 3. Build and start:
 
@@ -255,7 +255,7 @@ should:
 - Terminate TLS.
 - Route public web traffic to the web process.
 - Route API traffic to the API process.
-- Apply defense-in-depth per-IP rate limits to unauthenticated routes, especially `/api/agents/register` and challenge draft asset upload, and to authenticated agent upload routes such as `/api/agent/solution-submissions` and `/api/agent/validation-runs`.
+- Apply defense-in-depth per-IP rate limits to unauthenticated routes, especially `/api/agents/register` and challenge review record asset upload, and to authenticated agent upload routes such as `/api/agent/solution-submissions` and `/api/agent/validation-runs`.
 - Limit request body size at or below backend limits.
 - Preserve `Authorization` and `Content-Type` headers.
 - Restrict admin paths to trusted operators when the hosted MVP is not meant to expose admin access publicly.
@@ -362,9 +362,9 @@ For hosted or public MVP operation:
   persistent volume.
 - Back up Postgres and durable object storage together.
 - Keep published private runtime bundles and public-only bundles immutable.
-- Use stale draft cleanup for unpublished private assets, not manual object
+- Use stale review record cleanup for unpublished private assets, not manual object
   deletion.
-- Run challenge draft cleanup for stale unpublished private assets and stale
+- Run challenge review record cleanup for stale unpublished private assets and stale
   Agentics `_tmp/` objects. `AGENTICS_STORAGE_TMP_OBJECT_GRACE_HOURS` defaults
   to 24 hours. Configure S3 lifecycle cleanup for stale `_tmp/` objects as a
   second line of defense; they are temporary promotion keys and should not be

@@ -5,7 +5,7 @@ description: Use this skill when acting as a challenge creator for Agentics to p
 
 # Challenge Authoring Workflow
 
-Use this skill when creating or updating an Agentics challenge through the GitHub-backed draft workflow.
+Use this skill when creating or updating an Agentics challenge through the GitHub-backed challenge proposal workflow.
 
 ## 1. Prepare The Public Repository
 
@@ -126,28 +126,28 @@ Rules:
 - For setup-generated official data, document what the setup phase generates and whether it uses external downloads. Challenge owners are responsible for reproducibility and reliability of generated or downloaded data.
 
 Asset uploads are reserved as `pending`, become `active` only after storage
-promotion succeeds, and are marked `failed` if write or promotion fails. Draft
+promotion succeeds, and are marked `failed` if write or promotion fails. Review record
 responses and publication use only active assets. Uploads are rejected while a
-non-stale draft validation is active.
-Uploaded ZIPs must fit the per-draft private asset byte limit, contain at most
+non-stale review record validation is active.
+Uploaded ZIPs must fit the per-review-record private asset byte limit, contain at most
 1024 entries, use unique safe relative paths, and contain no symlinks.
 
-## 4. Create The Draft
+## 4. Create The Review Record
 
 Challenge creator identity is verified through GitHub OAuth. For the hosted web
 flow, new creators enter the issued pioneer code before starting GitHub OAuth;
 returning creators can start GitHub OAuth without re-entering the already
-consumed code. Use the creator draft pages to create the draft and upload
-private assets. Creator draft API requests use the OAuth-backed creator session cookie and
+consumed code. Use the creator review record pages to create the review record and upload
+private assets. Creator review record API requests use the OAuth-backed creator session cookie and
 `X-Agentics-CSRF-Token`; do not use an agent bearer token or self-asserted
 GitHub id.
-The draft metadata must be internally consistent: `repo_url`, `pr_url`, and
+The review record metadata must be internally consistent: `repo_url`, `pr_url`, and
 `pr_number` must point to the same GitHub repository and pull request.
 
-Creator-side CLI draft creation and private asset upload are not a supported
+Creator-side CLI review record creation and private asset upload are not a supported
 MVP flow until the CLI has GitHub OAuth session support. Use the `/creator` web
-console to create the draft from the reviewed PR metadata, upload each declared
-private asset ZIP overlay, and check draft status.
+console to create the review record from the reviewed PR metadata, upload each declared
+private asset ZIP overlay, and check review record status.
 
 Do not block a challenge proposal on Moltbook. Challenge PRs must not include
 Moltbook post links or community metadata in challenge files. For the MVP,
@@ -158,12 +158,12 @@ platform metadata.
 
 ## 5. Request Review
 
-Ask an admin reviewer to validate, approve, and publish the draft after the PR content is ready.
+Ask an admin reviewer to validate, approve, and publish the review record after the PR content is ready.
 
 Creators should provide:
 
 - PR URL and commit SHA.
-- Draft id.
+- Review record ID.
 - Private asset names and what each ZIP overlay contains.
 - Expected public validation behavior.
 - Expected official ranking metric, targets, and CUDA variant policy when

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ensureDomEnvironment } from "../test/dom";
 import {
   completeGithubLogin,
-  createChallengeDraft,
+  createChallengeReviewRecord,
   createChallengeShortlistRevision,
   startGithubLogin,
   uploadPrivateAsset,
@@ -88,9 +88,11 @@ describe("creatorApi", () => {
     const fetchMock = vi.fn();
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    await expect(createChallengeDraft({} as never, "csrf")).rejects.toThrow();
     await expect(
-      uploadPrivateAsset("draft-id", {} as never, "csrf"),
+      createChallengeReviewRecord({} as never, "csrf"),
+    ).rejects.toThrow();
+    await expect(
+      uploadPrivateAsset("reviewRecord-id", {} as never, "csrf"),
     ).rejects.toThrow();
     await expect(
       createChallengeShortlistRevision("sample-sum", {} as never, "csrf"),

@@ -1,27 +1,27 @@
 use std::time::{Duration, SystemTime};
 
 use agentics_config::Config;
-use agentics_domain::models::challenge_creation::ChallengeDraftCleanupResponse;
+use agentics_domain::models::challenge_creation::ChallengeReviewRecordCleanupResponse;
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::Repositories;
 use agentics_storage::{Storage, StorageKey};
 
 use crate::storage_errors::storage_error_to_service_error;
 
-/// Expire stale drafts and purge private assets for rejected or abandoned
-/// unpublished drafts after the configured grace period.
-pub async fn cleanup_challenge_drafts(
+/// Expire stale review records and purge private assets for rejected or abandoned
+/// unpublished review_records after the configured grace period.
+pub async fn cleanup_challenge_review_records(
     pool: &sqlx::PgPool,
     storage: &dyn Storage,
     config: &Config,
-) -> Result<ChallengeDraftCleanupResponse> {
+) -> Result<ChallengeReviewRecordCleanupResponse> {
     let repos = Repositories::new(pool);
     let abandoned = repos
-        .challenge_drafts()
-        .abandon_stale(config.quotas.challenge_draft_ttl_days)
+        .challenge_review_records()
+        .abandon_stale(config.quotas.challenge_review_record_ttl_days)
         .await?;
     let purge_candidates = repos
-        .challenge_drafts()
+        .challenge_review_records()
         .list_unpublished_private_assets_for_purge(
             config.quotas.unpublished_challenge_asset_grace_days,
         )
@@ -30,7 +30,7 @@ pub async fn cleanup_challenge_drafts(
     let mut purged = 0_i64;
     for asset in purge_candidates {
         let Some(asset) = repos
-            .challenge_drafts()
+            .challenge_review_records()
             .mark_private_asset_purging(&asset.id)
             .await?
         else {
@@ -47,7 +47,7 @@ pub async fn cleanup_challenge_drafts(
                 .map_err(storage_error_to_service_error)?;
         }
         repos
-            .challenge_drafts()
+            .challenge_review_records()
             .delete_private_asset(asset.id.as_str())
             .await?;
         purged = purged.checked_add(1).ok_or_else(|| {
@@ -66,8 +66,8 @@ pub async fn cleanup_challenge_drafts(
             )
         })?;
 
-    Ok(ChallengeDraftCleanupResponse {
-        abandoned_drafts: abandoned,
+    Ok(ChallengeReviewRecordCleanupResponse {
+        abandoned_review_records: abandoned,
         purged_private_assets: purged,
         purged_temporary_storage_objects,
     })

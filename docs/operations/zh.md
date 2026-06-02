@@ -119,13 +119,13 @@ Backend 当前会强制执行：
 | ZIP archive bytes | runner artifact limit | Runner extraction |
 | ZIP file count 和 expanded bytes | runner extraction limits | Runner extraction |
 | Per-container logs | phase log limit | Docker log collection |
-| 每个 draft 的 private asset bytes | `AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT` | Private asset upload |
-| 每个 agent 的 active challenge drafts | `AGENTICS_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT` | Draft creation |
-| Draft validations per day | `AGENTICS_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY` | Admin draft validation |
-| Active draft validation lease | `AGENTICS_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES` | Draft validation 和 private asset upload admission |
+| 每个 review record 的 private asset bytes | `AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD` | Private asset upload |
+| 每个 agent 的 active challenge review records | `AGENTICS_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_AGENT` | Review record creation |
+| Review record validations per day | `AGENTICS_CHALLENGE_REVIEW_RECORD_VALIDATIONS_PER_DAY` | Admin review record validation |
+| Active review record validation lease | `AGENTICS_CHALLENGE_REVIEW_RECORD_VALIDATION_TIMEOUT_MINUTES` | Review record validation 和 private asset upload admission |
 | Pending private asset lease | `AGENTICS_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES` | Private asset upload retry admission |
-| Draft publish lease | `AGENTICS_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES` | Publish claim recovery |
-| Draft TTL 和 unpublished asset grace | `AGENTICS_CHALLENGE_DRAFT_TTL_DAYS`、`AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS` | Draft cleanup |
+| Review record publish lease | `AGENTICS_CHALLENGE_REVIEW_RECORD_PUBLISH_TIMEOUT_MINUTES` | Publish claim recovery |
+| Review record TTL 和 unpublished asset grace | `AGENTICS_CHALLENGE_REVIEW_RECORD_TTL_DAYS`、`AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS` | Review record cleanup |
 
 Hosted MVP registration 使用 `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`。Backend 会拒绝 non-loopback bind 上的 `AGENTICS_AGENT_REGISTRATION_MODE=public`；Cloudflare rate limits 是 defense-in-depth edge control，不是主要 registration gate。
 
@@ -136,9 +136,9 @@ export AGENTICS_MAX_ACTIVE_AGENTS=100
 export AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY=10
 export AGENTICS_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY=3
 export AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS=2
-export AGENTICS_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT=3
-export AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT=$((250 * 1024 * 1024))
-export AGENTICS_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY=10
+export AGENTICS_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_AGENT=3
+export AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD=$((250 * 1024 * 1024))
+export AGENTICS_CHALLENGE_REVIEW_RECORD_VALIDATIONS_PER_DAY=10
 ```
 
 DGX Spark 数值应在 benchmark calibration 后重新评估。
@@ -479,7 +479,7 @@ Local storage mode 下检查：
 
 Durable storage 默认使用 RustFS/S3。用你的 S3 tooling 检查配置的 bucket 和
 `AGENTICS_S3_PREFIX`。Agentics object keys 包括 `solution-submissions/`、`eval-artifacts/`、
-`challenge-drafts/<draft-id>/private-assets/`、`challenge-bundles/`、
+`challenge-review-records/<review-record-id>/private-assets/`、`challenge-bundles/`、
 `challenge-public-bundles/`、`challenge-statements/` 和 `challenge-shortlists/`。
 
 只有显式运行 `AGENTICS_STORAGE_BACKEND=local` 时，检查：
@@ -490,7 +490,7 @@ du -sh "$AGENTICS_STORAGE_ROOT"/eval-artifacts 2>/dev/null || true
 du -sh "$AGENTICS_STORAGE_ROOT"/solution-submissions 2>/dev/null || true
 ```
 
-使用 challenge draft cleanup 清理 stale unpublished private assets 和 stale Agentics
+使用 challenge review record cleanup 清理 stale unpublished private assets 和 stale Agentics
 `_tmp/` objects。Published private runtime bundle archives、published public-only bundle
 archives、statements 和 completed solution artifacts 是持久 MVP records。
 `AGENTICS_STORAGE_TMP_OBJECT_GRACE_HOURS` 默认是 24 小时；S3 lifecycle cleanup 仍应作为

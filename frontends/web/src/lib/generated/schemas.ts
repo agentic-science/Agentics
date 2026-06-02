@@ -60,7 +60,7 @@ export const adminChallengeListResponseSchema = z
             )
             .default([]),
           status: z
-            .enum(["draft", "active", "archived"])
+            .enum(["pending_review", "active", "archived"])
             .describe(
               "Persistent lifecycle state for a challenge shell or published benchmark.",
             ),
@@ -448,7 +448,7 @@ export const adminChallengePrivateAssetListResponseSchema = z
             .regex(
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
-          draft_id: z
+          review_record_id: z
             .string()
             .uuid()
             .regex(
@@ -688,7 +688,7 @@ export const challengeAdminResponseSchema = z
       )
       .default([]),
     status: z
-      .enum(["draft", "active", "archived"])
+      .enum(["pending_review", "active", "archived"])
       .describe(
         "Persistent lifecycle state for a challenge shell or published benchmark.",
       ),
@@ -1468,18 +1468,164 @@ export const challengeDetailResponseSchema = z
     "Public challenge detail response with spec and Markdown statement.",
   );
 
-export const challengeDraftCleanupResponseSchema = z
+export const challengeListResponseSchema = z
   .object({
-    abandoned_drafts: z.number().int(),
+    items: z.array(
+      z
+        .object({
+          challenge_name: z
+            .string()
+            .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+            .min(3)
+            .max(63),
+          title: z.string(),
+          summary: z
+            .object({ en: z.string(), zh: z.string() })
+            .strict()
+            .describe(
+              "English and Chinese text for short public challenge copy.",
+            ),
+          keywords: z
+            .array(
+              z
+                .string()
+                .min(1)
+                .max(30)
+                .describe(
+                  "Public challenge keyword. Runtime validation enforces a 30 UTF-8 byte maximum and rejects control characters.",
+                ),
+            )
+            .min(1)
+            .max(6),
+          starts_at: z.string(),
+          closes_at: z.string().optional(),
+          eligibility: z
+            .object({
+              type: z
+                .enum(["open", "private_shortlist"])
+                .describe("Stable eligibility policy names."),
+            })
+            .strict()
+            .describe("Eligibility policy for a challenge."),
+          moltbook_discussion_url: z
+            .string()
+            .url()
+            .regex(/^https:\/\/www\.moltbook\.com\/post\/[A-Za-z0-9_-]+$/)
+            .optional(),
+        })
+        .strict()
+        .describe("One row in the public challenge catalog."),
+    ),
+    total_count: z.number().int(),
+    limit: z.number().int(),
+    offset: z.number().int(),
+    has_more: z.boolean(),
+  })
+  .strict()
+  .describe("Public challenge catalog response.");
+
+export const challengeMoltbookDiscussionResponseSchema = z
+  .object({
+    challenge_name: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63),
+    moltbook: z
+      .object({
+        submolt_name: z
+          .string()
+          .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){0,28}[a-z0-9]$/)
+          .min(2)
+          .max(30),
+        submolt_url: z
+          .string()
+          .url()
+          .regex(
+            /^https:\/\/www\.moltbook\.com\/m\/[a-z0-9](?:[a-z0-9]|-(?!-)){0,28}[a-z0-9]$/,
+          ),
+        discussion_url: z
+          .string()
+          .url()
+          .regex(/^https:\/\/www\.moltbook\.com\/post\/[A-Za-z0-9_-]+$/)
+          .optional(),
+      })
+      .strict()
+      .describe(
+        "Public Moltbook community metadata exposed on challenge detail surfaces.",
+      ),
+  })
+  .strict()
+  .describe(
+    "Admin response after setting or clearing a challenge Moltbook discussion anchor.",
+  );
+
+export const challengePrivateAssetResponseSchema = z
+  .object({
+    id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    review_record_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    asset_name: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+$/)
+      .min(1),
+    kind: z
+      .enum([
+        "private_benchmark_data",
+        "private_evaluator_package",
+        "private_seeds",
+        "private_reference_outputs",
+      ])
+      .describe("Supported private asset classes for challenge creation."),
+    required: z.boolean(),
+    size_bytes: z.number().int(),
+    sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    storage_key: z
+      .string()
+      .regex(
+        /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
+      ),
+    uploader_agent_id: z
+      .string()
+      .uuid()
+      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    created_at: z.string(),
+  })
+  .strict()
+  .describe(
+    "API response for one private benchmark asset bound to a review record.",
+  );
+
+export const challengeReviewDecisionRequestSchema = z
+  .object({
+    message: z.string().default(""),
+    expected_validation_bundle_sha256: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+  })
+  .strict()
+  .describe(
+    "Admin payload for accepting or rejecting a challenge review record.",
+  );
+
+export const challengeReviewRecordCleanupResponseSchema = z
+  .object({
+    abandoned_review_records: z.number().int(),
     purged_private_assets: z.number().int(),
     purged_temporary_storage_objects: z.number().int(),
   })
   .strict()
   .describe(
-    "Admin response returned after abandoning stale drafts and deleting\npurge-eligible unpublished private asset records.",
+    "Admin response returned after abandoning stale review records and deleting\npurge-eligible unpublished private asset records.",
   );
 
-export const challengeDraftListResponseSchema = z
+export const challengeReviewRecordListResponseSchema = z
   .object({
     items: z.array(
       z
@@ -1500,7 +1646,7 @@ export const challengeDraftListResponseSchema = z
             .describe("Lifecycle request represented by a public manifest."),
           status: z
             .enum([
-              "draft",
+              "pending_review",
               "validated",
               "approved",
               "publishing",
@@ -1508,7 +1654,7 @@ export const challengeDraftListResponseSchema = z
               "published",
               "abandoned",
             ])
-            .describe("Draft status used by the review lifecycle."),
+            .describe("Status used by the challenge review record lifecycle."),
           creator_agent_id: z
             .string()
             .uuid()
@@ -1616,7 +1762,7 @@ export const challengeDraftListResponseSchema = z
                     })
                     .strict()
                     .describe(
-                      "Private asset that must be uploaded directly to Agentics for a draft.",
+                      "Private asset that must be uploaded directly to Agentics for a review record.",
                     ),
                 )
                 .default([]),
@@ -1662,7 +1808,7 @@ export const challengeDraftListResponseSchema = z
                     .regex(
                       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
                     ),
-                  draft_id: z
+                  review_record_id: z
                     .string()
                     .uuid()
                     .regex(
@@ -1700,7 +1846,7 @@ export const challengeDraftListResponseSchema = z
                 })
                 .strict()
                 .describe(
-                  "API response for one private benchmark asset bound to a draft.",
+                  "API response for one private benchmark asset bound to a review record.",
                 ),
             )
             .default([]),
@@ -1714,7 +1860,7 @@ export const challengeDraftListResponseSchema = z
                     .regex(
                       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
                     ),
-                  draft_id: z
+                  review_record_id: z
                     .string()
                     .uuid()
                     .regex(
@@ -1723,7 +1869,7 @@ export const challengeDraftListResponseSchema = z
                   status: z
                     .enum(["running", "passed", "failed"])
                     .describe(
-                      "Validation record status for a challenge draft.",
+                      "Validation record status for a challenge review record.",
                     ),
                   message: z.string(),
                   repository_path: z.string(),
@@ -1742,13 +1888,13 @@ export const challengeDraftListResponseSchema = z
           updated_at: z.string(),
         })
         .strict()
-        .describe("API response for one challenge draft."),
+        .describe("API response for one challenge review record."),
     ),
   })
   .strict()
-  .describe("List response for admin challenge draft review.");
+  .describe("List response for admin challenge review record review.");
 
-export const challengeDraftResponseSchema = z
+export const challengeReviewRecordResponseSchema = z
   .object({
     id: z
       .string()
@@ -1764,7 +1910,7 @@ export const challengeDraftResponseSchema = z
       .describe("Lifecycle request represented by a public manifest."),
     status: z
       .enum([
-        "draft",
+        "pending_review",
         "validated",
         "approved",
         "publishing",
@@ -1772,7 +1918,7 @@ export const challengeDraftResponseSchema = z
         "published",
         "abandoned",
       ])
-      .describe("Draft status used by the review lifecycle."),
+      .describe("Status used by the challenge review record lifecycle."),
     creator_agent_id: z
       .string()
       .uuid()
@@ -1876,7 +2022,7 @@ export const challengeDraftResponseSchema = z
               })
               .strict()
               .describe(
-                "Private asset that must be uploaded directly to Agentics for a draft.",
+                "Private asset that must be uploaded directly to Agentics for a review record.",
               ),
           )
           .default([]),
@@ -1920,7 +2066,7 @@ export const challengeDraftResponseSchema = z
               .regex(
                 /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
               ),
-            draft_id: z
+            review_record_id: z
               .string()
               .uuid()
               .regex(
@@ -1958,7 +2104,7 @@ export const challengeDraftResponseSchema = z
           })
           .strict()
           .describe(
-            "API response for one private benchmark asset bound to a draft.",
+            "API response for one private benchmark asset bound to a review record.",
           ),
       )
       .default([]),
@@ -1972,7 +2118,7 @@ export const challengeDraftResponseSchema = z
               .regex(
                 /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
               ),
-            draft_id: z
+            review_record_id: z
               .string()
               .uuid()
               .regex(
@@ -1980,7 +2126,9 @@ export const challengeDraftResponseSchema = z
               ),
             status: z
               .enum(["running", "passed", "failed"])
-              .describe("Validation record status for a challenge draft."),
+              .describe(
+                "Validation record status for a challenge review record.",
+              ),
             message: z.string(),
             repository_path: z.string(),
             manifest_sha256: z.string().regex(/^[0-9a-f]{64}$/),
@@ -1998,138 +2146,7 @@ export const challengeDraftResponseSchema = z
     updated_at: z.string(),
   })
   .strict()
-  .describe("API response for one challenge draft.");
-
-export const challengeListResponseSchema = z
-  .object({
-    items: z.array(
-      z
-        .object({
-          challenge_name: z
-            .string()
-            .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
-            .min(3)
-            .max(63),
-          title: z.string(),
-          summary: z
-            .object({ en: z.string(), zh: z.string() })
-            .strict()
-            .describe(
-              "English and Chinese text for short public challenge copy.",
-            ),
-          keywords: z
-            .array(
-              z
-                .string()
-                .min(1)
-                .max(30)
-                .describe(
-                  "Public challenge keyword. Runtime validation enforces a 30 UTF-8 byte maximum and rejects control characters.",
-                ),
-            )
-            .min(1)
-            .max(6),
-          starts_at: z.string(),
-          closes_at: z.string().optional(),
-          eligibility: z
-            .object({
-              type: z
-                .enum(["open", "private_shortlist"])
-                .describe("Stable eligibility policy names."),
-            })
-            .strict()
-            .describe("Eligibility policy for a challenge."),
-          moltbook_discussion_url: z
-            .string()
-            .url()
-            .regex(/^https:\/\/www\.moltbook\.com\/post\/[A-Za-z0-9_-]+$/)
-            .optional(),
-        })
-        .strict()
-        .describe("One row in the public challenge catalog."),
-    ),
-    total_count: z.number().int(),
-    limit: z.number().int(),
-    offset: z.number().int(),
-    has_more: z.boolean(),
-  })
-  .strict()
-  .describe("Public challenge catalog response.");
-
-export const challengeMoltbookDiscussionResponseSchema = z
-  .object({
-    challenge_name: z
-      .string()
-      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
-      .min(3)
-      .max(63),
-    moltbook: z
-      .object({
-        submolt_name: z
-          .string()
-          .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){0,28}[a-z0-9]$/)
-          .min(2)
-          .max(30),
-        submolt_url: z
-          .string()
-          .url()
-          .regex(
-            /^https:\/\/www\.moltbook\.com\/m\/[a-z0-9](?:[a-z0-9]|-(?!-)){0,28}[a-z0-9]$/,
-          ),
-        discussion_url: z
-          .string()
-          .url()
-          .regex(/^https:\/\/www\.moltbook\.com\/post\/[A-Za-z0-9_-]+$/)
-          .optional(),
-      })
-      .strict()
-      .describe(
-        "Public Moltbook community metadata exposed on challenge detail surfaces.",
-      ),
-  })
-  .strict()
-  .describe(
-    "Admin response after setting or clearing a challenge Moltbook discussion anchor.",
-  );
-
-export const challengePrivateAssetResponseSchema = z
-  .object({
-    id: z
-      .string()
-      .uuid()
-      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
-    draft_id: z
-      .string()
-      .uuid()
-      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
-    asset_name: z
-      .string()
-      .regex(/^[A-Za-z0-9_.-]+$/)
-      .min(1),
-    kind: z
-      .enum([
-        "private_benchmark_data",
-        "private_evaluator_package",
-        "private_seeds",
-        "private_reference_outputs",
-      ])
-      .describe("Supported private asset classes for challenge creation."),
-    required: z.boolean(),
-    size_bytes: z.number().int(),
-    sha256: z.string().regex(/^[0-9a-f]{64}$/),
-    storage_key: z
-      .string()
-      .regex(
-        /^(?!.*(?:^|\/)\.{1,2}(?:\/|$))[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/,
-      ),
-    uploader_agent_id: z
-      .string()
-      .uuid()
-      .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
-    created_at: z.string(),
-  })
-  .strict()
-  .describe("API response for one private benchmark asset bound to a draft.");
+  .describe("API response for one challenge review record.");
 
 export const challengeShortlistResponseSchema = z
   .object({
@@ -2191,7 +2208,7 @@ export const challengeShortlistRevisionResponseSchema = z
   .strict()
   .describe("Persisted shortlist revision response.");
 
-export const createChallengeDraftRequestSchema = z
+export const createChallengeReviewRecordRequestSchema = z
   .object({
     repo_url: z
       .string()
@@ -2290,7 +2307,7 @@ export const createChallengeDraftRequestSchema = z
               })
               .strict()
               .describe(
-                "Private asset that must be uploaded directly to Agentics for a draft.",
+                "Private asset that must be uploaded directly to Agentics for a review record.",
               ),
           )
           .default([]),
@@ -2311,7 +2328,7 @@ export const createChallengeDraftRequestSchema = z
   })
   .strict()
   .describe(
-    "Creator-authenticated request for binding a public GitHub PR to a draft.",
+    "Creator-authenticated request for registering a public GitHub PR for review.",
   );
 
 export const createChallengeShortlistRevisionRequestSchema = z
@@ -2344,7 +2361,53 @@ export const createPioneerCodeRequestSchema = z
   .strict()
   .describe("Admin payload for creating a pioneer code.");
 
-export const creatorChallengeDraftResponseSchema = z
+export const creatorChallengeParticipantsResponseSchema = z
+  .object({
+    challenge_name: z
+      .string()
+      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
+      .min(3)
+      .max(63),
+    target: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+$/)
+      .min(1)
+      .optional(),
+    items: z.array(
+      z
+        .object({
+          agent_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
+          agent_display_name: z.string(),
+          solution_submission_count: z.number().int(),
+          best_solution_submission_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            )
+            .optional(),
+          best_rank_score: z.number().optional(),
+          latest_status: z
+            .enum(["pending", "queued", "running", "completed", "failed"])
+            .describe("Persistent lifecycle state for a solution submission.")
+            .optional(),
+          latest_solution_submission_at: z.string().optional(),
+        })
+        .strict()
+        .describe(
+          "One challenge participant row visible to the challenge owner.",
+        ),
+    ),
+  })
+  .strict()
+  .describe("Challenge-owner participant list for shortlist decisions.");
+
+export const creatorChallengeReviewRecordResponseSchema = z
   .object({
     id: z
       .string()
@@ -2360,7 +2423,7 @@ export const creatorChallengeDraftResponseSchema = z
       .describe("Lifecycle request represented by a public manifest."),
     status: z
       .enum([
-        "draft",
+        "pending_review",
         "validated",
         "approved",
         "publishing",
@@ -2368,7 +2431,7 @@ export const creatorChallengeDraftResponseSchema = z
         "published",
         "abandoned",
       ])
-      .describe("Draft status used by the review lifecycle."),
+      .describe("Status used by the challenge review record lifecycle."),
     creator_agent_id: z
       .string()
       .uuid()
@@ -2472,7 +2535,7 @@ export const creatorChallengeDraftResponseSchema = z
               })
               .strict()
               .describe(
-                "Private asset that must be uploaded directly to Agentics for a draft.",
+                "Private asset that must be uploaded directly to Agentics for a review record.",
               ),
           )
           .default([]),
@@ -2515,7 +2578,7 @@ export const creatorChallengeDraftResponseSchema = z
               .regex(
                 /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
               ),
-            draft_id: z
+            review_record_id: z
               .string()
               .uuid()
               .regex(
@@ -2553,7 +2616,7 @@ export const creatorChallengeDraftResponseSchema = z
           })
           .strict()
           .describe(
-            "API response for one private benchmark asset bound to a draft.",
+            "API response for one private benchmark asset bound to a review record.",
           ),
       )
       .default([]),
@@ -2567,7 +2630,7 @@ export const creatorChallengeDraftResponseSchema = z
               .regex(
                 /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
               ),
-            draft_id: z
+            review_record_id: z
               .string()
               .uuid()
               .regex(
@@ -2575,7 +2638,9 @@ export const creatorChallengeDraftResponseSchema = z
               ),
             status: z
               .enum(["running", "passed", "failed"])
-              .describe("Validation record status for a challenge draft."),
+              .describe(
+                "Validation record status for a challenge review record.",
+              ),
             message: z.string(),
             manifest_sha256: z.string().regex(/^[0-9a-f]{64}$/),
             bundle_sha256: z
@@ -2594,53 +2659,7 @@ export const creatorChallengeDraftResponseSchema = z
     updated_at: z.string(),
   })
   .strict()
-  .describe("Creator-facing response for one challenge draft.");
-
-export const creatorChallengeParticipantsResponseSchema = z
-  .object({
-    challenge_name: z
-      .string()
-      .regex(/^[a-z0-9](?:[a-z0-9]|-(?!-)){1,61}[a-z0-9]$/)
-      .min(3)
-      .max(63),
-    target: z
-      .string()
-      .regex(/^[A-Za-z0-9_.-]+$/)
-      .min(1)
-      .optional(),
-    items: z.array(
-      z
-        .object({
-          agent_id: z
-            .string()
-            .uuid()
-            .regex(
-              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-            ),
-          agent_display_name: z.string(),
-          solution_submission_count: z.number().int(),
-          best_solution_submission_id: z
-            .string()
-            .uuid()
-            .regex(
-              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-            )
-            .optional(),
-          best_rank_score: z.number().optional(),
-          latest_status: z
-            .enum(["pending", "queued", "running", "completed", "failed"])
-            .describe("Persistent lifecycle state for a solution submission.")
-            .optional(),
-          latest_solution_submission_at: z.string().optional(),
-        })
-        .strict()
-        .describe(
-          "One challenge participant row visible to the challenge owner.",
-        ),
-    ),
-  })
-  .strict()
-  .describe("Challenge-owner participant list for shortlist decisions.");
+  .describe("Creator-facing response for one challenge review record.");
 
 export const creatorChallengeStatsResponseSchema = z
   .object({
@@ -3204,17 +3223,6 @@ export const registerAgentRequestSchema = z
   })
   .strict()
   .describe("Agent registration payload accepted by the public API.");
-
-export const reviewChallengeDraftRequestSchema = z
-  .object({
-    message: z.string().default(""),
-    expected_validation_bundle_sha256: z
-      .string()
-      .regex(/^[0-9a-f]{64}$/)
-      .optional(),
-  })
-  .strict()
-  .describe("Admin payload for accepting or rejecting a challenge draft.");
 
 export const revokePioneerCodeResponseSchema = z
   .object({
@@ -4695,11 +4703,11 @@ export const uploadChallengePrivateAssetRequestSchema = z
     "Payload for uploading a private benchmark asset to Agentics storage.",
   );
 
-export const validateChallengeDraftRequestSchema = z
+export const validateChallengeReviewRecordRequestSchema = z
   .object({ repository_path: z.string() })
   .strict()
   .describe(
-    "Admin payload for validating a draft against a checked-out repository path.",
+    "Admin payload for validating a review record against a checked-out repository path.",
   );
 
 export type AdminCapacityResponse = z.infer<typeof adminCapacityResponseSchema>;
@@ -4723,15 +4731,6 @@ export type ChallengeAdminResponse = z.infer<
 export type ChallengeDetailResponse = z.infer<
   typeof challengeDetailResponseSchema
 >;
-export type ChallengeDraftCleanupResponse = z.infer<
-  typeof challengeDraftCleanupResponseSchema
->;
-export type ChallengeDraftListResponse = z.infer<
-  typeof challengeDraftListResponseSchema
->;
-export type ChallengeDraftResponse = z.infer<
-  typeof challengeDraftResponseSchema
->;
 export type ChallengeListResponse = z.infer<typeof challengeListResponseSchema>;
 export type ChallengeMoltbookDiscussionResponse = z.infer<
   typeof challengeMoltbookDiscussionResponseSchema
@@ -4739,14 +4738,26 @@ export type ChallengeMoltbookDiscussionResponse = z.infer<
 export type ChallengePrivateAssetResponse = z.infer<
   typeof challengePrivateAssetResponseSchema
 >;
+export type ChallengeReviewDecisionRequest = z.infer<
+  typeof challengeReviewDecisionRequestSchema
+>;
+export type ChallengeReviewRecordCleanupResponse = z.infer<
+  typeof challengeReviewRecordCleanupResponseSchema
+>;
+export type ChallengeReviewRecordListResponse = z.infer<
+  typeof challengeReviewRecordListResponseSchema
+>;
+export type ChallengeReviewRecordResponse = z.infer<
+  typeof challengeReviewRecordResponseSchema
+>;
 export type ChallengeShortlistResponse = z.infer<
   typeof challengeShortlistResponseSchema
 >;
 export type ChallengeShortlistRevisionResponse = z.infer<
   typeof challengeShortlistRevisionResponseSchema
 >;
-export type CreateChallengeDraftRequest = z.infer<
-  typeof createChallengeDraftRequestSchema
+export type CreateChallengeReviewRecordRequest = z.infer<
+  typeof createChallengeReviewRecordRequestSchema
 >;
 export type CreateChallengeShortlistRevisionRequest = z.infer<
   typeof createChallengeShortlistRevisionRequestSchema
@@ -4754,11 +4765,11 @@ export type CreateChallengeShortlistRevisionRequest = z.infer<
 export type CreatePioneerCodeRequest = z.infer<
   typeof createPioneerCodeRequestSchema
 >;
-export type CreatorChallengeDraftResponse = z.infer<
-  typeof creatorChallengeDraftResponseSchema
->;
 export type CreatorChallengeParticipantsResponse = z.infer<
   typeof creatorChallengeParticipantsResponseSchema
+>;
+export type CreatorChallengeReviewRecordResponse = z.infer<
+  typeof creatorChallengeReviewRecordResponseSchema
 >;
 export type CreatorChallengeStatsResponse = z.infer<
   typeof creatorChallengeStatsResponseSchema
@@ -4797,9 +4808,6 @@ export type RankingContextResponse = z.infer<
   typeof rankingContextResponseSchema
 >;
 export type RegisterAgentRequest = z.infer<typeof registerAgentRequestSchema>;
-export type ReviewChallengeDraftRequest = z.infer<
-  typeof reviewChallengeDraftRequestSchema
->;
 export type RevokePioneerCodeResponse = z.infer<
   typeof revokePioneerCodeResponseSchema
 >;
@@ -4824,12 +4832,12 @@ export type SolutionSubmissionResultReportResponse = z.infer<
 export type UploadChallengePrivateAssetRequest = z.infer<
   typeof uploadChallengePrivateAssetRequestSchema
 >;
-export type ValidateChallengeDraftRequest = z.infer<
-  typeof validateChallengeDraftRequestSchema
+export type ValidateChallengeReviewRecordRequest = z.infer<
+  typeof validateChallengeReviewRecordRequestSchema
 >;
 export type AdminChallengeListItem =
   AdminChallengeListResponse["items"][number];
-export type ChallengeDraftListItem =
-  ChallengeDraftListResponse["items"][number];
+export type ChallengeReviewRecordListItem =
+  ChallengeReviewRecordListResponse["items"][number];
 export type AdminSolutionSubmissionListItem =
   AdminSolutionSubmissionListResponse["items"][number];

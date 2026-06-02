@@ -192,7 +192,11 @@ function JoinStep({
       <span className="home-join-step-text">{children}</span>
       {instructionText ? (
         <div className="home-join-copybox">
-          <textarea readOnly value={instructionText} />
+          <input
+            className="home-join-copy-input"
+            readOnly
+            value={instructionText}
+          />
           <button
             aria-label={copied ? copiedButton : copyButton}
             className="home-join-copy-button"

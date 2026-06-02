@@ -11,21 +11,21 @@ use agentics_contracts::validation::archive::{
     ArchiveEnvelopePolicy, extract_zip_bytes_to_dir, inspect_zip_bytes,
 };
 use agentics_domain::models::challenge_creation::{
-    ChallengeDraftStatus, ChallengePrivateAssetResponse,
+    ChallengePrivateAssetResponse, ChallengeReviewRecordStatus,
 };
-use agentics_domain::models::ids::{ChallengeDraftAuditEventId, ChallengePrivateAssetId};
+use agentics_domain::models::ids::{ChallengePrivateAssetId, ChallengeReviewAuditEventId};
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::{self as persistence, Repositories};
 use agentics_storage::{Storage, StorageKey, StorageWriteIntent};
 
-use super::presentation::{draft_response, private_asset_response};
+use super::presentation::{private_asset_response, review_record_response};
 use super::types::UploadChallengePrivateAssetServiceRequest;
 use super::utils::{base64_decode, cleanup_storage_key};
 use crate::storage_errors::storage_error_to_service_error;
 
 const MAX_PRIVATE_ASSET_FILE_COUNT: usize = 1024;
 
-/// Upload a private benchmark asset for a draft owned by the authenticated agent.
+/// Upload a private benchmark asset for a review_record owned by the authenticated agent.
 pub async fn upload_challenge_private_asset(
     pool: &sqlx::PgPool,
     storage: &dyn Storage,
@@ -34,31 +34,31 @@ pub async fn upload_challenge_private_asset(
 ) -> Result<ChallengePrivateAssetResponse> {
     let UploadChallengePrivateAssetServiceRequest {
         creator_agent_id,
-        draft_id,
+        review_record_id,
         body,
     } = request;
     let repos = Repositories::new(pool);
-    let draft = repos
-        .challenge_drafts()
-        .get(draft_id.as_str())
+    let review_record = repos
+        .challenge_review_records()
+        .get(review_record_id.as_str())
         .await?
         .ok_or(ServiceError::NotFound)?;
-    let draft = draft_response(draft);
-    if draft.creator_agent_id != creator_agent_id {
+    let review_record = review_record_response(review_record);
+    if review_record.creator_agent_id != creator_agent_id {
         return Err(ServiceError::NotFound);
     }
     if matches!(
-        draft.status,
-        ChallengeDraftStatus::Rejected
-            | ChallengeDraftStatus::Approved
-            | ChallengeDraftStatus::Publishing
-            | ChallengeDraftStatus::Published
-            | ChallengeDraftStatus::Abandoned
+        review_record.status,
+        ChallengeReviewRecordStatus::Rejected
+            | ChallengeReviewRecordStatus::Approved
+            | ChallengeReviewRecordStatus::Publishing
+            | ChallengeReviewRecordStatus::Published
+            | ChallengeReviewRecordStatus::Abandoned
     ) {
         return Err(ServiceError::Conflict);
     }
 
-    let requirement = draft
+    let requirement = review_record
         .manifest
         .private_assets
         .iter()
@@ -80,10 +80,16 @@ pub async fn upload_challenge_private_asset(
     let asset_size_bytes = u64::try_from(asset_bytes.len()).map_err(|_| {
         ServiceError::BadRequest("private asset size exceeds supported range".to_string())
     })?;
-    if asset_size_bytes > config.quotas.challenge_private_asset_bytes_per_draft {
+    if asset_size_bytes
+        > config
+            .quotas
+            .challenge_private_asset_bytes_per_review_record
+    {
         return Err(ServiceError::BadRequest(format!(
             "private asset must be at most {} bytes",
-            config.quotas.challenge_private_asset_bytes_per_draft
+            config
+                .quotas
+                .challenge_private_asset_bytes_per_review_record
         )));
     }
     let asset_size_bytes_i64 = i64::try_from(asset_size_bytes).map_err(|_| {
@@ -92,27 +98,29 @@ pub async fn upload_challenge_private_asset(
     validate_private_asset_zip_upload(
         &asset_bytes,
         body.asset_name.as_str(),
-        config.quotas.challenge_private_asset_bytes_per_draft,
+        config
+            .quotas
+            .challenge_private_asset_bytes_per_review_record,
     )
     .await?;
     let sha256 = challenge_creation::sha256_digest(&asset_bytes);
     let storage_key = StorageKey::try_new(format!(
-        "challenge-drafts/{}/private-assets/{}-{}.bin",
-        draft.id, body.asset_name, sha256
+        "challenge-review-records/{}/private-assets/{}-{}.bin",
+        review_record.id, body.asset_name, sha256
     ))?;
     let temporary_asset_key = StorageKey::try_new(format!(
         "_tmp/challenge-private-assets/{}-{}-{}.bin",
-        draft.id,
+        review_record.id,
         body.asset_name,
         Uuid::new_v4()
     ))?;
     let asset_row_id = ChallengePrivateAssetId::generate();
     repos
-        .challenge_drafts()
+        .challenge_review_records()
         .reserve_private_asset(
             &persistence::CreateChallengePrivateAssetInput {
                 asset_row_id: asset_row_id.clone(),
-                draft_id: draft.id.clone(),
+                review_record_id: review_record.id.clone(),
                 asset_name: body.asset_name.clone(),
                 kind: body.kind,
                 required: requirement.required,
@@ -122,8 +130,12 @@ pub async fn upload_challenge_private_asset(
                 temporary_storage_key: temporary_asset_key.clone(),
                 uploader_agent_id: creator_agent_id.clone(),
             },
-            config.quotas.challenge_private_asset_bytes_per_draft,
-            config.quotas.challenge_draft_validation_timeout_minutes,
+            config
+                .quotas
+                .challenge_private_asset_bytes_per_review_record,
+            config
+                .quotas
+                .challenge_review_record_validation_timeout_minutes,
             config
                 .quotas
                 .challenge_private_asset_pending_timeout_minutes,
@@ -137,7 +149,9 @@ pub async fn upload_challenge_private_asset(
             &asset_bytes,
             StorageWriteIntent::new(
                 "challenge private asset ZIP",
-                config.quotas.challenge_private_asset_bytes_per_draft,
+                config
+                    .quotas
+                    .challenge_private_asset_bytes_per_review_record,
             ),
         )
         .await
@@ -163,10 +177,10 @@ pub async fn upload_challenge_private_asset(
         return Err(storage_error_to_service_error(error));
     }
     let asset = match Repositories::new(pool)
-        .challenge_drafts()
+        .challenge_review_records()
         .activate_private_asset_with_audit(
             &asset_row_id,
-            ChallengeDraftAuditEventId::generate(),
+            ChallengeReviewAuditEventId::generate(),
             &creator_agent_id,
         )
         .await
@@ -188,7 +202,7 @@ async fn fail_challenge_private_asset_record(
     message: &str,
 ) {
     if let Err(error) = Repositories::new(pool)
-        .challenge_drafts()
+        .challenge_review_records()
         .fail_private_asset(asset_row_id, message)
         .await
     {
@@ -214,7 +228,7 @@ async fn cleanup_unreferenced_private_asset_object(
         return Ok(());
     }
     if Repositories::new(pool)
-        .challenge_drafts()
+        .challenge_review_records()
         .private_asset_storage_key_has_active_reference(storage_key)
         .await?
     {

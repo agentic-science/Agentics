@@ -263,8 +263,8 @@ pub(super) fn challenge_manifest_json() -> serde_json::Value {
     })
 }
 
-/// Handles challenge draft json for this module.
-pub(super) fn challenge_draft_json(status: &str) -> serde_json::Value {
+/// Handles challenge review record json for this module.
+pub(super) fn challenge_review_record_json(status: &str) -> serde_json::Value {
     json!({
         "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
         "challenge_name": "sample-sum",

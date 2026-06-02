@@ -11,8 +11,8 @@ Use the admin web console at:
 /admin
 ```
 
-The Drafts tab supports validation, approval, rejection, publication,
-abandonment, and stale draft cleanup. Server-side scripts can also use the
+The Review Records tab supports validation, approval, rejection, publication,
+abandonment, and stale review record cleanup. Server-side scripts can also use the
 admin CLI helpers.
 
 Server-side admin routes use HTTP Basic Auth. The web console exchanges the
@@ -61,7 +61,7 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
   target.
 - Confirm hosted images use `source: "registry"` and digest-pinned immutable
   references.
-- Confirm draft provenance is internally consistent: `repo_url`, `pr_url`, and
+- Confirm review record provenance is internally consistent: `repo_url`, `pr_url`, and
   `pr_number` must refer to the same GitHub repository and pull request.
 - Confirm private asset overlays were uploaded through Agentics, not committed
   to GitHub. Uploaded ZIPs must use safe unique relative paths and must not
@@ -72,33 +72,33 @@ same admin credentials for an HttpOnly browser session cookie and CSRF token.
 
 ## Validation And Approval
 
-Validate a draft against the reviewed checkout. Validation records a digest over
+Validate a review record against the reviewed checkout. Validation records a digest over
 the canonical public manifest JSON, the public bundle tree, and uploaded private
 asset names and metadata. Approval freezes that digest. Publish recomputes it and
 rejects changes after approval.
 
 Approval requests must include the validation digest the reviewer is approving
 as `expected_validation_bundle_sha256`. The web console fills this from the
-visible validated draft. Automation and CLI callers must pass the digest returned
+visible validated review record. Automation and CLI callers must pass the digest returned
 by the validation response so a later validation cannot be approved accidentally.
 
-Reject drafts that fail validation or need creator changes. Abandon drafts that
-should no longer proceed. Use cleanup for stale unpublished drafts after the
+Reject review records that fail validation or need creator changes. Abandon review records that
+should no longer proceed. Use cleanup for stale unpublished review records after the
 configured grace period.
 
-Draft validation uses a lease. A non-stale active validation blocks approval,
+Review record validation uses a lease. A non-stale active validation blocks approval,
 rejection, abandonment, and private asset uploads; a stale validation record is
 failed and cleared before a new validation or upload proceeds. Private assets use
 a repairable lifecycle:
 `pending` while bytes are being written and promoted, `active` after the
 durable object exists, `failed` after write or promotion failure, and
-`purging` while stale cleanup has claimed the row and is deleting its objects. Draft
+`purging` while stale cleanup has claimed the row and is deleting its objects. Review record
 responses and publish use only active assets. Exact retries repair stale
 pending uploads that left unreferenced durable objects behind before the row
 became active. Reviewers can inspect all private asset lifecycle rows, including
 pending, failed, and purging rows, through the admin private asset endpoint.
 
-Publishing claims an approved draft by moving it to `publishing` with a
+Publishing claims an approved review record by moving it to `publishing` with a
 publish-claim ID before any bundle work starts. Only that claim can fail or
 complete the publish attempt. Agentics assembles the private runtime bundle in a
 unique directory under `AGENTICS_STORAGE_WORK_ROOT`, validates it there, packs
@@ -109,17 +109,17 @@ removes the temporary work directories and any durable keys created by that
 publish claim. A stale `publishing` claim can be reset to `approved`
 after the configured publish timeout so reviewers can retry.
 
-Admin endpoints for draft review are:
+Admin review-record endpoints are:
 
 ```text
-GET  /admin/challenge-drafts
-POST /admin/challenge-drafts/cleanup
-GET  /admin/challenge-drafts/{id}/private-assets
-POST /admin/challenge-drafts/{id}/validate
-POST /admin/challenge-drafts/{id}/approve
-POST /admin/challenge-drafts/{id}/reject
-POST /admin/challenge-drafts/{id}/abandon
-POST /admin/challenge-drafts/{id}/publish
+GET  /admin/challenge-review-records
+POST /admin/challenge-review-records/cleanup
+GET  /admin/challenge-review-records/{id}/private-assets
+POST /admin/challenge-review-records/{id}/validate
+POST /admin/challenge-review-records/{id}/approve
+POST /admin/challenge-review-records/{id}/reject
+POST /admin/challenge-review-records/{id}/abandon
+POST /admin/challenge-review-records/{id}/publish
 ```
 
 Server-side Basic-auth callers must include
@@ -132,22 +132,22 @@ requests should use the session-cookie and CSRF-token flow instead.
 read -rsp "Agentics admin password: " AGENTICS_ADMIN_PASSWORD; echo
 export AGENTICS_ADMIN_PASSWORD
 
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft validate <draft-id> \
+cargo run -p agentics-cli --bin agentics -- challenge-creator review-record validate <review-record-id> \
   --repository-path <repo-dir> \
   --admin-username admin
 
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft approve <draft-id> \
+cargo run -p agentics-cli --bin agentics -- challenge-creator review-record approve <review-record-id> \
   --expected-validation-bundle-sha256 <validation-digest> \
   --message "approved" \
   --admin-username admin
 
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft publish <draft-id> \
+cargo run -p agentics-cli --bin agentics -- challenge-creator review-record publish <review-record-id> \
   --repository-path <repo-dir> \
   --admin-username admin
 ```
 
-The CLI also supports draft rejection, abandonment, and cleanup with
-`challenge-creator draft <command>`. Use `AGENTICS_ADMIN_PASSWORD` or
+The CLI also supports review record rejection, abandonment, and cleanup with
+`challenge-creator review-record <command>`. Use `AGENTICS_ADMIN_PASSWORD` or
 `--admin-password-stdin`; do not pass admin passwords as argv values.
 
 ## Publication Notes
@@ -162,8 +162,8 @@ storage, so later edits to the source checkout do not affect historical
 evaluations.
 
 Published runtime bundles and completed solution artifacts are durable platform
-records. Stale draft cleanup can mark old drafts abandoned and purge private
-assets for rejected or abandoned unpublished drafts after the configured grace
+records. Stale review record cleanup can mark old review records abandoned and purge private
+assets for rejected or abandoned unpublished review records after the configured grace
 period. Published runtime bundle archives are preserved.
 
 For MVP Moltbook collaboration, use the shared `agentics-platform` Submolt

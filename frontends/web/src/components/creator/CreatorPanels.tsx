@@ -16,8 +16,8 @@ import { selectLocalizedText } from "@/lib/localizedText";
 import type {
   ChallengeShortlistResponse,
   ChallengeShortlistRevisionResponse,
-  CreatorChallengeDraftResponse,
   CreatorChallengeParticipantsResponse,
+  CreatorChallengeReviewRecordResponse,
   CreatorChallengeStatsResponse,
   CreatorMeResponse,
 } from "@/lib/schemas";
@@ -103,16 +103,16 @@ export function CreatorIdentityPanel({
   );
 }
 
-/** Renders the draft detail component. */
-export function DraftDetail({
-  draft,
+/** Renders the review record detail component. */
+export function ReviewRecordDetail({
+  reviewRecord,
 }: {
-  draft: CreatorChallengeDraftResponse | null;
+  reviewRecord: CreatorChallengeReviewRecordResponse | null;
 }) {
-  const t = useTranslations("creator.draft");
+  const t = useTranslations("creator.reviewRecord");
   const common = useTranslations("common");
 
-  if (!draft) {
+  if (!reviewRecord) {
     return (
       <div className="card">
         <div className="empty-state">{t("empty")}</div>
@@ -126,19 +126,23 @@ export function DraftDetail({
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-3">
-              <LocalizedStatusBadge status={draft.status} />
-              <span className="badge badge-default">{draft.request}</span>
+              <LocalizedStatusBadge status={reviewRecord.status} />
+              <span className="badge badge-default">
+                {reviewRecord.request}
+              </span>
             </div>
-            <h2 className="text-h2 font-semibold">{draft.manifest.title}</h2>
+            <h2 className="text-h2 font-semibold">
+              {reviewRecord.manifest.title}
+            </h2>
             <p className="mt-2 text-body-sm text-fg-secondary">
               {selectLocalizedText(
-                draft.manifest.summary,
+                reviewRecord.manifest.summary,
                 currentDocumentLocale(),
               )}
             </p>
           </div>
           <a
-            href={draft.pr_url}
+            href={reviewRecord.pr_url}
             target="_blank"
             rel="noreferrer"
             className="btn btn-secondary"
@@ -149,25 +153,34 @@ export function DraftDetail({
         </div>
 
         <dl className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-body-sm">
-          <Metadata label={t("draftId")} value={draft.id} />
-          <Metadata label={t("challengeName")} value={draft.challenge_name} />
-          <Metadata label={t("creator")} value={draft.creator_github_login} />
-          <Metadata label={t("commit")} value={shortHash(draft.commit_sha)} />
+          <Metadata label={t("reviewRecordId")} value={reviewRecord.id} />
+          <Metadata
+            label={t("challengeName")}
+            value={reviewRecord.challenge_name}
+          />
+          <Metadata
+            label={t("creator")}
+            value={reviewRecord.creator_github_login}
+          />
+          <Metadata
+            label={t("commit")}
+            value={shortHash(reviewRecord.commit_sha)}
+          />
           <Metadata
             label={t("manifestHash")}
-            value={shortHash(draft.manifest_sha256)}
+            value={shortHash(reviewRecord.manifest_sha256)}
           />
           <Metadata
             label={t("validationBundle")}
-            value={shortHash(draft.validation_bundle_sha256)}
+            value={shortHash(reviewRecord.validation_bundle_sha256)}
           />
           <Metadata
             label={t("approvedBundle")}
-            value={shortHash(draft.approved_bundle_sha256)}
+            value={shortHash(reviewRecord.approved_bundle_sha256)}
           />
           <Metadata
             label={t("publishedChallengeName")}
-            value={draft.published_challenge_name ?? "—"}
+            value={reviewRecord.published_challenge_name ?? "—"}
           />
         </dl>
       </div>
@@ -179,10 +192,10 @@ export function DraftDetail({
             title={t("privateAssets")}
           />
           <span className="badge badge-default">
-            {common("rows", { count: draft.private_assets.length })}
+            {common("rows", { count: reviewRecord.private_assets.length })}
           </span>
         </div>
-        {draft.private_assets.length === 0 ? (
+        {reviewRecord.private_assets.length === 0 ? (
           <div className="empty-state">{t("noPrivateAssets")}</div>
         ) : (
           <table className="data-table">
@@ -195,7 +208,7 @@ export function DraftDetail({
               </tr>
             </thead>
             <tbody>
-              {draft.private_assets.map((asset) => (
+              {reviewRecord.private_assets.map((asset) => (
                 <tr key={asset.id}>
                   <td>
                     <div className="font-mono">{asset.asset_name}</div>
@@ -220,10 +233,10 @@ export function DraftDetail({
             title={t("validationRecords")}
           />
           <span className="badge badge-default">
-            {common("rows", { count: draft.validation_records.length })}
+            {common("rows", { count: reviewRecord.validation_records.length })}
           </span>
         </div>
-        {draft.validation_records.length === 0 ? (
+        {reviewRecord.validation_records.length === 0 ? (
           <div className="empty-state">{t("noValidationRecords")}</div>
         ) : (
           <table className="data-table">
@@ -235,7 +248,7 @@ export function DraftDetail({
               </tr>
             </thead>
             <tbody>
-              {draft.validation_records.map((record) => (
+              {reviewRecord.validation_records.map((record) => (
                 <tr key={record.id}>
                   <td>
                     <LocalizedStatusBadge status={record.status} />
@@ -445,7 +458,7 @@ function LocalizedStatusBadge({ status }: { status: string }) {
     approved: t("approved"),
     completed: t("completed"),
     disabled: t("disabled"),
-    draft: t("draft"),
+    pending_review: t("pending_review"),
     failed: t("failed"),
     passed: t("passed"),
     pending: t("pending"),

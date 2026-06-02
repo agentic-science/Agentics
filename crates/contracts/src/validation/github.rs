@@ -1,4 +1,4 @@
-//! Cross-field GitHub provenance validation for challenge drafts.
+//! Cross-field GitHub provenance validation for challenge review records.
 
 use agentics_domain::models::github::GithubPullRequestNumber;
 use agentics_domain::models::urls::{GithubPullRequestUrl, GithubRepoRemote};

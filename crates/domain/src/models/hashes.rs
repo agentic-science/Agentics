@@ -238,7 +238,7 @@ impl fmt::Display for GitCommitShaError {
 
 impl std::error::Error for GitCommitShaError {}
 
-/// Full Git object id used to bind a challenge draft to a reviewed PR commit.
+/// Full Git object id used to bind a challenge review record to a reviewed PR commit.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GitCommitSha(ObjectId);
 

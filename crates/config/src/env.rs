@@ -3,12 +3,14 @@
 use super::{
     AgentRegistrationMode, Config, DEFAULT_ADMIN_USERNAME, DEFAULT_AGENT_REGISTRATION_MODE,
     DEFAULT_ALLOW_INSECURE_DEFAULT_ADMIN_CREDENTIALS, DEFAULT_API_HOST, DEFAULT_API_PORT,
-    DEFAULT_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES, DEFAULT_CHALLENGE_DRAFT_TTL_DAYS,
-    DEFAULT_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES,
-    DEFAULT_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY, DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT,
-    DEFAULT_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES, DEFAULT_HOST_PROBE_COMMAND,
+    DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD,
+    DEFAULT_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES,
+    DEFAULT_CHALLENGE_REVIEW_RECORD_PUBLISH_TIMEOUT_MINUTES,
+    DEFAULT_CHALLENGE_REVIEW_RECORD_TTL_DAYS,
+    DEFAULT_CHALLENGE_REVIEW_RECORD_VALIDATION_TIMEOUT_MINUTES,
+    DEFAULT_CHALLENGE_REVIEW_RECORD_VALIDATIONS_PER_DAY, DEFAULT_HOST_PROBE_COMMAND,
     DEFAULT_HOST_PROBE_MODE, DEFAULT_LOG_LEVEL, DEFAULT_MAX_ACTIVE_AGENTS,
-    DEFAULT_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT, DEFAULT_MAX_ACTIVE_OFFICIAL_JOBS,
+    DEFAULT_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_AGENT, DEFAULT_MAX_ACTIVE_OFFICIAL_JOBS,
     DEFAULT_OFFICIAL_LOG_REDACTION_MODE, DEFAULT_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY,
     DEFAULT_POSTGRES_PORT, DEFAULT_REQUIRE_DIGEST_PINNED_IMAGES, DEFAULT_RUNNER_DOCKER_LAYER_QUOTA,
     DEFAULT_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS,
@@ -158,13 +160,13 @@ pub struct RawQuotaEnv {
     pub official_runs_per_agent_challenge_day: Option<u32>,
     pub max_active_official_jobs: Option<u32>,
     pub max_active_agents: Option<u32>,
-    pub max_active_challenge_drafts_per_agent: Option<u32>,
-    pub challenge_private_asset_bytes_per_draft: Option<u64>,
-    pub challenge_draft_validations_per_day: Option<u32>,
-    pub challenge_draft_validation_timeout_minutes: Option<i32>,
+    pub max_active_challenge_review_records_per_agent: Option<u32>,
+    pub challenge_private_asset_bytes_per_review_record: Option<u64>,
+    pub challenge_review_record_validations_per_day: Option<u32>,
+    pub challenge_review_record_validation_timeout_minutes: Option<i32>,
     pub challenge_private_asset_pending_timeout_minutes: Option<i32>,
-    pub challenge_draft_publish_timeout_minutes: Option<i32>,
-    pub challenge_draft_ttl_days: Option<i64>,
+    pub challenge_review_record_publish_timeout_minutes: Option<i32>,
+    pub challenge_review_record_ttl_days: Option<i64>,
     pub unpublished_challenge_asset_grace_days: Option<i64>,
 }
 
@@ -374,29 +376,35 @@ fn apply_quota_env(config: &mut Config, raw: RawQuotaEnv) -> anyhow::Result<()> 
         .max_active_official_jobs
         .unwrap_or(DEFAULT_MAX_ACTIVE_OFFICIAL_JOBS);
     config.quotas.max_active_agents = raw.max_active_agents.unwrap_or(DEFAULT_MAX_ACTIVE_AGENTS);
-    config.quotas.max_active_challenge_drafts_per_agent = raw
-        .max_active_challenge_drafts_per_agent
-        .unwrap_or(DEFAULT_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT);
-    config.quotas.challenge_private_asset_bytes_per_draft = raw
-        .challenge_private_asset_bytes_per_draft
-        .unwrap_or(DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT);
-    config.quotas.challenge_draft_validations_per_day = raw
-        .challenge_draft_validations_per_day
-        .unwrap_or(DEFAULT_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY);
-    config.quotas.challenge_draft_validation_timeout_minutes = raw
-        .challenge_draft_validation_timeout_minutes
-        .unwrap_or(DEFAULT_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES);
+    config.quotas.max_active_challenge_review_records_per_agent = raw
+        .max_active_challenge_review_records_per_agent
+        .unwrap_or(DEFAULT_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_AGENT);
+    config
+        .quotas
+        .challenge_private_asset_bytes_per_review_record = raw
+        .challenge_private_asset_bytes_per_review_record
+        .unwrap_or(DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD);
+    config.quotas.challenge_review_record_validations_per_day = raw
+        .challenge_review_record_validations_per_day
+        .unwrap_or(DEFAULT_CHALLENGE_REVIEW_RECORD_VALIDATIONS_PER_DAY);
+    config
+        .quotas
+        .challenge_review_record_validation_timeout_minutes = raw
+        .challenge_review_record_validation_timeout_minutes
+        .unwrap_or(DEFAULT_CHALLENGE_REVIEW_RECORD_VALIDATION_TIMEOUT_MINUTES);
     config
         .quotas
         .challenge_private_asset_pending_timeout_minutes = raw
         .challenge_private_asset_pending_timeout_minutes
         .unwrap_or(DEFAULT_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES);
-    config.quotas.challenge_draft_publish_timeout_minutes = raw
-        .challenge_draft_publish_timeout_minutes
-        .unwrap_or(DEFAULT_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES);
-    config.quotas.challenge_draft_ttl_days = raw
-        .challenge_draft_ttl_days
-        .unwrap_or(DEFAULT_CHALLENGE_DRAFT_TTL_DAYS);
+    config
+        .quotas
+        .challenge_review_record_publish_timeout_minutes = raw
+        .challenge_review_record_publish_timeout_minutes
+        .unwrap_or(DEFAULT_CHALLENGE_REVIEW_RECORD_PUBLISH_TIMEOUT_MINUTES);
+    config.quotas.challenge_review_record_ttl_days = raw
+        .challenge_review_record_ttl_days
+        .unwrap_or(DEFAULT_CHALLENGE_REVIEW_RECORD_TTL_DAYS);
     config.quotas.unpublished_challenge_asset_grace_days = raw
         .unpublished_challenge_asset_grace_days
         .unwrap_or(DEFAULT_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS);

@@ -62,7 +62,7 @@ evaluator packages, secrets, `.env` files, private keys, or symlinks.
 ## Lifecycle Manifest
 
 `agentics.challenge.json` declares the requested lifecycle action.
-Drafts are addressed by `draft_id` and proposed `challenge_name`. The proposed
+Review Records are addressed by `review_record_id` and proposed `challenge_name`. The proposed
 challenge name becomes the published challenge handle after approval and
 publication; do not put generated platform IDs in challenge repositories or
 bundles.
@@ -157,7 +157,7 @@ Archive request:
 ## Private Assets
 
 Private benchmark material is uploaded to Agentics as ZIP overlays bound to a
-draft. During publish, Agentics copies the reviewed public bundle into a
+review record. During publish, Agentics copies the reviewed public bundle into a
 temporary work directory, applies approved private overlays to the private
 runtime copy, packs immutable public-only and private tar archives, and stores
 those archives by durable storage key. Validation uses the public-only bundle
@@ -174,12 +174,12 @@ Overlay entries must use safe relative paths, must not be symlinks, and must not
 overwrite public bundle files. A static private benchmark overlay commonly
 contains `private-benchmark/runs.json` plus any files referenced by
 `input_files[].source_path` in official run manifests.
-If the manifest declares `private_assets[].required_paths`, draft validation and
-publish both assemble the runtime bundle and reject the draft unless each listed
+If the manifest declares `private_assets[].required_paths`, review record validation and
+publish both assemble the runtime bundle and reject the review record unless each listed
 path exists after the private overlays are applied.
 
 Private asset ZIPs use the shared archive validator. They must stay within the
-configured per-draft private asset byte limit, contain at most 1024 entries, use
+configured per-review-record private asset byte limit, contain at most 1024 entries, use
 unique normalized paths, and avoid traversal or absolute paths.
 
 Generated official benchmarks can instead use `execution.official_evaluation_setup` in
@@ -187,11 +187,11 @@ Generated official benchmarks can instead use `execution.official_evaluation_set
 
 Private asset uploads are reserved before bytes are written. A normal upload
 moves through `pending` to `active`; failed uploads are marked `failed` and are
-not used by draft responses or publication. Uploads are rejected while a
-non-stale draft validation is active, because validation and private asset
+not used by review record responses or publication. Uploads are rejected while a
+non-stale review record validation is active, because validation and private asset
 mutation must not race. Private asset reservation, activation, failure, and
-cleanup refresh the parent draft activity timestamp, so stale draft cleanup does
-not abandon a draft while asset work is actively repairing or progressing. If a
+cleanup refresh the parent review record activity timestamp, so stale review record cleanup does
+not abandon a review record while asset work is actively repairing or progressing. If a
 stale pending upload left an unreferenced durable object behind, an exact retry
 repairs it by deleting that unreferenced object before promoting the new upload.
 
@@ -202,19 +202,19 @@ repairs it by deleting that unreferenced object before promoting the new upload.
 3. Sign in to the Agentics creator console at `/creator` with GitHub OAuth.
    New creators enter an issued pioneer code before OAuth starts; returning
    creators do not need to re-enter a consumed code.
-4. Create a draft from the reviewed PR metadata.
+4. Create a review record from the reviewed PR metadata.
 5. Upload required private assets through the creator console.
-6. Watch draft validation, approval, and publication status.
+6. Watch review record validation, approval, and publication status.
 
-Creator draft detail responses show validation status, messages, and bundle
+Creator review record detail responses show validation status, messages, and bundle
 digests, but they do not expose reviewer/admin server checkout paths.
 
-Draft creation validates that `repo_url`, `pr_url`, and `pr_number` refer to
-the same GitHub repository and pull request before the draft is stored. MVP
+Review record creation validates that `repo_url`, `pr_url`, and `pr_number` refer to
+the same GitHub repository and pull request before the review record is stored. MVP
 GitHub account ownership proof is still handled by the reviewed workflow rather
 than by a server-side GitHub authorization check.
 
-Creator-side draft creation and private asset upload are web-only in the MVP.
+Creator-side review record creation and private asset upload are web-only in the MVP.
 The CLI does not yet provide GitHub OAuth creator sessions.
 
 Creator-authenticated APIs are backed by a creator session cookie and
@@ -229,20 +229,20 @@ POST /api/auth/github/login
 POST /api/auth/github/callback
 GET  /api/creator/session
 GET  /api/creator/me
-POST /api/creator/challenge-drafts
-GET  /api/creator/challenge-drafts/{id}
-POST /api/creator/challenge-drafts/{id}/private-assets
+POST /api/creator/challenge-review-records
+GET  /api/creator/challenge-review-records/{id}
+POST /api/creator/challenge-review-records/{id}/private-assets
 ```
 
-## Draft Lifecycle
+## Review Record Lifecycle
 
 1. A creator opens a PR in the challenge repository.
 2. The creator signs in to Agentics with GitHub OAuth.
-3. The creator creates an Agentics challenge draft from PR metadata.
+3. The creator creates an Agentics challenge review record from PR metadata.
 4. The creator uploads declared private assets through Agentics.
-5. An admin validates the draft against a checked-out repository path.
-6. An admin approves or rejects the draft.
-7. An approved new-challenge draft can be published into immutable challenge
+5. An admin validates the review record against a checked-out repository path.
+6. An admin approves or rejects the review record.
+7. An approved new-challenge review record can be published into immutable challenge
    records.
 
 Publishing an archive request marks the challenge archived, hides it from
@@ -294,13 +294,13 @@ validation and official solution submissions.
 
 The API enforces challenge creation quotas with:
 
-- `AGENTICS_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT`
-- `AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT`
-- `AGENTICS_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY`
-- `AGENTICS_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES`
+- `AGENTICS_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_AGENT`
+- `AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD`
+- `AGENTICS_CHALLENGE_REVIEW_RECORD_VALIDATIONS_PER_DAY`
+- `AGENTICS_CHALLENGE_REVIEW_RECORD_VALIDATION_TIMEOUT_MINUTES`
 - `AGENTICS_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES`
-- `AGENTICS_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES`
-- `AGENTICS_CHALLENGE_DRAFT_TTL_DAYS`
+- `AGENTICS_CHALLENGE_REVIEW_RECORD_PUBLISH_TIMEOUT_MINUTES`
+- `AGENTICS_CHALLENGE_REVIEW_RECORD_TTL_DAYS`
 - `AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS`
 
 ## References

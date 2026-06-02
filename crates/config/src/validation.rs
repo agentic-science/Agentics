@@ -38,21 +38,25 @@ fn env_name_for_field(field: &str) -> Option<&'static str> {
         "official_runs_per_agent_challenge_day" => "AGENTICS_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY",
         "max_active_official_jobs" => "AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS",
         "max_active_agents" => "AGENTICS_MAX_ACTIVE_AGENTS",
-        "max_active_challenge_drafts_per_agent" => "AGENTICS_MAX_ACTIVE_CHALLENGE_DRAFTS_PER_AGENT",
-        "challenge_private_asset_bytes_per_draft" => {
-            "AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_DRAFT"
+        "max_active_challenge_review_records_per_agent" => {
+            "AGENTICS_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_AGENT"
         }
-        "challenge_draft_validations_per_day" => "AGENTICS_CHALLENGE_DRAFT_VALIDATIONS_PER_DAY",
-        "challenge_draft_validation_timeout_minutes" => {
-            "AGENTICS_CHALLENGE_DRAFT_VALIDATION_TIMEOUT_MINUTES"
+        "challenge_private_asset_bytes_per_review_record" => {
+            "AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD"
+        }
+        "challenge_review_record_validations_per_day" => {
+            "AGENTICS_CHALLENGE_REVIEW_RECORD_VALIDATIONS_PER_DAY"
+        }
+        "challenge_review_record_validation_timeout_minutes" => {
+            "AGENTICS_CHALLENGE_REVIEW_RECORD_VALIDATION_TIMEOUT_MINUTES"
         }
         "challenge_private_asset_pending_timeout_minutes" => {
             "AGENTICS_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES"
         }
-        "challenge_draft_publish_timeout_minutes" => {
-            "AGENTICS_CHALLENGE_DRAFT_PUBLISH_TIMEOUT_MINUTES"
+        "challenge_review_record_publish_timeout_minutes" => {
+            "AGENTICS_CHALLENGE_REVIEW_RECORD_PUBLISH_TIMEOUT_MINUTES"
         }
-        "challenge_draft_ttl_days" => "AGENTICS_CHALLENGE_DRAFT_TTL_DAYS",
+        "challenge_review_record_ttl_days" => "AGENTICS_CHALLENGE_REVIEW_RECORD_TTL_DAYS",
         "unpublished_challenge_asset_grace_days" => {
             "AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS"
         }

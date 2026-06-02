@@ -1,24 +1,24 @@
-//! Challenge draft response DTOs.
+//! Challenge review record response DTOs.
 
 use serde::{Deserialize, Serialize};
 
 use crate::models::github::GithubPullRequestNumber;
 use crate::models::hashes::{GitCommitSha, Sha256Digest};
-use crate::models::ids::{AgentId, ChallengeDraftId, ChallengeDraftValidationRecordId};
+use crate::models::ids::{AgentId, ChallengeReviewRecordId, ChallengeReviewValidationRecordId};
 use crate::models::names::ChallengeName;
 use crate::models::paths::RepoRelativePath;
 use crate::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
 
-use super::lifecycle::{ChallengeDraftStatus, ChallengeDraftValidationStatus};
+use super::lifecycle::{ChallengeReviewRecordStatus, ChallengeReviewValidationStatus};
 use super::manifest::{ChallengeCreationManifest, ChallengeCreationRequestKind};
 use super::private_assets::ChallengePrivateAssetResponse;
 
 /// API response for one validation record.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct ChallengeDraftValidationRecordResponse {
-    pub id: ChallengeDraftValidationRecordId,
-    pub draft_id: ChallengeDraftId,
-    pub status: ChallengeDraftValidationStatus,
+pub struct ChallengeReviewValidationRecordResponse {
+    pub id: ChallengeReviewValidationRecordId,
+    pub review_record_id: ChallengeReviewRecordId,
+    pub status: ChallengeReviewValidationStatus,
     pub message: String,
     pub repository_path: String,
     pub manifest_sha256: Sha256Digest,
@@ -29,10 +29,10 @@ pub struct ChallengeDraftValidationRecordResponse {
 
 /// Creator-facing validation record response without server-local checkout paths.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct CreatorChallengeDraftValidationRecordResponse {
-    pub id: ChallengeDraftValidationRecordId,
-    pub draft_id: ChallengeDraftId,
-    pub status: ChallengeDraftValidationStatus,
+pub struct CreatorChallengeReviewValidationRecordResponse {
+    pub id: ChallengeReviewValidationRecordId,
+    pub review_record_id: ChallengeReviewRecordId,
+    pub status: ChallengeReviewValidationStatus,
     pub message: String,
     pub manifest_sha256: Sha256Digest,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -40,13 +40,13 @@ pub struct CreatorChallengeDraftValidationRecordResponse {
     pub created_at: String,
 }
 
-/// API response for one challenge draft.
+/// API response for one challenge review record.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct ChallengeDraftResponse {
-    pub id: ChallengeDraftId,
+pub struct ChallengeReviewRecordResponse {
+    pub id: ChallengeReviewRecordId,
     pub challenge_name: ChallengeName,
     pub request: ChallengeCreationRequestKind,
-    pub status: ChallengeDraftStatus,
+    pub status: ChallengeReviewRecordStatus,
     pub creator_agent_id: AgentId,
     pub creator_github_user_id: i64,
     pub creator_github_login: String,
@@ -70,18 +70,18 @@ pub struct ChallengeDraftResponse {
     #[serde(default)]
     pub private_assets: Vec<ChallengePrivateAssetResponse>,
     #[serde(default)]
-    pub validation_records: Vec<ChallengeDraftValidationRecordResponse>,
+    pub validation_records: Vec<ChallengeReviewValidationRecordResponse>,
     pub created_at: String,
     pub updated_at: String,
 }
 
-/// Creator-facing response for one challenge draft.
+/// Creator-facing response for one challenge review record.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct CreatorChallengeDraftResponse {
-    pub id: ChallengeDraftId,
+pub struct CreatorChallengeReviewRecordResponse {
+    pub id: ChallengeReviewRecordId,
     pub challenge_name: ChallengeName,
     pub request: ChallengeCreationRequestKind,
-    pub status: ChallengeDraftStatus,
+    pub status: ChallengeReviewRecordStatus,
     pub creator_agent_id: AgentId,
     pub creator_github_user_id: i64,
     pub creator_github_login: String,
@@ -103,19 +103,19 @@ pub struct CreatorChallengeDraftResponse {
     #[serde(default)]
     pub private_assets: Vec<ChallengePrivateAssetResponse>,
     #[serde(default)]
-    pub validation_records: Vec<CreatorChallengeDraftValidationRecordResponse>,
+    pub validation_records: Vec<CreatorChallengeReviewValidationRecordResponse>,
     pub created_at: String,
     pub updated_at: String,
 }
 
-impl From<ChallengeDraftValidationRecordResponse>
-    for CreatorChallengeDraftValidationRecordResponse
+impl From<ChallengeReviewValidationRecordResponse>
+    for CreatorChallengeReviewValidationRecordResponse
 {
     /// Drop admin-only checkout path data for creator surfaces.
-    fn from(record: ChallengeDraftValidationRecordResponse) -> Self {
+    fn from(record: ChallengeReviewValidationRecordResponse) -> Self {
         Self {
             id: record.id,
-            draft_id: record.draft_id,
+            review_record_id: record.review_record_id,
             status: record.status,
             message: record.message,
             manifest_sha256: record.manifest_sha256,
@@ -125,51 +125,51 @@ impl From<ChallengeDraftValidationRecordResponse>
     }
 }
 
-impl From<ChallengeDraftResponse> for CreatorChallengeDraftResponse {
+impl From<ChallengeReviewRecordResponse> for CreatorChallengeReviewRecordResponse {
     /// Drop admin-only checkout path data for creator surfaces.
-    fn from(draft: ChallengeDraftResponse) -> Self {
+    fn from(review_record: ChallengeReviewRecordResponse) -> Self {
         Self {
-            id: draft.id,
-            challenge_name: draft.challenge_name,
-            request: draft.request,
-            status: draft.status,
-            creator_agent_id: draft.creator_agent_id,
-            creator_github_user_id: draft.creator_github_user_id,
-            creator_github_login: draft.creator_github_login,
-            repo_url: draft.repo_url,
-            pr_number: draft.pr_number,
-            pr_url: draft.pr_url,
-            commit_sha: draft.commit_sha,
-            challenge_path: draft.challenge_path,
-            manifest_sha256: draft.manifest_sha256,
-            manifest: draft.manifest,
-            validation_bundle_sha256: draft.validation_bundle_sha256,
-            approved_bundle_sha256: draft.approved_bundle_sha256,
-            validation_message: draft.validation_message,
-            published_challenge_name: draft.published_challenge_name,
-            private_assets: draft.private_assets,
-            validation_records: draft
+            id: review_record.id,
+            challenge_name: review_record.challenge_name,
+            request: review_record.request,
+            status: review_record.status,
+            creator_agent_id: review_record.creator_agent_id,
+            creator_github_user_id: review_record.creator_github_user_id,
+            creator_github_login: review_record.creator_github_login,
+            repo_url: review_record.repo_url,
+            pr_number: review_record.pr_number,
+            pr_url: review_record.pr_url,
+            commit_sha: review_record.commit_sha,
+            challenge_path: review_record.challenge_path,
+            manifest_sha256: review_record.manifest_sha256,
+            manifest: review_record.manifest,
+            validation_bundle_sha256: review_record.validation_bundle_sha256,
+            approved_bundle_sha256: review_record.approved_bundle_sha256,
+            validation_message: review_record.validation_message,
+            published_challenge_name: review_record.published_challenge_name,
+            private_assets: review_record.private_assets,
+            validation_records: review_record
                 .validation_records
                 .into_iter()
-                .map(CreatorChallengeDraftValidationRecordResponse::from)
+                .map(CreatorChallengeReviewValidationRecordResponse::from)
                 .collect(),
-            created_at: draft.created_at,
-            updated_at: draft.updated_at,
+            created_at: review_record.created_at,
+            updated_at: review_record.updated_at,
         }
     }
 }
 
-/// List response for admin challenge draft review.
+/// List response for admin challenge review record review.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct ChallengeDraftListResponse {
-    pub items: Vec<ChallengeDraftResponse>,
+pub struct ChallengeReviewRecordListResponse {
+    pub items: Vec<ChallengeReviewRecordResponse>,
 }
 
-/// Admin response returned after abandoning stale drafts and deleting
+/// Admin response returned after abandoning stale review records and deleting
 /// purge-eligible unpublished private asset records.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct ChallengeDraftCleanupResponse {
-    pub abandoned_drafts: i64,
+pub struct ChallengeReviewRecordCleanupResponse {
+    pub abandoned_review_records: i64,
     pub purged_private_assets: i64,
     pub purged_temporary_storage_objects: i64,
 }

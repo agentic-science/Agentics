@@ -101,7 +101,10 @@ async fn admin_basic_mutation_requires_automation_header(pool: sqlx::PgPool) {
     );
 
     let response = client
-        .post(helpers::api_url(&app, "/admin/challenge-drafts/cleanup"))
+        .post(helpers::api_url(
+            &app,
+            "/admin/challenge-review-records/cleanup",
+        ))
         .header("Authorization", admin_auth)
         .send()
         .await

@@ -1,13 +1,13 @@
-//! Challenge creation draft lifecycle integration tests.
+//! Challenge creation review_record lifecycle integration tests.
 
 #[path = "support/challenge_creation.rs"]
 mod challenge_creation_helpers;
 mod helpers;
 
-use agentics_domain::models::challenge_creation::ChallengeDraftValidationStatus;
+use agentics_domain::models::challenge_creation::ChallengeReviewValidationStatus;
 use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::ids::{
-    ChallengeDraftAuditEventId, ChallengeDraftId, ChallengeDraftValidationRecordId,
+    ChallengeReviewAuditEventId, ChallengeReviewRecordId, ChallengeReviewValidationRecordId,
 };
 use agentics_domain::models::names::ChallengeName;
 use agentics_domain::storage::StorageKey;
@@ -22,9 +22,9 @@ use serde_json::json;
 
 use reqwest::StatusCode;
 
-/// Verifies that challenge draft rejects short commit sha.
+/// Verifies that challenge review record rejects short commit sha.
 #[sqlx::test(migrations = "../migrations")]
-async fn challenge_draft_rejects_short_commit_sha(pool: sqlx::PgPool) {
+async fn challenge_review_record_rejects_short_commit_sha(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let config = test_config(storage.path(), seeded_challenges.path());
@@ -33,7 +33,7 @@ async fn challenge_draft_rejects_short_commit_sha(pool: sqlx::PgPool) {
     let creator = create_creator_session(&pool, 1001, "creator").await;
 
     let response = creator_auth(
-        client.post(api_url(&app, "/api/creator/challenge-drafts")),
+        client.post(api_url(&app, "/api/creator/challenge-review-records")),
         &creator,
     )
     .json(&json!({
@@ -47,7 +47,7 @@ async fn challenge_draft_rejects_short_commit_sha(pool: sqlx::PgPool) {
     }))
     .send()
     .await
-    .expect("draft request");
+    .expect("review_record request");
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let body: serde_json::Value = response.json().await.expect("error json");
@@ -59,9 +59,9 @@ async fn challenge_draft_rejects_short_commit_sha(pool: sqlx::PgPool) {
     );
 }
 
-/// Verifies that challenge draft conflicts on canonical repo key.
+/// Verifies that challenge review record conflicts on canonical repo key.
 #[sqlx::test(migrations = "../migrations")]
-async fn challenge_draft_conflicts_on_canonical_repo_key(pool: sqlx::PgPool) {
+async fn challenge_review_record_conflicts_on_canonical_repo_key(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let config = test_config(storage.path(), seeded_challenges.path());
@@ -69,10 +69,10 @@ async fn challenge_draft_conflicts_on_canonical_repo_key(pool: sqlx::PgPool) {
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
 
-    let _draft = create_draft(&client, &app, &creator, 7, manifest_json()).await;
+    let _draft = create_review_record(&client, &app, &creator, 7, manifest_json()).await;
 
     let response = creator_auth(
-        client.post(api_url(&app, "/api/creator/challenge-drafts")),
+        client.post(api_url(&app, "/api/creator/challenge-review-records")),
         &creator,
     )
     .json(&json!({
@@ -86,7 +86,7 @@ async fn challenge_draft_conflicts_on_canonical_repo_key(pool: sqlx::PgPool) {
     }))
     .send()
     .await
-    .expect("duplicate canonical repo draft request");
+    .expect("duplicate canonical repo review_record request");
 
     assert_eq!(response.status(), StatusCode::CONFLICT);
 }
@@ -100,13 +100,13 @@ async fn private_asset_upload_rejects_non_zip_payload(pool: sqlx::PgPool) {
     let app = spawn_app_with_config(pool.clone(), config).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
-    let draft = create_draft(&client, &app, &creator, 8, manifest_json()).await;
-    let draft_id = draft["id"].as_str().expect("draft id");
+    let review_record = create_review_record(&client, &app, &creator, 8, manifest_json()).await;
+    let review_record_id = review_record["id"].as_str().expect("review_record id");
 
     let missing_required_response = creator_auth(
         client.post(api_url(
             &app,
-            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+            &format!("/api/creator/challenge-review-records/{review_record_id}/private-assets"),
         )),
         &creator,
     )
@@ -131,7 +131,7 @@ async fn private_asset_upload_rejects_non_zip_payload(pool: sqlx::PgPool) {
     let response = creator_auth(
         client.post(api_url(
             &app,
-            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+            &format!("/api/creator/challenge-review-records/{review_record_id}/private-assets"),
         )),
         &creator,
     )
@@ -147,16 +147,16 @@ async fn private_asset_upload_rejects_non_zip_payload(pool: sqlx::PgPool) {
 
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     let stored_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::BIGINT FROM challenge_private_assets WHERE draft_id = $1::uuid",
+        "SELECT COUNT(*)::BIGINT FROM challenge_private_assets WHERE review_record_id = $1::uuid",
     )
-    .bind(draft_id)
+    .bind(review_record_id)
     .fetch_one(&pool)
     .await
     .expect("private asset count query should succeed");
     assert_eq!(stored_count, 0);
 }
 
-/// Verifies that draft validation records must own the current draft validation claim.
+/// Verifies that review_record validation records must own the current review_record validation claim.
 #[sqlx::test(migrations = "../migrations")]
 async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
@@ -170,25 +170,26 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
         &config.auth.admin_username,
         config.expose_admin_password_for_http_basic(),
     );
-    let draft = create_draft(&client, &app, &creator, 9, manifest_json()).await;
-    let draft_id = ChallengeDraftId::try_new(draft["id"].as_str().expect("draft id"))
-        .expect("draft id should parse");
+    let review_record = create_review_record(&client, &app, &creator, 9, manifest_json()).await;
+    let review_record_id =
+        ChallengeReviewRecordId::try_new(review_record["id"].as_str().expect("review_record id"))
+            .expect("review_record id should parse");
     let manifest_sha256 = Sha256Digest::try_new(
-        draft["manifest_sha256"]
+        review_record["manifest_sha256"]
             .as_str()
             .expect("manifest sha should exist"),
     )
     .expect("manifest sha should parse");
-    let first_validation_id = ChallengeDraftValidationRecordId::generate();
-    let second_validation_id = ChallengeDraftValidationRecordId::generate();
+    let first_validation_id = ChallengeReviewValidationRecordId::generate();
+    let second_validation_id = ChallengeReviewValidationRecordId::generate();
 
     let repos = agentics_persistence::Repositories::new(&pool);
     repos
-        .challenge_drafts()
+        .challenge_review_records()
         .begin_validation(
-            &agentics_persistence::BeginChallengeDraftValidationInput {
+            &agentics_persistence::BeginChallengeReviewRecordValidationInput {
                 validation_record_id: first_validation_id.clone(),
-                draft_id: draft_id.clone(),
+                review_record_id: review_record_id.clone(),
                 repository_path: repository.path().to_string_lossy().to_string(),
                 manifest_sha256,
             },
@@ -200,11 +201,11 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
         .expect("first validation claim should reserve");
 
     let overlapping = repos
-        .challenge_drafts()
+        .challenge_review_records()
         .begin_validation(
-            &agentics_persistence::BeginChallengeDraftValidationInput {
+            &agentics_persistence::BeginChallengeReviewRecordValidationInput {
                 validation_record_id: second_validation_id.clone(),
-                draft_id: draft_id.clone(),
+                review_record_id: review_record_id.clone(),
                 repository_path: repository.path().to_string_lossy().to_string(),
                 manifest_sha256,
             },
@@ -221,7 +222,7 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
     let approve_while_running = client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/approve"),
+            &format!("/admin/challenge-review-records/{review_record_id}/approve"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -237,7 +238,7 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
     let reject_while_running = client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/reject"),
+            &format!("/admin/challenge-review-records/{review_record_id}/reject"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -250,7 +251,7 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
     let abandon_while_running = client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/abandon"),
+            &format!("/admin/challenge-review-records/{review_record_id}/abandon"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -263,18 +264,18 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
     let validation_digest =
         Sha256Digest::try_new("b".repeat(64)).expect("validation digest should parse");
     repos
-        .challenge_drafts()
+        .challenge_review_records()
         .finish_validation(
-            &agentics_persistence::FinishChallengeDraftValidationInput {
+            &agentics_persistence::FinishChallengeReviewRecordValidationInput {
                 validation_record_id: first_validation_id,
-                draft_id: draft_id.clone(),
-                status: ChallengeDraftValidationStatus::Passed,
+                review_record_id: review_record_id.clone(),
+                status: ChallengeReviewValidationStatus::Passed,
                 message: "passed".to_string(),
                 bundle_sha256: Some(validation_digest),
             },
-            &agentics_persistence::CreateChallengeDraftAuditEventInput {
-                event_id: ChallengeDraftAuditEventId::generate(),
-                draft_id,
+            &agentics_persistence::CreateChallengeReviewRecordAuditEventInput {
+                event_id: ChallengeReviewAuditEventId::generate(),
+                review_record_id,
                 actor_agent_id: None,
                 actor_admin_username: Some("admin".to_string()),
                 action: "draft_validated".to_string(),
@@ -286,9 +287,9 @@ async fn draft_validation_claim_blocks_overlap_and_approval(pool: sqlx::PgPool) 
         .expect("current validation claim should finish");
 }
 
-/// Verifies that challenge draft can be validated approved and published.
+/// Verifies that challenge review record can be validated approved and published.
 #[sqlx::test(migrations = "../migrations")]
-async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgPool) {
+async fn challenge_review_record_can_be_validated_approved_and_published(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let public_repo = tempfile::tempdir().expect("public repo tempdir");
@@ -303,8 +304,8 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         config.expose_admin_password_for_http_basic(),
     );
 
-    let draft: serde_json::Value = creator_auth(
-        client.post(api_url(&app, "/api/creator/challenge-drafts")),
+    let review_record: serde_json::Value = creator_auth(
+        client.post(api_url(&app, "/api/creator/challenge-review-records")),
         &creator,
     )
     .json(&json!({
@@ -318,19 +319,19 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     }))
     .send()
     .await
-    .expect("draft request")
+    .expect("review_record request")
     .error_for_status()
-    .expect("draft should create")
+    .expect("review_record should create")
     .json()
     .await
-    .expect("draft json");
-    assert_eq!(draft["status"], "draft");
-    let draft_id = draft["id"].as_str().expect("draft id");
+    .expect("review_record json");
+    assert_eq!(review_record["status"], "pending_review");
+    let review_record_id = review_record["id"].as_str().expect("review_record id");
 
     let asset: serde_json::Value = creator_auth(
         client.post(api_url(
             &app,
-            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+            &format!("/api/creator/challenge-review-records/{review_record_id}/private-assets"),
         )),
         &creator,
     )
@@ -354,7 +355,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     let validated: serde_json::Value = client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/validate"),
+            &format!("/admin/challenge-review-records/{review_record_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -363,7 +364,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         .await
         .expect("validate request")
         .error_for_status()
-        .expect("draft should validate")
+        .expect("review_record should validate")
         .json()
         .await
         .expect("validated json");
@@ -398,23 +399,23 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     let creator_visible_draft: serde_json::Value = creator_auth(
         client.get(api_url(
             &app,
-            &format!("/api/creator/challenge-drafts/{draft_id}"),
+            &format!("/api/creator/challenge-review-records/{review_record_id}"),
         )),
         &creator,
     )
     .send()
     .await
-    .expect("creator draft detail request")
+    .expect("creator review record detail request")
     .error_for_status()
-    .expect("creator draft detail should be visible")
+    .expect("creator review record detail should be visible")
     .json()
     .await
-    .expect("creator draft detail json");
+    .expect("creator review record detail json");
     assert!(
         creator_visible_draft
             .get("validation_repository_path")
             .is_none(),
-        "creator draft detail must not expose validation checkout path"
+        "creator review record detail must not expose validation checkout path"
     );
     assert!(
         creator_visible_draft["validation_records"][0]
@@ -426,7 +427,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     let approved: serde_json::Value = client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/approve"),
+            &format!("/admin/challenge-review-records/{review_record_id}/approve"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -438,7 +439,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         .await
         .expect("approve request")
         .error_for_status()
-        .expect("draft should approve")
+        .expect("review_record should approve")
         .json()
         .await
         .expect("approve json");
@@ -450,7 +451,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     let upload_after_approval = creator_auth(
         client.post(api_url(
             &app,
-            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+            &format!("/api/creator/challenge-review-records/{review_record_id}/private-assets"),
         )),
         &creator,
     )
@@ -471,7 +472,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     let validate_after_approval = client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/validate"),
+            &format!("/admin/challenge-review-records/{review_record_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -487,7 +488,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     let published: serde_json::Value = client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/publish"),
+            &format!("/admin/challenge-review-records/{review_record_id}/publish"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -496,7 +497,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
         .await
         .expect("publish request")
         .error_for_status()
-        .expect("draft should publish")
+        .expect("review_record should publish")
         .json()
         .await
         .expect("published json");
@@ -602,7 +603,7 @@ async fn challenge_draft_can_be_validated_approved_and_published(pool: sqlx::PgP
     assert_eq!(non_owner_stats.status(), reqwest::StatusCode::FORBIDDEN);
 }
 
-/// Verifies that approved draft publish rejects changed review content.
+/// Verifies that approved review_record publish rejects changed review content.
 #[sqlx::test(migrations = "../migrations")]
 async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
@@ -619,14 +620,15 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
         config.expose_admin_password_for_http_basic(),
     );
 
-    let draft =
-        create_draft_with_commit(&client, &app, &creator, 17, manifest_json(), &commit_sha).await;
-    let draft_id = draft["id"].as_str().expect("draft id");
+    let review_record =
+        create_review_record_with_commit(&client, &app, &creator, 17, manifest_json(), &commit_sha)
+            .await;
+    let review_record_id = review_record["id"].as_str().expect("review_record id");
 
     creator_auth(
         client.post(api_url(
             &app,
-            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+            &format!("/api/creator/challenge-review-records/{review_record_id}/private-assets"),
         )),
         &creator,
     )
@@ -645,7 +647,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
     let validated: serde_json::Value = client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/validate"),
+            &format!("/admin/challenge-review-records/{review_record_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -654,14 +656,14 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
         .await
         .expect("validate request")
         .error_for_status()
-        .expect("draft should validate")
+        .expect("review_record should validate")
         .json()
         .await
-        .expect("validated draft json");
+        .expect("validated review_record json");
     client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/approve"),
+            &format!("/admin/challenge-review-records/{review_record_id}/approve"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -673,7 +675,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
         .await
         .expect("approve request")
         .error_for_status()
-        .expect("draft should approve");
+        .expect("review_record should approve");
 
     write_file(
         &public_repo
@@ -685,7 +687,7 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
     let publish_response = client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/publish"),
+            &format!("/admin/challenge-review-records/{review_record_id}/publish"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -722,13 +724,14 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
         config.expose_admin_password_for_http_basic(),
     );
 
-    let draft =
-        create_draft_with_commit(&client, &app, &creator, 23, manifest_json(), &commit_sha).await;
-    let draft_id = draft["id"].as_str().expect("draft id");
+    let review_record =
+        create_review_record_with_commit(&client, &app, &creator, 23, manifest_json(), &commit_sha)
+            .await;
+    let review_record_id = review_record["id"].as_str().expect("review_record id");
     creator_auth(
         client.post(api_url(
             &app,
-            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+            &format!("/api/creator/challenge-review-records/{review_record_id}/private-assets"),
         )),
         &creator,
     )
@@ -746,7 +749,7 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
     let validated: serde_json::Value = client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/validate"),
+            &format!("/admin/challenge-review-records/{review_record_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -755,14 +758,14 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
         .await
         .expect("validate request")
         .error_for_status()
-        .expect("draft should validate")
+        .expect("review_record should validate")
         .json()
         .await
-        .expect("validated draft json");
+        .expect("validated review_record json");
     client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/approve"),
+            &format!("/admin/challenge-review-records/{review_record_id}/approve"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -774,9 +777,12 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
         .await
         .expect("approve request")
         .error_for_status()
-        .expect("draft should approve");
+        .expect("review_record should approve");
 
-    let publish_url = api_url(&app, &format!("/admin/challenge-drafts/{draft_id}/publish"));
+    let publish_url = api_url(
+        &app,
+        &format!("/admin/challenge-review-records/{review_record_id}/publish"),
+    );
     let repository_path = public_repo.path().to_string_lossy().to_string();
     let publish_a = client
         .post(publish_url.clone())
@@ -826,11 +832,11 @@ async fn concurrent_publish_requests_leave_one_published_bundle(pool: sqlx::PgPo
         "published bundle should include promoted private benchmark data"
     );
     let draft_status: String =
-        sqlx::query_scalar("SELECT status FROM challenge_drafts WHERE id = $1::uuid")
-            .bind(draft_id)
+        sqlx::query_scalar("SELECT status FROM challenge_review_records WHERE id = $1::uuid")
+            .bind(review_record_id)
             .fetch_one(&pool)
             .await
-            .expect("draft status");
+            .expect("review_record status");
     assert_eq!(draft_status, "published");
 }
 
@@ -851,13 +857,14 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
         config.expose_admin_password_for_http_basic(),
     );
 
-    let draft =
-        create_draft_with_commit(&client, &app, &creator, 24, manifest_json(), &commit_sha).await;
-    let draft_id = draft["id"].as_str().expect("draft id");
+    let review_record =
+        create_review_record_with_commit(&client, &app, &creator, 24, manifest_json(), &commit_sha)
+            .await;
+    let review_record_id = review_record["id"].as_str().expect("review_record id");
     creator_auth(
         client.post(api_url(
             &app,
-            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+            &format!("/api/creator/challenge-review-records/{review_record_id}/private-assets"),
         )),
         &creator,
     )
@@ -875,7 +882,7 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
     let validated: serde_json::Value = client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/validate"),
+            &format!("/admin/challenge-review-records/{review_record_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -884,14 +891,14 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
         .await
         .expect("validate request")
         .error_for_status()
-        .expect("draft should validate")
+        .expect("review_record should validate")
         .json()
         .await
-        .expect("validated draft json");
+        .expect("validated review_record json");
     client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/approve"),
+            &format!("/admin/challenge-review-records/{review_record_id}/approve"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -903,7 +910,7 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
         .await
         .expect("approve request")
         .error_for_status()
-        .expect("draft should approve");
+        .expect("review_record should approve");
 
     let existing_bundle_key = StorageKey::try_new("challenge-bundles/sample-sum/existing.tar")
         .expect("existing bundle key");
@@ -958,7 +965,7 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
     let response = client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/publish"),
+            &format!("/admin/challenge-review-records/{review_record_id}/publish"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -969,19 +976,19 @@ async fn failed_publish_removes_claim_scoped_runtime_bundle(pool: sqlx::PgPool) 
     assert_eq!(response.status(), reqwest::StatusCode::CONFLICT);
 
     let (draft_status, publish_claim_id): (String, Option<String>) = sqlx::query_as(
-        "SELECT status, publish_claim_id::text FROM challenge_drafts WHERE id = $1::uuid",
+        "SELECT status, publish_claim_id::text FROM challenge_review_records WHERE id = $1::uuid",
     )
-    .bind(draft_id)
+    .bind(review_record_id)
     .fetch_one(&pool)
     .await
-    .expect("draft status after failed publish");
+    .expect("review_record status after failed publish");
     assert_eq!(draft_status, "approved");
     assert!(publish_claim_id.is_none());
 
     assert!(
         helpers::storage_prefix_is_empty(
             &config,
-            &format!("challenge-bundles/sample-sum/{draft_id}")
+            &format!("challenge-bundles/sample-sum/{review_record_id}")
         )
         .await,
         "failed DB publish must remove the claim-scoped runtime bundle"
@@ -1005,43 +1012,43 @@ async fn stale_publish_claim_cannot_mutate_newer_publish_claim(pool: sqlx::PgPoo
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
 
-    let draft = create_draft(&client, &app, &creator, 34, manifest_json()).await;
-    let draft_id = draft["id"].as_str().expect("draft id");
+    let review_record = create_review_record(&client, &app, &creator, 34, manifest_json()).await;
+    let review_record_id = review_record["id"].as_str().expect("review_record id");
     sqlx::query(
         r#"
-        UPDATE challenge_drafts
+        UPDATE challenge_review_records
         SET status = 'approved',
             approved_bundle_sha256 = manifest_sha256,
             validation_repository_path = $2
         WHERE id = $1::uuid
         "#,
     )
-    .bind(draft_id)
+    .bind(review_record_id)
     .bind(public_repo.path().to_string_lossy().to_string())
     .execute(&pool)
     .await
-    .expect("failed to approve draft directly");
+    .expect("failed to approve review_record directly");
 
     let repos = agentics_persistence::Repositories::new(&pool);
     let first = repos
-        .challenge_drafts()
-        .claim_for_publish(draft_id, 30)
+        .challenge_review_records()
+        .claim_for_publish(review_record_id, 30)
         .await
         .expect("first publish claim should reserve");
     let first_claim = first
         .publish_claim_id
         .expect("first publish claim id should exist");
     sqlx::query(
-        "UPDATE challenge_drafts SET updated_at = NOW() - INTERVAL '60 minutes' WHERE id = $1::uuid",
+        "UPDATE challenge_review_records SET updated_at = NOW() - INTERVAL '60 minutes' WHERE id = $1::uuid",
     )
-    .bind(draft_id)
+    .bind(review_record_id)
     .execute(&pool)
     .await
     .expect("failed to age publish claim");
 
     let second = repos
-        .challenge_drafts()
-        .claim_for_publish(draft_id, 30)
+        .challenge_review_records()
+        .claim_for_publish(review_record_id, 30)
         .await
         .expect("second publish claim should reserve after stale reset");
     let second_claim = second
@@ -1050,40 +1057,40 @@ async fn stale_publish_claim_cannot_mutate_newer_publish_claim(pool: sqlx::PgPoo
     assert_ne!(first_claim, second_claim);
 
     let stale_fail = repos
-        .challenge_drafts()
-        .fail_publish(draft_id, &first_claim, "stale failure")
+        .challenge_review_records()
+        .fail_publish(review_record_id, &first_claim, "stale failure")
         .await
         .expect_err("stale claim should not fail newer publish");
     assert!(matches!(stale_fail, ServiceError::Conflict));
 
     let stale_complete = repos
-        .challenge_drafts()
-        .mark_published(draft_id, &first_claim, None)
+        .challenge_review_records()
+        .mark_published(review_record_id, &first_claim, None)
         .await
         .expect_err("stale claim should not complete newer publish");
     assert!(matches!(stale_complete, ServiceError::Conflict));
 
     let claim_after_stale: Option<String> = sqlx::query_scalar(
-        "SELECT publish_claim_id::text FROM challenge_drafts WHERE id = $1::uuid",
+        "SELECT publish_claim_id::text FROM challenge_review_records WHERE id = $1::uuid",
     )
-    .bind(draft_id)
+    .bind(review_record_id)
     .fetch_one(&pool)
     .await
     .expect("failed to query publish claim");
     assert_eq!(claim_after_stale.as_deref(), Some(second_claim.as_str()));
 
     repos
-        .challenge_drafts()
-        .mark_published(draft_id, &second_claim, None)
+        .challenge_review_records()
+        .mark_published(review_record_id, &second_claim, None)
         .await
         .expect("newer claim should complete publish");
     let status_and_claim: (String, Option<String>) = sqlx::query_as(
-        "SELECT status, publish_claim_id::text FROM challenge_drafts WHERE id = $1::uuid",
+        "SELECT status, publish_claim_id::text FROM challenge_review_records WHERE id = $1::uuid",
     )
-    .bind(draft_id)
+    .bind(review_record_id)
     .fetch_one(&pool)
     .await
-    .expect("failed to query published draft");
+    .expect("failed to query published review_record");
     assert_eq!(status_and_claim, ("published".to_string(), None));
 }
 

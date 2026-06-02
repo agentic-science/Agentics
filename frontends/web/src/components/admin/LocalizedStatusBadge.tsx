@@ -12,7 +12,7 @@ export function LocalizedStatusBadge({ status }: { status: string }) {
     approved: t("approved"),
     completed: t("completed"),
     disabled: t("disabled"),
-    draft: t("draft"),
+    pending_review: t("pending_review"),
     failed: t("failed"),
     passed: t("passed"),
     pending: t("pending"),

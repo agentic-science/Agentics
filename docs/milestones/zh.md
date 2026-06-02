@@ -461,10 +461,10 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
   - Scope：让 leaderboards、aggregate metrics、per-run metrics、solution submission status、logs 和 artifact browsing 更便于人类浏览与比较。
   - Test spec：为带 multi-metric outputs 的 successful、failed、not-yet-visible、validation-only 和 official solution submissions 添加 rendering tests。
 
-- **M0.2.5-WEB-4：添加 creator 和 draft review web surfaces**
-  - Commit target：`web: add creator challenge draft console`
-  - Scope：添加基于 GitHub OAuth 的 creator route，用于 draft creation、private asset upload 和 draft status inspection。添加 admin draft review tab，用于 validation、approval、rejection、publish、abandon 和 stale cleanup。Creator pages 可以共用 web app，但不能使用 admin identity model。
-  - Test spec：为 creator console 和 admin draft tab 添加 rendering tests，并验证 unsafe creator requests 使用 creator CSRF token，而不是 admin credentials。
+- **M0.2.5-WEB-4：添加 creator 和 reviewer web surfaces**
+  - Commit target：`web: add creator challenge review record console`
+  - Scope：添加基于 GitHub OAuth 的 creator route，用于 review record creation、private asset upload 和 review record status inspection。添加 admin Review Records tab，用于 validation、approval、rejection、publish、abandon 和 stale cleanup。Creator pages 可以共用 web app，但不能使用 admin identity model。
+  - Test spec：为 creator console 和 admin review record tab 添加 rendering tests，并验证 unsafe creator requests 使用 creator CSRF token，而不是 admin credentials。
 
 ### Challenge Creation
 
@@ -473,30 +473,30 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
   - Scope：定义 `agentics.challenge.json`、public repository directory layout、lifecycle metadata、archive metadata、namespace rules、required challenge-level eligibility/timing policy 和 CI validation expectations。
   - Test spec：为 valid new challenges、archive requests、rejected `new_version` manifests、missing README、invalid namespace、invalid lifecycle transitions，以及不应出现在 public repo 的 files 添加 schema fixtures。
 
-- **M0.2.5-CREATE-2：添加 GitHub PR draft binding**
-  - Commit target：`api: add github challenge draft binding`
-  - Scope：添加 GitHub identity 或 verified webhook support，将 challenge draft 绑定到 repo URL、PR number、commit SHA、path、manifest hash、PR URL 和 PR author numeric user id。显式 multi-owner logic 推迟到 MVP 之后。
-  - Test spec：为 verified PR author binding、mismatched author rejection、replay 或 duplicate draft handling、closed PR sync，以及适用时的 invalid webhook signatures 添加 API 或 service tests。
+- **M0.2.5-CREATE-2：添加 GitHub PR review record binding**
+  - Commit target：`api: add github challenge review record binding`
+  - Scope：添加 GitHub identity 或 verified webhook support，将 challenge review record 绑定到 repo URL、PR number、commit SHA、path、manifest hash、PR URL 和 PR author numeric user id。显式 multi-owner logic 推迟到 MVP 之后。
+  - Test spec：为 verified PR author binding、mismatched author rejection、replay 或 duplicate review record handling、closed PR sync，以及适用时的 invalid webhook signatures 添加 API 或 service tests。
 
 - **M0.2.5-CREATE-3：添加 private benchmark asset upload 和 binding**
   - Commit target：`api: add private benchmark asset binding`
-  - Scope：为 private benchmark datasets、private evaluator packages、private seeds 和 reference outputs 添加 private asset upload。将 asset metadata、digest、size、creator、storage URI 和 draft binding 存储在 Agentics-controlled storage 中。
-  - Test spec：为 size limits、digest recording、missing draft rejection、unauthorized creator rejection、duplicate asset handling 和 failed uploads 的 storage cleanup 添加 upload tests。
+  - Scope：为 private benchmark datasets、private evaluator packages、private seeds 和 reference outputs 添加 private asset upload。将 asset metadata、digest、size、creator、storage URI 和 review record binding 存储在 Agentics-controlled storage 中。
+  - Test spec：为 size limits、digest recording、missing review record rejection、unauthorized creator rejection、duplicate asset handling 和 failed uploads 的 storage cleanup 添加 upload tests。
 
-- **M0.2.5-CREATE-4：添加 challenge draft validation 和 review lifecycle**
-  - Commit target：`api: add challenge draft review lifecycle`
-  - Scope：添加 draft states、validation job records、approval、rejection、publish transition、audit events，以及经过 admin review 的 immutable challenge contract publishing。
-  - Test spec：为 draft state transitions、validation failures、approval authorization、publish idempotency、audit event creation 和 immutable published challenge contract records 添加 integration tests。
+- **M0.2.5-CREATE-4：添加 challenge review record validation 和 lifecycle**
+  - Commit target：`api: add challenge review-record lifecycle`
+  - Scope：添加 review record states、validation job records、approval、rejection、publish transition、audit events，以及经过 admin review 的 immutable challenge contract publishing。
+  - Test spec：为 review record state transitions、validation failures、approval authorization、publish idempotency、audit event creation 和 immutable published challenge contract records 添加 integration tests。
 
 - **M0.2.5-CREATE-5：添加 challenge archive flow 并拒绝 version updates**
   - Commit target：`api: add challenge lifecycle flows`
-  - Scope：拒绝 `new_version` drafts，因为实质 benchmark 变更必须使用新的 challenge name。添加 challenge archive drafts，保留 public records、保留 private assets、从默认浏览隐藏 challenges，并禁用新的 validation 或 official runs。
+  - Scope：拒绝 `new_version` review records，因为实质 benchmark 变更必须使用新的 challenge name。添加 challenge archive review records，保留 public records、保留 private assets、从默认浏览隐藏 challenges，并禁用新的 validation 或 official runs。
   - Test spec：为 `new_version` manifest rejection、archived challenges 的 default browse hiding、archived records 的 direct-link access，以及 archived challenges 的 solution submission rejection 添加 tests。
 
-- **M0.2.5-CREATE-6：添加 stale draft cleanup 和 challenge creation quotas**
-  - Commit target：`api: add challenge draft cleanup and quotas`
-  - Scope：将绑定 closed unmerged PRs 的 drafts 以及 inactive active unpublished drafts 标记为 abandoned，保留明确 rejected 的 review outcomes，在 grace period 后 purge unpublished draft private assets，并执行 draft count、private asset size、validation frequency、queued validation jobs 和 worker concurrency 的 MVP quotas。
-  - Test spec：为 abandoned draft cleanup、rejected-state preservation、grace-period asset purge、published asset preservation、quota boundaries、quota error responses 和 admin override behavior 添加 tests。
+- **M0.2.5-CREATE-6：添加 stale review record cleanup 和 challenge creation quotas**
+  - Commit target：`api: add challenge review record cleanup and quotas`
+  - Scope：将绑定 closed unmerged PRs 的 review records 以及 inactive active unpublished review records 标记为 abandoned，保留明确 rejected 的 review outcomes，在 grace period 后 purge unpublished review record private assets，并执行 review record count、private asset size、validation frequency、queued validation jobs 和 worker concurrency 的 MVP quotas。
+  - Test spec：为 abandoned review record cleanup、rejected-state preservation、grace-period asset purge、published asset preservation、quota boundaries、quota error responses 和 admin override behavior 添加 tests。
 
 ### Demo Challenges
 
@@ -549,9 +549,9 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
   - Scope：确保 agent 或 operator 能够配置 CLI 连接 hosted demo、注册、查看 challenge、初始化 workspace、在启用时进行 validation、official submit，并轮询 status。
   - Test spec：为 hosted configuration examples 添加 command-level tests，并针对 staging 运行一次 end-to-end smoke test。
 
-- **M0.2.5-CLI-2：添加 challenge draft reviewer commands**
-  - Commit target：`cli: add challenge draft reviewer workflow`
-  - Scope：添加使用 Basic Auth 的 admin validation、approval、rejection、publish、abandon 和 cleanup CLI helpers。Creator-side draft creation、draft status 和 private asset upload 在 CLI 支持 GitHub OAuth creator sessions 之前保持 web-only。
+- **M0.2.5-CLI-2：添加 challenge review record reviewer commands**
+  - Commit target：`cli: add challenge review-record reviewer workflow`
+  - Scope：添加使用 Basic Auth 的 admin validation、approval、rejection、publish、abandon 和 cleanup CLI helpers。Creator-side review record creation、review record status 和 private asset upload 在 CLI 支持 GitHub OAuth creator sessions 之前保持 web-only。
   - Test spec：添加 command parser tests、mocked admin API tests，以及 validation failure responses 的 golden output。
 
 - **M0.2.5-CLI-3：添加 agent result exploration commands**
@@ -566,8 +566,8 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 
 - **M0.2.5-SKILL-1：添加 challenge authoring skill**
   - Commit target：`skill: add challenge authoring workflow`
-  - Scope：添加一个 agent skill，指导 creators 如何组织 public repo files、编写 manifest、避免 private-data leakage、通过 Agentics 上传 private assets、validate drafts 并请求 publish。
-  - Test spec：根据 CLI help output、manifest schema examples 和 draft lifecycle docs 审查该 skill。
+  - Scope：添加一个 agent skill，指导 creators 如何组织 public repo files、编写 manifest、避免 private-data leakage、通过 Agentics 上传 private assets、validate review records 并请求 publish。
+  - Test spec：根据 CLI help output、manifest schema examples 和 review record lifecycle docs 审查该 skill。
 
 - **M0.2.5-SKILL-2：添加 challenge review skill**
   - Commit target：`skill: add challenge review workflow`
@@ -586,13 +586,13 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-WEB-1：改版 public web visual system 和 layout` | 计划中 | Public first impression blocker。 |
 | `M0.2.5-WEB-2：打磨 challenge browsing 和 challenge detail` | 计划中 | 依赖 resource metadata 和结构化 challenge summaries。 |
 | `M0.2.5-WEB-3：打磨 leaderboard、solution submission detail 和 artifacts` | 计划中 | 依赖 structured metric display。 |
-| `M0.2.5-WEB-4：添加 creator 和 draft review web surfaces` | 已实现 | `/creator` 使用 GitHub OAuth creator sessions 进行 draft creation 和 asset upload；`/admin` 增加 Drafts tab 处理 reviewer lifecycle actions。 |
+| `M0.2.5-WEB-4：添加 creator 和 reviewer web surfaces` | 已实现 | `/creator` 使用 GitHub OAuth creator sessions 进行 review record creation 和 asset upload；`/admin` 增加 Review Records tab 处理 reviewer lifecycle actions。 |
 | `M0.2.5-CREATE-1：定义 public challenge manifest 和 repository layout` | 已实现 | 已实现并记录 public manifest、repo layout validation、namespace rules 和 leakage checks。 |
-| `M0.2.5-CREATE-2：添加 GitHub PR draft binding` | 已实现 | Drafts 已绑定 repo URL、PR number、commit SHA、path、manifest hash、PR URL 和 linked PR author id。 |
-| `M0.2.5-CREATE-3：添加 private benchmark asset upload 和 binding` | 已实现 | Private asset upload 会在 GitHub 之外存储 digest、size、storage URI、uploader 和 draft binding。 |
-| `M0.2.5-CREATE-4：添加 challenge draft validation 和 review lifecycle` | 已实现 | 已实现 draft validation records、approval、rejection、publish transition 和 audit events。 |
-| `M0.2.5-CREATE-5：添加 challenge archive flow 并拒绝 version updates` | 已实现 | `new_version` manifests 会被拒绝；archive drafts 会隐藏 challenge 但保留 direct records。 |
-| `M0.2.5-CREATE-6：添加 stale draft cleanup 和 challenge creation quotas` | 已实现 | 已实现 active draft limits、private asset byte limits、validation-frequency limits、stale draft abandonment 和 unpublished asset purge。 |
+| `M0.2.5-CREATE-2：添加 GitHub PR review record binding` | 已实现 | Review Records 已绑定 repo URL、PR number、commit SHA、path、manifest hash、PR URL 和 linked PR author id。 |
+| `M0.2.5-CREATE-3：添加 private benchmark asset upload 和 binding` | 已实现 | Private asset upload 会在 GitHub 之外存储 digest、size、storage URI、uploader 和 review record binding。 |
+| `M0.2.5-CREATE-4：添加 challenge review record validation 和 review lifecycle` | 已实现 | 已实现 review record validation records、approval、rejection、publish transition 和 audit events。 |
+| `M0.2.5-CREATE-5：添加 challenge archive flow 并拒绝 version updates` | 已实现 | `new_version` manifests 会被拒绝；archive review records 会隐藏 challenge 但保留 direct records。 |
+| `M0.2.5-CREATE-6：添加 stale review record cleanup 和 challenge creation quotas` | 已实现 | 已实现 active review record limits、private asset byte limits、validation-frequency limits、stale review record abandonment 和 unpublished asset purge。 |
 | `M0.2.5-DEMO-1：确定 official demo challenge set` | 已实现 | Migrated Frontier-CS challenges 是 MVP demo seed set；共享 dev/demo workflow 会自动加载 non-GPU challenges、private bundles 和 test solutions。 |
 | `M0.2.5-DEMO-2：打包 official demo challenges` | 已实现 | Demo challenges 位于 `agentics-challenges`，使用从 RustFS backup storage 恢复的 private asset overlays，并包含 public test solutions 用于 local official-submission smoke paths。 |
 | `M0.2.5-DEPLOY-1：添加 hosted deployment baseline` | 已实现 | 已文档化 Local Compose MVP deployment rehearsal；DGX Spark host preparation 现在由 DGX-1 和 DGX-2 单独覆盖。 |
@@ -602,7 +602,7 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-DGX-2：添加 DGX Spark host preparation 和 profile checks` | 已实现 | Host-preparation docs、production Compose env template、Linux-gated storage/profile checks、loopback XFS mounts 和 optional `/etc/fstab` entries、root-prepared runner quota slots、configured host Docker socket 和 strict profile verification 已就绪。 |
 | `M0.2.5-DGX-3：运行 DGX Spark end-to-end smoke 和 benchmark calibration` | 已实现 | DGX smoke evidence 已在 `docs/dgx-spark/zh.md` 中汇总，包括 hosted CLI onboarding、`linux-arm64-cpu` 上的 matrix validation 和 official submission、no-egress runner smoke、storage-quota escape smoke、capacity、heartbeats 和 MVP target decision。 |
 | `M0.2.5-CLI-1：验证 hosted CLI onboarding` | 已实现 | 已记录 registration、challenge inspection、workspace initialization、validation、official submission 和 polling 的 hosted CLI smoke path。 |
-| `M0.2.5-CLI-2：添加 challenge draft reviewer commands` | 已实现 | CLI 覆盖 admin validation、review、publish、abandon 和 cleanup helpers；creator-side GitHub OAuth CLI support 已推迟，当前使用 `/creator` web flow。 |
+| `M0.2.5-CLI-2：添加 challenge review-record admin commands` | 已实现 | CLI 覆盖 admin validation、review、publish、abandon 和 cleanup helpers；creator-side GitHub OAuth CLI support 已推迟，当前使用 `/creator` web flow。 |
 | `M0.2.5-CLI-3：添加 agent result exploration commands` | 已实现 | 添加 challenge stats、默认 limit 为 20 的 visible solution submission listing、detailed submission reports、public/authenticated report fallback 和 target-scoped API support。 |
 | `M0.2.5-CLI-4：用全局 JSON convention 替换 output-format flag` | 已实现 | 已用全局 `--json` 替换 `--output json`，并保持 JSON 对 agent automation 完整可用。 |
 | `M0.2.5-SKILL-1：添加 challenge authoring skill` | 已实现 | `skills/challenge-authoring-workflow/SKILL.md` 记录 creator workflow、`/creator` web usage 和 private asset ZIP overlays。 |

@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ChallengeLifecycleStatus {
-    Draft,
+    PendingReview,
     Active,
     Archived,
 }
@@ -17,7 +17,7 @@ impl ChallengeLifecycleStatus {
     /// Stable database string for a challenge lifecycle state.
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Draft => "draft",
+            Self::PendingReview => "pending_review",
             Self::Active => "active",
             Self::Archived => "archived",
         }
@@ -26,7 +26,7 @@ impl ChallengeLifecycleStatus {
     /// Parse a stable database string for a challenge lifecycle state.
     pub fn from_storage_value(value: &str) -> Option<Self> {
         match value {
-            "draft" => Some(Self::Draft),
+            "pending_review" => Some(Self::PendingReview),
             "active" => Some(Self::Active),
             "archived" => Some(Self::Archived),
             _ => None,

@@ -1,4 +1,4 @@
-//! GitHub-backed challenge draft lifecycle workflows.
+//! GitHub-backed challenge review record lifecycle workflows.
 
 use std::{
     collections::HashSet,
@@ -10,15 +10,15 @@ use uuid::Uuid;
 use agentics_config::Config;
 use agentics_contracts::challenge_bundle;
 use agentics_domain::models::challenge_creation::{
-    ChallengeCreationManifest, ChallengeDraftResponse, ChallengePrivateAssetKind,
+    ChallengeCreationManifest, ChallengePrivateAssetKind, ChallengeReviewRecordResponse,
 };
-use agentics_domain::models::ids::ChallengeDraftPublishClaimId;
+use agentics_domain::models::ids::ChallengeReviewPublishClaimId;
 use agentics_error::{Result, ServiceError};
 use agentics_storage::{Storage, StorageWriteIntent};
 
 use crate::storage_errors::storage_error_to_service_error;
 
-const CHALLENGE_DRAFT_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
+const CHALLENGE_REVIEW_RECORD_QUOTA_WINDOW_SECONDS: i64 = 24 * 60 * 60;
 
 mod cleanup;
 mod create;
@@ -31,49 +31,58 @@ mod types;
 mod utils;
 mod validation;
 
-pub use cleanup::cleanup_challenge_drafts;
-pub use create::create_challenge_draft;
+pub use cleanup::cleanup_challenge_review_records;
+pub use create::create_challenge_review_record;
 use private_assets::extract_private_asset_overlay;
 pub use private_assets::upload_challenge_private_asset;
-pub use publishing::publish_challenge_draft;
+pub use publishing::publish_challenge_review_record;
 pub use read::{
-    get_challenge_draft, list_admin_challenge_draft_private_assets, list_admin_challenge_drafts,
+    get_challenge_review_record, list_admin_challenge_review_record_private_assets,
+    list_admin_challenge_review_records,
 };
-pub use review::{abandon_challenge_draft, approve_challenge_draft, reject_challenge_draft};
+pub use review::{
+    abandon_challenge_review_record, approve_challenge_review_record,
+    reject_challenge_review_record,
+};
 pub use types::{
-    ChallengeDraftAdmin, ChallengeDraftCreator, CreateChallengeDraftServiceRequest,
-    PublishChallengeDraftServiceRequest, ReviewChallengeDraftServiceRequest,
-    UploadChallengePrivateAssetServiceRequest, ValidateChallengeDraftServiceRequest,
+    ChallengeReviewDecisionServiceRequest, ChallengeReviewRecordAdmin,
+    ChallengeReviewRecordCreator, CreateChallengeReviewRecordServiceRequest,
+    PublishChallengeReviewRecordServiceRequest, UploadChallengePrivateAssetServiceRequest,
+    ValidateChallengeReviewRecordServiceRequest,
 };
-pub use validation::validate_challenge_draft;
-pub(super) use validation::validate_draft_repository;
+pub use validation::validate_challenge_review_record;
+pub(super) use validation::validate_review_record_repository;
 
 /// Builds the managed runtime bundle by combining public bundle files and private overlays.
 pub(super) async fn assemble_runtime_bundle(
     storage: &dyn Storage,
     config: &Config,
-    draft: &ChallengeDraftResponse,
+    review_record: &ChallengeReviewRecordResponse,
     proposal_root: &Path,
     manifest: &ChallengeCreationManifest,
     runtime_bundle_path: &Path,
 ) -> Result<()> {
     let bundle_path = manifest.bundle_path.as_ref().ok_or_else(|| {
-        ServiceError::BadRequest("bundle_path is required for publishable drafts".to_string())
+        ServiceError::BadRequest(
+            "bundle_path is required for publishable review_records".to_string(),
+        )
     })?;
     let public_bundle_path = proposal_root.join(bundle_path.as_path());
     let public_spec = challenge_bundle::read_challenge_bundle_spec(&public_bundle_path).await?;
-    validate_private_assets_for_publish(draft, manifest, &public_spec)?;
+    validate_private_assets_for_publish(review_record, manifest, &public_spec)?;
 
     challenge_bundle::copy_challenge_bundle_dir(&public_bundle_path, runtime_bundle_path, true)
         .await?;
 
-    for asset in &draft.private_assets {
+    for asset in &review_record.private_assets {
         let bytes = storage
             .get(
                 &asset.storage_key,
                 StorageWriteIntent::new(
                     "challenge private asset ZIP",
-                    config.quotas.challenge_private_asset_bytes_per_draft,
+                    config
+                        .quotas
+                        .challenge_private_asset_bytes_per_review_record,
                 ),
             )
             .await
@@ -82,11 +91,13 @@ pub(super) async fn assemble_runtime_bundle(
             &bytes,
             runtime_bundle_path,
             &asset.asset_name,
-            config.quotas.challenge_private_asset_bytes_per_draft,
+            config
+                .quotas
+                .challenge_private_asset_bytes_per_review_record,
         )
         .await?;
     }
-    validate_private_asset_required_paths(draft, manifest, runtime_bundle_path).await?;
+    validate_private_asset_required_paths(review_record, manifest, runtime_bundle_path).await?;
 
     Ok(())
 }
@@ -98,7 +109,9 @@ pub(super) async fn assemble_public_bundle(
     public_runtime_bundle_path: &Path,
 ) -> Result<()> {
     let bundle_path = manifest.bundle_path.as_ref().ok_or_else(|| {
-        ServiceError::BadRequest("bundle_path is required for publishable drafts".to_string())
+        ServiceError::BadRequest(
+            "bundle_path is required for publishable review_records".to_string(),
+        )
     })?;
     let public_bundle_path = proposal_root.join(bundle_path.as_path());
     challenge_bundle::copy_challenge_bundle_dir(
@@ -112,8 +125,8 @@ pub(super) async fn assemble_public_bundle(
 /// Attempt-scoped temporary runtime-bundle path under local storage work root.
 pub(super) fn temporary_runtime_bundle_path(
     config: &Config,
-    draft: &ChallengeDraftResponse,
-    publish_claim_id: &ChallengeDraftPublishClaimId,
+    review_record: &ChallengeReviewRecordResponse,
+    publish_claim_id: &ChallengeReviewPublishClaimId,
 ) -> Result<PathBuf> {
     Ok(config
         .storage_work_root()
@@ -122,7 +135,7 @@ pub(super) fn temporary_runtime_bundle_path(
         .join("challenge-bundles")
         .join(format!(
             "{}-{}-{}",
-            draft.id,
+            review_record.id,
             publish_claim_id,
             Uuid::new_v4()
         )))
@@ -131,8 +144,8 @@ pub(super) fn temporary_runtime_bundle_path(
 /// Attempt-scoped temporary public-only bundle path under local storage work root.
 pub(super) fn temporary_public_runtime_bundle_path(
     config: &Config,
-    draft: &ChallengeDraftResponse,
-    publish_claim_id: &ChallengeDraftPublishClaimId,
+    review_record: &ChallengeReviewRecordResponse,
+    publish_claim_id: &ChallengeReviewPublishClaimId,
 ) -> Result<PathBuf> {
     Ok(config
         .storage_work_root()
@@ -141,7 +154,7 @@ pub(super) fn temporary_public_runtime_bundle_path(
         .join("challenge-public-bundles")
         .join(format!(
             "{}-{}-{}",
-            draft.id,
+            review_record.id,
             publish_claim_id,
             Uuid::new_v4()
         )))
@@ -149,11 +162,11 @@ pub(super) fn temporary_public_runtime_bundle_path(
 
 /// Verifies every private asset required by the manifest and bundle shape is present.
 fn validate_private_assets_for_publish(
-    draft: &ChallengeDraftResponse,
+    review_record: &ChallengeReviewRecordResponse,
     manifest: &ChallengeCreationManifest,
     spec: &agentics_domain::models::challenge::ChallengeBundleSpec,
 ) -> Result<()> {
-    let uploaded: HashSet<&str> = draft
+    let uploaded: HashSet<&str> = review_record
         .private_assets
         .iter()
         .map(|asset| asset.asset_name.as_str())
@@ -180,7 +193,7 @@ fn validate_private_assets_for_publish(
                 false
             }
         };
-    let private_benchmark_uploaded = draft
+    let private_benchmark_uploaded = review_record
         .private_assets
         .iter()
         .any(|asset| asset.kind == ChallengePrivateAssetKind::PrivateBenchmarkData);
@@ -196,11 +209,11 @@ fn validate_private_assets_for_publish(
 
 /// Confirms uploaded private overlays produced every manifest-declared runtime path.
 async fn validate_private_asset_required_paths(
-    draft: &ChallengeDraftResponse,
+    review_record: &ChallengeReviewRecordResponse,
     manifest: &ChallengeCreationManifest,
     runtime_bundle_path: &Path,
 ) -> Result<()> {
-    let uploaded: HashSet<&str> = draft
+    let uploaded: HashSet<&str> = review_record
         .private_assets
         .iter()
         .map(|asset| asset.asset_name.as_str())

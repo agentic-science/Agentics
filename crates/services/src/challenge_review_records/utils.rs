@@ -45,11 +45,11 @@ pub(super) async fn cleanup_file(path: &Path) {
 pub(super) fn challenge_bundle_storage_key(
     prefix: &str,
     challenge_name: &str,
-    draft_id: &str,
+    review_record_id: &str,
     publish_claim_id: &str,
 ) -> Result<StorageKey> {
     StorageKey::try_new(format!(
-        "{prefix}/{challenge_name}/{draft_id}-{publish_claim_id}.tar"
+        "{prefix}/{challenge_name}/{review_record_id}-{publish_claim_id}.tar"
     ))
     .map_err(Into::into)
 }

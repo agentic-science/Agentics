@@ -1,14 +1,17 @@
 use super::fixtures::*;
 use super::*;
 
-/// Verifies that challenge creator creates draft from repo manifest.
+/// Verifies that challenge creator creates a review record from repo manifest.
 #[tokio::test]
-async fn challenge_creator_creates_draft_from_repo_manifest() {
+async fn challenge_creator_creates_review_record_from_repo_manifest() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/api/creator/challenge-drafts"))
+        .and(path("/api/creator/challenge-review-records"))
         .and(header("authorization", "Bearer test-token"))
-        .respond_with(ResponseTemplate::new(201).set_body_json(challenge_draft_json("draft")))
+        .respond_with(
+            ResponseTemplate::new(201)
+                .set_body_json(challenge_review_record_json("pending_review")),
+        )
         .mount(&server)
         .await;
 
@@ -30,7 +33,7 @@ async fn challenge_creator_creates_draft_from_repo_manifest() {
         "--token",
         "test-token",
         "challenge-creator",
-        "draft",
+        "review-record",
         "create",
         "--repo-url",
         "https://github.com/agentics-reifying/agentics-challenges",
@@ -50,7 +53,7 @@ async fn challenge_creator_creates_draft_from_repo_manifest() {
 
     let error = execute(cli, Environment::default())
         .await
-        .expect_err("creator draft creation requires web-session auth");
+        .expect_err("creator review record creation requires web-session auth");
     let requests = server
         .received_requests()
         .await
@@ -60,7 +63,7 @@ async fn challenge_creator_creates_draft_from_repo_manifest() {
     assert!(
         error
             .to_string()
-            .contains("creator draft creation requires")
+            .contains("creator review record creation requires")
     );
 }
 
@@ -70,7 +73,7 @@ fn challenge_creator_rejects_invalid_commit_sha_during_cli_parse() {
     let result = Cli::try_parse_from([
         "agentics",
         "challenge-creator",
-        "draft",
+        "review-record",
         "create",
         "--repo-url",
         "https://github.com/agentics-reifying/agentics-challenges",
@@ -98,7 +101,7 @@ async fn challenge_creator_uploads_private_asset_file() {
         STANDARD.encode(b"private zip bytes")
     };
     Mock::given(method("POST"))
-        .and(path("/api/creator/challenge-drafts/dddddddd-dddd-4ddd-8ddd-dddddddddddd/private-assets"))
+        .and(path("/api/creator/challenge-review-records/dddddddd-dddd-4ddd-8ddd-dddddddddddd/private-assets"))
         .and(header("authorization", "Bearer test-token"))
         .and(body_json(json!({
             "asset_name": "official-cases",
@@ -108,13 +111,13 @@ async fn challenge_creator_uploads_private_asset_file() {
         })))
         .respond_with(ResponseTemplate::new(201).set_body_json(json!({
             "id": "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
-            "draft_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+            "review_record_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
             "asset_name": "official-cases",
             "kind": "private_benchmark_data",
             "required": true,
             "size_bytes": 17,
             "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "storage_key": "challenge-drafts/dddddddd-dddd-4ddd-8ddd-dddddddddddd/private-assets/official-cases.bin",
+            "storage_key": "challenge-review-records/dddddddd-dddd-4ddd-8ddd-dddddddddddd/private-assets/official-cases.bin",
             "uploader_agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "created_at": "2026-05-01T00:00:00Z"
         })))
@@ -134,7 +137,7 @@ async fn challenge_creator_uploads_private_asset_file() {
         "--token",
         "test-token",
         "challenge-creator",
-        "draft",
+        "review-record",
         "upload-private-asset",
         "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
         "--asset-name",
@@ -162,9 +165,9 @@ async fn challenge_creator_uploads_private_asset_file() {
     );
 }
 
-/// Verifies that challenge creator validates draft with admin auth.
+/// Verifies that challenge creator validates a review record with admin auth.
 #[tokio::test]
-async fn challenge_creator_validates_draft_with_admin_auth() {
+async fn challenge_creator_validates_review_record_with_admin_auth() {
     let server = MockServer::start().await;
     let admin_auth = format!("Basic {}", {
         use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -172,12 +175,14 @@ async fn challenge_creator_validates_draft_with_admin_auth() {
     });
     Mock::given(method("POST"))
         .and(path(
-            "/admin/challenge-drafts/dddddddd-dddd-4ddd-8ddd-dddddddddddd/validate",
+            "/admin/challenge-review-records/dddddddd-dddd-4ddd-8ddd-dddddddddddd/validate",
         ))
         .and(header("authorization", admin_auth))
         .and(header("x-agentics-admin-automation", "true"))
         .and(body_json(json!({ "repository_path": "/tmp/challenges" })))
-        .respond_with(ResponseTemplate::new(200).set_body_json(challenge_draft_json("validated")))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(challenge_review_record_json("validated")),
+        )
         .mount(&server)
         .await;
 
@@ -190,7 +195,7 @@ async fn challenge_creator_validates_draft_with_admin_auth() {
         "--api-base-url",
         &server.uri(),
         "challenge-creator",
-        "draft",
+        "review-record",
         "validate",
         "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
         "--repository-path",
@@ -212,7 +217,7 @@ async fn challenge_creator_validates_draft_with_admin_auth() {
     assert!(output.contains("status: validated"));
 }
 
-/// Verifies admin draft validation rejects non-UTF-8 repository paths before the API request.
+/// Verifies admin review record validation rejects non-UTF-8 repository paths before the API request.
 #[cfg(unix)]
 #[tokio::test]
 async fn challenge_creator_rejects_non_utf8_admin_repository_path() {
@@ -229,7 +234,7 @@ async fn challenge_creator_rejects_non_utf8_admin_repository_path() {
         OsString::from("--api-base-url"),
         OsString::from(server.uri()),
         OsString::from("challenge-creator"),
-        OsString::from("draft"),
+        OsString::from("review-record"),
         OsString::from("validate"),
         OsString::from("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
         OsString::from("--repository-path"),

@@ -4,20 +4,20 @@ import {
   type ChallengePrivateAssetResponse,
   type ChallengeShortlistResponse,
   type ChallengeShortlistRevisionResponse,
-  type CreateChallengeDraftRequest,
+  type CreateChallengeReviewRecordRequest,
   type CreateChallengeShortlistRevisionRequest,
-  type CreatorChallengeDraftResponse,
   type CreatorChallengeParticipantsResponse,
+  type CreatorChallengeReviewRecordResponse,
   type CreatorChallengeStatsResponse,
   type CreatorMeResponse,
   type CreatorSessionResponse,
   challengePrivateAssetResponseSchema,
   challengeShortlistResponseSchema,
   challengeShortlistRevisionResponseSchema,
-  createChallengeDraftRequestSchema,
+  createChallengeReviewRecordRequestSchema,
   createChallengeShortlistRevisionRequestSchema,
-  creatorChallengeDraftResponseSchema,
   creatorChallengeParticipantsResponseSchema,
+  creatorChallengeReviewRecordResponseSchema,
   creatorChallengeStatsResponseSchema,
   creatorMeResponseSchema,
   creatorSessionResponseSchema,
@@ -33,19 +33,19 @@ import {
 
 /** Describes the challenge creation manifest shape used by this module. */
 export type ChallengeCreationManifest =
-  CreatorChallengeDraftResponse["manifest"];
+  CreatorChallengeReviewRecordResponse["manifest"];
 /** Describes the challenge private asset kind shape used by this module. */
 export type ChallengePrivateAssetKind =
   UploadChallengePrivateAssetRequest["kind"];
 
 export type {
-  CreateChallengeDraftRequest,
+  CreateChallengeReviewRecordRequest,
   CreateChallengeShortlistRevisionRequest,
   UploadChallengePrivateAssetRequest,
 };
 export {
   ApiClientError as CreatorApiError,
-  createChallengeDraftRequestSchema,
+  createChallengeReviewRecordRequestSchema,
   createChallengeShortlistRevisionRequestSchema,
   uploadChallengePrivateAssetRequestSchema,
 };
@@ -98,15 +98,15 @@ export async function completeGithubLogin(
   );
 }
 
-/** Creates challenge draft through the API. */
-export async function createChallengeDraft(
-  request: CreateChallengeDraftRequest,
+/** Creates challenge review record through the API. */
+export async function createChallengeReviewRecord(
+  request: CreateChallengeReviewRecordRequest,
   csrfToken: string,
-): Promise<CreatorChallengeDraftResponse> {
-  const body = createChallengeDraftRequestSchema.parse(request);
+): Promise<CreatorChallengeReviewRecordResponse> {
+  const body = createChallengeReviewRecordRequestSchema.parse(request);
   return creatorFetchJson(
-    "/api/creator/challenge-drafts",
-    creatorChallengeDraftResponseSchema,
+    "/api/creator/challenge-review-records",
+    creatorChallengeReviewRecordResponseSchema,
     csrfToken,
     {
       method: "POST",
@@ -115,25 +115,25 @@ export async function createChallengeDraft(
   );
 }
 
-/** Fetches challenge draft for the requested UI scope. */
-export async function getChallengeDraft(
+/** Fetches challenge review record for the requested UI scope. */
+export async function getChallengeReviewRecord(
   id: string,
-): Promise<CreatorChallengeDraftResponse> {
+): Promise<CreatorChallengeReviewRecordResponse> {
   return creatorFetchJson(
-    `/api/creator/challenge-drafts/${encodeURIComponent(id)}`,
-    creatorChallengeDraftResponseSchema,
+    `/api/creator/challenge-review-records/${encodeURIComponent(id)}`,
+    creatorChallengeReviewRecordResponseSchema,
   );
 }
 
 /** Uploads private asset through the API. */
 export async function uploadPrivateAsset(
-  draftId: string,
+  reviewRecordId: string,
   request: UploadChallengePrivateAssetRequest,
   csrfToken: string,
 ): Promise<ChallengePrivateAssetResponse> {
   const body = uploadChallengePrivateAssetRequestSchema.parse(request);
   return creatorFetchJson(
-    `/api/creator/challenge-drafts/${encodeURIComponent(draftId)}/private-assets`,
+    `/api/creator/challenge-review-records/${encodeURIComponent(reviewRecordId)}/private-assets`,
     challengePrivateAssetResponseSchema,
     csrfToken,
     {

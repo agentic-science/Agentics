@@ -1,9 +1,9 @@
 use super::helpers::{sample_sum_solution, solution_zip_base64};
 use super::*;
 
-/// Verifies that challenge draft rejects new version manifest.
+/// Verifies that challenge review record rejects new version manifest.
 #[sqlx::test(migrations = "../migrations")]
-async fn challenge_draft_rejects_new_version_manifest(pool: sqlx::PgPool) {
+async fn challenge_review_record_rejects_new_version_manifest(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let config = test_config(storage.path(), seeded_challenges.path());
@@ -12,7 +12,7 @@ async fn challenge_draft_rejects_new_version_manifest(pool: sqlx::PgPool) {
     let creator = create_creator_session(&pool, 1001, "creator").await;
 
     let response = creator_auth(
-        client.post(api_url(&app, "/api/creator/challenge-drafts")),
+        client.post(api_url(&app, "/api/creator/challenge-review-records")),
         &creator,
     )
     .json(&json!({
@@ -38,7 +38,7 @@ async fn challenge_draft_rejects_new_version_manifest(pool: sqlx::PgPool) {
     }))
     .send()
     .await
-    .expect("new_version draft request");
+    .expect("new_version review_record request");
     assert_eq!(
         response.status(),
         reqwest::StatusCode::BAD_REQUEST,
@@ -46,9 +46,9 @@ async fn challenge_draft_rejects_new_version_manifest(pool: sqlx::PgPool) {
     )
 }
 
-/// Verifies that archive draft hides challenge and rejects new submissions.
+/// Verifies that archive review_record hides challenge and rejects new submissions.
 #[sqlx::test(migrations = "../migrations")]
-async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::PgPool) {
+async fn archive_review_record_hides_challenge_and_rejects_new_submissions(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let public_repo = tempfile::tempdir().expect("public repo tempdir");
@@ -71,14 +71,15 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
         config.expose_admin_password_for_http_basic(),
     );
 
-    let publish_flow = DraftPublishFlow {
+    let publish_flow = ReviewRecordPublishFlow {
         client: &client,
         app: &app,
         creator: &creator,
         admin_auth: &admin_auth,
         public_repo: public_repo.path(),
     };
-    create_validate_approve_publish_draft(&publish_flow, &commit_sha, 31, manifest_json()).await;
+    create_validate_approve_publish_review_record(&publish_flow, &commit_sha, 31, manifest_json())
+        .await;
     let sample_sum_name: String = sqlx::query_scalar(
         "SELECT challenge_name::text FROM challenges WHERE challenge_name = 'sample-sum'",
     )
@@ -127,7 +128,7 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
 
     write_archive_manifest(public_repo.path());
     let archive_commit_sha = commit_all(public_repo.path(), "archive sample-sum");
-    create_validate_approve_publish_draft(
+    create_validate_approve_publish_review_record(
         &publish_flow,
         &archive_commit_sha,
         32,
@@ -237,9 +238,9 @@ async fn archive_draft_hides_challenge_and_rejects_new_submissions(pool: sqlx::P
     assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
 }
 
-/// Verifies that archive publication requires the draft creator to own the challenge.
+/// Verifies that archive publication requires the review_record creator to own the challenge.
 #[sqlx::test(migrations = "../migrations")]
-async fn archive_draft_requires_challenge_owner(pool: sqlx::PgPool) {
+async fn archive_review_record_requires_challenge_owner(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let public_repo = tempfile::tempdir().expect("public repo tempdir");
@@ -255,18 +256,19 @@ async fn archive_draft_requires_challenge_owner(pool: sqlx::PgPool) {
         config.expose_admin_password_for_http_basic(),
     );
 
-    let publish_flow = DraftPublishFlow {
+    let publish_flow = ReviewRecordPublishFlow {
         client: &client,
         app: &app,
         creator: &owner,
         admin_auth: &admin_auth,
         public_repo: public_repo.path(),
     };
-    create_validate_approve_publish_draft(&publish_flow, &commit_sha, 61, manifest_json()).await;
+    create_validate_approve_publish_review_record(&publish_flow, &commit_sha, 61, manifest_json())
+        .await;
 
     write_archive_manifest(public_repo.path());
     let archive_commit_sha = commit_all(public_repo.path(), "archive sample-sum");
-    let archive_draft = create_draft_with_author_and_commit(
+    let archive_review_record = create_review_record_with_author_and_commit(
         &client,
         &app,
         &non_owner,
@@ -276,11 +278,13 @@ async fn archive_draft_requires_challenge_owner(pool: sqlx::PgPool) {
         &archive_commit_sha,
     )
     .await;
-    let archive_draft_id = archive_draft["id"].as_str().expect("archive draft id");
+    let archive_review_record_id = archive_review_record["id"]
+        .as_str()
+        .expect("archive review_record id");
     let archive_validated: serde_json::Value = client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{archive_draft_id}/validate"),
+            &format!("/admin/challenge-review-records/{archive_review_record_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -289,14 +293,14 @@ async fn archive_draft_requires_challenge_owner(pool: sqlx::PgPool) {
         .await
         .expect("validate archive request")
         .error_for_status()
-        .expect("archive draft should validate")
+        .expect("archive review_record should validate")
         .json()
         .await
-        .expect("validated archive draft json");
+        .expect("validated archive review_record json");
     client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{archive_draft_id}/approve"),
+            &format!("/admin/challenge-review-records/{archive_review_record_id}/approve"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -308,12 +312,12 @@ async fn archive_draft_requires_challenge_owner(pool: sqlx::PgPool) {
         .await
         .expect("approve archive request")
         .error_for_status()
-        .expect("archive draft should approve");
+        .expect("archive review_record should approve");
 
     let publish = client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{archive_draft_id}/publish"),
+            &format!("/admin/challenge-review-records/{archive_review_record_id}/publish"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -324,9 +328,9 @@ async fn archive_draft_requires_challenge_owner(pool: sqlx::PgPool) {
     assert_eq!(publish.status(), StatusCode::FORBIDDEN);
 }
 
-/// Verifies that challenge draft rejects mismatched pr author.
+/// Verifies that challenge review record rejects mismatched pr author.
 #[sqlx::test(migrations = "../migrations")]
-async fn challenge_draft_rejects_mismatched_pr_author(pool: sqlx::PgPool) {
+async fn challenge_review_record_rejects_mismatched_pr_author(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let config = test_config(storage.path(), seeded_challenges.path());
@@ -335,7 +339,7 @@ async fn challenge_draft_rejects_mismatched_pr_author(pool: sqlx::PgPool) {
     let creator = create_creator_session(&pool, 1001, "creator").await;
 
     let response = creator_auth(
-        client.post(api_url(&app, "/api/creator/challenge-drafts")),
+        client.post(api_url(&app, "/api/creator/challenge-review-records")),
         &creator,
     )
     .json(&json!({
@@ -349,7 +353,7 @@ async fn challenge_draft_rejects_mismatched_pr_author(pool: sqlx::PgPool) {
     }))
     .send()
     .await
-    .expect("draft request");
+    .expect("review_record request");
 
     assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
 }
@@ -365,7 +369,7 @@ async fn challenge_creator_routes_require_oauth_session_and_csrf(pool: sqlx::PgP
     let creator = create_creator_session(&pool, 1001, "creator").await;
 
     let unauthenticated = client
-        .post(api_url(&app, "/api/creator/challenge-drafts"))
+        .post(api_url(&app, "/api/creator/challenge-review-records"))
         .json(&json!({
             "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
             "pr_number": 8,
@@ -377,11 +381,11 @@ async fn challenge_creator_routes_require_oauth_session_and_csrf(pool: sqlx::PgP
         }))
         .send()
         .await
-        .expect("draft request without session");
+        .expect("review_record request without session");
     assert_eq!(unauthenticated.status(), reqwest::StatusCode::UNAUTHORIZED);
 
     let missing_csrf = client
-        .post(api_url(&app, "/api/creator/challenge-drafts"))
+        .post(api_url(&app, "/api/creator/challenge-review-records"))
         .header("Cookie", &creator.cookie_header)
         .json(&json!({
             "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
@@ -394,7 +398,7 @@ async fn challenge_creator_routes_require_oauth_session_and_csrf(pool: sqlx::PgP
         }))
         .send()
         .await
-        .expect("draft request without csrf");
+        .expect("review_record request without csrf");
     assert_eq!(missing_csrf.status(), reqwest::StatusCode::FORBIDDEN);
 
     let old_self_link_route = client
@@ -444,9 +448,11 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     .expect("asset length fits u64");
 
     let mut config = test_config(storage.path(), seeded_challenges.path());
-    config.quotas.max_active_challenge_drafts_per_agent = 1;
-    config.quotas.challenge_draft_validations_per_day = 1;
-    config.quotas.challenge_private_asset_bytes_per_draft = valid_asset_len;
+    config.quotas.max_active_challenge_review_records_per_agent = 1;
+    config.quotas.challenge_review_record_validations_per_day = 1;
+    config
+        .quotas
+        .challenge_private_asset_bytes_per_review_record = valid_asset_len;
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let creator = create_creator_session(&pool, 1001, "creator").await;
@@ -455,12 +461,19 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
         config.expose_admin_password_for_http_basic(),
     );
 
-    let draft: serde_json::Value =
-        create_draft_with_commit(&client, &app, &creator, 41, manifest.clone(), &commit_sha).await;
-    let draft_id = draft["id"].as_str().expect("draft id");
+    let review_record: serde_json::Value = create_review_record_with_commit(
+        &client,
+        &app,
+        &creator,
+        41,
+        manifest.clone(),
+        &commit_sha,
+    )
+    .await;
+    let review_record_id = review_record["id"].as_str().expect("review_record id");
 
     let quota_response = creator_auth(
-        client.post(api_url(&app, "/api/creator/challenge-drafts")),
+        client.post(api_url(&app, "/api/creator/challenge-review-records")),
         &creator,
     )
     .json(&json!({
@@ -474,7 +487,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     }))
     .send()
     .await
-    .expect("draft quota request");
+    .expect("review_record quota request");
     assert_eq!(
         quota_response.status(),
         reqwest::StatusCode::TOO_MANY_REQUESTS
@@ -483,7 +496,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     creator_auth(
         client.post(api_url(
             &app,
-            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+            &format!("/api/creator/challenge-review-records/{review_record_id}/private-assets"),
         )),
         &creator,
     )
@@ -502,7 +515,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     let asset_response = creator_auth(
         client.post(api_url(
             &app,
-            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+            &format!("/api/creator/challenge-review-records/{review_record_id}/private-assets"),
         )),
         &creator,
     )
@@ -523,7 +536,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/validate"),
+            &format!("/admin/challenge-review-records/{review_record_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -536,7 +549,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     let validation_quota_response = client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/validate"),
+            &format!("/admin/challenge-review-records/{review_record_id}/validate"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -550,7 +563,7 @@ async fn challenge_creation_quotas_reject_excess_work(pool: sqlx::PgPool) {
     );
 }
 
-/// Verifies that cleanup purges abandoned draft private assets.
+/// Verifies that cleanup purges abandoned review record private assets.
 #[sqlx::test(migrations = "../migrations")]
 async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
@@ -565,13 +578,13 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
         config.expose_admin_password_for_http_basic(),
     );
 
-    let draft = create_draft(&client, &app, &creator, 51, manifest_json()).await;
-    let draft_id = draft["id"].as_str().expect("draft id");
+    let review_record = create_review_record(&client, &app, &creator, 51, manifest_json()).await;
+    let review_record_id = review_record["id"].as_str().expect("review_record id");
 
     let asset: serde_json::Value = creator_auth(
         client.post(api_url(
             &app,
-            &format!("/api/creator/challenge-drafts/{draft_id}/private-assets"),
+            &format!("/api/creator/challenge-review-records/{review_record_id}/private-assets"),
         )),
         &creator,
     )
@@ -598,7 +611,7 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     client
         .post(api_url(
             &app,
-            &format!("/admin/challenge-drafts/{draft_id}/abandon"),
+            &format!("/admin/challenge-review-records/{review_record_id}/abandon"),
         ))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
@@ -609,15 +622,15 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
         .error_for_status()
         .expect("abandon should succeed");
     sqlx::query(
-        "UPDATE challenge_drafts SET updated_at = NOW() - INTERVAL '2 days' WHERE id = $1::uuid",
+        "UPDATE challenge_review_records SET updated_at = NOW() - INTERVAL '2 days' WHERE id = $1::uuid",
     )
-    .bind(draft_id)
+    .bind(review_record_id)
     .execute(&pool)
     .await
-    .expect("age draft");
+    .expect("age review_record");
 
     let cleanup: serde_json::Value = client
-        .post(api_url(&app, "/admin/challenge-drafts/cleanup"))
+        .post(api_url(&app, "/admin/challenge-review-records/cleanup"))
         .header("Authorization", &admin_auth)
         .header("X-Agentics-Admin-Automation", "true")
         .send()

@@ -26,7 +26,7 @@ export function statusBadgeClass(status: string): string {
     normalized === "running" ||
     normalized === "queued" ||
     normalized === "pending" ||
-    normalized === "draft" ||
+    normalized === "pending_review" ||
     normalized === "publishing"
   ) {
     return "badge-warning";

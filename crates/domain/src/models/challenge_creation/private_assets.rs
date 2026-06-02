@@ -3,12 +3,12 @@
 use serde::{Deserialize, Serialize};
 
 use crate::models::hashes::Sha256Digest;
-use crate::models::ids::{AgentId, ChallengeDraftId, ChallengePrivateAssetId};
+use crate::models::ids::{AgentId, ChallengePrivateAssetId, ChallengeReviewRecordId};
 use crate::models::names::AssetName;
 use crate::models::paths::BundleRelativePath;
 use crate::storage::StorageKey;
 
-/// Private asset that must be uploaded directly to Agentics for a draft.
+/// Private asset that must be uploaded directly to Agentics for a review record.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ChallengePrivateAssetRequirement {
@@ -54,11 +54,11 @@ impl ChallengePrivateAssetKind {
     }
 }
 
-/// API response for one private benchmark asset bound to a draft.
+/// API response for one private benchmark asset bound to a review record.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ChallengePrivateAssetResponse {
     pub id: ChallengePrivateAssetId,
-    pub draft_id: ChallengeDraftId,
+    pub review_record_id: ChallengeReviewRecordId,
     pub asset_name: AssetName,
     pub kind: ChallengePrivateAssetKind,
     pub required: bool,
@@ -106,7 +106,7 @@ impl ChallengePrivateAssetStatus {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminChallengePrivateAssetResponse {
     pub id: ChallengePrivateAssetId,
-    pub draft_id: ChallengeDraftId,
+    pub review_record_id: ChallengeReviewRecordId,
     pub asset_name: AssetName,
     pub kind: ChallengePrivateAssetKind,
     pub required: bool,

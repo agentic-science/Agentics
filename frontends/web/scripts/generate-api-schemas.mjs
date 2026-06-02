@@ -37,7 +37,7 @@ for (const schemaName of Object.keys(schemas).sort()) {
   output += `export type ${schemaNameToTypeName(schemaName)} = z.infer<typeof ${schemaName}>;\n`;
 }
 output += `export type AdminChallengeListItem = AdminChallengeListResponse["items"][number];\n`;
-output += `export type ChallengeDraftListItem = ChallengeDraftListResponse["items"][number];\n`;
+output += `export type ChallengeReviewRecordListItem = ChallengeReviewRecordListResponse["items"][number];\n`;
 output += `export type AdminSolutionSubmissionListItem = AdminSolutionSubmissionListResponse["items"][number];\n`;
 output = replaceRegexConstructors(output);
 output = formatTypescript(output);
