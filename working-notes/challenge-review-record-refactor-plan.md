@@ -94,3 +94,47 @@ This document is the source of truth for the implementation. Before considering 
 - Because there is no compatibility requirement, old API routes, CLI commands, env vars, generated schema exports, and DB names are removed rather than deprecated.
 - Existing local dev database/storage containing old challenge-draft tables or keys may need to be reset after the refactor.
 - If a real production dataset unexpectedly exists, stop and convert the DB/storage rename into an explicit migration plan before applying changes.
+
+## Linux Handoff For Full CPU Verification
+
+The implementation was completed and committed on macOS in these focused commits:
+
+- `f9ca7b81 docs(challenge-creation): record review record rename plan`
+- `546b8f5e refactor(challenge-creation): rename drafts to review records`
+- `362f3426 docs(challenge-creation): update review record workflows`
+
+Checks already run successfully on macOS:
+
+- `cargo fmt --all`
+- `bun run generate:schemas`
+- `bun run format && bunx biome check --write src messages scripts && bun run lint` from `frontends/web/`
+- `cargo check --workspace --all-targets`
+- `cargo test -p agentics-cli challenge_creator`
+- `cargo test -p integration-tests challenge_review_record` with local dev Postgres and S3/RustFS env
+- Targeted web tests:
+  - `bun run test -- src/components/creator/CreatorConsole.test.tsx src/components/admin/ChallengeReviewRecordPanel.test.tsx src/components/admin/AdminConsole.test.tsx src/lib/creatorApi.test.ts src/lib/creatorData.test.ts src/lib/adminData.test.ts src/lib/schemas.test.ts src/components/HomeJoinTabs.test.tsx`
+- `bun run generate:schemas:check`
+- `just rust::clippy`
+- `just web::schema-check`
+- `git diff --check`
+- Final terminology audit for the old challenge-draft workflow names, excluding `working-notes/**`, `challenge-repos/**`, and historical `reviews/**`
+
+The remaining verification is the Linux-only full CPU harness. On a Linux host with the dedicated test storage prepared, run:
+
+```bash
+just test-env-status-cpu
+just test-env-up
+just test-all-cpu
+just test-env-down
+```
+
+If `just test-env-status-cpu` reports missing prepared storage or Docker daemon state, follow the setup guidance printed by that command before running `just test-all-cpu`. If `just test-all-cpu` fails, capture the failing recipe, test name, and first relevant error block, then check whether the failure is caused by the refactor contracts:
+
+- API route names should use `challenge-review-records`.
+- JSON IDs should use `review_record_id`.
+- Lifecycle initial status should be `pending_review`.
+- Storage keys should use `challenge-review-records/<review-record-id>/...`.
+- CLI admin commands should use `agentics challenge-creator review-record ...`.
+- Env vars should use the `AGENTICS_CHALLENGE_REVIEW_RECORD_*` and `AGENTICS_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_AGENT` names.
+
+Do not add compatibility aliases for the old `challenge-draft` names. If a Linux-only failure reveals a missed caller, update the caller to the new review-record contract and rerun the targeted failing test plus `just test-all-cpu`.
