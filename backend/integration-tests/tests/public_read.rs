@@ -220,6 +220,35 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert!(listed_first.get("aggregate_metrics").is_none());
     assert!(listed_first.get("official_metrics").is_none());
 
+    let third_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agent/solution-submissions"))
+        .header("Authorization", format!("Bearer {token_b}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&serde_json::json!({
+            "challenge_name": &sample_sum_id,
+            "target": "linux-arm64-cpu",
+            "artifact_base64": solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b'] + 1")),
+            "explanation": "pending attempt for public stats"
+        }))
+        .send()
+        .await
+        .expect("failed to create pending stats solution_submission")
+        .json()
+        .await
+        .expect("failed to decode pending stats solution_submission");
+    let third_id = third_response["id"]
+        .as_str()
+        .expect("missing pending stats solution submission id");
+    let third_not_visible = client
+        .get(api_url(
+            &app,
+            &format!("/api/public/solution-submissions/{third_id}"),
+        ))
+        .send()
+        .await
+        .expect("failed to check pending stats solution submission visibility");
+    assert_eq!(third_not_visible.status(), 404);
+
     let public_stats: serde_json::Value = client
         .get(api_url(&app, "/api/public/stats"))
         .send()
@@ -230,7 +259,9 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .expect("failed to decode public stats");
     assert_eq!(public_stats["challenge_count"], 2);
     assert_eq!(public_stats["agent_count"], 2);
-    assert_eq!(public_stats["solution_submission_count"], 2);
+    assert_eq!(public_stats["public_completed_submission_count"], 2);
+    assert_eq!(public_stats["total_solution_attempt_count"], 3);
+    assert!(public_stats.get("solution_submission_count").is_none());
 
     let missing_target_response = client
         .get(api_url(

@@ -10,20 +10,22 @@ import { usePublicLiveJson } from "@/lib/usePublicLiveJson";
 export type HomeStats = {
   agents: number;
   challenges: number;
-  submissions: number;
+  publicCompletedSubmissions: number;
+  totalSubmissions: number;
 };
 
 type HomeStatsLabels = {
   agents: string;
   challenges: string;
-  submissions: string;
+  totalSubmissions: string;
 };
 
 function toHomeStats(stats: PublicStatsResponse): HomeStats {
   return {
     agents: stats.agent_count,
     challenges: stats.challenge_count,
-    submissions: stats.solution_submission_count,
+    publicCompletedSubmissions: stats.public_completed_submission_count,
+    totalSubmissions: stats.total_solution_attempt_count,
   };
 }
 
@@ -39,7 +41,9 @@ export function HomeStatsRow({
     fallbackData: {
       agent_count: initialStats.agents,
       challenge_count: initialStats.challenges,
-      solution_submission_count: initialStats.submissions,
+      public_completed_submission_count:
+        initialStats.publicCompletedSubmissions,
+      total_solution_attempt_count: initialStats.totalSubmissions,
     },
     path: "/api/public/stats",
     schema: publicStatsResponseSchema,
@@ -47,7 +51,8 @@ export function HomeStatsRow({
     updatedDetails: (stats) => ({
       agents: stats.agent_count,
       challenges: stats.challenge_count,
-      submissions: stats.solution_submission_count,
+      publicCompletedSubmissions: stats.public_completed_submission_count,
+      totalSubmissions: stats.total_solution_attempt_count,
     }),
   });
   const stats = data ? toHomeStats(data) : initialStats;
@@ -86,12 +91,12 @@ export function HomeStatsRow({
           <Users className="w-5 h-5 text-[var(--accent-secondary-text)]" />
           <span
             className="live-number text-2xl font-bold font-mono text-[var(--text-primary)]"
-            key={`submissions-${stats.submissions}`}
+            key={`total-submissions-${stats.totalSubmissions}`}
           >
-            {stats.submissions}
+            {stats.totalSubmissions}
           </span>
           <span className="text-caption text-[var(--text-muted)]">
-            {labels.submissions}
+            {labels.totalSubmissions}
           </span>
         </div>
       </div>

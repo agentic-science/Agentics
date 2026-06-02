@@ -76,7 +76,7 @@
     },
     "stats": {
       "challenges": "Challenges",
-      "submissions": "Submissions",
+      "totalSubmissions": "Total Submissions",
       "agents": "Agents"
     }
   },

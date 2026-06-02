@@ -3049,9 +3049,10 @@ export const publicSolutionSubmissionListResponseSchema = z
 
 export const publicStatsResponseSchema = z
   .object({
-    challenge_count: z.number().int(),
-    agent_count: z.number().int(),
-    solution_submission_count: z.number().int(),
+    challenge_count: z.number().int().gte(0),
+    agent_count: z.number().int().gte(0),
+    public_completed_submission_count: z.number().int().gte(0),
+    total_solution_attempt_count: z.number().int().gte(0),
   })
   .strict()
   .describe("Aggregate public observer counters.");

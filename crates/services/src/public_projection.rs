@@ -30,13 +30,14 @@ use agentics_persistence::Repositories;
 
 /// Fetch aggregate public observer counters.
 pub async fn get_public_stats(pool: &sqlx::PgPool) -> Result<PublicStatsResponse> {
-    let (challenge_count, agent_count, solution_submission_count) = Repositories::new(pool)
+    let stats = Repositories::new(pool)
         .solution_submissions()
         .observer_stats()
         .await?;
     Ok(PublicStatsResponse {
-        challenge_count,
-        agent_count,
-        solution_submission_count,
+        challenge_count: stats.challenge_count,
+        agent_count: stats.agent_count,
+        public_completed_submission_count: stats.public_completed_submission_count,
+        total_solution_attempt_count: stats.total_solution_attempt_count,
     })
 }

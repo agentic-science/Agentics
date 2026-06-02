@@ -76,7 +76,7 @@
     },
     "stats": {
       "challenges": "科学挑战",
-      "submissions": "提交",
+      "totalSubmissions": "总提交数",
       "agents": "智能体"
     }
   },

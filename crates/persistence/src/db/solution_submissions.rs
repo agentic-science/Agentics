@@ -81,6 +81,15 @@ pub struct PublicSolutionSubmissionListItemRecord {
     pub updated_at: DateTime<Utc>,
 }
 
+/// Aggregate public observer counters before transport projection.
+#[derive(Debug, Clone, Copy)]
+pub struct PublicObserverStatsRecord {
+    pub challenge_count: u64,
+    pub agent_count: u64,
+    pub public_completed_submission_count: u64,
+    pub total_solution_attempt_count: u64,
+}
+
 /// Authoritative quota limits applied inside the submission/job transaction.
 #[derive(Debug, Clone, Copy)]
 pub struct SolutionSubmissionQuotaAdmission {
@@ -856,8 +865,8 @@ pub async fn count_public_solution_submissions_for_challenge(
 }
 
 /// Count aggregate currently public observer stats.
-pub async fn public_observer_stats(pool: &PgPool) -> Result<(i64, i64, i64)> {
-    let row = sqlx::query_as::<_, (i64, i64, i64)>(
+pub async fn public_observer_stats(pool: &PgPool) -> Result<PublicObserverStatsRecord> {
+    let row = sqlx::query_as::<_, (i64, i64, i64, i64)>(
         r#"
         WITH public_challenges AS (
             SELECT challenge_name, spec_json
@@ -870,6 +879,7 @@ pub async fn public_observer_stats(pool: &PgPool) -> Result<(i64, i64, i64)> {
             FROM solution_submissions s
             JOIN public_challenges c ON c.challenge_name = s.challenge_name
             WHERE s.visible_after_eval = TRUE
+              AND s.status = 'completed'
               AND (
                 c.spec_json #>> '{visibility,result_detail}' = 'submitter_live_public_live'
                 OR (
@@ -877,17 +887,35 @@ pub async fn public_observer_stats(pool: &PgPool) -> Result<(i64, i64, i64)> {
                     AND (c.spec_json ->> 'closes_at')::timestamptz <= NOW()
                 )
               )
+        ),
+        public_challenge_attempts AS (
+            SELECT s.id
+            FROM solution_submissions s
+            JOIN public_challenges c ON c.challenge_name = s.challenge_name
         )
         SELECT
             (SELECT COUNT(*)::bigint FROM public_challenges) AS challenge_count,
             (SELECT COUNT(DISTINCT agent_id)::bigint FROM public_submissions) AS agent_count,
-            (SELECT COUNT(*)::bigint FROM public_submissions) AS solution_submission_count
+            (SELECT COUNT(*)::bigint FROM public_submissions) AS public_completed_submission_count,
+            (SELECT COUNT(*)::bigint FROM public_challenge_attempts) AS total_solution_attempt_count
         "#,
     )
     .fetch_one(pool)
     .await?;
 
-    Ok(row)
+    Ok(PublicObserverStatsRecord {
+        challenge_count: count_to_u64("challenge_count", row.0)?,
+        agent_count: count_to_u64("agent_count", row.1)?,
+        public_completed_submission_count: count_to_u64(
+            "public_completed_submission_count",
+            row.2,
+        )?,
+        total_solution_attempt_count: count_to_u64("total_solution_attempt_count", row.3)?,
+    })
+}
+
+fn count_to_u64(label: &str, value: i64) -> Result<u64> {
+    u64::try_from(value).map_err(|_| ServiceError::Internal(format!("{label} count was negative")))
 }
 
 /// Reads parse eval from a database row and validates its domain shape.

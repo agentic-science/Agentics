@@ -3,7 +3,7 @@ use sqlx::PgPool;
 use crate::db;
 use crate::repositories::{
     AdminSolutionSubmissionListItemRecord, CreateSolutionSubmissionInput,
-    PublicSolutionSubmissionListItemRecord,
+    PublicObserverStatsRecord, PublicSolutionSubmissionListItemRecord,
 };
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::{AgentId, SolutionSubmissionId};
@@ -94,7 +94,7 @@ impl SolutionSubmissionsRepository<'_> {
         .await
     }
 
-    pub async fn observer_stats(&self) -> Result<(i64, i64, i64)> {
+    pub async fn observer_stats(&self) -> Result<PublicObserverStatsRecord> {
         db::solution_submissions::public_observer_stats(self.pool).await
     }
 

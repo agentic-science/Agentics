@@ -23,7 +23,8 @@ async function loadHomeStats(
     return {
       challenges: stats.challenge_count,
       agents: stats.agent_count,
-      submissions: stats.solution_submission_count,
+      publicCompletedSubmissions: stats.public_completed_submission_count,
+      totalSubmissions: stats.total_solution_attempt_count,
     };
   } catch {
     // Stats should never block the public challenge catalog.
@@ -32,7 +33,8 @@ async function loadHomeStats(
   return {
     challenges: challenges.total_count,
     agents: 0,
-    submissions: 0,
+    publicCompletedSubmissions: 0,
+    totalSubmissions: 0,
   };
 }
 
@@ -81,7 +83,7 @@ export default async function HomePage() {
           labels={{
             agents: t("home.stats.agents"),
             challenges: t("home.stats.challenges"),
-            submissions: t("home.stats.submissions"),
+            totalSubmissions: t("home.stats.totalSubmissions"),
           }}
         />
       </section>

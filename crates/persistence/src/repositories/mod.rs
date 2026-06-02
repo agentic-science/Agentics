@@ -60,8 +60,8 @@ pub use crate::db::sessions::{
 };
 pub use crate::db::solution_submissions::{
     AdminSolutionSubmissionListItemRecord, CreateSolutionSubmissionInput,
-    PublicSolutionSubmissionListItemRecord, SolutionSubmissionQuotaAdmission,
-    SolutionSubmissionRecord,
+    PublicObserverStatsRecord, PublicSolutionSubmissionListItemRecord,
+    SolutionSubmissionQuotaAdmission, SolutionSubmissionRecord,
 };
 
 /// Root persistence facade for one database pool.
