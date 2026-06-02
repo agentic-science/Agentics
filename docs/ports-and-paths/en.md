@@ -108,7 +108,7 @@ root.
 Production Compose bind-mounts a standalone `agentics-challenges` checkout from
 `AGENTICS_CHALLENGE_REVIEW_REPOSITORY_HOST_ROOT` to
 `AGENTICS_CHALLENGE_REVIEW_REPOSITORY_CONTAINER_ROOT`. Use the container path as
-the admin `repository_path` for challenge draft validation and publishing. The
+the admin `repository_path` for challenge review record validation and publishing. The
 host checkout must be clean at the reviewed commit and readable by the
 production API runtime user.
 
@@ -129,7 +129,7 @@ Current object-key prefixes:
 | --- | --- |
 | `solution-submissions/` | Uploaded solution ZIPs |
 | `eval-artifacts/` | Runner logs and evaluation artifacts |
-| `challenge-drafts/<draft-id>/private-assets/` | Uploaded private asset ZIP overlays |
+| `challenge-review-records/<review-record-id>/private-assets/` | Uploaded private asset ZIP overlays |
 | `challenge-bundles/` | Immutable private challenge bundle tar archives |
 | `challenge-public-bundles/` | Immutable public-only challenge bundle tar archives |
 | `challenge-statements/` | Public `statement.md` objects |

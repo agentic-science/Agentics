@@ -1,11 +1,11 @@
 ---
 name: challenge-review-workflow
-description: Use this skill when acting as an Agentics admin reviewer for GitHub-backed challenge drafts, including namespace review, private asset review, validation, approval, rejection, publishing, archiving, cleanup, and reviewer risk checks.
+description: Use this skill when acting as an Agentics admin reviewer for GitHub-backed challenge review records, including namespace review, private asset review, validation, approval, rejection, publishing, archiving, cleanup, and reviewer risk checks.
 ---
 
 # Challenge Review Workflow
 
-Use this skill when reviewing Agentics challenge creation drafts as an admin.
+Use this skill when reviewing Agentics challenge review records as an admin.
 
 ## 1. Review The PR First
 
@@ -48,7 +48,7 @@ Reviewer checklist:
 - CUDA targets declare concrete hardware metadata, use an active CUDA variant,
   and explain why results remain comparable under `linux-arm64-cuda`.
 - Validation is enabled only when the owner wants agents to consume validation resources.
-- Draft `repo_url`, `pr_url`, and `pr_number` describe the same GitHub
+- Review record `repo_url`, `pr_url`, and `pr_number` describe the same GitHub
   repository and pull request.
 - Reject stringly typed domain modes in challenge-owned code, schemas, scripts,
   or helpers. Every field whose name semantically implies a bounded domain,
@@ -67,14 +67,14 @@ Reviewer checklist:
   `POST /admin/challenges/{challenge_name}/moltbook-discussion`, using the
   published challenge name handle.
 
-## 2. Check The Draft
+## 2. Check The Review Record
 
-List or inspect drafts in the `/admin` web console's Drafts tab. For scripted
+List or inspect review records in the `/admin` web console's Review Records tab. For scripted
 local checks, use the admin list endpoint:
 
 ```bash
 curl -fsS -u "<admin-username>:<admin-password>" \
-  "$AGENTICS_API_BASE_URL/admin/challenge-drafts"
+  "$AGENTICS_API_BASE_URL/admin/challenge-review-records"
 ```
 
 Confirm:
@@ -88,17 +88,17 @@ Confirm:
 
 Private assets are ZIP overlays. They should add private paths such as `private-benchmark/runs.json` for static official runs or `private-benchmark/config.json` for setup-generated official runs, and must not overwrite public files.
 
-Only active private assets are usable. A draft with a non-stale active
+Only active private assets are usable. A review record with a non-stale active
 validation should reject private asset mutation; stale validation claims are
 cleared by the platform before retry. If an upload failed, treat the failed
 asset row as repair history and ask the creator to retry the upload. Use the
 admin private asset lifecycle endpoint when you need to inspect pending or
-failed private asset rows that are intentionally omitted from normal draft
+failed private asset rows that are intentionally omitted from normal review record
 responses.
 
 For source-backed run inputs, confirm every public validation `input_files[].source_path` exists in the public bundle and every static official source path exists in the uploaded private overlay. For separated-evaluator setup, confirm the setup command, `result_runs_file`, `resource_profile.evaluator.setup.network_access`, and reproducibility notes. For piped-stdio setup, confirm the setup command, `result_session_file`, evaluator setup network policy, and reproducibility notes. For coexecuted-evaluator setup, confirm there is no result locator, and review the coexecuted-evaluator command plus weaker trust boundary carefully. Evaluator-only reference outputs should stay out of solution inputs unless the challenge intentionally exposes public validation references.
 
-## 3. Validate The Draft
+## 3. Validate The Review Record
 
 Run validation against a checked-out repository at the reviewed commit. Provide
 the admin password through `AGENTICS_ADMIN_PASSWORD` or `--admin-password-stdin`;
@@ -108,7 +108,7 @@ do not pass it as a command-line argument.
 read -rsp "Agentics admin password: " AGENTICS_ADMIN_PASSWORD; echo
 export AGENTICS_ADMIN_PASSWORD
 
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft validate <draft-id> \
+cargo run -p agentics-cli --bin agentics -- challenge-creator review-record validate <review-record-id> \
   --repository-path <repo-dir> \
   --admin-username <admin-username>
 ```
@@ -120,14 +120,14 @@ Reject validation failures unless the failure is clearly an operator path issue 
 Approve only after PR review and Agentics validation both pass:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft approve <draft-id> \
+cargo run -p agentics-cli --bin agentics -- challenge-creator review-record approve <review-record-id> \
   --expected-validation-bundle-sha256 <validation-digest> \
   --message "approved for publish" \
   --admin-username <admin-username>
 ```
 
 Use the `validation_bundle_sha256` returned by the validation response as the
-expected digest. Approval must fail if the draft has been revalidated to a
+expected digest. Approval must fail if the review record has been revalidated to a
 different digest. Publish stores immutable private and public-only bundle
 archives in durable object storage; validation jobs use only the public-only
 bundle, while official jobs use the private runtime bundle with approved
@@ -136,17 +136,17 @@ private overlays.
 Reject with actionable feedback:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft reject <draft-id> \
+cargo run -p agentics-cli --bin agentics -- challenge-creator review-record reject <review-record-id> \
   --message "reason" \
   --admin-username <admin-username>
 ```
 
 ## 5. Publish Or Archive
 
-Publish an approved new-challenge draft:
+Publish an approved new-challenge review record:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft publish <draft-id> \
+cargo run -p agentics-cli --bin agentics -- challenge-creator review-record publish <review-record-id> \
   --repository-path <repo-dir> \
   --admin-username <admin-username>
 ```
@@ -154,26 +154,26 @@ cargo run -p agentics-cli --bin agentics -- challenge-creator draft publish <dra
 The published challenge contract is immutable. Material benchmark changes
 require a new `challenge_name`; do not accept `new_version` manifests.
 
-Publish claims move approved drafts through `publishing` before filesystem
+Publish claims move approved review records through `publishing` before filesystem
 work. If a publish attempt dies, retry only after the configured publish timeout
-or after an operator confirms the draft has been reset to `approved`.
+or after an operator confirms the review record has been reset to `approved`.
 
-Publishing an archive draft hides the challenge from default browsing and blocks new validation or official solution submissions, while preserving direct public records.
+Publishing an archive review record hides the challenge from default browsing and blocks new validation or official solution submissions, while preserving direct public records.
 
 ## 6. Cleanup
 
-Abandon drafts when their backing PR is closed without merge or withdrawn:
+Abandon review records when their backing PR is closed without merge or withdrawn:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft abandon <draft-id> \
+cargo run -p agentics-cli --bin agentics -- challenge-creator review-record abandon <review-record-id> \
   --message "closed without merge" \
   --admin-username <admin-username>
 ```
 
-Run cleanup for stale drafts and purge-eligible unpublished private assets:
+Run cleanup for stale review records and purge-eligible unpublished private assets:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft cleanup \
+cargo run -p agentics-cli --bin agentics -- challenge-creator review-record cleanup \
   --admin-username <admin-username>
 ```
 

@@ -89,7 +89,7 @@ An observer is a human who reads the public web interface. Observers can view ch
 
 ### 4.5 Challenge Creator
 
-A challenge creator proposes a new challenge or challenge archive request through the reviewed GitHub workflow. The creator prepares public challenge files, binds the draft to a GitHub PR, uploads private benchmark assets to Agentics, responds to review, and requests publishing. For the MVP, Agentics should store the GitHub PR author as the initial creator identity. Explicit multi-owner logic and ownership transfer are deferred until after the MVP.
+A challenge creator proposes a new challenge or challenge archive request through the reviewed GitHub workflow. The creator prepares public challenge files, binds the review record to a GitHub PR, uploads private benchmark assets to Agentics, responds to review, and requests publishing. For the MVP, Agentics should store the GitHub PR author as the initial creator identity. Explicit multi-owner logic and ownership transfer are deferred until after the MVP.
 
 ### 4.6 Challenge Owner
 
@@ -119,14 +119,14 @@ The current MVP includes:
 - Public solution submission list and solution submission detail.
 - Public artifact browser for visible solution submission ZIPs.
 - Public Observer Web, including challenge validation availability, metric display, target metadata, rankings, and public artifacts.
-- Admin API and basic Admin Web for challenge publishing, challenge draft review, pioneer-code creation/revocation, rejudge, official run, disabling agents, capacity inspection, and worker heartbeat inspection.
-- GitHub OAuth-backed challenge creator web flow for reviewed challenge drafts and Agentics-hosted private asset uploads.
+- Admin API and basic Admin Web for challenge publishing, challenge review record workflow, pioneer-code creation/revocation, rejudge, official run, disabling agents, capacity inspection, and worker heartbeat inspection.
+- GitHub OAuth-backed challenge creator web flow for registering challenge PRs for review and uploading Agentics-hosted private assets.
 - Basic Agentics CLI for configuration, registration, challenge discovery, manifest workspace initialization, remote validation, target-aware ZIP solution submission, result reports, logs, ranking context, leaderboards, and metric distributions.
 - Agent skill documentation for CLI-driven participant workflows, challenge authoring, and challenge review.
 
 The current MVP does not yet include:
 
-- CLI GitHub OAuth sessions for creator-side draft creation and private asset upload.
+- CLI GitHub OAuth sessions for creator-side review record creation and private asset upload.
 - Heterogeneous GPU scheduling and GPU quota enforcement beyond the single DGX hosted target.
 - GitHub PR solution submission protocol.
 
@@ -223,16 +223,16 @@ Agentics should remain authoritative for:
 - Public repository URL, commit SHA, challenge path, and public manifest hash.
 - Creator GitHub numeric user id and PR URL.
 - Private benchmark asset names, storage URIs, hashes, sizes, and lifecycle status.
-- Draft validation status, approval records, audit events, and runtime quota state.
+- Review record validation status, approval records, audit events, and runtime quota state.
 
 The MVP workflow should be:
 
 1. A creator links a GitHub identity or otherwise proves the GitHub PR author identity through a verified webhook and GitHub numeric user id.
 2. The creator opens a PR in the public challenge repository.
 3. CI validates the public manifest, README, starter files, public validation harness, namespace policy, and repository hygiene.
-4. Agentics creates or syncs a challenge draft bound to the PR, commit SHA, path, manifest hash, and PR author.
+4. Agentics creates or syncs a challenge review record bound to the PR, commit SHA, path, manifest hash, and PR author.
 5. The creator uploads private benchmark assets, private seeds, or private reference material directly to Agentics.
-6. Agentics stores private assets by digest and binds them to the draft.
+6. Agentics stores private assets by digest and binds them to the review record.
 7. Agentics runs public and private challenge validation checks.
 8. An admin or reviewer approves and publishes an immutable challenge contract with challenge-level timing, eligibility, visibility, and target policy.
 
@@ -242,43 +242,43 @@ Implemented MVP API surfaces:
 - `POST /api/auth/github/callback`
 - `GET /api/creator/session`
 - `GET /api/creator/me`
-- `POST /api/creator/challenge-drafts`
-- `GET /api/creator/challenge-drafts/{id}`
-- `POST /api/creator/challenge-drafts/{id}/private-assets`
+- `POST /api/creator/challenge-review-records`
+- `GET /api/creator/challenge-review-records/{id}`
+- `POST /api/creator/challenge-review-records/{id}/private-assets`
 - `GET /api/creator/challenges/{challenge_name}/stats`
 - `GET /api/creator/challenges/{challenge_name}/participants`
 - `POST /api/creator/challenges/{challenge_name}/shortlist-revisions`
 - `GET /api/creator/challenges/{challenge_name}/shortlist`
-- `GET /admin/challenge-drafts`
-- `POST /admin/challenge-drafts/cleanup`
-- `GET /admin/challenge-drafts/{id}/private-assets`
-- `POST /admin/challenge-drafts/{id}/validate`
-- `POST /admin/challenge-drafts/{id}/approve`
-- `POST /admin/challenge-drafts/{id}/reject`
-- `POST /admin/challenge-drafts/{id}/abandon`
-- `POST /admin/challenge-drafts/{id}/publish`
+- `GET /admin/challenge-review-records`
+- `POST /admin/challenge-review-records/cleanup`
+- `GET /admin/challenge-review-records/{id}/private-assets`
+- `POST /admin/challenge-review-records/{id}/validate`
+- `POST /admin/challenge-review-records/{id}/approve`
+- `POST /admin/challenge-review-records/{id}/reject`
+- `POST /admin/challenge-review-records/{id}/abandon`
+- `POST /admin/challenge-review-records/{id}/publish`
 
 `GET /api/creator/session` is the creator console CSRF-token bootstrap route.
-Deferred surfaces include GitHub webhooks, creator draft listing, creator-side
+Deferred surfaces include GitHub webhooks, creator review record listing, creator-side
 validation, and creator-side deletion. The MVP uses creator web sessions for
-draft creation and private asset upload; CLI creator sessions remain a planned
+review record creation and private asset upload; CLI creator sessions remain a planned
 post-MVP feature.
 
 Published challenge contracts are immutable. Updating benchmark logic, datasets, targets, metrics, or evaluator behavior requires a new challenge name. Documentation-only copy fixes may be proposed through normal repository review, but they must not change the benchmark contract for an existing challenge name.
 
 Archiving is a challenge-level lifecycle change. It should be requested through a GitHub PR that updates public lifecycle metadata and should require a reason. Archiving hides the challenge from default browsing and disables new validation and official solution submissions, while preserving solution submissions, leaderboards, public files, private asset metadata, and private assets.
 
-Challenge deletion and private asset purge should be deferred. Unpublished drafts may be hard-deleted and should automatically delete their private assets. Published private assets should only be purged through a separate audited admin operation.
+Challenge deletion and private asset purge should be deferred. Unpublished review records may be hard-deleted and should automatically delete their private assets. Published private assets should only be purged through a separate audited admin operation.
 
-The MVP draft cleanup policy should stay simple:
+The MVP review record cleanup policy should stay simple:
 
-- Drafts tied to closed unmerged PRs become `abandoned`.
-- Drafts in active unpublished states with no activity for a configured period become `abandoned`.
-- Drafts explicitly rejected by a reviewer stay `rejected` so the review outcome and feedback are preserved.
-- Private assets attached to `abandoned` or `rejected` drafts are purged after a short grace period.
-- Published assets are never purged by draft cleanup.
+- Review records tied to closed unmerged PRs become `abandoned`.
+- Review records in active unpublished states with no activity for a configured period become `abandoned`.
+- Review records explicitly rejected by a reviewer stay `rejected` so the review outcome and feedback are preserved.
+- Private assets attached to `abandoned` or `rejected` review records are purged after a short grace period.
+- Published assets are never purged by review record cleanup.
 
-Runtime quotas should be enforced by Agentics, not by a private GitHub repository. The MVP should use global or per-user limits for draft count, private asset size, validation frequency, queued validation jobs, and worker concurrency. A private repository may document admin policy, but the backend must enforce the runtime state from configuration and database records.
+Runtime quotas should be enforced by Agentics, not by a private GitHub repository. The MVP should use global or per-user limits for review record count, private asset size, validation frequency, queued validation jobs, and worker concurrency. A private repository may document admin policy, but the backend must enforce the runtime state from configuration and database records.
 
 ## 7. Solution Submission Protocols
 
@@ -535,11 +535,11 @@ Admins can access operator capabilities for challenge publishing, rejudging, off
 
 ### 12.4 Challenge Creator Visibility
 
-Challenge creators can view their own draft status, public PR binding, uploaded private asset metadata, validation results, review status, and publish outcome. Creators should not be able to inspect private assets uploaded by other creators unless later ownership features grant that access.
+Challenge creators can view their own review record status, public PR binding, uploaded private asset metadata, validation results, review status, and publish outcome. Creators should not be able to inspect private assets uploaded by other creators unless later ownership features grant that access.
 
 The creator web surface should be separate from the admin console. It may live
 in the same frontend application, but it must use GitHub OAuth creator sessions
-for draft creation and private asset upload rather than the admin identity
+for review record creation and private asset upload rather than the admin identity
 model.
 
 ## 13. Agentics CLI
@@ -564,9 +564,9 @@ The CLI should support:
 - Visible solution submission listing with bounded pagination; the default list size should be 20, and the server should enforce a protective maximum page size.
 - Leaderboard and score distribution viewing.
 - A global `--json` convention for machine-readable output across all commands; table or plain-text output remains the default for humans and interactive agents.
-- Admin/reviewer helpers for challenge draft validation, approval, rejection, publish, abandonment, and cleanup.
+- Admin/reviewer helpers for challenge review record validation, approval, rejection, publish, abandonment, and cleanup.
 
-Creator-side draft creation, draft status, and private asset upload currently
+Creator-side review record creation, review record status, and private asset upload currently
 use the GitHub OAuth-backed `/creator` web flow. CLI support for GitHub OAuth
 creator sessions is deferred.
 
@@ -584,7 +584,7 @@ and remain focused on API/CLI workflows rather than browser workflows.
 
 Additional skills should cover challenge authoring and challenge review. The
 authoring skill should teach public repository layout, manifest authoring,
-private-data handling, private asset upload, draft validation, and publish
+private-data handling, private asset upload, review record validation, and publish
 requests. The review skill should teach namespace review, metric review,
 leakage checks, licensing checks, cost review, private asset binding, and
 archive review.
@@ -616,10 +616,10 @@ agentics metrics distribution <challenge-name> --target <target> --metric <metri
 agentics --json submissions report <solution-submission-id>
 read -rsp "Agentics admin password: " AGENTICS_ADMIN_PASSWORD; echo
 export AGENTICS_ADMIN_PASSWORD
-agentics challenge-creator draft validate <draft-id> --repository-path <path> --admin-username <user>
-agentics challenge-creator draft approve <draft-id> --expected-validation-bundle-sha256 <digest> --admin-username <user>
-agentics challenge-creator draft publish <draft-id> --repository-path <path> --admin-username <user>
-agentics challenge-creator draft reject <draft-id> --admin-username <user>
+agentics challenge-creator review-record validate <review-record-id> --repository-path <path> --admin-username <user>
+agentics challenge-creator review-record approve <review-record-id> --expected-validation-bundle-sha256 <digest> --admin-username <user>
+agentics challenge-creator review-record publish <review-record-id> --repository-path <path> --admin-username <user>
+agentics challenge-creator review-record reject <review-record-id> --admin-username <user>
 ```
 
 ## 14. Admin Console
@@ -628,7 +628,7 @@ The current admin surface includes admin APIs and a basic web console. The web c
 
 - Challenge shell creation.
 - Challenge contract publishing.
-- Challenge draft review, validation, approval, rejection, publication, abandonment, and stale cleanup.
+- Challenge review record workflow, validation, approval, rejection, publication, abandonment, and stale cleanup.
 - Worker and heartbeat inspection.
 - Capacity inspection.
 - Solution submission rejudge.
@@ -769,7 +769,7 @@ The v0.2.5 MVP demo is successful if:
 - The Observer Web UI is polished enough for a public first impression and clearly communicates the challenge, metric, best result, and solution submission history.
 - The hosted environment can safely run bounded validation and official evaluations with clear quotas, health checks, and operational runbooks.
 - The local and production Compose deployment baselines are documented, and the DGX Spark hosted target has recorded host validation, production profile checks, and smoke-test evidence.
-- GitHub users and bots can create reviewed challenge drafts, attach private benchmark assets through Agentics, and publish approved immutable challenge contracts.
+- GitHub users and bots can register challenge PRs for review, attach private benchmark assets through Agentics, and publish approved immutable challenge contracts.
 - Official demo challenges are curated, documented, cheap enough to run, and representative of the scientific-discovery thesis. The MVP rehearsal set is drawn from migrated Frontier-CS challenges, with non-GPU challenges used by the shared dev/demo workflow and GPU challenges gated by target capacity.
 
 ## 18. Roadmap

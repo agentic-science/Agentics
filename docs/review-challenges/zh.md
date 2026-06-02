@@ -11,8 +11,8 @@ creation workflow 中的 reviewer 侧流程。
 /admin
 ```
 
-Drafts tab 支持 validation、approval、rejection、publication、abandonment 和
-stale draft cleanup。Server-side scripts 也可以使用 admin CLI helpers。
+Review Records tab 支持 validation、approval、rejection、publication、abandonment 和
+stale review record cleanup。Server-side scripts 也可以使用 admin CLI helpers。
 
 Server-side admin routes 使用 HTTP Basic Auth。Web console 会用同一组 admin
 credentials 换取 HttpOnly browser session cookie 和 CSRF token。
@@ -55,7 +55,7 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
 - 确认 resource limits 和 network policies 适合所选 target。
 - 确认 hosted images 使用 `source: "registry"` 和 digest-pinned immutable
   references。
-- 确认 draft provenance 内部一致：`repo_url`、`pr_url` 和 `pr_number` 必须指向同一个
+- 确认 review record provenance 内部一致：`repo_url`、`pr_url` 和 `pr_number` 必须指向同一个
   GitHub repository 和 pull request。
 - 确认 private asset overlays 通过 Agentics 上传，而不是提交到 GitHub。Uploaded ZIPs
   必须使用 safe unique relative paths，且不能包含 symlinks。
@@ -65,32 +65,32 @@ credentials 换取 HttpOnly browser session cookie 和 CSRF token。
 
 ## Validation 和 Approval
 
-针对已 review 的 checkout 验证 draft。Validation 会基于 canonical public manifest
+针对已 review 的 checkout 验证 review record。Validation 会基于 canonical public manifest
 JSON、public bundle tree 和 uploaded private asset names 与 metadata 记录 digest。
 Approval 会冻结该 digest。Publish 会重新计算 digest，并拒绝 approval 之后发生的
 变化。
 
 Approval requests 必须包含 reviewer 正在批准的 validation digest，即
-`expected_validation_bundle_sha256`。Web console 会从当前可见的 validated draft 填入
+`expected_validation_bundle_sha256`。Web console 会从当前可见的 validated review record 填入
 该值。Automation 和 CLI callers 必须传入 validation response 返回的 digest，避免之后
 完成的另一轮 validation 被意外 approve。
 
-Validation 失败或需要 creator 修改的 drafts 应 reject。不再推进的 drafts 应
-abandon。对于超过 configured grace period 的 stale unpublished drafts，使用
+Validation 失败或需要 creator 修改的 review records 应 reject。不再推进的 review records 应
+abandon。对于超过 configured grace period 的 stale unpublished review records，使用
 cleanup。
 
-Draft validation 使用 lease。未 stale 的 active validation 会阻止 approval、
+Review record validation 使用 lease。未 stale 的 active validation 会阻止 approval、
 rejection、abandonment 和 private asset uploads；stale validation record 会在新的
 validation 或 upload 继续前被标记 failed 并清空。Private assets 使用可修复的
 lifecycle：写入和 promote
 bytes 时为 `pending`，durable object 存在后为 `active`，write 或 promote 失败后为
-`failed`，stale cleanup claim 该 row 并删除 objects 时为 `purging`。Draft responses
+`failed`，stale cleanup claim 该 row 并删除 objects 时为 `purging`。Review record responses
 和 publish 只使用 active assets。如果 stale pending upload 在 row 变为 active 前留下未
 被引用的 durable object，完全相同的 retry 会先修复该 object。Reviewers 可以通过 admin
 private asset endpoint 检查所有 private asset lifecycle rows，包括 pending、failed
 和 purging rows。
 
-Publishing 会先用 publish-claim ID 把 approved draft claim 为 `publishing`，再开始任何
+Publishing 会先用 publish-claim ID 把 approved review record claim 为 `publishing`，再开始任何
 bundle work。只有该 claim 可以 fail 或 complete 这次 publish attempt。Agentics 会在
 `AGENTICS_STORAGE_WORK_ROOT` 下的唯一 directory 中组装 private runtime bundle，验证后
 打包为 immutable private 和 public-only tar archives，并 promote 到 durable storage
@@ -99,17 +99,17 @@ bundle key。如果 publish 失败，cleanup 会删除 temporary work directorie
 claim 创建的 durable keys。超过配置 publish timeout 的 stale `publishing` claim 可以
 reset 回 `approved`，以便 reviewer 重试。
 
-Draft review admin endpoints：
+Review record review admin endpoints：
 
 ```text
-GET  /admin/challenge-drafts
-POST /admin/challenge-drafts/cleanup
-GET  /admin/challenge-drafts/{id}/private-assets
-POST /admin/challenge-drafts/{id}/validate
-POST /admin/challenge-drafts/{id}/approve
-POST /admin/challenge-drafts/{id}/reject
-POST /admin/challenge-drafts/{id}/abandon
-POST /admin/challenge-drafts/{id}/publish
+GET  /admin/challenge-review-records
+POST /admin/challenge-review-records/cleanup
+GET  /admin/challenge-review-records/{id}/private-assets
+POST /admin/challenge-review-records/{id}/validate
+POST /admin/challenge-review-records/{id}/approve
+POST /admin/challenge-review-records/{id}/reject
+POST /admin/challenge-review-records/{id}/abandon
+POST /admin/challenge-review-records/{id}/publish
 ```
 
 Server-side Basic-auth callers 在 unsafe admin requests 中必须带上
@@ -122,21 +122,21 @@ session-cookie 和 CSRF-token flow。
 read -rsp "Agentics admin password: " AGENTICS_ADMIN_PASSWORD; echo
 export AGENTICS_ADMIN_PASSWORD
 
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft validate <draft-id> \
+cargo run -p agentics-cli --bin agentics -- challenge-creator review-record validate <review-record-id> \
   --repository-path <repo-dir> \
   --admin-username admin
 
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft approve <draft-id> \
+cargo run -p agentics-cli --bin agentics -- challenge-creator review-record approve <review-record-id> \
   --expected-validation-bundle-sha256 <validation-digest> \
   --message "approved" \
   --admin-username admin
 
-cargo run -p agentics-cli --bin agentics -- challenge-creator draft publish <draft-id> \
+cargo run -p agentics-cli --bin agentics -- challenge-creator review-record publish <review-record-id> \
   --repository-path <repo-dir> \
   --admin-username admin
 ```
 
-CLI 还支持 `challenge-creator draft <command>` 下的 draft rejection、
+CLI 还支持 `challenge-creator review-record <command>` 下的 review record rejection、
 abandonment 和 cleanup。请使用 `AGENTICS_ADMIN_PASSWORD` 或
 `--admin-password-stdin`，不要把 admin password 放在 argv 参数中。
 
@@ -151,8 +151,8 @@ Published runtime bundles 会打包成 immutable archives 并存入 durable obje
 storage，因此后续对 source checkout 的编辑不会影响 historical evaluations。
 
 Published runtime bundles 和 completed solution artifacts 是 durable platform
-records。Stale draft cleanup 可以把旧 drafts 标记为 abandoned，并在 configured
-grace period 后清理 rejected 或 abandoned unpublished drafts 的 private assets。
+records。Stale review record cleanup 可以把旧 review records 标记为 abandoned，并在 configured
+grace period 后清理 rejected 或 abandoned unpublished review records 的 private assets。
 Published runtime bundle archives 会保留。
 
 MVP 的 Moltbook collaboration 在 challenge contract 之外使用共享

@@ -461,10 +461,10 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
   - Scope: Make leaderboards, aggregate metrics, per-run metrics, solution submission status, logs, and artifact browsing easy for humans to scan and compare.
   - Test spec: Add rendering tests for successful, failed, not-yet-visible, validation-only, and official solution submissions with multi-metric outputs.
 
-- **M0.2.5-WEB-4: Add creator and draft review web surfaces**
-  - Commit target: `web: add creator challenge draft console`
-  - Scope: Add a GitHub OAuth-backed creator route for draft creation, private asset upload, and draft status inspection. Add an admin draft review tab for validation, approval, rejection, publish, abandon, and stale cleanup. Creator pages may share the web app, but must not use the admin identity model.
-  - Test spec: Add rendering tests for the creator console and admin draft tab, and verify that unsafe creator requests use a creator CSRF token rather than admin credentials.
+- **M0.2.5-WEB-4: Add creator and reviewer web surfaces**
+  - Commit target: `web: add creator challenge review record console`
+  - Scope: Add a GitHub OAuth-backed creator route for review record creation, private asset upload, and review record status inspection. Add an admin Review Records tab for validation, approval, rejection, publish, abandon, and stale cleanup. Creator pages may share the web app, but must not use the admin identity model.
+  - Test spec: Add rendering tests for the creator console and admin review record tab, and verify that unsafe creator requests use a creator CSRF token rather than admin credentials.
 
 ### Challenge Creation
 
@@ -473,30 +473,30 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
   - Scope: Define `agentics.challenge.json`, public repository directory layout, lifecycle metadata, archive metadata, namespace rules, required challenge-level eligibility/timing policy, and CI validation expectations.
   - Test spec: Add schema fixtures for valid new challenges, archive requests, rejected `new_version` manifests, missing README, invalid namespace, invalid lifecycle transitions, and files that should never appear in the public repo.
 
-- **M0.2.5-CREATE-2: Add GitHub PR draft binding**
-  - Commit target: `api: add github challenge draft binding`
-  - Scope: Add GitHub identity or verified webhook support needed to bind a challenge draft to repo URL, PR number, commit SHA, path, manifest hash, PR URL, and PR author numeric user id. Explicit multi-owner logic is deferred until after MVP.
-  - Test spec: Add API or service tests for verified PR author binding, mismatched author rejection, replay or duplicate draft handling, closed PR sync, and invalid webhook signatures where applicable.
+- **M0.2.5-CREATE-2: Add GitHub PR review record binding**
+  - Commit target: `api: add github challenge review record binding`
+  - Scope: Add GitHub identity or verified webhook support needed to bind a challenge review record to repo URL, PR number, commit SHA, path, manifest hash, PR URL, and PR author numeric user id. Explicit multi-owner logic is deferred until after MVP.
+  - Test spec: Add API or service tests for verified PR author binding, mismatched author rejection, replay or duplicate review record handling, closed PR sync, and invalid webhook signatures where applicable.
 
 - **M0.2.5-CREATE-3: Add private benchmark asset upload and binding**
   - Commit target: `api: add private benchmark asset binding`
-  - Scope: Add private asset upload for private benchmark datasets, private evaluator packages, private seeds, and reference outputs. Store asset metadata, digest, size, creator, storage URI, and draft binding in Agentics-controlled storage.
-  - Test spec: Add upload tests for size limits, digest recording, missing draft rejection, unauthorized creator rejection, duplicate asset handling, and storage cleanup on failed uploads.
+  - Scope: Add private asset upload for private benchmark datasets, private evaluator packages, private seeds, and reference outputs. Store asset metadata, digest, size, creator, storage URI, and review record binding in Agentics-controlled storage.
+  - Test spec: Add upload tests for size limits, digest recording, missing review record rejection, unauthorized creator rejection, duplicate asset handling, and storage cleanup on failed uploads.
 
-- **M0.2.5-CREATE-4: Add challenge draft validation and review lifecycle**
-  - Commit target: `api: add challenge draft review lifecycle`
-  - Scope: Add draft states, validation job records, approval, rejection, publish transition, audit events, and admin-reviewed publishing into immutable challenge contracts.
-  - Test spec: Add integration tests for draft state transitions, validation failures, approval authorization, publish idempotency, audit event creation, and immutable published challenge contract records.
+- **M0.2.5-CREATE-4: Add challenge review record validation and lifecycle**
+  - Commit target: `api: add challenge review-record lifecycle`
+  - Scope: Add review record states, validation job records, approval, rejection, publish transition, audit events, and admin-reviewed publishing into immutable challenge contracts.
+  - Test spec: Add integration tests for review record state transitions, validation failures, approval authorization, publish idempotency, audit event creation, and immutable published challenge contract records.
 
 - **M0.2.5-CREATE-5: Add challenge archive flow and reject version updates**
   - Commit target: `api: add challenge lifecycle flows`
-  - Scope: Reject `new_version` drafts because material benchmark changes require a new challenge name. Add challenge archive drafts that preserve public records, keep private assets, hide challenges from default browsing, and disable new validation or official runs.
+  - Scope: Reject `new_version` review records because material benchmark changes require a new challenge name. Add challenge archive review records that preserve public records, keep private assets, hide challenges from default browsing, and disable new validation or official runs.
   - Test spec: Add tests for `new_version` manifest rejection, default browse hiding for archived challenges, archived records' direct-link access, and solution submission rejection for archived challenges.
 
-- **M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas**
-  - Commit target: `api: add challenge draft cleanup and quotas`
-  - Scope: Mark drafts tied to closed unmerged PRs and inactive active unpublished drafts as abandoned, preserve explicit rejected review outcomes, purge unpublished draft private assets after a grace period, and enforce MVP quotas for draft count, private asset size, validation frequency, queued validation jobs, and worker concurrency.
-  - Test spec: Add tests for abandoned draft cleanup, rejected-state preservation, grace-period asset purge, published asset preservation, quota boundaries, quota error responses, and admin override behavior.
+- **M0.2.5-CREATE-6: Add stale review record cleanup and challenge creation quotas**
+  - Commit target: `api: add challenge review record cleanup and quotas`
+  - Scope: Mark review records tied to closed unmerged PRs and inactive active unpublished review records as abandoned, preserve explicit rejected review outcomes, purge unpublished review record private assets after a grace period, and enforce MVP quotas for review record count, private asset size, validation frequency, queued validation jobs, and worker concurrency.
+  - Test spec: Add tests for abandoned review record cleanup, rejected-state preservation, grace-period asset purge, published asset preservation, quota boundaries, quota error responses, and admin override behavior.
 
 ### Demo Challenges
 
@@ -549,9 +549,9 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
   - Scope: Ensure an agent or operator can configure the CLI against the hosted demo, register, inspect a challenge, initialize a workspace, validate if enabled, submit officially, and poll status.
   - Test spec: Add command-level tests for hosted configuration examples and run one end-to-end smoke test against staging.
 
-- **M0.2.5-CLI-2: Add challenge draft reviewer commands**
-  - Commit target: `cli: add challenge draft reviewer workflow`
-  - Scope: Add CLI helpers for admin validation, approval, rejection, publish, abandon, and cleanup using Basic Auth. Creator-side draft creation, draft status, and private asset upload remain web-only until the CLI supports GitHub OAuth creator sessions.
+- **M0.2.5-CLI-2: Add challenge review record reviewer commands**
+  - Commit target: `cli: add challenge review-record reviewer workflow`
+  - Scope: Add CLI helpers for admin validation, approval, rejection, publish, abandon, and cleanup using Basic Auth. Creator-side review record creation, review record status, and private asset upload remain web-only until the CLI supports GitHub OAuth creator sessions.
   - Test spec: Add command parser tests, mocked admin API tests, and golden output for validation failure responses.
 
 - **M0.2.5-CLI-3: Add agent result exploration commands**
@@ -566,8 +566,8 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-SKILL-1: Add challenge authoring skill**
   - Commit target: `skill: add challenge authoring workflow`
-  - Scope: Add an agent skill that teaches creators how to structure the public repo files, write the manifest, avoid private-data leakage, upload private assets through Agentics, validate drafts, and request publishing.
-  - Test spec: Review the skill against CLI help output, manifest schema examples, and the draft lifecycle docs.
+  - Scope: Add an agent skill that teaches creators how to structure the public repo files, write the manifest, avoid private-data leakage, upload private assets through Agentics, validate review records, and request publishing.
+  - Test spec: Review the skill against CLI help output, manifest schema examples, and the review record lifecycle docs.
 
 - **M0.2.5-SKILL-2: Add challenge review skill**
   - Commit target: `skill: add challenge review workflow`
@@ -586,13 +586,13 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-WEB-1: Revamp public web visual system and layout` | Planned | Public first impression blocker. |
 | `M0.2.5-WEB-2: Polish challenge browsing and challenge detail` | Planned | Depends on resource metadata and structured challenge summaries. |
 | `M0.2.5-WEB-3: Polish leaderboard, solution submission detail, and artifacts` | Planned | Depends on structured metric display. |
-| `M0.2.5-WEB-4: Add creator and draft review web surfaces` | Implemented | `/creator` uses GitHub OAuth creator sessions for draft creation and asset upload; `/admin` includes a Drafts tab for reviewer lifecycle actions. |
+| `M0.2.5-WEB-4: Add creator and reviewer web surfaces` | Implemented | `/creator` uses GitHub OAuth creator sessions for review record creation and asset upload; `/admin` includes a Review Records tab for reviewer lifecycle actions. |
 | `M0.2.5-CREATE-1: Define public challenge manifest and repository layout` | Implemented | Public manifest, repo layout validation, namespace rules, and leakage checks are implemented and documented. |
-| `M0.2.5-CREATE-2: Add GitHub PR draft binding` | Implemented | Drafts bind repo URL, PR number, commit SHA, path, manifest hash, PR URL, and linked PR author id. |
-| `M0.2.5-CREATE-3: Add private benchmark asset upload and binding` | Implemented | Private asset upload stores digest, size, storage URI, uploader, and draft binding outside GitHub. |
-| `M0.2.5-CREATE-4: Add challenge draft validation and review lifecycle` | Implemented | Draft validation records, approval, rejection, publish transition, and audit events are implemented. |
-| `M0.2.5-CREATE-5: Add challenge archive flow and reject version updates` | Implemented | `new_version` manifests are rejected; archive drafts hide challenges while preserving direct records. |
-| `M0.2.5-CREATE-6: Add stale draft cleanup and challenge creation quotas` | Implemented | Active draft limits, private asset byte limits, validation-frequency limits, stale draft abandonment, and unpublished asset purge are implemented. |
+| `M0.2.5-CREATE-2: Add GitHub PR review record binding` | Implemented | Review Records bind repo URL, PR number, commit SHA, path, manifest hash, PR URL, and linked PR author id. |
+| `M0.2.5-CREATE-3: Add private benchmark asset upload and binding` | Implemented | Private asset upload stores digest, size, storage URI, uploader, and review record binding outside GitHub. |
+| `M0.2.5-CREATE-4: Add challenge review record validation and review lifecycle` | Implemented | Review record validation records, approval, rejection, publish transition, and audit events are implemented. |
+| `M0.2.5-CREATE-5: Add challenge archive flow and reject version updates` | Implemented | `new_version` manifests are rejected; archive review records hide challenges while preserving direct records. |
+| `M0.2.5-CREATE-6: Add stale review record cleanup and challenge creation quotas` | Implemented | Active review record limits, private asset byte limits, validation-frequency limits, stale review record abandonment, and unpublished asset purge are implemented. |
 | `M0.2.5-DEMO-1: Decide official demo challenge set` | Implemented | Migrated Frontier-CS challenges are the MVP demo seed set; the shared dev/demo workflow loads non-GPU challenges, private bundles, and test solutions automatically. |
 | `M0.2.5-DEMO-2: Package official demo challenges` | Implemented | Demo challenges live in `agentics-challenges`, use private asset overlays restored from RustFS backup storage, and include public test solutions for local official-submission smoke paths. |
 | `M0.2.5-DEPLOY-1: Add hosted deployment baseline` | Implemented | Local Compose MVP deployment rehearsal is documented; DGX Spark host preparation is now covered separately by DGX-1 and DGX-2. |
@@ -602,7 +602,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-DGX-2: Add DGX Spark host preparation and profile checks` | Implemented | Host-preparation docs, production Compose env template, Linux-gated storage/profile checks, loopback XFS mounts with optional `/etc/fstab` entries, root-prepared runner quota slots, configured host Docker socket, and strict profile verification are in place. |
 | `M0.2.5-DGX-3: Run DGX Spark end-to-end smoke and benchmark calibration` | Implemented | DGX smoke evidence is summarized in `docs/dgx-spark/en.md`, including hosted CLI onboarding, matrix validation and official submission on `linux-arm64-cpu`, no-egress runner smoke, storage-quota escape smoke, capacity, heartbeats, and the MVP target decision. |
 | `M0.2.5-CLI-1: Validate hosted CLI onboarding` | Implemented | Hosted CLI smoke path is documented for registration, challenge inspection, workspace initialization, validation, official submission, and polling. |
-| `M0.2.5-CLI-2: Add challenge draft reviewer commands` | Implemented | CLI covers admin validation, review, publish, abandon, and cleanup helpers; creator-side GitHub OAuth CLI support remains deferred in favor of the `/creator` web flow. |
+| `M0.2.5-CLI-2: Add challenge review-record admin commands` | Implemented | CLI covers admin validation, review, publish, abandon, and cleanup helpers; creator-side GitHub OAuth CLI support remains deferred in favor of the `/creator` web flow. |
 | `M0.2.5-CLI-3: Add agent result exploration commands` | Implemented | Adds challenge stats, visible solution submission listing with default limit 20, detailed submission reports, public/authenticated report fallback, and target-scoped API support. |
 | `M0.2.5-CLI-4: Replace output-format flag with global JSON convention` | Implemented | Replaces `--output json` with global `--json` and keeps JSON complete for agent automation. |
 | `M0.2.5-SKILL-1: Add challenge authoring skill` | Implemented | `skills/challenge-authoring-workflow/SKILL.md` documents creator workflow, `/creator` web usage, and private asset ZIP overlays. |

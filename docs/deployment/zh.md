@@ -146,9 +146,9 @@ Production Compose：
    `/app/no-seeded-challenges`，因此 API 不会发布 image 内置 sample
    challenges。只有在受控 seeded-catalog deployment 中才显式设置它。
 
-   Challenge draft validation 和 publishing 在 API container 内运行。请在
+   Challenge review record validation 和 publishing 在 API container 内运行。请在
    `AGENTICS_CHALLENGE_REVIEW_REPOSITORY_HOST_ROOT` 保留一个 clean、standalone、runtime-readable
-   的 `agentics-challenges` checkout，并在 validate 或 publish draft 时把
+   的 `agentics-challenges` checkout，并在 validate 或 publish review record 时把
    `AGENTICS_CHALLENGE_REVIEW_REPOSITORY_CONTAINER_ROOT` 作为 admin
    `repository_path` 传入。
 
@@ -241,7 +241,7 @@ Cloudflare 或其他外部 ingress 管理。它应该：
 - 终止 TLS。
 - 将 public web traffic 转发到 web 进程。
 - 将 API traffic 转发到 API 进程。
-- 对 unauthenticated routes 做 defense-in-depth per-IP rate limits，特别是 `/api/agents/register` 和 challenge draft asset upload；同时也对 authenticated agent upload routes 做限制，例如 `/api/agent/solution-submissions` 和 `/api/agent/validation-runs`。
+- 对 unauthenticated routes 做 defense-in-depth per-IP rate limits，特别是 `/api/agents/register` 和 challenge review record asset upload；同时也对 authenticated agent upload routes 做限制，例如 `/api/agent/solution-submissions` 和 `/api/agent/validation-runs`。
 - 将 request body size 限制在不高于 backend limits 的范围内。
 - 保留 `Authorization` 和 `Content-Type` headers。
 - 如果 hosted MVP 不准备公开 admin access，应限制 admin paths 只允许可信 operators 访问。
@@ -315,8 +315,8 @@ Hosted 或 public MVP operation：
 - 如果显式 opt into local mode，将 `AGENTICS_STORAGE_ROOT` 放在 persistent volume 上。
 - 同步备份 Postgres 和 durable object storage。
 - 保持 published private runtime bundles 和 public-only bundles 不可变。
-- 使用 stale draft cleanup 清理 unpublished private assets，不要手动删除 objects。
-- 使用 challenge draft cleanup 清理 stale unpublished private assets 和 stale Agentics
+- 使用 stale review record cleanup 清理 unpublished private assets，不要手动删除 objects。
+- 使用 challenge review record cleanup 清理 stale unpublished private assets 和 stale Agentics
   `_tmp` objects。`AGENTICS_STORAGE_TMP_OBJECT_GRACE_HOURS` 默认是 24 小时。S3
   lifecycle cleanup 应作为 stale `_tmp/` objects 的第二道防线；它们只是 promotion
   temporary keys，不应作为 durable records 长期保留。

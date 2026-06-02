@@ -53,7 +53,7 @@ Cover these project-agnostic lanes when the user asks for a complete review:
      boundary. Prefer explicit validated newtypes for human-authored names
      such as challenge names, target names, asset names, run names, resource
      profile names, and metric names, and for generated IDs such as solution
-     submission IDs, agent IDs, draft IDs, job IDs, and worker claim IDs.
+     submission IDs, agent IDs, review record IDs, job IDs, and worker claim IDs.
    - Stringly typed URLs, storage keys, and paths. Flag raw `_url`, `_uri`,
      `_path`, and `path: String` fields after external parsing boundaries.
      Prefer `url::Url` or contract-specific URL wrappers, `StorageKey` for
@@ -175,14 +175,14 @@ Always inspect these platform-specific risks:
 - Official evaluations must have quota, rate, queue, and storage controls before
   public deployment.
 - Admission controls must be transactional. Quotas, active challenge checks,
-  draft limits, staged job reservations, shortlist eligibility, owner checks,
+  review record limits, staged job reservations, shortlist eligibility, owner checks,
   archive-state gates, and active official-job limits should be enforced in the
   same database transaction that creates or mutates the durable row. Treat
   check-then-insert or check-then-queue code as a likely P1 unless a database
   constraint, lock, or compare-and-swap transition makes the race impossible.
 - Capacity counts must include every state that consumes capacity. For Agentics
-  this usually includes `staged`, `queued`, and `running` jobs, pending draft
-  validations, active drafts, reserved storage, and disabled-but-not-cleaned
+  this usually includes `staged`, `queued`, and `running` jobs, pending review record
+  validations, active review records, reserved storage, and disabled-but-not-cleaned
   resources when they still occupy quota.
 - Validation and official modes must be distinct in both product behavior and
   API exposure.
@@ -213,7 +213,7 @@ Always inspect these platform-specific risks:
 - Challenge bundle schemas, CLI packaging rules, web schemas, README examples,
   PRDs, milestones, and skills must stay aligned when behavior changes.
 - Challenge and solution workflows must be reviewed as workflows, not only as
-  files. Walk through agent registration, creator OAuth login, draft creation,
+  files. Walk through agent registration, creator OAuth login, review record creation,
   private asset upload, challenge publication, solution submission, worker
   claim/requeue/complete, public result viewing, leaderboard reads, and score
   distribution reads. Confirm who is authorized, what transaction protects the
@@ -282,7 +282,7 @@ Do not report a modularity issue only because a file is long or a helper is
 small. Report it when the code mixes ownership of invariants, duplicates policy,
 forces distant layers to know too much, or makes meaningful workflow tests hard
 to write. Prefer recommendations such as "move this workflow into
-`agentics-services::challenge_drafts` and keep the SQL operation in the draft
+`agentics-services::challenge_review_records` and keep the SQL operation in the review record
 repository" over generic "split this module" advice.
 
 For Rust security review, also ask subagents to scan for CVE-prone tool patterns
@@ -301,7 +301,7 @@ whether a transaction, lock, unique constraint, or compare-and-swap transition
 actually closes the race:
 
 - `COUNT\\(\\*\\)|count_.*\\(`
-- `INSERT INTO .*solution_submissions|INSERT INTO .*evaluation_jobs|INSERT INTO .*challenge_drafts`
+- `INSERT INTO .*solution_submissions|INSERT INTO .*evaluation_jobs|INSERT INTO .*challenge_review_records`
 - `UPDATE .* SET .*status|status = 'staged'|status = 'queued'|status = 'running'`
 - `FOR UPDATE|pg_advisory|ON CONFLICT|WHERE .*status`
 - `begin\\(\\)\\.await|commit\\(\\)\\.await`

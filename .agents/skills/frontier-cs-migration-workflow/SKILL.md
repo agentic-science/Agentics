@@ -94,7 +94,7 @@ overwrite public files.
 
 When a persistent backup RustFS service is used for migrated private bundles,
 copy the final private ZIP into a directory named with the challenge handle so
-production rehearsals can restore it without recreating the draft.
+production rehearsals can restore it without recreating the review record.
 
 ## 5. Build The Challenge Bundle
 
@@ -165,10 +165,10 @@ For each migrated challenge:
 1. Create or update the migration issue with the plan and status.
 2. Create a branch in `agentics-challenges`.
 3. Open a PR as the challenge creator.
-4. Create the Agentics draft from the PR metadata.
+4. Create the Agentics review record from the PR metadata.
 5. Upload required private asset ZIP overlays as the creator.
-6. Validate the draft as admin against the reviewed checkout.
-7. Approve and publish only after the PR content and draft validation match.
+6. Validate the review record as admin against the reviewed checkout.
+7. Approve and publish only after the PR content and review record validation match.
 8. Attach the Moltbook/Submolt post URL as admin platform metadata after
    publication, using the published challenge name handle.
 9. Submit the simple solution as a participant.
