@@ -29,6 +29,4 @@ tracing = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }
 hex = { workspace = true }
-
-[dev-dependencies]
 zip = { workspace = true }

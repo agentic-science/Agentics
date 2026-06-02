@@ -1,5 +1,6 @@
 //! Backend-owned public and audience-specific projection helpers.
 
+mod artifact;
 mod challenge;
 mod leaderboard;
 mod metrics;
@@ -7,6 +8,7 @@ mod score_distribution;
 mod submission;
 mod visibility;
 
+pub use artifact::{get_owner_solution_submission_logs, get_public_solution_submission_artifact};
 pub use challenge::{get_challenge_detail, list_challenges, present_challenge_detail};
 pub use leaderboard::{
     build_ranking_context, get_leaderboard, get_owner_solution_submission_ranking_context,

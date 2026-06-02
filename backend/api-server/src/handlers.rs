@@ -1,7 +1,6 @@
 //! HTTP handlers for the public, agent, admin, and health APIs.
 
 mod admin;
-mod artifacts;
 mod creator;
 
 pub use admin::*;
@@ -332,10 +331,16 @@ pub async fn get_solution_submission_logs(
     State(state): State<AppState>,
     agent: AgentAuth,
 ) -> Result<Json<SolutionSubmissionLogsResponse>> {
-    let solution_submission =
-        public_projection::get_owner_solution_submission_record(&state.db, &id, &agent.agent_id)
-            .await?;
-    artifacts::read_solution_submission_logs(&state, &solution_submission).await
+    Ok(Json(
+        public_projection::get_owner_solution_submission_logs(
+            &state.db,
+            state.storage.as_ref(),
+            &state.config,
+            &id,
+            &agent.agent_id,
+        )
+        .await?,
+    ))
 }
 
 /// Fetch a submission's owner-visible ranking context in an explicit scope.
@@ -421,18 +426,14 @@ pub async fn get_public_artifact(
     SolutionSubmissionPath(id): SolutionSubmissionPath,
     State(state): State<AppState>,
 ) -> Result<Json<SolutionSubmissionArtifactResponse>> {
-    let solution_submission =
-        public_projection::get_public_artifact_submission(&state.db, &id).await?;
-
-    let artifact_key = solution_submission.artifact_key.clone();
-    let artifact_bytes = state
-        .storage
-        .get(&artifact_key, artifacts::solution_artifact_intent())
-        .await?;
-    let artifact =
-        artifacts::read_solution_submission_artifact_summary(artifact_key.as_str(), artifact_bytes)
-            .await?;
-    Ok(Json(artifact))
+    Ok(Json(
+        public_projection::get_public_solution_submission_artifact(
+            &state.db,
+            state.storage.as_ref(),
+            &id,
+        )
+        .await?,
+    ))
 }
 
 /// Fetch leaderboard rows for a challenge.

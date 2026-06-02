@@ -1,26 +1,92 @@
-//! Artifact and log helpers for solution-submission routes.
-
-use axum::Json;
-
-use crate::error::ApiResult as Result;
-use agentics_config::OfficialLogRedactionMode;
+use agentics_config::{Config, OfficialLogRedactionMode};
 use agentics_contracts::validation::archive::inspect_zip_bytes;
 use agentics_contracts::zip_project::{MAX_ZIP_PROJECT_ARTIFACT_BYTES, zip_project_archive_policy};
+use agentics_domain::models::evaluation::EvaluationDto;
+use agentics_domain::models::ids::{AgentId, SolutionSubmissionId};
 use agentics_domain::models::request::{
     SolutionSubmissionArtifactFileDto, SolutionSubmissionArtifactResponse,
     SolutionSubmissionLogAvailability, SolutionSubmissionLogsResponse,
 };
 use agentics_domain::storage::StorageKey;
-use agentics_error::ServiceError;
-use agentics_persistence::SolutionSubmissionRecord;
+use agentics_error::{Result, ServiceError};
+use agentics_storage::{Storage, StorageWriteIntent};
 
-use crate::state::AppState;
+use super::submission::{get_owner_solution_submission_record, get_public_artifact_submission};
+use crate::storage_errors::storage_error_to_service_error;
 
 const MAX_INLINE_TEXT_BYTES: u64 = 200_000;
 const MAX_TOTAL_INLINE_TEXT_BYTES: u64 = 1_000_000;
+const MAX_LOG_RESPONSE_BYTES: usize = 200_000;
 
-/// Summarize a solution submission ZIP for safe public code browsing.
-pub(super) async fn read_solution_submission_artifact_summary(
+/// Read owner-visible runner logs for one solution submission.
+pub async fn get_owner_solution_submission_logs(
+    pool: &sqlx::PgPool,
+    storage: &dyn Storage,
+    config: &Config,
+    id: &SolutionSubmissionId,
+    agent_id: &AgentId,
+) -> Result<SolutionSubmissionLogsResponse> {
+    let solution_submission = get_owner_solution_submission_record(pool, id, agent_id).await?;
+    let official_may_expose_private_material = solution_submission
+        .challenge_spec
+        .official_evaluation_may_expose_private_material();
+    let (runner_log_storage_key, availability) = submitter_visible_runner_log_storage_key(
+        config.runner.official_log_redaction,
+        official_may_expose_private_material,
+        solution_submission.official_evaluation.as_ref(),
+        solution_submission.validation_evaluation.as_ref(),
+    );
+
+    let Some(runner_log_storage_key) = runner_log_storage_key else {
+        return Ok(SolutionSubmissionLogsResponse {
+            solution_submission_id: solution_submission.id,
+            availability,
+            runner_log_storage_key: None,
+            content: None,
+            truncated: false,
+        });
+    };
+
+    let max_stored_log_bytes = config
+        .runner
+        .max_runs
+        .checked_mul(1024 * 1024)
+        .ok_or_else(|| ServiceError::Internal("runner log byte budget overflow".to_string()))?;
+    let bytes = storage
+        .get(
+            &runner_log_storage_key,
+            StorageWriteIntent::new("runner log", max_stored_log_bytes),
+        )
+        .await
+        .map_err(storage_error_to_service_error)?;
+    let (content, truncated) = truncated_log_content(&bytes)?;
+
+    Ok(SolutionSubmissionLogsResponse {
+        solution_submission_id: solution_submission.id,
+        availability,
+        runner_log_storage_key: Some(runner_log_storage_key),
+        content: Some(content),
+        truncated,
+    })
+}
+
+/// Fetch a public solution artifact summary after enforcing artifact visibility.
+pub async fn get_public_solution_submission_artifact(
+    pool: &sqlx::PgPool,
+    storage: &dyn Storage,
+    id: &SolutionSubmissionId,
+) -> Result<SolutionSubmissionArtifactResponse> {
+    let solution_submission = get_public_artifact_submission(pool, id).await?;
+    let artifact_key = solution_submission.artifact_key;
+    let artifact_bytes = storage
+        .get(&artifact_key, solution_artifact_intent())
+        .await
+        .map_err(storage_error_to_service_error)?;
+    read_solution_submission_artifact_summary(artifact_key.as_str(), artifact_bytes).await
+}
+
+/// Read one stored artifact into a safe browsable ZIP summary.
+async fn read_solution_submission_artifact_summary(
     artifact_key: &str,
     artifact_bytes: Vec<u8>,
 ) -> Result<SolutionSubmissionArtifactResponse> {
@@ -32,72 +98,19 @@ pub(super) async fn read_solution_submission_artifact_summary(
     .map_err(|e| ServiceError::Internal(format!("artifact summary task failed: {e}")))?
 }
 
-/// Read a submitter-visible runner log response, truncating the payload for transport.
-pub(super) async fn read_solution_submission_logs(
-    state: &AppState,
-    solution_submission: &SolutionSubmissionRecord,
-) -> Result<Json<SolutionSubmissionLogsResponse>> {
-    const MAX_LOG_RESPONSE_BYTES: usize = 200_000;
-
-    let (runner_log_storage_key, availability) =
-        submitter_visible_runner_log_storage_key(state, solution_submission);
-
-    let Some(runner_log_storage_key) = runner_log_storage_key else {
-        return Ok(Json(SolutionSubmissionLogsResponse {
-            solution_submission_id: solution_submission.id.clone(),
-            availability,
-            runner_log_storage_key: None,
-            content: None,
-            truncated: false,
-        }));
-    };
-
-    let max_stored_log_bytes = state
-        .config
-        .runner
-        .max_runs
-        .checked_mul(1024 * 1024)
-        .ok_or_else(|| ServiceError::Internal("runner log byte budget overflow".to_string()))?;
-    let bytes = state
-        .storage
-        .get(
-            &runner_log_storage_key,
-            agentics_storage::StorageWriteIntent::new("runner log", max_stored_log_bytes),
-        )
-        .await?;
-    let truncated = bytes.len() > MAX_LOG_RESPONSE_BYTES;
-    let visible_bytes = if truncated {
-        bytes
-            .get(..MAX_LOG_RESPONSE_BYTES)
-            .ok_or_else(|| ServiceError::Internal("log truncation range invalid".to_string()))?
-    } else {
-        bytes.as_slice()
-    };
-    let content = String::from_utf8_lossy(visible_bytes).to_string();
-
-    Ok(Json(SolutionSubmissionLogsResponse {
-        solution_submission_id: solution_submission.id.clone(),
-        availability,
-        runner_log_storage_key: Some(runner_log_storage_key),
-        content: Some(content),
-        truncated,
-    }))
-}
-
 /// Select the runner log storage key this submitter is allowed to read.
 fn submitter_visible_runner_log_storage_key(
-    state: &AppState,
-    solution_submission: &SolutionSubmissionRecord,
+    official_log_redaction: OfficialLogRedactionMode,
+    official_may_expose_private_material: bool,
+    official_evaluation: Option<&EvaluationDto>,
+    validation_evaluation: Option<&EvaluationDto>,
 ) -> (Option<StorageKey>, SolutionSubmissionLogAvailability) {
-    if let Some(evaluation) = solution_submission.official_evaluation.as_ref() {
-        if state.config.runner.official_log_redaction == OfficialLogRedactionMode::Always {
+    if let Some(evaluation) = official_evaluation {
+        if official_log_redaction == OfficialLogRedactionMode::Always {
             return (None, SolutionSubmissionLogAvailability::RedactedByConfig);
         }
 
-        if solution_submission
-            .challenge_spec
-            .official_evaluation_may_expose_private_material()
-        {
+        if official_may_expose_private_material {
             return (
                 None,
                 SolutionSubmissionLogAvailability::RedactedPrivateOfficial,
@@ -107,7 +120,7 @@ fn submitter_visible_runner_log_storage_key(
         return available_or_missing(evaluation.runner_log_storage_key.clone());
     }
 
-    if let Some(evaluation) = solution_submission.validation_evaluation.as_ref() {
+    if let Some(evaluation) = validation_evaluation {
         return available_or_missing(evaluation.runner_log_storage_key.clone());
     }
 
@@ -124,11 +137,25 @@ fn available_or_missing(
     }
 }
 
-pub(super) fn solution_artifact_intent() -> agentics_storage::StorageWriteIntent {
-    agentics_storage::StorageWriteIntent::new(
-        "solution artifact ZIP",
-        MAX_ZIP_PROJECT_ARTIFACT_BYTES,
-    )
+/// Build the storage intent for solution ZIP artifact reads.
+fn solution_artifact_intent() -> StorageWriteIntent {
+    StorageWriteIntent::new("solution artifact ZIP", MAX_ZIP_PROJECT_ARTIFACT_BYTES)
+}
+
+/// Truncate stored runner log bytes for transport.
+fn truncated_log_content(bytes: &[u8]) -> Result<(String, bool)> {
+    let truncated = bytes.len() > MAX_LOG_RESPONSE_BYTES;
+    let visible_bytes = if truncated {
+        bytes
+            .get(..MAX_LOG_RESPONSE_BYTES)
+            .ok_or_else(|| ServiceError::Internal("log truncation range invalid".to_string()))?
+    } else {
+        bytes
+    };
+    Ok((
+        String::from_utf8_lossy(visible_bytes).to_string(),
+        truncated,
+    ))
 }
 
 /// Perform ZIP parsing and safe summary construction on a blocking thread.
@@ -268,6 +295,9 @@ mod tests {
     use std::path::PathBuf;
 
     use agentics_contracts::zip_project::MAX_ZIP_PROJECT_FILE_COUNT;
+    use agentics_domain::models::evaluation::{EvaluationStatus, ScoringMode};
+    use agentics_domain::models::ids::EvaluationId;
+    use agentics_domain::models::names::TargetName;
     use uuid::Uuid;
 
     use super::*;
@@ -296,6 +326,32 @@ mod tests {
         archive.finish().expect("failed to finish test zip");
     }
 
+    fn storage_key(value: &str) -> StorageKey {
+        StorageKey::try_new(value).expect("test storage key is valid")
+    }
+
+    fn target_name() -> TargetName {
+        TargetName::try_new("linux-arm64-cpu".to_string()).expect("test target is valid")
+    }
+
+    fn evaluation(eval_type: ScoringMode, key: Option<StorageKey>) -> EvaluationDto {
+        EvaluationDto {
+            id: EvaluationId::generate(),
+            target: target_name(),
+            status: EvaluationStatus::Completed,
+            eval_type,
+            rank_score: Some(1.0),
+            aggregate_metrics: Vec::new(),
+            run_metrics: Vec::new(),
+            public_results: Vec::new(),
+            validation_summary: None,
+            official_summary: None,
+            runner_log_storage_key: key,
+            started_at: None,
+            finished_at: None,
+        }
+    }
+
     #[tokio::test]
     /// Verifies unsafe archive entry names are rejected from artifact previews.
     async fn artifact_summary_rejects_unsafe_entry_names() {
@@ -314,9 +370,7 @@ mod tests {
         drop(std::fs::remove_file(path));
 
         let error = result.expect_err("unsafe archive entry should be rejected");
-        assert!(
-            matches!(error.as_service_error(), ServiceError::Validation(message) if message.contains("unsafe"))
-        );
+        assert!(matches!(error, ServiceError::Validation(message) if message.contains("unsafe")));
     }
 
     #[tokio::test]
@@ -334,9 +388,7 @@ mod tests {
         drop(std::fs::remove_file(path));
 
         let error = result.expect_err("oversized archive should be rejected");
-        assert!(
-            matches!(error.as_service_error(), ServiceError::Validation(message) if message.contains("at most"))
-        );
+        assert!(matches!(error, ServiceError::Validation(message) if message.contains("at most")));
     }
 
     #[tokio::test]
@@ -361,5 +413,109 @@ mod tests {
         assert_eq!(summary.files[0].path, "main.py");
         assert!(summary.files[0].is_text);
         assert!(summary.files[0].content.is_none());
+    }
+
+    #[test]
+    /// Verifies official logs are selected before validation logs.
+    fn official_logs_are_selected_before_validation_logs() {
+        let official = evaluation(
+            ScoringMode::Official,
+            Some(storage_key("logs/official.log")),
+        );
+        let validation = evaluation(
+            ScoringMode::Validation,
+            Some(storage_key("logs/validation.log")),
+        );
+
+        let (key, availability) = submitter_visible_runner_log_storage_key(
+            OfficialLogRedactionMode::ContractBased,
+            false,
+            Some(&official),
+            Some(&validation),
+        );
+
+        assert_eq!(availability, SolutionSubmissionLogAvailability::Available);
+        assert_eq!(
+            key.expect("official log key should be visible").as_str(),
+            "logs/official.log"
+        );
+    }
+
+    #[test]
+    /// Verifies official logs are hidden when the operator config always redacts them.
+    fn official_logs_are_redacted_by_config() {
+        let official = evaluation(
+            ScoringMode::Official,
+            Some(storage_key("logs/official.log")),
+        );
+
+        let (key, availability) = submitter_visible_runner_log_storage_key(
+            OfficialLogRedactionMode::Always,
+            false,
+            Some(&official),
+            None,
+        );
+
+        assert!(key.is_none());
+        assert_eq!(
+            availability,
+            SolutionSubmissionLogAvailability::RedactedByConfig
+        );
+    }
+
+    #[test]
+    /// Verifies official logs are hidden when the contract may expose private benchmark material.
+    fn official_logs_are_redacted_for_private_material() {
+        let official = evaluation(
+            ScoringMode::Official,
+            Some(storage_key("logs/official.log")),
+        );
+
+        let (key, availability) = submitter_visible_runner_log_storage_key(
+            OfficialLogRedactionMode::ContractBased,
+            true,
+            Some(&official),
+            None,
+        );
+
+        assert!(key.is_none());
+        assert_eq!(
+            availability,
+            SolutionSubmissionLogAvailability::RedactedPrivateOfficial
+        );
+    }
+
+    #[test]
+    /// Verifies validation logs are visible when no official evaluation exists.
+    fn validation_logs_are_visible_without_official_evaluation() {
+        let validation = evaluation(
+            ScoringMode::Validation,
+            Some(storage_key("logs/validation.log")),
+        );
+
+        let (key, availability) = submitter_visible_runner_log_storage_key(
+            OfficialLogRedactionMode::Always,
+            true,
+            None,
+            Some(&validation),
+        );
+
+        assert_eq!(availability, SolutionSubmissionLogAvailability::Available);
+        assert_eq!(
+            key.expect("validation log key should be visible").as_str(),
+            "logs/validation.log"
+        );
+    }
+
+    #[test]
+    /// Verifies service log responses are truncated to the transport cap.
+    fn log_content_is_truncated_for_response() {
+        let bytes = vec![b'x'; MAX_LOG_RESPONSE_BYTES + 1];
+
+        let (content, truncated) =
+            truncated_log_content(&bytes).expect("log truncation should succeed");
+
+        assert!(truncated);
+        assert_eq!(content.len(), MAX_LOG_RESPONSE_BYTES);
     }
 }
