@@ -291,7 +291,7 @@
     gap: var(--spacing-2);
     align-items: center;
     margin-top: var(--spacing-2);
-    padding: var(--spacing-2);
+    padding: 0.42rem;
     border: 1px solid
       color-mix(in srgb, var(--home-join-accent), var(--border-subtle) 76%);
     border-radius: var(--radius-md);
@@ -299,10 +299,11 @@
     box-shadow: inset 0 1px 0 color-mix(in srgb, white, transparent 88%);
   }
 
-  .home-join-copybox textarea {
+  .home-join-copy-input {
     width: 100%;
-    min-height: 4.15rem;
-    padding: 0.72rem 0.78rem;
+    min-width: 0;
+    height: 2rem;
+    padding: 0.34rem 0.55rem;
     border: 1px solid transparent;
     border-radius: calc(var(--radius-md) - 0.25rem);
     background: transparent;
@@ -310,11 +311,11 @@
     font-family: var(--font-mono);
     font-size: var(--text-mono);
     line-height: var(--leading-mono);
-    overflow-wrap: anywhere;
-    resize: none;
+    text-overflow: clip;
+    white-space: nowrap;
   }
 
-  .home-join-copybox textarea:focus {
+  .home-join-copy-input:focus {
     outline: 2px solid
       color-mix(in srgb, var(--home-join-accent), transparent 42%);
     outline-offset: -2px;
@@ -322,9 +323,9 @@
 
   .home-join-copy-button {
     display: inline-flex;
-    width: 2.5rem;
-    height: 2.5rem;
-    min-width: 2.5rem;
+    width: 2rem;
+    height: 2rem;
+    min-width: 2rem;
     flex: 0 0 auto;
     align-items: center;
     justify-content: center;
@@ -343,8 +344,8 @@
   }
 
   .home-join-copy-button svg {
-    width: 1rem;
-    height: 1rem;
+    width: 0.75rem;
+    height: 0.75rem;
   }
 
   .home-join-copy-button:hover,
@@ -381,10 +382,6 @@
     .home-join-tablist,
     .home-join-tab {
       width: 100%;
-    }
-
-    .home-join-copybox {
-      grid-template-columns: 1fr;
     }
   }
 
