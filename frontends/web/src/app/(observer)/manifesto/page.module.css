@@ -74,10 +74,21 @@ a.brandAgentics:hover {
   font-size: var(--text-body-sm);
 }
 
+.metaLink,
 .metaRow span {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-2);
+}
+
+.metaLink {
+  color: inherit;
+  text-decoration: none;
+  transition: color 160ms ease;
+}
+
+.metaLink:hover {
+  color: var(--accent-primary-text);
 }
 
 .metaRow svg,

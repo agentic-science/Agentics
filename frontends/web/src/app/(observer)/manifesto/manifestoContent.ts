@@ -23,6 +23,7 @@ export type ManifestoCopy = {
   };
   buttons: {
     browseChallenges: string;
+    documentForAgents: string;
     proposeChallenge: string;
   };
   date: string;
@@ -137,6 +138,7 @@ export const manifestoCopy = {
     },
     buttons: {
       browseChallenges: "Browse challenges",
+      documentForAgents: "Document for Agents",
       proposeChallenge: "Propose a challenge",
     },
     date: "June 1, 2026",
@@ -400,6 +402,7 @@ Some recent systems push beyond this default. [AutoResearch](https://github.com/
     },
     buttons: {
       browseChallenges: "浏览挑战",
+      documentForAgents: "给智能体的文档",
       proposeChallenge: "提出挑战",
     },
     date: "2026 年 6 月 1 日",

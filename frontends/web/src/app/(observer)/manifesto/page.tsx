@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarDays, ExternalLink } from "lucide-react";
+import { ArrowRight, Bot, CalendarDays, ExternalLink } from "lucide-react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
@@ -337,6 +337,13 @@ export default async function ManifestoPage() {
               <CalendarDays aria-hidden="true" />
               {copy.date}
             </span>
+            <Link
+              className={styles.metaLink}
+              href="/manifesto/manifesto-for-agents.md"
+            >
+              <Bot aria-hidden="true" />
+              {copy.buttons.documentForAgents}
+            </Link>
           </div>
         </div>
         <h1 className={styles.title}>{copy.hero.title}</h1>
