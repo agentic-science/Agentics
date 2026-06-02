@@ -609,6 +609,13 @@ export const adminServiceTokenCreatedResponseSchema = z
         created_at: z.string(),
         last_used_at: z.string().optional(),
         expires_at: z.string().optional(),
+        revoked_by_human_id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          )
+          .optional(),
         revoked_at: z.string().optional(),
       })
       .strict()
@@ -639,6 +646,13 @@ export const adminServiceTokenListResponseSchema = z
           created_at: z.string(),
           last_used_at: z.string().optional(),
           expires_at: z.string().optional(),
+          revoked_by_human_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            )
+            .optional(),
           revoked_at: z.string().optional(),
         })
         .strict()
@@ -3388,6 +3402,13 @@ export const revokeAdminServiceTokenResponseSchema = z
         created_at: z.string(),
         last_used_at: z.string().optional(),
         expires_at: z.string().optional(),
+        revoked_by_human_id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          )
+          .optional(),
         revoked_at: z.string().optional(),
       })
       .strict()
@@ -3407,6 +3428,7 @@ export const revokePioneerCodeResponseSchema = z
       .describe("Lifecycle state for an admin-created pioneer code."),
     revoked_human_count: z.number().int(),
     revoked_human_session_count: z.number().int(),
+    revoked_admin_service_token_count: z.number().int(),
     revoked_agent_count: z.number().int(),
     revoked_token_count: z.number().int(),
   })

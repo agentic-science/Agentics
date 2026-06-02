@@ -12,6 +12,8 @@ import {
   humanSessionResponseSchema,
 } from "@/lib/schemas";
 
+export const HUMAN_SESSION_CACHE_KEY = "human-session";
+
 /** Restores the current GitHub-authenticated human session from cookies. */
 export async function getHumanSession(): Promise<HumanSessionResponse> {
   return fetchJson("/api/auth/session", humanSessionResponseSchema, {

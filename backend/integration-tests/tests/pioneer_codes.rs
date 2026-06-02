@@ -112,6 +112,7 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
         .await
         .expect("failed to decode revoke response");
     assert_eq!(revoked["status"], "revoked");
+    assert_eq!(revoked["revoked_admin_service_token_count"], 0);
     assert_eq!(revoked["revoked_agent_count"], 1);
     assert_eq!(revoked["revoked_token_count"], 1);
 
@@ -285,6 +286,18 @@ async fn human_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
     let code_hash = agentics_services::auth::hash_opaque_token(code);
     let code_id = PioneerCodeId::generate();
     let repos = agentics_persistence::Repositories::new(&pool);
+    let admin_human = repos
+        .sessions()
+        .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
+            fallback_human_id: HumanId::generate(),
+            github_user_id: 9001,
+            github_login: "integration-admin".to_string(),
+            pioneer_code_hash: None,
+            pioneer_code_required_for_new_human: false,
+            bootstrap_admin_candidate: true,
+        })
+        .await
+        .expect("admin human should resolve");
     repos
         .pioneer_codes()
         .create(&agentics_persistence::CreatePioneerCodeInput {
@@ -295,7 +308,7 @@ async fn human_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
             note: "human oauth".to_string(),
             max_uses: 1,
             expires_at: None,
-            created_by_human_id: None,
+            created_by_human_id: Some(admin_human.human_id.clone()),
             created_by_admin_service_token_id: None,
             created_by_display: "integration-admin".to_string(),
         })
@@ -394,5 +407,84 @@ async fn human_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
         disabled
             .to_string()
             .contains("linked human account is disabled")
+    );
+}
+
+/// Verifies revoking a pioneer code also revokes admin service tokens created by derived humans.
+#[sqlx::test(migrations = "../migrations")]
+async fn pioneer_code_revoke_revokes_derived_human_admin_service_tokens(pool: sqlx::PgPool) {
+    let code = "team-deadbeef";
+    let code_hash = agentics_services::auth::hash_opaque_token(code);
+    let code_id = PioneerCodeId::generate();
+    let repos = agentics_persistence::Repositories::new(&pool);
+    let admin_human = repos
+        .sessions()
+        .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
+            fallback_human_id: HumanId::generate(),
+            github_user_id: 9001,
+            github_login: "integration-admin".to_string(),
+            pioneer_code_hash: None,
+            pioneer_code_required_for_new_human: false,
+            bootstrap_admin_candidate: true,
+        })
+        .await
+        .expect("admin human should resolve");
+    repos
+        .pioneer_codes()
+        .create(&agentics_persistence::CreatePioneerCodeInput {
+            id: code_id.clone(),
+            code_display: code.to_string(),
+            code_hash: code_hash.clone(),
+            label: Some("team".to_string()),
+            note: "human oauth".to_string(),
+            max_uses: 1,
+            expires_at: None,
+            created_by_human_id: Some(admin_human.human_id.clone()),
+            created_by_admin_service_token_id: None,
+            created_by_display: "integration-admin".to_string(),
+        })
+        .await
+        .expect("pioneer code should insert");
+    let invited_human = repos
+        .sessions()
+        .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
+            fallback_human_id: HumanId::generate(),
+            github_user_id: 42,
+            github_login: "creator-login".to_string(),
+            pioneer_code_hash: Some(code_hash),
+            pioneer_code_required_for_new_human: true,
+            bootstrap_admin_candidate: false,
+        })
+        .await
+        .expect("oauth login should create human");
+    let admin_token = agentics_services::auth::create_admin_service_token();
+    let token_hash = agentics_services::auth::hash_opaque_token(&admin_token);
+    repos
+        .sessions()
+        .create_admin_service_token(&agentics_persistence::CreateAdminServiceTokenInput {
+            id: agentics_domain::models::ids::AdminServiceTokenId::generate(),
+            token_hash: token_hash.clone(),
+            label: "derived-human-token".to_string(),
+            created_by_human_id: invited_human.human_id.clone(),
+            expires_at: None,
+        })
+        .await
+        .expect("admin service token should insert");
+
+    let outcome = repos
+        .pioneer_codes()
+        .revoke(&code_id)
+        .await
+        .expect("pioneer code should revoke");
+
+    assert_eq!(outcome.revoked_human_count, 1);
+    assert_eq!(outcome.revoked_admin_service_token_count, 1);
+    assert!(
+        repos
+            .sessions()
+            .authenticate_admin_service_token(&token_hash)
+            .await
+            .expect("token auth lookup should not fail")
+            .is_none()
     );
 }

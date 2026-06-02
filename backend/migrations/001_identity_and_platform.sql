@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS human_roles (
   role TEXT NOT NULL CHECK (role IN ('creator', 'admin')),
   granted_by_human_id UUID REFERENCES humans(id) ON DELETE SET NULL,
   granted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  revoked_by_human_id UUID REFERENCES humans(id) ON DELETE SET NULL,
   revoked_at TIMESTAMPTZ
 );
 
@@ -68,6 +69,7 @@ CREATE TABLE IF NOT EXISTS admin_service_tokens (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   last_used_at TIMESTAMPTZ,
   expires_at TIMESTAMPTZ,
+  revoked_by_human_id UUID REFERENCES humans(id) ON DELETE SET NULL,
   revoked_at TIMESTAMPTZ
 );
 

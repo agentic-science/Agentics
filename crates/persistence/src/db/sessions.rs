@@ -54,6 +54,7 @@ pub struct AdminServiceTokenRecord {
     pub created_at: DateTime<Utc>,
     pub last_used_at: Option<DateTime<Utc>>,
     pub expires_at: Option<DateTime<Utc>>,
+    pub revoked_by_human_id: Option<HumanId>,
     pub revoked_at: Option<DateTime<Utc>>,
 }
 
@@ -117,6 +118,12 @@ pub async fn resolve_github_human(
             return Err(ServiceError::Forbidden(
                 "linked human account is disabled".to_string(),
             ));
+        }
+        if input.bootstrap_admin_candidate {
+            lock_bootstrap_admin_scope_tx(&mut tx).await?;
+            if !active_admin_exists_tx(&mut tx).await? {
+                grant_role_tx(&mut tx, &existing.human_id, HumanRole::Admin, None).await?;
+            }
         }
         sqlx::query(
             r#"
@@ -369,6 +376,7 @@ pub async fn grant_admin_role(
     granted_by_human_id: &HumanId,
 ) -> Result<HumanRecord> {
     let mut tx = pool.begin().await?;
+    lock_bootstrap_admin_scope_tx(&mut tx).await?;
     ensure_active_human_tx(&mut tx, human_id).await?;
     grant_role_tx(
         &mut tx,
@@ -382,22 +390,51 @@ pub async fn grant_admin_role(
 }
 
 /// Revoke the admin role from a human account.
-pub async fn revoke_admin_role(pool: &PgPool, human_id: &HumanId) -> Result<HumanRecord> {
-    let result = sqlx::query(
+pub async fn revoke_admin_role(
+    pool: &PgPool,
+    human_id: &HumanId,
+    revoked_by_human_id: &HumanId,
+) -> Result<HumanRecord> {
+    let mut tx = pool.begin().await?;
+    lock_bootstrap_admin_scope_tx(&mut tx).await?;
+    let role_exists = sqlx::query(
+        r#"
+        SELECT id
+        FROM human_roles
+        WHERE human_id = $1::uuid
+          AND role = 'admin'
+          AND revoked_at IS NULL
+        FOR UPDATE
+        "#,
+    )
+    .bind(human_id.as_str())
+    .fetch_optional(&mut *tx)
+    .await?
+    .is_some();
+    if !role_exists {
+        return Err(ServiceError::NotFound);
+    }
+    let active_admin_count = active_admin_count_tx(&mut tx).await?;
+    if active_admin_count <= 1 {
+        return Err(ServiceError::BadRequest(
+            "cannot revoke the final active human admin".to_string(),
+        ));
+    }
+    sqlx::query(
         r#"
         UPDATE human_roles
-        SET revoked_at = COALESCE(revoked_at, NOW())
+        SET revoked_at = COALESCE(revoked_at, NOW()),
+            revoked_by_human_id = COALESCE(revoked_by_human_id, $2::uuid)
         WHERE human_id = $1::uuid
           AND role = 'admin'
           AND revoked_at IS NULL
         "#,
     )
     .bind(human_id.as_str())
-    .execute(pool)
+    .bind(revoked_by_human_id.as_str())
+    .execute(&mut *tx)
     .await?;
-    if result.rows_affected() == 0 {
-        return Err(ServiceError::NotFound);
-    }
+    tx.commit().await?;
     get_human_by_id(pool, human_id).await
 }
 
@@ -424,6 +461,7 @@ pub async fn create_admin_service_token(
             created_at,
             last_used_at,
             expires_at,
+            revoked_by_human_id::text AS revoked_by_human_id,
             revoked_at
         "#,
     )
@@ -450,6 +488,7 @@ pub async fn list_admin_service_tokens(pool: &PgPool) -> Result<Vec<AdminService
             created_at,
             last_used_at,
             expires_at,
+            revoked_by_human_id::text AS revoked_by_human_id,
             revoked_at
         FROM admin_service_tokens
         ORDER BY created_at DESC
@@ -467,12 +506,14 @@ pub async fn list_admin_service_tokens(pool: &PgPool) -> Result<Vec<AdminService
 pub async fn revoke_admin_service_token(
     pool: &PgPool,
     id: &AdminServiceTokenId,
+    revoked_by_human_id: &HumanId,
 ) -> Result<AdminServiceTokenRecord> {
     let row = sqlx::query(
         r#"
         UPDATE admin_service_tokens
         SET status = 'revoked',
-            revoked_at = COALESCE(revoked_at, NOW())
+            revoked_at = COALESCE(revoked_at, NOW()),
+            revoked_by_human_id = COALESCE(revoked_by_human_id, $2::uuid)
         WHERE id = $1::uuid
         RETURNING
             id::text AS id,
@@ -482,10 +523,12 @@ pub async fn revoke_admin_service_token(
             created_at,
             last_used_at,
             expires_at,
+            revoked_by_human_id::text AS revoked_by_human_id,
             revoked_at
         "#,
     )
     .bind(id.as_str())
+    .bind(revoked_by_human_id.as_str())
     .fetch_optional(pool)
     .await?
     .ok_or(ServiceError::NotFound)?;
@@ -703,21 +746,23 @@ async fn lock_bootstrap_admin_scope_tx(tx: &mut Transaction<'_, Postgres>) -> Re
 }
 
 async fn active_admin_exists_tx(tx: &mut Transaction<'_, Postgres>) -> Result<bool> {
+    Ok(active_admin_count_tx(tx).await? > 0)
+}
+
+async fn active_admin_count_tx(tx: &mut Transaction<'_, Postgres>) -> Result<i64> {
     let row = sqlx::query(
         r#"
-        SELECT EXISTS (
-            SELECT 1
-            FROM human_roles r
-            JOIN humans h ON h.id = r.human_id
-            WHERE r.role = 'admin'
-              AND r.revoked_at IS NULL
-              AND h.status = 'active'
-        ) AS exists
+        SELECT COUNT(*) AS count
+        FROM human_roles r
+        JOIN humans h ON h.id = r.human_id
+        WHERE r.role = 'admin'
+          AND r.revoked_at IS NULL
+          AND h.status = 'active'
         "#,
     )
     .fetch_one(&mut **tx)
     .await?;
-    row.try_get("exists").map_err(ServiceError::from)
+    row.try_get("count").map_err(ServiceError::from)
 }
 
 fn human_list_sql() -> &'static str {
@@ -777,6 +822,13 @@ fn admin_service_token_record_from_row(
         created_at: row.try_get("created_at")?,
         last_used_at: row.try_get("last_used_at")?,
         expires_at: row.try_get("expires_at")?,
+        revoked_by_human_id: row
+            .try_get::<Option<String>, _>("revoked_by_human_id")?
+            .map(HumanId::try_new)
+            .transpose()
+            .map_err(|e| {
+                ServiceError::Internal(format!("stored invalid token revoker human id: {e}"))
+            })?,
         revoked_at: row.try_get("revoked_at")?,
     })
 }

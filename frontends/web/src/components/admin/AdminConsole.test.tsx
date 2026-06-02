@@ -27,6 +27,7 @@ vi.mock("@/lib/adminApi", () => {
 });
 
 vi.mock("@/lib/authApi", () => ({
+  HUMAN_SESSION_CACHE_KEY: "human-session",
   getHumanSession: vi.fn(),
   logoutHuman: vi.fn(),
   startGithubLogin: vi.fn(),

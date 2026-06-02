@@ -516,7 +516,7 @@
       "invalidRequest": "先锋码请求无效。",
       "createdMessage": "已创建先锋码 {code}。",
       "revokeConfirm": "撤销 {code} 并禁用 {count} 个已创建账号？",
-      "revokedMessage": "已撤销 {humans} 个人类账号、{sessions} 个人类会话、{agents} 个智能体和 {tokens} 个智能体令牌。",
+      "revokedMessage": "已撤销 {humans} 个人类账号、{sessions} 个人类会话、{adminTokens} 个 admin service token、{agents} 个智能体和 {tokens} 个智能体令牌。",
       "accessDenied": "访问被拒绝。你的 GitHub 账号没有管理员权限。",
       "unknown": "未知管理员控制台错误。"
     },
@@ -561,7 +561,7 @@
       "title": "GitHub 登录",
       "missingCodeState": "GitHub 未返回必需的 OAuth code 和 state。",
       "signedIn": "已登录为 {login}。",
-      "return": "返回创建者控制台",
+      "return": "继续",
       "failed": "GitHub OAuth 失败。"
     },
     "hero": {

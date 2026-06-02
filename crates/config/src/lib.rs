@@ -417,6 +417,14 @@ impl Config {
                 "AGENTICS_GITHUB_OAUTH_REDIRECT_URL",
             )?;
         }
+        if (!local_urls::is_loopback_host(&self.api_web.api_host)
+            || !self.auth.bootstrap_admin_github_user_ids.is_empty())
+            && !self.github_oauth_enabled()
+        {
+            anyhow::bail!(
+                "GitHub OAuth must be fully configured with AGENTICS_GITHUB_OAUTH_CLIENT_ID, AGENTICS_GITHUB_OAUTH_CLIENT_SECRET, and AGENTICS_GITHUB_OAUTH_REDIRECT_URL before human admin login or bootstrap can work"
+            );
+        }
         self.validate_hosted_image_policy()?;
         self.validate_object_storage_config()?;
 

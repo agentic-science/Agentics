@@ -22,18 +22,22 @@ type AdminRefresh = (options?: RefreshOptions) => Promise<void>;
 
 export function AdminIdentityPanel({
   csrfToken,
+  currentHumanId,
   humans,
   serviceTokens,
   locale,
   onRefresh,
+  onSessionChanged,
   onError,
   onMessage,
 }: {
   csrfToken: string;
+  currentHumanId: string | null;
   humans: AdminHumanListResponse;
   serviceTokens: AdminServiceTokenListResponse;
   locale: string;
   onRefresh: AdminRefresh;
+  onSessionChanged: () => Promise<void>;
   onError: (message: string | null) => void;
   onMessage: (message: string | null) => void;
 }) {
@@ -85,6 +89,7 @@ export function AdminIdentityPanel({
       }
       onMessage(t(grant ? "adminGranted" : "adminRevoked"));
       await onRefresh({ quiet: true });
+      await onSessionChanged();
     } catch (e) {
       onError(
         adminErrorMessage(e, {
@@ -116,6 +121,9 @@ export function AdminIdentityPanel({
       );
     }
   };
+  const activeAdminCount = humans.items.filter(
+    (human) => human.status === "active" && human.roles.includes("admin"),
+  ).length;
 
   return (
     <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -145,6 +153,9 @@ export function AdminIdentityPanel({
             <tbody>
               {humans.items.map((human) => {
                 const isAdmin = human.roles.includes("admin");
+                const revokeDisabled =
+                  isAdmin &&
+                  (human.human_id === currentHumanId || activeAdminCount <= 1);
                 return (
                   <tr key={human.human_id}>
                     <td>
@@ -164,6 +175,7 @@ export function AdminIdentityPanel({
                         className={
                           isAdmin ? "btn btn-secondary" : "btn btn-primary"
                         }
+                        disabled={revokeDisabled}
                         onClick={() =>
                           void setAdminRole(human.human_id, !isAdmin)
                         }

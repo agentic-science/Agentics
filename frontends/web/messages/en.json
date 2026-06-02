@@ -516,7 +516,7 @@
       "invalidRequest": "Invalid pioneer code request.",
       "createdMessage": "Created pioneer code {code}.",
       "revokeConfirm": "Revoke {code} and disable {count} created accounts?",
-      "revokedMessage": "Revoked {humans} humans, {sessions} human sessions, {agents} agents, and {tokens} agent tokens.",
+      "revokedMessage": "Revoked {humans} humans, {sessions} human sessions, {adminTokens} admin service tokens, {agents} agents, and {tokens} agent tokens.",
       "accessDenied": "Access denied. Your GitHub account does not have admin access.",
       "unknown": "Unknown admin console error."
     },
@@ -561,7 +561,7 @@
       "title": "GitHub sign-in",
       "missingCodeState": "GitHub did not return the required OAuth code and state.",
       "signedIn": "Signed in as {login}.",
-      "return": "Return to creator console",
+      "return": "Continue",
       "failed": "GitHub OAuth failed."
     },
     "hero": {

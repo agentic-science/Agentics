@@ -13,6 +13,7 @@
 )]
 
 use super::Config;
+use agentics_domain::models::urls::GithubOauthRedirectUrl;
 use secrecy::{ExposeSecret, SecretString};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -252,10 +253,31 @@ fn hosted_bind_requires_secure_cookies_and_invited_registration() {
 
     config.auth.agent_registration_mode = super::AgentRegistrationMode::PioneerCode;
     config.api_web.web_session_cookie_secure = true;
+    assert!(config.validate_api_security().is_err());
+    configure_test_github_oauth(&mut config);
     assert!(config.validate_api_security().is_ok());
 
     config.auth.agent_registration_mode = super::AgentRegistrationMode::Public;
     assert!(config.validate_api_security().is_err());
+}
+
+/// Verifies bootstrap admin IDs cannot be configured without GitHub OAuth.
+#[test]
+fn bootstrap_admin_requires_github_oauth_config() {
+    let mut config = test_config();
+    config.auth.bootstrap_admin_github_user_ids = vec![9001];
+
+    let error = config
+        .validate_api_security()
+        .expect_err("bootstrap admin requires OAuth");
+    assert!(
+        error
+            .to_string()
+            .contains("GitHub OAuth must be fully configured")
+    );
+
+    configure_test_github_oauth(&mut config);
+    assert!(config.validate_api_security().is_ok());
 }
 
 /// Verifies that hosted API binds reject public registration mode.
@@ -661,6 +683,15 @@ fn test_config() -> Config {
     config.database.url = SecretString::from("");
     config.storage.challenges_root = String::new();
     config
+}
+
+fn configure_test_github_oauth(config: &mut Config) {
+    config.github_oauth.client_id = Some("test-client-id".to_string());
+    config.github_oauth.client_secret = Some(SecretString::from("test-client-secret"));
+    config.github_oauth.redirect_url = Some(
+        GithubOauthRedirectUrl::try_new("https://agentics.example/auth/github/callback")
+            .expect("test OAuth redirect URL should parse"),
+    );
 }
 
 fn config_with_runner(update: impl FnOnce(&mut super::RunnerConfig)) -> Config {

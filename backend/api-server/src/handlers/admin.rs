@@ -98,10 +98,10 @@ pub async fn revoke_human_admin_role(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<AdminHumanRoleResponse>> {
-    require_human_admin(&admin)?;
+    let revoked_by = require_human_admin(&admin)?.clone();
     let target = HumanId::try_new(id).map_err(|e| ServiceError::BadRequest(e.to_string()))?;
     Ok(Json(
-        admin_service::revoke_human_admin_role(&state.db, &target).await?,
+        admin_service::revoke_human_admin_role(&state.db, &target, &revoked_by).await?,
     ))
 }
 
@@ -135,11 +135,11 @@ pub async fn revoke_admin_service_token(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<RevokeAdminServiceTokenResponse>> {
-    require_human_admin(&admin)?;
+    let revoked_by = require_human_admin(&admin)?.clone();
     let id =
         AdminServiceTokenId::try_new(id).map_err(|e| ServiceError::BadRequest(e.to_string()))?;
     Ok(Json(
-        admin_service::revoke_admin_service_token(&state.db, &id).await?,
+        admin_service::revoke_admin_service_token(&state.db, &id, &revoked_by).await?,
     ))
 }
 

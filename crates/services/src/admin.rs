@@ -138,6 +138,7 @@ pub async fn revoke_pioneer_code(
         status: PioneerCodeStatus::Revoked,
         revoked_human_count: outcome.revoked_human_count,
         revoked_human_session_count: outcome.revoked_human_session_count,
+        revoked_admin_service_token_count: outcome.revoked_admin_service_token_count,
         revoked_agent_count: outcome.revoked_agent_count,
         revoked_token_count: outcome.revoked_token_count,
     })
@@ -174,10 +175,11 @@ pub async fn grant_human_admin_role(
 pub async fn revoke_human_admin_role(
     pool: &sqlx::PgPool,
     target_human_id: &HumanId,
+    revoked_by_human_id: &HumanId,
 ) -> Result<AdminHumanRoleResponse> {
     let human = Repositories::new(pool)
         .sessions()
-        .revoke_admin_role(target_human_id)
+        .revoke_admin_role(target_human_id, revoked_by_human_id)
         .await?;
     Ok(AdminHumanRoleResponse {
         human: present_human(human)?,
@@ -226,10 +228,11 @@ pub async fn list_admin_service_tokens(
 pub async fn revoke_admin_service_token(
     pool: &sqlx::PgPool,
     id: &AdminServiceTokenId,
+    revoked_by_human_id: &HumanId,
 ) -> Result<RevokeAdminServiceTokenResponse> {
     let record = Repositories::new(pool)
         .sessions()
-        .revoke_admin_service_token(id)
+        .revoke_admin_service_token(id, revoked_by_human_id)
         .await?;
     Ok(RevokeAdminServiceTokenResponse {
         token_record: present_admin_service_token(record),
@@ -508,6 +511,7 @@ fn present_admin_service_token(record: AdminServiceTokenRecord) -> AdminServiceT
             .last_used_at
             .map(|last_used_at| last_used_at.to_rfc3339()),
         expires_at: record.expires_at.map(|expires_at| expires_at.to_rfc3339()),
+        revoked_by_human_id: record.revoked_by_human_id,
         revoked_at: record.revoked_at.map(|revoked_at| revoked_at.to_rfc3339()),
     }
 }

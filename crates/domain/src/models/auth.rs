@@ -156,6 +156,8 @@ pub struct AdminServiceTokenDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub revoked_by_human_id: Option<HumanId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub revoked_at: Option<String>,
 }
 

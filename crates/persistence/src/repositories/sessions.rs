@@ -68,8 +68,12 @@ impl SessionsRepository<'_> {
         db::sessions::grant_admin_role(self.pool, human_id, granted_by_human_id).await
     }
 
-    pub async fn revoke_admin_role(&self, human_id: &HumanId) -> Result<HumanRecord> {
-        db::sessions::revoke_admin_role(self.pool, human_id).await
+    pub async fn revoke_admin_role(
+        &self,
+        human_id: &HumanId,
+        revoked_by_human_id: &HumanId,
+    ) -> Result<HumanRecord> {
+        db::sessions::revoke_admin_role(self.pool, human_id, revoked_by_human_id).await
     }
 
     pub async fn create_admin_service_token(
@@ -86,8 +90,9 @@ impl SessionsRepository<'_> {
     pub async fn revoke_admin_service_token(
         &self,
         id: &AdminServiceTokenId,
+        revoked_by_human_id: &HumanId,
     ) -> Result<AdminServiceTokenRecord> {
-        db::sessions::revoke_admin_service_token(self.pool, id).await
+        db::sessions::revoke_admin_service_token(self.pool, id, revoked_by_human_id).await
     }
 
     pub async fn authenticate_admin_service_token(

@@ -464,7 +464,7 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 - **M0.2.5-WEB-4：添加 creator 和 reviewer web surfaces**
   - Commit target：`web: add creator challenge review record console`
   - Scope：添加基于 GitHub OAuth 的 creator route，用于 review record creation、private asset upload 和 review record status inspection。添加 admin Review Records tab，用于 validation、approval、rejection、publish、abandon 和 stale cleanup。Creator pages 可以共用 web app，但不能使用 admin identity model。
-  - Test spec：为 creator console 和 admin review record tab 添加 rendering tests，并验证 unsafe creator requests 使用 creator CSRF token，而不是 admin credentials。
+  - Test spec：为 creator console 和 admin review record tab 添加 rendering tests，并验证 unsafe creator requests 使用 creator CSRF token，而不是 admin authorization。
 
 ### Challenge Creation
 
@@ -535,7 +535,7 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 - **M0.2.5-DGX-2：添加 DGX Spark host preparation 和 profile checks**
   - Commit target：`ops: add dgx spark host preparation`
   - Scope：定义 DGX-specific environment values、persistent storage layout、external reverse proxy 和 TLS assumptions、Docker socket 和 data-root settings、backup locations，以及 production Compose expectations。包括 `AGENTICS_RUNNER_SECURITY_PROFILE=production`、`AGENTICS_HOST_PROBE_MODE=require`、`AGENTICS_WORKER_ACCELERATORS=gpu`、`AGENTICS_WORKER_GPU_PROBE_IMAGE`、configured Docker daemon 支持时的 Docker writable-layer quota probes，以及位于 per-phase loopback filesystem images 下、由 root 预先准备的 XFS project-quota slots，用于所有 solution setup/build/run writable mounts 和 evaluator prepare/score writable mounts。
-  - Test spec：在 DGX Spark 上使用 persistent storage 和非默认 admin credentials dry-run storage preparation、production Compose startup、health checks、configured Docker daemon 支持时的 Docker writable-layer quota probe、per-phase loop-image writable-mount probe，以及 per-phase quota-slot exhaustion probe。
+  - Test spec：在 DGX Spark 上使用 persistent storage、已配置的 GitHub OAuth bootstrap 和 admin service-token rotation，dry-run storage preparation、production Compose startup、health checks、configured Docker daemon 支持时的 Docker writable-layer quota probe、per-phase loop-image writable-mount probe，以及 per-phase quota-slot exhaustion probe。
 
 - **M0.2.5-DGX-3：运行 DGX Spark end-to-end smoke 和 benchmark calibration**
   - Commit target：`ops: add dgx spark smoke checklist`

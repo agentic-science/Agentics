@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { SWRConfig } from "swr";
 import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getHumanSession } from "@/lib/authApi";
 import {
   createChallengeReviewRecord,
   createChallengeShortlistRevision,
@@ -10,7 +11,6 @@ import {
   getChallengeShortlist,
   getCreatorChallengeParticipants,
   getCreatorChallengeStats,
-  getCreatorSession,
   startGithubLogin,
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
@@ -47,12 +47,16 @@ vi.mock("@/lib/creatorApi", () => {
     getChallengeShortlist: vi.fn(),
     getCreatorChallengeParticipants: vi.fn(),
     getCreatorChallengeStats: vi.fn(),
-    getCreatorSession: vi.fn(),
     startGithubLogin: vi.fn(),
     uploadChallengePrivateAssetRequestSchema: passthroughSchema,
     uploadPrivateAsset: vi.fn(),
   };
 });
+
+vi.mock("@/lib/authApi", () => ({
+  HUMAN_SESSION_CACHE_KEY: "human-session",
+  getHumanSession: vi.fn(),
+}));
 
 ensureDomEnvironment();
 const { cleanup, fireEvent, render, waitFor, within } = await import(
@@ -67,14 +71,14 @@ const getChallengeShortlistMock = getChallengeShortlist as Mock;
 const getCreatorChallengeParticipantsMock =
   getCreatorChallengeParticipants as Mock;
 const getCreatorChallengeStatsMock = getCreatorChallengeStats as Mock;
-const getCreatorSessionMock = getCreatorSession as Mock;
+const getHumanSessionMock = getHumanSession as Mock;
 const startGithubLoginMock = startGithubLogin as Mock;
 const uploadPrivateAssetMock = uploadPrivateAsset as Mock;
 
 describe("CreatorConsole", () => {
   beforeEach(() => {
     window.localStorage.clear();
-    getCreatorSessionMock.mockRejectedValue(new Error("not signed in"));
+    getHumanSessionMock.mockRejectedValue(new Error("not signed in"));
     startGithubLoginMock.mockResolvedValue({
       authorization_url: "https://github.com/login/oauth/authorize",
     });
@@ -163,7 +167,7 @@ describe("CreatorConsole", () => {
   });
 
   it("creates a review record with the loaded creator identity and CSRF token", async () => {
-    getCreatorSessionMock.mockResolvedValue({
+    getHumanSessionMock.mockResolvedValue({
       human_id: "11111111-1111-4111-8111-111111111111",
       github_user_id: 123,
       github_login: "octocat",
@@ -208,7 +212,7 @@ describe("CreatorConsole", () => {
   });
 
   it("rejects malformed PR numbers before creating a review record", async () => {
-    getCreatorSessionMock.mockResolvedValue({
+    getHumanSessionMock.mockResolvedValue({
       human_id: "11111111-1111-4111-8111-111111111111",
       github_user_id: 123,
       github_login: "octocat",
@@ -235,7 +239,7 @@ describe("CreatorConsole", () => {
   });
 
   it("uploads a private asset and refreshes the review record detail", async () => {
-    getCreatorSessionMock.mockResolvedValue(creatorSessionResponse);
+    getHumanSessionMock.mockResolvedValue(creatorSessionResponse);
     uploadPrivateAssetMock.mockResolvedValue(privateAssetResponse);
     getChallengeReviewRecordMock.mockResolvedValue(
       challengeReviewRecordWithPrivateAsset,
@@ -285,7 +289,7 @@ describe("CreatorConsole", () => {
   });
 
   it("uploads a shortlist revision and refreshes owner surfaces", async () => {
-    getCreatorSessionMock.mockResolvedValue(creatorSessionResponse);
+    getHumanSessionMock.mockResolvedValue(creatorSessionResponse);
     getChallengeShortlistMock.mockResolvedValue(shortlistWithAgent);
 
     const view = renderCreatorConsole();

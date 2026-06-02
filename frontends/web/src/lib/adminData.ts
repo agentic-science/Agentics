@@ -2,7 +2,7 @@
 
 import useSWR, { mutate } from "swr";
 import { adminFetchJson } from "@/lib/adminApi";
-import { getHumanSession } from "@/lib/authApi";
+import { getHumanSession, HUMAN_SESSION_CACHE_KEY } from "@/lib/authApi";
 import {
   type AdminCapacityResponse,
   type AdminChallengeListResponse,
@@ -48,9 +48,13 @@ export const emptyAdminData: AdminData = {
 
 /** Restores the cookie-backed admin browser session through SWR. */
 export function useAdminSession() {
-  const swr = useSWR<HumanSessionResponse>("admin-session", getHumanSession, {
-    shouldRetryOnError: false,
-  });
+  const swr = useSWR<HumanSessionResponse>(
+    HUMAN_SESSION_CACHE_KEY,
+    getHumanSession,
+    {
+      shouldRetryOnError: false,
+    },
+  );
   return {
     session: swr.data,
     error: swr.error,

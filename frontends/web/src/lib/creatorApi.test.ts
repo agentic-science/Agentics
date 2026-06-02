@@ -34,7 +34,7 @@ describe("creatorApi", () => {
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const response = await startGithubLogin("jack-deadbeef");
+    const response = await startGithubLogin("jack-deadbeef", "/creator");
 
     expect(response.authorization_url).toBe(
       "https://github.com/login/oauth/authorize?client_id=test&state=oauth-state",
@@ -43,7 +43,10 @@ describe("creatorApi", () => {
       "/api/auth/github/login",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ pioneer_code: "jack-deadbeef" }),
+        body: JSON.stringify({
+          pioneer_code: "jack-deadbeef",
+          return_to: "/creator",
+        }),
       }),
     );
     const requestedPath = fetchMock.mock.calls[0]?.[0];

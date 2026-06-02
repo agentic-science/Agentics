@@ -269,10 +269,14 @@ export function AdminConsole() {
       {hasAdminRole && activeTab === "identity" ? (
         <AdminIdentityPanel
           csrfToken={csrfToken}
+          currentHumanId={restoredSession.session?.human_id ?? null}
           humans={data.humans}
           serviceTokens={data.adminServiceTokens}
           locale={locale}
           onRefresh={refresh}
+          onSessionChanged={async () => {
+            await restoredSession.mutate();
+          }}
           onError={setError}
           onMessage={setMessage}
         />

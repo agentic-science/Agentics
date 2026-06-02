@@ -77,6 +77,7 @@ pub struct PioneerCodeUseRecord {
 pub struct RevokePioneerCodeOutcome {
     pub revoked_human_count: i64,
     pub revoked_human_session_count: i64,
+    pub revoked_admin_service_token_count: i64,
     pub revoked_agent_count: i64,
     pub revoked_token_count: i64,
 }
@@ -463,6 +464,26 @@ pub async fn revoke_pioneer_code(
         })?
     };
 
+    let revoked_admin_service_token_count = if human_ids.is_empty() {
+        0
+    } else {
+        let result = sqlx::query(
+            r#"
+            UPDATE admin_service_tokens
+            SET status = 'revoked',
+                revoked_at = COALESCE(revoked_at, NOW())
+            WHERE created_by_human_id = ANY($1::uuid[])
+              AND status = 'active'
+            "#,
+        )
+        .bind(&human_ids)
+        .execute(&mut *tx)
+        .await?;
+        i64::try_from(result.rows_affected()).map_err(|_| {
+            ServiceError::Internal("revoked admin service token count overflow".to_string())
+        })?
+    };
+
     let revoked_agent_count = if agent_ids.is_empty() {
         0
     } else {
@@ -504,6 +525,7 @@ pub async fn revoke_pioneer_code(
     Ok(RevokePioneerCodeOutcome {
         revoked_human_count,
         revoked_human_session_count,
+        revoked_admin_service_token_count,
         revoked_agent_count,
         revoked_token_count,
     })

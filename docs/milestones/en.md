@@ -464,7 +464,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 - **M0.2.5-WEB-4: Add creator and reviewer web surfaces**
   - Commit target: `web: add creator challenge review record console`
   - Scope: Add a GitHub OAuth-backed creator route for review record creation, private asset upload, and review record status inspection. Add an admin Review Records tab for validation, approval, rejection, publish, abandon, and stale cleanup. Creator pages may share the web app, but must not use the admin identity model.
-  - Test spec: Add rendering tests for the creator console and admin review record tab, and verify that unsafe creator requests use a creator CSRF token rather than admin credentials.
+  - Test spec: Add rendering tests for the creator console and admin review record tab, and verify that unsafe creator requests use a creator CSRF token rather than admin authorization.
 
 ### Challenge Creation
 
@@ -535,7 +535,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 - **M0.2.5-DGX-2: Add DGX Spark host preparation and profile checks**
   - Commit target: `ops: add dgx spark host preparation`
   - Scope: Define DGX-specific environment values, persistent storage layout, external reverse proxy and TLS assumptions, Docker socket and data-root settings, backup locations, and production Compose expectations. Include `AGENTICS_RUNNER_SECURITY_PROFILE=production`, `AGENTICS_HOST_PROBE_MODE=require`, `AGENTICS_WORKER_ACCELERATORS=gpu`, `AGENTICS_WORKER_GPU_PROBE_IMAGE`, Docker writable-layer quota probes when supported by the configured Docker daemon, and root-prepared XFS project-quota slots under per-phase loopback filesystem images for all solution setup/build/run writable mounts and evaluator prepare/score writable mounts.
-  - Test spec: Dry-run storage preparation, production Compose startup, health checks, Docker writable-layer quota probe when supported, per-phase loop-image writable-mount probe, and per-phase quota-slot exhaustion probe on DGX Spark with persistent storage and non-default admin credentials.
+  - Test spec: Dry-run storage preparation, production Compose startup, health checks, Docker writable-layer quota probe when supported, per-phase loop-image writable-mount probe, and per-phase quota-slot exhaustion probe on DGX Spark with persistent storage, configured GitHub OAuth bootstrap, and admin service-token rotation.
 
 - **M0.2.5-DGX-3: Run DGX Spark end-to-end smoke and benchmark calibration**
   - Commit target: `ops: add dgx spark smoke checklist`

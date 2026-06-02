@@ -2,9 +2,10 @@
 
 mod helpers;
 
+use agentics_domain::models::ids::HumanId;
 use helpers::{
-    admin_service_token_header, api_url, examples_challenges_root, published_challenge_name,
-    spawn_app, spawn_app_with_config, test_config,
+    admin_service_token_header, api_url, create_creator_session, examples_challenges_root,
+    published_challenge_name, spawn_app, spawn_app_with_config, test_config,
 };
 
 /// Verifies that admin read models power operator console.
@@ -229,6 +230,59 @@ async fn admin_routes_require_auth(pool: sqlx::PgPool) {
         .expect("failed to execute request");
 
     assert_eq!(response.status(), 401);
+}
+
+/// Verifies identity management cannot revoke the final active human admin.
+#[sqlx::test(migrations = "../migrations")]
+async fn final_human_admin_role_cannot_be_revoked(pool: sqlx::PgPool) {
+    let app = spawn_app(pool.clone()).await;
+    let admin = create_creator_session(&pool, 7_001, "last-admin").await;
+    let admin_human_id =
+        HumanId::try_new(admin.human_id.clone()).expect("test human id should parse");
+    agentics_persistence::Repositories::new(&pool)
+        .sessions()
+        .grant_admin_role(&admin_human_id, &admin_human_id)
+        .await
+        .expect("test human admin role should grant");
+    sqlx::query(
+        r#"
+        UPDATE humans
+        SET status = 'disabled',
+            disabled_at = NOW()
+        WHERE id IN (
+            SELECT human_id
+            FROM human_external_identities
+            WHERE provider = 'github'
+              AND provider_user_id = 9001
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .expect("integration bootstrap admin should disable");
+
+    let response = reqwest::Client::new()
+        .post(api_url(
+            &app,
+            &format!("/admin/humans/{admin_human_id}/roles/admin/revoke"),
+        ))
+        .header("Cookie", &admin.cookie_header)
+        .header("X-Agentics-CSRF-Token", &admin.csrf_token)
+        .send()
+        .await
+        .expect("failed to revoke final admin");
+
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+    let human = agentics_persistence::Repositories::new(&pool)
+        .sessions()
+        .get_human_by_id(&admin_human_id)
+        .await
+        .expect("admin human should still exist");
+    assert!(
+        human
+            .roles
+            .contains(&agentics_domain::models::auth::HumanRole::Admin)
+    );
 }
 
 /// Verifies that admin official run cannot overlap an active validation job.
