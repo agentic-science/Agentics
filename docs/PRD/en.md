@@ -249,9 +249,14 @@ Implemented MVP API surfaces:
 - `GET /api/creator/challenges/{challenge_name}/participants`
 - `POST /api/creator/challenges/{challenge_name}/shortlist-revisions`
 - `GET /api/creator/challenges/{challenge_name}/shortlist`
+- `GET /admin/challenge-drafts`
+- `POST /admin/challenge-drafts/cleanup`
+- `GET /admin/challenge-drafts/{id}/private-assets`
+- `POST /admin/challenge-drafts/{id}/validate`
 - `POST /admin/challenge-drafts/{id}/approve`
-- `POST /admin/challenge-drafts/{id}/publish`
 - `POST /admin/challenge-drafts/{id}/reject`
+- `POST /admin/challenge-drafts/{id}/abandon`
+- `POST /admin/challenge-drafts/{id}/publish`
 
 `GET /api/creator/session` is the creator console CSRF-token bootstrap route.
 Deferred surfaces include GitHub webhooks, creator draft listing, creator-side

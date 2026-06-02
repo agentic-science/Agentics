@@ -1,5 +1,6 @@
 import type { RenderResult } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import { SWRConfig } from "swr";
 import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -13,7 +14,10 @@ import {
   startGithubLogin,
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
-import type { CreatorChallengeDraftResponse } from "@/lib/schemas";
+import type {
+  ChallengePrivateAssetResponse,
+  CreatorChallengeDraftResponse,
+} from "@/lib/schemas";
 import messages from "../../../messages/en.json";
 import { ensureDomEnvironment } from "../../test/dom";
 
@@ -51,7 +55,7 @@ vi.mock("@/lib/creatorApi", () => {
 });
 
 ensureDomEnvironment();
-const { cleanup, fireEvent, render, waitFor } = await import(
+const { cleanup, fireEvent, render, waitFor, within } = await import(
   "@testing-library/react"
 );
 
@@ -214,14 +218,91 @@ describe("CreatorConsole", () => {
     ).toBeTruthy();
     expect(createChallengeDraftMock).not.toHaveBeenCalled();
   });
+
+  it("uploads a private asset and refreshes the draft detail", async () => {
+    getCreatorSessionMock.mockResolvedValue(creatorSessionResponse);
+    uploadPrivateAssetMock.mockResolvedValue(privateAssetResponse);
+    getChallengeDraftMock.mockResolvedValue(challengeDraftWithPrivateAsset);
+
+    const view = renderCreatorConsole();
+
+    expect(await view.findByText(/octocat/)).toBeTruthy();
+    const privateAssetForm = view
+      .getByText("Upload private asset")
+      .closest("form");
+    if (!privateAssetForm) {
+      throw new Error("private asset upload form was not rendered");
+    }
+    const privateAssetFields = within(privateAssetForm);
+    fireEvent.input(privateAssetFields.getByLabelText("Draft ID"), {
+      target: { value: challengeDraftResponse.id },
+    });
+    const fileInput =
+      privateAssetForm.querySelector<HTMLInputElement>('input[type="file"]');
+    if (!fileInput) {
+      throw new Error("private asset file input was not rendered");
+    }
+    fireEvent.change(fileInput, {
+      target: {
+        files: [new File(["asset-zip"], "official-seed-config.zip")],
+      },
+    });
+    fireEvent.submit(privateAssetForm);
+
+    await waitFor(() =>
+      expect(uploadPrivateAssetMock).toHaveBeenCalledWith(
+        challengeDraftResponse.id,
+        expect.objectContaining({
+          asset_name: "official-seed-config",
+          kind: "private_seeds",
+          required: true,
+          asset_base64: btoa("asset-zip"),
+        }),
+        creatorSessionResponse.csrf_token,
+      ),
+    );
+    expect(
+      await view.findByText("Uploaded private asset official-seed-config."),
+    ).toBeTruthy();
+    expect(view.getByText("eeeeeeeeeeeeeeee")).toBeTruthy();
+  });
+
+  it("uploads a shortlist revision and refreshes owner surfaces", async () => {
+    getCreatorSessionMock.mockResolvedValue(creatorSessionResponse);
+    getChallengeShortlistMock.mockResolvedValue(shortlistWithAgent);
+
+    const view = renderCreatorConsole();
+
+    expect(await view.findByText(/octocat/)).toBeTruthy();
+    fireEvent.input(view.getByLabelText("Published challenge name"), {
+      target: { value: "frontier-cs-example-challenge" },
+    });
+    fireEvent.click(view.getByRole("button", { name: "Upload delta" }));
+
+    await waitFor(() =>
+      expect(createChallengeShortlistRevisionMock).toHaveBeenCalledWith(
+        "frontier-cs-example-challenge",
+        { agent_ids_to_add: ["11111111-1111-4111-8111-111111111111"] },
+        creatorSessionResponse.csrf_token,
+      ),
+    );
+    expect(
+      await view.findByText(
+        "Uploaded shortlist revision 33333333-3333-4333-8333-333333333333.",
+      ),
+    ).toBeTruthy();
+    expect(await view.findByText("Ada Agent")).toBeTruthy();
+  });
 });
 
 /** Builds the creator console test fixture with translations. */
 function renderCreatorConsole() {
   return render(
-    <NextIntlClientProvider locale="en" messages={messages}>
-      <CreatorConsole />
-    </NextIntlClientProvider>,
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+      <NextIntlClientProvider locale="en" messages={messages}>
+        <CreatorConsole />
+      </NextIntlClientProvider>
+    </SWRConfig>,
   );
 }
 
@@ -279,3 +360,42 @@ const challengeDraftResponse = {
   created_at: "2026-05-15T00:00:00Z",
   updated_at: "2026-05-15T00:00:00Z",
 } satisfies CreatorChallengeDraftResponse;
+
+const creatorSessionResponse = {
+  agent_id: "11111111-1111-4111-8111-111111111111",
+  github_user_id: 123,
+  github_login: "octocat",
+  csrf_token: "csrf-token",
+  expires_at: "2026-05-16T00:00:00Z",
+};
+
+const privateAssetResponse = {
+  id: "55555555-5555-4555-8555-555555555555",
+  draft_id: challengeDraftResponse.id,
+  asset_name: "official-seed-config",
+  kind: "private_seeds",
+  required: true,
+  storage_key:
+    "challenge-drafts/44444444-4444-4444-8444-444444444444/private-assets/official-seed-config.zip",
+  uploader_agent_id: "11111111-1111-4111-8111-111111111111",
+  size_bytes: 9,
+  sha256: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  created_at: "2026-05-15T00:00:00Z",
+} satisfies ChallengePrivateAssetResponse;
+
+const challengeDraftWithPrivateAsset = {
+  ...challengeDraftResponse,
+  private_assets: [privateAssetResponse],
+} satisfies CreatorChallengeDraftResponse;
+
+const shortlistWithAgent = {
+  challenge_name: "frontier-cs-example-challenge",
+  items: [
+    {
+      agent_id: "11111111-1111-4111-8111-111111111111",
+      agent_display_name: "Ada Agent",
+      added_by_agent_id: "22222222-2222-4222-8222-222222222222",
+      created_at: "2026-05-15T00:00:00Z",
+    },
+  ],
+};

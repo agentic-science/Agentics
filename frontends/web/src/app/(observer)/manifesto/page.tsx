@@ -9,6 +9,7 @@ import remarkGfm from "remark-gfm";
 import type { CommunicationAnimation } from "@/components/timeline/communicationGraph";
 import {
   CommunicationPatternCarousel,
+  type CommunicationPatternCarouselLabels,
   type CommunicationPatternItem,
 } from "./CommunicationPatternCarousel";
 import { ManifestoToc } from "./ManifestoToc";
@@ -596,12 +597,22 @@ function ResearchLoopCards({
 }
 
 function CommunicationPatternShowcase({ copy }: { copy: ManifestoCopy }) {
+  const carouselLabels = {
+    carouselLabel: copy.showcase.carouselLabel,
+    dotLegend: copy.showcase.dotLegend,
+    graphAriaSuffix: copy.showcase.graphAriaSuffix,
+    showPatternTemplate: copy.showcase.showPatternTemplate,
+  } satisfies CommunicationPatternCarouselLabels;
+
   return (
     <section className={styles.showcase} aria-labelledby="pattern-showcase">
       <div className={styles.showcaseHeader}>
         <h2 id="pattern-showcase">{copy.showcase.heading}</h2>
       </div>
-      <CommunicationPatternCarousel items={getShowcaseItems(copy)} />
+      <CommunicationPatternCarousel
+        items={getShowcaseItems(copy)}
+        labels={carouselLabels}
+      />
     </section>
   );
 }

@@ -2,7 +2,6 @@
 
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import Link from "next/link";
-import useSWR from "swr";
 import { ChallengeCatalogCard } from "@/components/ChallengeCatalogCard";
 import {
   addKeywordHref,
@@ -11,14 +10,11 @@ import {
   challengeCatalogApiQuery,
   challengeCatalogHref,
 } from "@/lib/challengeCatalog";
-import { livePollingErrorMessage, logLivePoll } from "@/lib/livePollingLog";
-import { publicFetchJson } from "@/lib/publicApi";
 import {
   type ChallengeListResponse,
   challengeListResponseSchema,
 } from "@/lib/schemas";
-
-const liveRefreshIntervalMs = 10_000;
+import { usePublicLiveJson } from "@/lib/usePublicLiveJson";
 
 type ChallengeCatalogLabels = {
   empty: string;
@@ -35,32 +31,6 @@ function challengeCatalogSignature(challenges: ChallengeListResponse) {
     challenges.offset,
     ...challenges.items.map((challenge) => challenge.challenge_name),
   ].join(":");
-}
-
-async function fetchChallengeCatalog(
-  path: string,
-): Promise<ChallengeListResponse> {
-  logLivePoll("challenge catalog", { event: "poll", path });
-
-  try {
-    const challenges = await publicFetchJson(path, challengeListResponseSchema);
-    logLivePoll("challenge catalog", {
-      event: "updated",
-      has_more: challenges.has_more,
-      items: challenges.items.length,
-      offset: challenges.offset,
-      path,
-      total: challenges.total_count,
-    });
-    return challenges;
-  } catch (error) {
-    logLivePoll("challenge catalog", {
-      error: livePollingErrorMessage(error),
-      event: "error",
-      path,
-    });
-    throw error;
-  }
 }
 
 /** Renders live-updating challenge catalog results and pagination. */
@@ -83,9 +53,17 @@ export function ChallengeCatalogLive({
     page,
     filters,
   )}`;
-  const { data, error, isValidating } = useSWR(apiPath, fetchChallengeCatalog, {
+  const { data, error, isValidating } = usePublicLiveJson({
     fallbackData: initialChallenges,
-    refreshInterval: liveRefreshIntervalMs,
+    path: apiPath,
+    schema: challengeListResponseSchema,
+    surface: "challenge catalog",
+    updatedDetails: (challenges) => ({
+      has_more: challenges.has_more,
+      items: challenges.items.length,
+      offset: challenges.offset,
+      total: challenges.total_count,
+    }),
   });
   const challenges = data ?? initialChallenges;
   const hasLoadedRemoteData = data !== initialChallenges;

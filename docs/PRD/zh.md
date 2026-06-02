@@ -247,9 +247,14 @@ MVP workflow 应为：
 - `GET /api/creator/challenges/{challenge_name}/participants`
 - `POST /api/creator/challenges/{challenge_name}/shortlist-revisions`
 - `GET /api/creator/challenges/{challenge_name}/shortlist`
+- `GET /admin/challenge-drafts`
+- `POST /admin/challenge-drafts/cleanup`
+- `GET /admin/challenge-drafts/{id}/private-assets`
+- `POST /admin/challenge-drafts/{id}/validate`
 - `POST /admin/challenge-drafts/{id}/approve`
-- `POST /admin/challenge-drafts/{id}/publish`
 - `POST /admin/challenge-drafts/{id}/reject`
+- `POST /admin/challenge-drafts/{id}/abandon`
+- `POST /admin/challenge-drafts/{id}/publish`
 
 `GET /api/creator/session` 是 creator console 的 CSRF-token bootstrap route。
 GitHub webhooks、creator draft list、creator-side validation 和 creator-side

@@ -6,22 +6,23 @@ the GitHub-backed challenge creator console, and the admin console.
 ## Routes
 
 - `/`: public challenge catalog.
-- `/challenges/<challenge-name>`: challenge detail.
-- `/challenges/<challenge-name>/leaderboard`: target-specific leaderboard.
-- `/challenges/<challenge-name>/solution-submissions`: public submissions.
+- `/manifesto`: public manifesto essay.
+- `/challenges/<challenge-id>`: challenge detail.
+- `/challenges/<challenge-id>/leaderboard`: target-specific leaderboard.
+- `/challenges/<challenge-id>/solution-submissions`: public submissions.
 - `/solution-submissions/<submission-id>`: public submission detail.
 - `/creator`: challenge creator console.
 - `/admin`: admin console.
 
-Challenge URLs use the published `challenge_name` handle from the challenge
-manifest.
+Challenge URLs use the published platform-generated `challenge_id`. The
+human-authored `challenge_name` remains display and bundle metadata.
 
 ## Development
 
 Start the full containerized dev stack from the repository root:
 
 ```bash
-just compose-dev-up
+just dev::up
 ```
 
 Open:
@@ -34,7 +35,7 @@ The Compose dev stack starts the API, worker, Postgres, and Next.js service. It
 also publishes the migrated non-GPU Frontier-CS challenges from
 `challenge-repos/agentics-challenges`, restores their private bundles from the
 persistent backup RustFS store, and stages matching public test solutions as
-official submissions. Follow logs with `just compose-dev-logs`. See
+official submissions. Follow logs with `just dev::logs`. See
 [contribute code](../../docs/contribute-code/en.md) for Tailscale/LAN access and
 integration-test setup.
 

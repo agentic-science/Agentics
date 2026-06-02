@@ -1,16 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import useSWR from "swr";
 import { ChallengeCatalogCard } from "@/components/ChallengeCatalogCard";
-import { livePollingErrorMessage, logLivePoll } from "@/lib/livePollingLog";
-import { publicFetchJson } from "@/lib/publicApi";
 import {
   type ChallengeListResponse,
   challengeListResponseSchema,
 } from "@/lib/schemas";
-
-const liveRefreshIntervalMs = 10_000;
+import { usePublicLiveJson } from "@/lib/usePublicLiveJson";
 
 function challengePreviewSignature(challenges: ChallengeListResponse) {
   return [
@@ -18,31 +14,6 @@ function challengePreviewSignature(challenges: ChallengeListResponse) {
     challenges.has_more ? "more" : "end",
     ...challenges.items.map((challenge) => challenge.challenge_name),
   ].join(":");
-}
-
-async function fetchChallengePreview(
-  path: string,
-): Promise<ChallengeListResponse> {
-  logLivePoll("home challenge preview", { event: "poll", path });
-
-  try {
-    const challenges = await publicFetchJson(path, challengeListResponseSchema);
-    logLivePoll("home challenge preview", {
-      event: "updated",
-      has_more: challenges.has_more,
-      items: challenges.items.length,
-      path,
-      total: challenges.total_count,
-    });
-    return challenges;
-  } catch (error) {
-    logLivePoll("home challenge preview", {
-      error: livePollingErrorMessage(error),
-      event: "error",
-      path,
-    });
-    throw error;
-  }
 }
 
 /** Renders the live-updating home challenge preview grid. */
@@ -64,9 +35,16 @@ export function HomeChallengePreview({
   previewLimit: number;
 }) {
   const apiPath = `/api/public/challenges?limit=${previewLimit}&offset=0`;
-  const { data, error, isValidating } = useSWR(apiPath, fetchChallengePreview, {
+  const { data, error, isValidating } = usePublicLiveJson({
     fallbackData: initialChallenges,
-    refreshInterval: liveRefreshIntervalMs,
+    path: apiPath,
+    schema: challengeListResponseSchema,
+    surface: "home challenge preview",
+    updatedDetails: (challenges) => ({
+      has_more: challenges.has_more,
+      items: challenges.items.length,
+      total: challenges.total_count,
+    }),
   });
   const challenges = data ?? initialChallenges;
   const hasLoadedRemoteData = data !== initialChallenges;

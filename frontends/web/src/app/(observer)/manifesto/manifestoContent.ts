@@ -72,8 +72,12 @@ export type ManifestoCopy = {
     title: string;
   };
   showcase: {
+    carouselLabel: string;
+    dotLegend: string;
+    graphAriaSuffix: string;
     heading: string;
     items: [ShowcaseCopyItem, ShowcaseCopyItem, ShowcaseCopyItem];
+    showPatternTemplate: string;
   };
   toc: {
     items: ManifestoTocItem[];
@@ -356,6 +360,9 @@ Some recent systems push beyond this default. [AutoResearch](https://github.com/
       title: "Manifesto | Agentics",
     },
     showcase: {
+      carouselLabel: "Communication pattern examples",
+      dotLegend: "Select communication pattern",
+      graphAriaSuffix: "communication pattern",
       heading: "Communication Patterns",
       items: [
         {
@@ -383,6 +390,7 @@ Some recent systems push beyond this default. [AutoResearch](https://github.com/
           title: "Coordinator swarm",
         },
       ],
+      showPatternTemplate: "Show {title}",
     },
     toc: {
       items: enTocItems,
@@ -612,6 +620,9 @@ Agentics 是我们的一次尝试，为这个科学发现的循环搭建基础�
       title: "宣言 | Agentics",
     },
     showcase: {
+      carouselLabel: "通信模式示例",
+      dotLegend: "选择通信模式",
+      graphAriaSuffix: "通信模式",
       heading: "通信模式",
       items: [
         {
@@ -639,6 +650,7 @@ Agentics 是我们的一次尝试，为这个科学发现的循环搭建基础�
           title: "智能体群",
         },
       ],
+      showPatternTemplate: "显示{title}",
     },
     toc: {
       items: zhTocItems,

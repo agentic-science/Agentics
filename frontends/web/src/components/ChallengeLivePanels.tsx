@@ -2,20 +2,16 @@
 
 import { BarChart3, GitCommit } from "lucide-react";
 import Link from "next/link";
-import useSWR from "swr";
 import { RankBadge } from "@/components/RankBadge";
 import { formatDate } from "@/lib/format";
-import { livePollingErrorMessage, logLivePoll } from "@/lib/livePollingLog";
 import { formatDeclaredMetric, type MetricSchema } from "@/lib/metrics";
-import { publicFetchJson } from "@/lib/publicApi";
 import {
   type LeaderboardResponse,
   leaderboardResponseSchema,
   type PublicSolutionSubmissionListResponse,
   publicSolutionSubmissionListResponseSchema,
 } from "@/lib/schemas";
-
-const liveRefreshIntervalMs = 10_000;
+import { usePublicLiveJson } from "@/lib/usePublicLiveJson";
 
 type ChallengeLivePanelLabels = {
   empty: string;
@@ -40,56 +36,6 @@ function leaderboardSignature(leaderboard: LeaderboardResponse) {
         `${entry.agent_id}:${entry.best_solution_submission_id}:${entry.official_primary_metric?.value ?? "none"}`,
     )
     .join(":");
-}
-
-async function fetchPublicSubmissions(
-  path: string,
-): Promise<PublicSolutionSubmissionListResponse> {
-  logLivePoll("challenge submissions", { event: "poll", path });
-
-  try {
-    const submissions = await publicFetchJson(
-      path,
-      publicSolutionSubmissionListResponseSchema,
-    );
-    logLivePoll("challenge submissions", {
-      event: "updated",
-      items: submissions.items.length,
-      path,
-      total: submissions.total_count,
-    });
-    return submissions;
-  } catch (error) {
-    logLivePoll("challenge submissions", {
-      error: livePollingErrorMessage(error),
-      event: "error",
-      path,
-    });
-    throw error;
-  }
-}
-
-async function fetchPublicLeaderboard(
-  path: string,
-): Promise<LeaderboardResponse> {
-  logLivePoll("challenge leaderboard", { event: "poll", path });
-
-  try {
-    const leaderboard = await publicFetchJson(path, leaderboardResponseSchema);
-    logLivePoll("challenge leaderboard", {
-      event: "updated",
-      items: leaderboard.items.length,
-      path,
-    });
-    return leaderboard;
-  } catch (error) {
-    logLivePoll("challenge leaderboard", {
-      error: livePollingErrorMessage(error),
-      event: "error",
-      path,
-    });
-    throw error;
-  }
 }
 
 /** Renders live-updating latest submissions and top leaderboard panels. */
@@ -121,22 +67,29 @@ export function ChallengeLivePanels({
   const leaderboardPath = `/api/public/challenges/${encodeURIComponent(
     challengeName,
   )}/leaderboard?target=${encodedTarget}&limit=5`;
-  const { data: submissionsData, isValidating: submissionsRefreshing } = useSWR(
-    submissionsArePublic ? submissionsPath : null,
-    fetchPublicSubmissions,
-    {
+  const { data: submissionsData, isValidating: submissionsRefreshing } =
+    usePublicLiveJson({
+      enabled: submissionsArePublic,
       fallbackData: initialSubmissions,
-      refreshInterval: liveRefreshIntervalMs,
-    },
-  );
-  const { data: leaderboardData, isValidating: leaderboardRefreshing } = useSWR(
-    leaderboardIsPublic ? leaderboardPath : null,
-    fetchPublicLeaderboard,
-    {
+      path: submissionsPath,
+      schema: publicSolutionSubmissionListResponseSchema,
+      surface: "challenge submissions",
+      updatedDetails: (submissions) => ({
+        items: submissions.items.length,
+        total: submissions.total_count,
+      }),
+    });
+  const { data: leaderboardData, isValidating: leaderboardRefreshing } =
+    usePublicLiveJson({
+      enabled: leaderboardIsPublic,
       fallbackData: initialLeaderboard,
-      refreshInterval: liveRefreshIntervalMs,
-    },
-  );
+      path: leaderboardPath,
+      schema: leaderboardResponseSchema,
+      surface: "challenge leaderboard",
+      updatedDetails: (leaderboard) => ({
+        items: leaderboard.items.length,
+      }),
+    });
   const submissions = submissionsData ?? initialSubmissions;
   const leaderboard = leaderboardData ?? initialLeaderboard;
 
@@ -209,18 +162,28 @@ export function ChallengeLivePanels({
             <BarChart3 className="w-4 h-4 text-[var(--accent-primary-text)]" />
             {labels.topLeaderboard}
           </h3>
-          <Link
-            href={`/challenges/${challengeName}/leaderboard?target=${encodedTarget}`}
-            className="text-body-sm text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
-          >
-            {labels.viewAll}
-          </Link>
+          {leaderboardIsPublic ? (
+            <Link
+              href={`/challenges/${challengeName}/leaderboard?target=${encodedTarget}`}
+              className="text-body-sm text-[var(--text-muted)] hover:text-[var(--accent-primary-text)] transition-colors"
+            >
+              {labels.viewAll}
+            </Link>
+          ) : (
+            <span className="text-body-sm text-[var(--text-muted)]">
+              {labels.hidden}
+            </span>
+          )}
         </div>
         <div
           className="flex flex-col gap-2 live-refresh-frame"
           key={leaderboardSignature(leaderboard)}
         >
-          {leaderboard.items.length === 0 ? (
+          {!leaderboardIsPublic ? (
+            <p className="text-[var(--text-muted)] text-body-sm">
+              {labels.hidden}
+            </p>
+          ) : leaderboard.items.length === 0 ? (
             <p className="text-[var(--text-muted)] text-body-sm">
               {labels.empty}
             </p>

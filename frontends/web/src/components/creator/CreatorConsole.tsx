@@ -51,6 +51,14 @@ import type {
 } from "@/lib/schemas";
 
 const LAST_DRAFT_STORAGE_KEY = "agentics.creator.last_draft_id";
+type CreatorPendingAction =
+  | "createDraft"
+  | "inspectDraft"
+  | "loadOwner"
+  | "refreshIdentity"
+  | "signIn"
+  | "uploadAsset"
+  | "uploadShortlist";
 
 /** Renders the creator console component. */
 export function CreatorConsole() {
@@ -97,7 +105,8 @@ export function CreatorConsole() {
     useState<ChallengeShortlistRevisionResponse | null>(null);
   const [ownerScope, setOwnerScope] = useState<CreatorOwnerScope | null>(null);
   const [pioneerCode, setPioneerCode] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [pendingAction, setPendingAction] =
+    useState<CreatorPendingAction | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const displayCreatorError = (error: unknown) =>
@@ -144,20 +153,20 @@ export function CreatorConsole() {
 
   /** Handles sign in for the current session. */
   const signIn = async () => {
-    setLoading(true);
+    setPendingAction("signIn");
     setError(null);
     try {
       const response = await startGithubLogin(pioneerCode.trim());
       window.location.href = response.authorization_url;
     } catch (e) {
       setError(displayCreatorError(e));
-      setLoading(false);
+      setPendingAction(null);
     }
   };
 
   /** Refreshes identity from the backend. */
   const refreshIdentity = async () => {
-    setLoading(true);
+    setPendingAction("refreshIdentity");
     setError(null);
     try {
       const session = await creatorSession.mutate();
@@ -171,7 +180,7 @@ export function CreatorConsole() {
       setCreator(null);
       setError(displayCreatorError(e));
     } finally {
-      setLoading(false);
+      setPendingAction(null);
     }
   };
 
@@ -225,7 +234,7 @@ export function CreatorConsole() {
       return;
     }
 
-    setLoading(true);
+    setPendingAction("createDraft");
     setError(null);
     try {
       const response = await createChallengeDraft(
@@ -238,7 +247,7 @@ export function CreatorConsole() {
     } catch (e) {
       setError(displayCreatorError(e));
     } finally {
-      setLoading(false);
+      setPendingAction(null);
     }
   };
 
@@ -250,7 +259,7 @@ export function CreatorConsole() {
       return;
     }
 
-    setLoading(true);
+    setPendingAction("inspectDraft");
     setError(null);
     try {
       const response = await getChallengeDraft(draftLookupId.trim());
@@ -260,7 +269,7 @@ export function CreatorConsole() {
     } catch (e) {
       setError(displayCreatorError(e));
     } finally {
-      setLoading(false);
+      setPendingAction(null);
     }
   };
 
@@ -276,7 +285,7 @@ export function CreatorConsole() {
       return;
     }
 
-    setLoading(true);
+    setPendingAction("uploadAsset");
     setError(null);
     try {
       const request = {
@@ -306,7 +315,7 @@ export function CreatorConsole() {
     } catch (e) {
       setError(displayCreatorError(e));
     } finally {
-      setLoading(false);
+      setPendingAction(null);
     }
   };
 
@@ -317,7 +326,7 @@ export function CreatorConsole() {
       return;
     }
 
-    setLoading(true);
+    setPendingAction("loadOwner");
     setError(null);
     try {
       const challengeName = ownerForm.challengeName.trim();
@@ -332,7 +341,7 @@ export function CreatorConsole() {
     } catch (e) {
       setError(displayCreatorError(e));
     } finally {
-      setLoading(false);
+      setPendingAction(null);
     }
   };
 
@@ -365,7 +374,7 @@ export function CreatorConsole() {
       return;
     }
 
-    setLoading(true);
+    setPendingAction("uploadShortlist");
     setError(null);
     try {
       const challengeName = ownerForm.challengeName.trim();
@@ -387,7 +396,7 @@ export function CreatorConsole() {
     } catch (e) {
       setError(displayCreatorError(e));
     } finally {
-      setLoading(false);
+      setPendingAction(null);
     }
   };
 
@@ -419,7 +428,9 @@ export function CreatorConsole() {
           </div>
           <CreatorIdentityPanel
             creator={creator}
-            loading={loading}
+            loading={
+              pendingAction === "signIn" || pendingAction === "refreshIdentity"
+            }
             pioneerCode={pioneerCode}
             onPioneerCodeChange={setPioneerCode}
             onSignIn={signIn}
@@ -440,21 +451,21 @@ export function CreatorConsole() {
           <DraftCreateForm
             draftForm={draftForm}
             setDraftForm={setDraftForm}
-            loading={loading}
+            loading={pendingAction === "createDraft"}
             onSubmit={submitDraft}
           />
 
           <DraftInspectForm
             draftLookupId={draftLookupId}
             setDraftLookupId={setDraftLookupId}
-            loading={loading}
+            loading={pendingAction === "inspectDraft"}
             onSubmit={inspectDraft}
           />
 
           <PrivateAssetUploadForm
             assetForm={assetForm}
             setAssetForm={setAssetForm}
-            loading={loading}
+            loading={pendingAction === "uploadAsset"}
             onSubmit={uploadAsset}
           />
         </div>
@@ -467,14 +478,14 @@ export function CreatorConsole() {
           <OwnerStatsForm
             ownerForm={ownerForm}
             setOwnerForm={setOwnerForm}
-            loading={loading}
+            loading={pendingAction === "loadOwner"}
             onLoad={loadOwnerSurfaces}
           />
 
           <ShortlistUploadForm
             ownerForm={ownerForm}
             setOwnerForm={setOwnerForm}
-            loading={loading}
+            loading={pendingAction === "uploadShortlist"}
             onSubmit={uploadShortlist}
           />
         </div>

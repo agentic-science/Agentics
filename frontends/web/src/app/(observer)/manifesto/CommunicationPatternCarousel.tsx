@@ -18,12 +18,21 @@ export type CommunicationPatternItem = {
   title: string;
 };
 
+export type CommunicationPatternCarouselLabels = {
+  carouselLabel: string;
+  dotLegend: string;
+  graphAriaSuffix: string;
+  showPatternTemplate: string;
+};
+
 const slideDurationMs = 8000;
 
 export function CommunicationPatternCarousel({
   items,
+  labels,
 }: {
   items: readonly CommunicationPatternItem[];
+  labels: CommunicationPatternCarouselLabels;
 }) {
   const reduceMotion = useReducedMotion();
   const [activeIndex, setActiveIndex] = useState(0);
@@ -53,7 +62,7 @@ export function CommunicationPatternCarousel({
     <section
       className={styles.showcaseCarousel}
       aria-roledescription="carousel"
-      aria-label="Communication pattern examples"
+      aria-label={labels.carouselLabel}
     >
       <div className={styles.showcaseTrack}>
         {items.map((item, index) => {
@@ -72,7 +81,7 @@ export function CommunicationPatternCarousel({
                   <div className={styles.visualCanvas}>
                     <CommunicationTimelineGraph
                       key={`${item.title}-${cycle}`}
-                      ariaLabel={`${item.title} communication pattern`}
+                      ariaLabel={`${item.title} ${labels.graphAriaSuffix}`}
                       className={styles.showcaseGraph}
                       graph={item.graph}
                       layout={{
@@ -102,13 +111,14 @@ export function CommunicationPatternCarousel({
         })}
       </div>
       <fieldset className={styles.showcaseDots}>
-        <legend className={styles.showcaseDotsLabel}>
-          Select communication pattern
-        </legend>
+        <legend className={styles.showcaseDotsLabel}>{labels.dotLegend}</legend>
         {items.map((item, index) => (
           <button
             aria-current={index === activeIndex ? "true" : undefined}
-            aria-label={`Show ${item.title}`}
+            aria-label={labels.showPatternTemplate.replace(
+              "{title}",
+              item.title,
+            )}
             className={`${styles.showcaseDot} ${
               index === activeIndex ? styles.showcaseDotActive : ""
             }`}

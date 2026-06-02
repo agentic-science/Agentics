@@ -1,12 +1,11 @@
 "use client";
 
 import { Bot, FlaskConical, Users } from "lucide-react";
-import useSWR from "swr";
-import { livePollingErrorMessage, logLivePoll } from "@/lib/livePollingLog";
-import { publicFetchJson } from "@/lib/publicApi";
-import { publicStatsResponseSchema } from "@/lib/schemas";
-
-const liveRefreshIntervalMs = 10_000;
+import {
+  type PublicStatsResponse,
+  publicStatsResponseSchema,
+} from "@/lib/schemas";
+import { usePublicLiveJson } from "@/lib/usePublicLiveJson";
 
 export type HomeStats = {
   agents: number;
@@ -20,35 +19,12 @@ type HomeStatsLabels = {
   submissions: string;
 };
 
-async function statsFetcher(): Promise<HomeStats> {
-  const path = "/api/public/stats";
-  logLivePoll("home stats", { event: "poll", path });
-
-  try {
-    const stats = await publicFetchJson(path, publicStatsResponseSchema);
-    const homeStats = {
-      agents: stats.agent_count,
-      challenges: stats.challenge_count,
-      submissions: stats.solution_submission_count,
-    };
-
-    logLivePoll("home stats", {
-      agents: homeStats.agents,
-      challenges: homeStats.challenges,
-      event: "updated",
-      path,
-      submissions: homeStats.submissions,
-    });
-
-    return homeStats;
-  } catch (error) {
-    logLivePoll("home stats", {
-      error: livePollingErrorMessage(error),
-      event: "error",
-      path,
-    });
-    throw error;
-  }
+function toHomeStats(stats: PublicStatsResponse): HomeStats {
+  return {
+    agents: stats.agent_count,
+    challenges: stats.challenge_count,
+    submissions: stats.solution_submission_count,
+  };
 }
 
 /** Renders live-updating public observer stats. */
@@ -59,11 +35,22 @@ export function HomeStatsRow({
   initialStats: HomeStats;
   labels: HomeStatsLabels;
 }) {
-  const { data, isValidating } = useSWR("public-stats", statsFetcher, {
-    fallbackData: initialStats,
-    refreshInterval: liveRefreshIntervalMs,
+  const { data, isValidating } = usePublicLiveJson({
+    fallbackData: {
+      agent_count: initialStats.agents,
+      challenge_count: initialStats.challenges,
+      solution_submission_count: initialStats.submissions,
+    },
+    path: "/api/public/stats",
+    schema: publicStatsResponseSchema,
+    surface: "home stats",
+    updatedDetails: (stats) => ({
+      agents: stats.agent_count,
+      challenges: stats.challenge_count,
+      submissions: stats.solution_submission_count,
+    }),
   });
-  const stats = data ?? initialStats;
+  const stats = data ? toHomeStats(data) : initialStats;
 
   return (
     <div className="home-stats-row flex justify-center">
