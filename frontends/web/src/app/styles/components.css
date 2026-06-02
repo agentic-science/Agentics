@@ -31,6 +31,29 @@
     border: 1px solid var(--border-medium);
   }
 
+  .brand-lockup {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-2);
+  }
+
+  .brand-mark {
+    display: inline-flex;
+    width: 1.65rem;
+    height: 1.65rem;
+    flex: 0 0 auto;
+    background: url("/brand/logo-lattice.svg") center / contain no-repeat;
+    transition: transform var(--duration-fast) var(--ease-default);
+  }
+
+  html[data-theme="light"] .brand-mark {
+    background-image: url("/brand/logo-lattice-light.svg");
+  }
+
+  .brand-lockup:hover .brand-mark {
+    transform: scale(1.04);
+  }
+
   /* ===================================================================
    Cards
    =================================================================== */

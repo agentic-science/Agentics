@@ -16,11 +16,11 @@ export default async function ObserverLayout({
       <header className="glass sticky top-0 z-50">
         <div className="site-header-main">
           <nav className="flex items-center justify-between h-11">
-            <Link href="/" className="flex items-center gap-2 group">
+            <Link href="/" className="brand-lockup group">
+              <span className="brand-mark" aria-hidden="true" />
               <span className="font-sans text-xl font-bold tracking-tight text-fg group-hover:text-action-fg transition-colors">
                 Agentics
               </span>
-              <span className="w-1.5 h-1.5 rounded-full bg-action" />
             </Link>
 
             <div className="hidden sm:flex items-center gap-5 text-body-sm font-medium text-fg-muted">

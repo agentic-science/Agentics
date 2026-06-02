@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="120 100 340 340" role="img" aria-label="Agentics frontier lattice logo for light surfaces">
+
+  <g fill="none" stroke="#475569" stroke-opacity="0.2" stroke-width="1">
+    <path d="M160 160 H400 M160 240 H400 M160 320 H400 M160 400 H400" />
+    <path d="M160 160 V400 M240 160 V400 M320 160 V400 M400 160 V400" />
+  </g>
+
+  <g fill="none" stroke="#0f766e" stroke-linecap="round" stroke-linejoin="round" opacity="0.08">
+    <path d="M240 400 L240 320" stroke-width="14" />
+    <path d="M320 320 L400 240" stroke-width="14" />
+    <path d="M240 240 L320 160" stroke-width="14" />
+    <path d="M160 400 L240 400" stroke-width="10" />
+    <path d="M160 160 L240 160" stroke-width="10" />
+    <path d="M240 320 L320 320" stroke-width="10" />
+    <path d="M320 240 L320 320" stroke-width="10" />
+    <path d="M320 240 L400 160" stroke-width="10" />
+    <path d="M160 240 L240 240" stroke-width="10" />
+  </g>
+
+  <g fill="none" stroke="#0f766e" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M240 400 L240 320" stroke-width="8" />
+    <path d="M320 320 L400 240" stroke-width="8" />
+    <path d="M240 240 L320 160" stroke-width="8" />
+    <path d="M160 400 L240 400" stroke-width="5" opacity="0.68" />
+    <path d="M160 160 L240 160" stroke-width="5" opacity="0.68" />
+    <path d="M240 320 L320 320" stroke-width="5" opacity="0.68" />
+    <path d="M320 240 L320 320" stroke-width="5" opacity="0.68" />
+    <path d="M320 240 L400 160" stroke-width="5" opacity="0.68" />
+    <path d="M160 240 L240 240" stroke-width="5" opacity="0.68" />
+  </g>
+
+  <g fill="#0f172a" opacity="0.06">
+    <circle cx="240" cy="160" r="18" />
+    <circle cx="160" cy="240" r="18" />
+    <circle cx="240" cy="240" r="18" />
+    <circle cx="320" cy="240" r="18" />
+    <circle cx="240" cy="320" r="18" />
+    <circle cx="320" cy="320" r="18" />
+    <circle cx="160" cy="400" r="18" />
+    <circle cx="240" cy="400" r="18" />
+  </g>
+
+  <g>
+    <circle cx="240" cy="160" r="11" fill="#0f172a" />
+    <circle cx="160" cy="240" r="11" fill="#0f172a" />
+    <circle cx="240" cy="240" r="11" fill="#0f172a" />
+    <circle cx="320" cy="240" r="11" fill="#0f172a" />
+    <circle cx="240" cy="320" r="11" fill="#0f172a" />
+    <circle cx="320" cy="320" r="11" fill="#0f172a" />
+    <circle cx="160" cy="400" r="11" fill="#0f172a" />
+    <circle cx="240" cy="400" r="11" fill="#0f172a" />
+  </g>
+
+  <g fill="#64748b" opacity="0.62">
+    <circle cx="160" cy="160" r="9" />
+    <circle cx="320" cy="160" r="9" />
+    <circle cx="400" cy="240" r="9" />
+    <circle cx="160" cy="320" r="9" />
+    <circle cx="400" cy="320" r="9" />
+    <circle cx="320" cy="400" r="9" />
+    <circle cx="400" cy="400" r="9" />
+  </g>
+
+  <g>
+    <circle cx="400" cy="160" r="34" fill="#d97706" opacity="0.1" />
+    <circle cx="400" cy="160" r="20" fill="#d97706" opacity="0.14" />
+    <circle cx="400" cy="160" r="10" fill="#d97706" />
+  </g>
+</svg>
