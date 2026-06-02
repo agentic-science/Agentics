@@ -9,7 +9,9 @@ use agentics_domain::models::request::{
 use anyhow::Result;
 
 use super::OutputFormat;
-use super::format::{format_score, pretty_json, quantile_value, render_table, status_label};
+use super::format::{
+    format_score, format_warnings, pretty_json, quantile_value, render_table, status_label,
+};
 
 /// Renders challenge list for user-facing output.
 pub(crate) fn render_challenge_list(
@@ -357,7 +359,7 @@ pub(crate) fn render_score_distribution(
                 })
                 .collect::<Vec<_>>();
             Ok(format!(
-                "challenge: {}\ntarget: {}\nmetric: {}\ncount: {}\nmin: {}\nmax: {}\nmean: {}\nquantiles:\n{}\nhistogram:\n{}",
+                "challenge: {}\ntarget: {}\nmetric: {}\ncount: {}\nmin: {}\nmax: {}\nmean: {}\nwarnings:\n{}\nquantiles:\n{}\nhistogram:\n{}",
                 response.challenge_name,
                 response.target,
                 response.metric_name,
@@ -374,6 +376,7 @@ pub(crate) fn render_score_distribution(
                     .mean
                     .map(format_score)
                     .unwrap_or_else(|| "none".to_string()),
+                format_warnings(&response.warnings),
                 render_table(&["Q", "VALUE"], &quantiles),
                 render_table(&["LOWER", "UPPER", "COUNT"], &buckets)
             ))

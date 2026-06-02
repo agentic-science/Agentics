@@ -223,6 +223,11 @@ Public leaderboard and ranking-context DTOs do not include raw
 backend-internal and are used only to compute ordering and allowed score
 distributions.
 
+Ranking context and score distribution responses include a `warnings` array
+when their result basis is truncated by the platform row cap. Clients should
+display or preserve those warnings instead of treating truncated counts,
+percentiles, quantiles, or histograms as complete-population statistics.
+
 Score distributions may expose built-in ranking fields such as `rank_score`
 and `best_rank_score`. A challenge's primary metric is public in score
 distributions only when that metric is declared with `visibility: "public"` in

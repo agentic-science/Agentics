@@ -112,9 +112,7 @@ fn execution_declares_official_runs(execution: &ChallengeExecutionSpec) -> bool 
         ChallengeExecutionSpec::PipedStdio(spec) => {
             spec.official_session.is_some() || spec.official_evaluation_setup.is_some()
         }
-        ChallengeExecutionSpec::CoexecutedBenchmark(spec) => {
-            spec.official_evaluation_setup.is_some()
-        }
+        ChallengeExecutionSpec::CoexecutedBenchmark(_) => true,
     }
 }
 

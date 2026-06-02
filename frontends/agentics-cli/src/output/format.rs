@@ -32,6 +32,17 @@ pub(super) fn format_optional_metric(metric: Option<&MetricValue>) -> String {
         .unwrap_or_else(|| "none".to_string())
 }
 
+pub(super) fn format_warnings(warnings: &[String]) -> String {
+    if warnings.is_empty() {
+        return "none".to_string();
+    }
+    warnings
+        .iter()
+        .map(|warning| format!("- {warning}"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub(super) fn first_aggregate_metric(evaluation: &EvaluationDto) -> Option<&MetricValue> {
     evaluation.aggregate_metrics.first()
 }

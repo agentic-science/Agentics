@@ -8,9 +8,10 @@ use agentics_config::Config;
 use agentics_domain::storage::StorageKey;
 use agentics_storage::{StorageWriteIntent, build_storage, pack_directory_to_tar};
 use helpers::{
-    api_url, copy_dir_all, examples_challenges_root, grid_routing_solution_zip_base64,
-    published_challenge_name, run_worker_once, sample_sum_solution, solution_zip_base64,
-    solution_zip_base64_with_scripts, spawn_app_with_config, test_config, zip_project_zip_base64,
+    api_url, basic_auth_header, copy_dir_all, examples_challenges_root,
+    grid_routing_solution_zip_base64, published_challenge_name, run_worker_once,
+    sample_sum_solution, solution_zip_base64, solution_zip_base64_with_scripts,
+    spawn_app_with_config, test_config, zip_project_zip_base64,
 };
 
 /// Creates validation disabled challenge after validating caller inputs.

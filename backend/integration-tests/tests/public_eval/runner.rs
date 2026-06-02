@@ -193,6 +193,105 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     );
 }
 
+/// Verifies submitter logs follow official-first result projection after admin official runs.
+#[sqlx::test(migrations = "../migrations")]
+async fn submitter_logs_prefer_official_redaction_after_validation_run(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let mut config = test_config(storage.path(), &examples_challenges_root());
+    config.quotas.max_active_official_jobs = 1;
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+    let sample_sum_id = published_challenge_name(&pool, "sample-sum").await;
+    let admin_auth = basic_auth_header(
+        &config.auth.admin_username,
+        config.expose_admin_password_for_http_basic(),
+    );
+
+    let register_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agents/register"))
+        .json(&serde_json::json!({ "display_name": "log-projection-agent" }))
+        .send()
+        .await
+        .expect("failed to register agent")
+        .json()
+        .await
+        .expect("failed to decode register response");
+    let token = register_response["token"].as_str().expect("missing token");
+
+    let validation_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agent/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&serde_json::json!({
+            "challenge_name": &sample_sum_id,
+            "target": "linux-arm64-cpu",
+            "artifact_base64": solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']")),
+            "explanation": "validation first, official later"
+        }))
+        .send()
+        .await
+        .expect("failed to create validation run")
+        .error_for_status()
+        .expect("validation run should be accepted")
+        .json()
+        .await
+        .expect("failed to decode validation response");
+    let solution_submission_id = validation_response["id"]
+        .as_str()
+        .expect("missing validation submission id");
+    run_worker_once(&pool, &config).await;
+
+    let validation_logs: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/agent/solution-submissions/{solution_submission_id}/logs"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .send()
+        .await
+        .expect("failed to get validation logs")
+        .json()
+        .await
+        .expect("failed to decode validation logs");
+    assert_eq!(validation_logs["availability"], "available");
+    assert!(
+        validation_logs["content"].is_string(),
+        "validation logs should be visible to the submitter"
+    );
+
+    let official_run = client
+        .post(api_url(
+            &app,
+            &format!("/admin/solution-submissions/{solution_submission_id}/official-run"),
+        ))
+        .header("Authorization", &admin_auth)
+        .header("X-Agentics-Admin-Automation", "true")
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .expect("failed to queue official run");
+    assert_eq!(official_run.status(), 202);
+    run_worker_once(&pool, &config).await;
+
+    let official_logs: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/agent/solution-submissions/{solution_submission_id}/logs"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-Agentics-Admin-Automation", "true")
+        .send()
+        .await
+        .expect("failed to get official-first logs")
+        .json()
+        .await
+        .expect("failed to decode official-first logs");
+    assert_eq!(official_logs["availability"], "redacted_private_official");
+    assert!(official_logs["runner_log_storage_key"].is_null());
+    assert!(official_logs["content"].is_null());
+}
+
 /// Verifies that the worker completes a piped-stdio official submission.
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_completes_piped_stdio_solution_submission(pool: sqlx::PgPool) {
@@ -430,7 +529,7 @@ async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {
     assert_eq!(validation["evaluation"]["eval_type"], "validation");
     assert_eq!(validation["evaluation"]["rank_score"], 1.0);
 
-    let create_response: serde_json::Value = client
+    let create_response = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
         .header("X-Agentics-Admin-Automation", "true")
@@ -442,10 +541,17 @@ async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {
         }))
         .send()
         .await
-        .expect("failed to create solution submission")
+        .expect("failed to create solution submission");
+    let create_status = create_response.status();
+    let create_response: serde_json::Value = create_response
         .json()
         .await
         .expect("failed to decode create solution submission response");
+    assert_eq!(
+        create_status,
+        reqwest::StatusCode::CREATED,
+        "unexpected coexecuted solution submission response: {create_response:#}"
+    );
     let solution_submission_id = create_response["id"]
         .as_str()
         .expect("missing solution submission id");

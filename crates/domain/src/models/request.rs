@@ -316,6 +316,8 @@ pub struct RankingContextResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub entry: Option<LeaderboardEntryDto>,
     pub nearby_entries: Vec<RankedLeaderboardEntryDto>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 /// Redacted or owner-visible result report for a solution submission.
@@ -354,6 +356,8 @@ pub struct ScoreDistributionResponse {
     pub mean: Option<f64>,
     pub quantiles: Vec<ScoreDistributionQuantileDto>,
     pub histogram: Vec<ScoreDistributionBucketDto>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub warnings: Vec<String>,
 }
 
 /// Challenge-owner statistics for one challenge and optional target.

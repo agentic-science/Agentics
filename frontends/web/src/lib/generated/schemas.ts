@@ -3187,6 +3187,7 @@ export const rankingContextResponseSchema = z
           "Leaderboard row with its rank in one explicit challenge and target scope.",
         ),
     ),
+    warnings: z.array(z.string()).optional(),
   })
   .strict()
   .describe(
@@ -3264,6 +3265,7 @@ export const scoreDistributionResponseSchema = z
         .strict()
         .describe("One histogram bucket in a score distribution response."),
     ),
+    warnings: z.array(z.string()).optional(),
   })
   .strict()
   .describe(

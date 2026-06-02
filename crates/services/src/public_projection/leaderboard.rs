@@ -14,6 +14,9 @@ use super::visibility::{
     load_challenge_policy, public_visible_solution_submission,
 };
 
+const MAX_RANKING_CONTEXT_LEADERBOARD_ROWS: usize = 10_000;
+const RANKING_CONTEXT_TRUNCATION_WARNING: &str = "ranking context is limited to the first 10000 leaderboard rows; totals and percentiles are based on that truncated set";
+
 /// Fetch a submission's owner-visible ranking context in an explicit scope.
 pub async fn get_owner_solution_submission_ranking_context(
     pool: &sqlx::PgPool,
@@ -91,13 +94,19 @@ pub async fn build_ranking_context(
         .ok_or(ServiceError::NotFound)?;
     let spec: ChallengeBundleSpec = serde_json::from_value(challenge.spec_json.clone())
         .map_err(|e| ServiceError::Internal(format!("stored challenge spec is invalid: {e}")))?;
-    let entries = repos
+    let fetch_limit = i64::try_from(MAX_RANKING_CONTEXT_LEADERBOARD_ROWS + 1)
+        .map_err(|_| ServiceError::Internal("leaderboard fetch limit overflow".to_string()))?;
+    let mut entries = repos
         .leaderboard()
-        .list_entries(challenge_name, target, 10_000, &spec)
+        .list_entries(challenge_name, target, fetch_limit, &spec)
         .await?
         .into_iter()
         .map(|record| present_leaderboard_entry(record, &spec))
         .collect::<Vec<_>>();
+    let truncated = entries.len() > MAX_RANKING_CONTEXT_LEADERBOARD_ROWS;
+    if truncated {
+        entries.truncate(MAX_RANKING_CONTEXT_LEADERBOARD_ROWS);
+    }
     let total_ranked = i64::try_from(entries.len())
         .map_err(|_| ServiceError::Internal("leaderboard entry count overflow".to_string()))?;
     let ranked_entries = entries
@@ -162,6 +171,11 @@ pub async fn build_ranking_context(
         is_agent_best: entry.is_some(),
         entry,
         nearby_entries,
+        warnings: if truncated {
+            vec![RANKING_CONTEXT_TRUNCATION_WARNING.to_string()]
+        } else {
+            Vec::new()
+        },
     })
 }
 

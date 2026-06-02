@@ -89,29 +89,29 @@ fn submitter_visible_runner_log_storage_key(
     state: &AppState,
     solution_submission: &SolutionSubmissionRecord,
 ) -> (Option<StorageKey>, SolutionSubmissionLogAvailability) {
+    if let Some(evaluation) = solution_submission.official_evaluation.as_ref() {
+        if state.config.runner.official_log_redaction == OfficialLogRedactionMode::Always {
+            return (None, SolutionSubmissionLogAvailability::RedactedByConfig);
+        }
+
+        if solution_submission
+            .challenge_spec
+            .official_evaluation_may_expose_private_material()
+        {
+            return (
+                None,
+                SolutionSubmissionLogAvailability::RedactedPrivateOfficial,
+            );
+        }
+
+        return available_or_missing(evaluation.runner_log_storage_key.clone());
+    }
+
     if let Some(evaluation) = solution_submission.validation_evaluation.as_ref() {
         return available_or_missing(evaluation.runner_log_storage_key.clone());
     }
 
-    let Some(evaluation) = solution_submission.official_evaluation.as_ref() else {
-        return (None, SolutionSubmissionLogAvailability::NotPersisted);
-    };
-
-    if state.config.runner.official_log_redaction == OfficialLogRedactionMode::Always {
-        return (None, SolutionSubmissionLogAvailability::RedactedByConfig);
-    }
-
-    if solution_submission
-        .challenge_spec
-        .official_evaluation_may_expose_private_material()
-    {
-        return (
-            None,
-            SolutionSubmissionLogAvailability::RedactedPrivateOfficial,
-        );
-    }
-
-    available_or_missing(evaluation.runner_log_storage_key.clone())
+    (None, SolutionSubmissionLogAvailability::NotPersisted)
 }
 
 /// Convert an optional persisted log key into its response availability state.

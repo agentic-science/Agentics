@@ -10,8 +10,8 @@ use serde_json::{Map, Value, json};
 
 use super::OutputFormat;
 use super::format::{
-    first_aggregate_metric, format_optional_metric, format_score, pretty_json, render_table,
-    status_label,
+    first_aggregate_metric, format_optional_metric, format_score, format_warnings, pretty_json,
+    render_table, status_label,
 };
 use crate::package::SolutionPackage;
 
@@ -469,7 +469,7 @@ pub(crate) fn render_ranking_context(
                 })
                 .collect::<Vec<_>>();
             Ok(format!(
-                "solution_submission: {}\nchallenge: {}\ntarget: {}\nrank: {}\ntotal_ranked: {}\npercentile: {}\nis_agent_best: {}\nnearby:\n{}",
+                "solution_submission: {}\nchallenge: {}\ntarget: {}\nrank: {}\ntotal_ranked: {}\npercentile: {}\nis_agent_best: {}\nwarnings:\n{}\nnearby:\n{}",
                 response.solution_submission_id,
                 response.challenge_name,
                 response.target,
@@ -483,6 +483,7 @@ pub(crate) fn render_ranking_context(
                     .map(format_score)
                     .unwrap_or_else(|| "none".to_string()),
                 response.is_agent_best,
+                format_warnings(&response.warnings),
                 render_table(&["RANK", "AGENT", "SUBMISSION", "SCORE"], &nearby)
             ))
         }

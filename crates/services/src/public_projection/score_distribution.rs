@@ -13,6 +13,9 @@ use super::metrics::{
 use super::visibility::{ensure_visibility_allows_public, load_challenge_policy};
 use stats::{build_histogram, build_quantiles};
 
+const MAX_SCORE_DISTRIBUTION_ROWS: usize = 10_000;
+const SCORE_DISTRIBUTION_TRUNCATION_WARNING: &str = "score distribution is limited to the first 10000 leaderboard rows; count, quantiles, histogram, and summary statistics are based on that truncated set";
+
 /// Fetch a visible score distribution for a metric in one explicit target scope.
 pub async fn get_score_distribution(
     pool: &sqlx::PgPool,
@@ -23,16 +26,24 @@ pub async fn get_score_distribution(
     let (challenge, spec) = load_challenge_policy(pool, challenge_name).await?;
     ensure_visibility_allows_public(spec.visibility.score_distribution, &spec)?;
     let target = public_api::resolve_required_public_target(&spec, target)?;
-    let entries = Repositories::new(pool)
+    let fetch_limit = i64::try_from(MAX_SCORE_DISTRIBUTION_ROWS + 1).map_err(|_| {
+        ServiceError::Internal("score distribution fetch limit overflow".to_string())
+    })?;
+    let mut entries = Repositories::new(pool)
         .leaderboard()
-        .list_entries_with_metric_payloads(challenge_name, &target, 10_000, &spec)
+        .list_entries_with_metric_payloads(challenge_name, &target, fetch_limit, &spec)
         .await?;
+    let truncated = entries.len() > MAX_SCORE_DISTRIBUTION_ROWS;
+    if truncated {
+        entries.truncate(MAX_SCORE_DISTRIBUTION_ROWS);
+    }
     build_score_distribution_response(
         challenge.challenge_name,
         target,
         metric_name,
         &spec,
         entries,
+        truncated,
     )
 }
 
@@ -43,6 +54,7 @@ pub(super) fn build_score_distribution_response(
     metric_name: MetricName,
     spec: &ChallengeBundleSpec,
     entries: Vec<LeaderboardMetricEntry>,
+    truncated: bool,
 ) -> Result<ScoreDistributionResponse> {
     ensure_metric_is_publicly_distributable(&metric_name, spec)?;
     let mut values = entries
@@ -83,6 +95,11 @@ pub(super) fn build_score_distribution_response(
         mean,
         quantiles,
         histogram,
+        warnings: if truncated {
+            vec![SCORE_DISTRIBUTION_TRUNCATION_WARNING.to_string()]
+        } else {
+            Vec::new()
+        },
     })
 }
 
@@ -109,7 +126,7 @@ mod tests {
     use agentics_error::ServiceError;
     use agentics_persistence::LeaderboardMetricEntry;
 
-    use super::build_score_distribution_response;
+    use super::{SCORE_DISTRIBUTION_TRUNCATION_WARNING, build_score_distribution_response};
 
     /// Parse a valid challenge name for a focused score-distribution test.
     fn challenge_name(value: &str) -> ChallengeName {
@@ -296,12 +313,14 @@ mod tests {
             metric_name("latency_ms"),
             &spec,
             vec![entry(20.0, -20.0), entry(50.0, -50.0)],
+            false,
         )
         .expect("score distribution should build");
 
         assert_eq!(response.count, 2);
         assert_eq!(response.min, Some(20.0));
         assert_eq!(response.max, Some(50.0));
+        assert!(response.warnings.is_empty());
     }
 
     /// Verifies rank-score distributions intentionally use comparator values.
@@ -314,12 +333,17 @@ mod tests {
             metric_name("rank_score"),
             &spec,
             vec![entry(20.0, -20.0), entry(50.0, -50.0)],
+            true,
         )
         .expect("score distribution should build");
 
         assert_eq!(response.count, 2);
         assert_eq!(response.min, Some(-50.0));
         assert_eq!(response.max, Some(-20.0));
+        assert_eq!(
+            response.warnings,
+            vec![SCORE_DISTRIBUTION_TRUNCATION_WARNING.to_string()]
+        );
     }
 
     /// Verifies official-only primary metrics are not distributable through the public endpoint.
@@ -334,6 +358,7 @@ mod tests {
             metric_name("latency_ms"),
             &spec,
             vec![entry(20.0, -20.0)],
+            false,
         )
         .expect_err("official-only primary metric should be rejected");
         assert!(matches!(error, ServiceError::Forbidden(_)));
@@ -344,6 +369,7 @@ mod tests {
             metric_name("official_score"),
             &spec,
             vec![entry(20.0, -20.0)],
+            false,
         )
         .expect_err("official_score built-in is no longer exposed");
         assert!(matches!(error, ServiceError::Forbidden(_)));

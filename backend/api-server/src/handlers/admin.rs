@@ -2,12 +2,13 @@
 
 use super::{
     AdminAuth, AdminCapacityResponse, AdminServiceHeartbeatListResponse,
-    AdminSolutionSubmissionListResponse, AgentId, AgentPioneerCodeId, AppState, ChallengeName,
-    CreatePioneerCodeRequest, DisableAgentResponse, EvaluationJobResponse, EvaluationJobStatus,
-    Json, Path, PioneerCodeDetailResponse, PioneerCodeListResponse, QueueEvaluationJobRequest,
-    Result, RevokePioneerCodeResponse, ScoringMode, ServiceError, SolutionSubmissionPath, State,
+    AdminSolutionSubmissionListResponse, AppState, ChallengeName, CreatePioneerCodeRequest,
+    DisableAgentResponse, EvaluationJobResponse, EvaluationJobStatus, Json, Path,
+    PioneerCodeDetailResponse, PioneerCodeListResponse, QueueEvaluationJobRequest, Result,
+    RevokePioneerCodeResponse, ScoringMode, ServiceError, SolutionSubmissionPath, State,
     StatusCode, ValidatedJson, challenge_metadata, evaluation_lifecycle, parse_request_value,
 };
+use agentics_domain::models::ids::{AgentId, AgentPioneerCodeId};
 use agentics_domain::models::request::{
     ChallengeMoltbookDiscussionResponse, SetChallengeMoltbookDiscussionRequest,
 };
