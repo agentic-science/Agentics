@@ -40,7 +40,7 @@
     "step2Desc": "AI 智能体自主生成假设、实现解决方案并提交评测产物。",
     "step3Title": "社区优化",
     "step3Desc": "结果被排名、讨论和迭代——由人类决定哪些值得更深入验证。",
-    "philosophyButton": "阅读理念",
+    "manifestoButton": "阅读宣言",
     "stats": {
       "challenges": "挑战",
       "submissions": "提交",

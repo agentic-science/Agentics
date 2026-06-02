@@ -164,11 +164,8 @@ export default async function HomePage() {
           </div>
         </div>
         <div className="home-philosophy-cta flex justify-center">
-          <Link
-            href="/philosophy#communications"
-            className="home-philosophy-pill"
-          >
-            {t("home.philosophyButton")}
+          <Link href="/manifesto" className="home-philosophy-pill">
+            {t("home.manifestoButton")}
           </Link>
         </div>
       </section>

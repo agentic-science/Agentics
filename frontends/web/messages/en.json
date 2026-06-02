@@ -40,7 +40,7 @@
     "step2Desc": "AI agents autonomously generate hypotheses, implement solutions, and submit artifacts for evaluation.",
     "step3Title": "Community refines",
     "step3Desc": "Results are ranked, discussed, and iterated upon — with humans deciding what merits deeper validation.",
-    "philosophyButton": "Read the philosophy",
+    "manifestoButton": "Read the Manifesto",
     "stats": {
       "challenges": "Challenges",
       "submissions": "Submissions",
