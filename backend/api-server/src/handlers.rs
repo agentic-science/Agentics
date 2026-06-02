@@ -19,14 +19,11 @@ use serde::Deserialize;
 use url::form_urlencoded;
 
 use crate::error::ApiResult as Result;
-use agentics_config::AgentRegistrationMode;
 use agentics_contracts::validation::public_api::{
     self, DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT, PublicPagination,
 };
 use agentics_domain::models::evaluation::{EvaluationJobStatus, ScoringMode};
-use agentics_domain::models::ids::{AgentId, AgentPioneerCodeId, AgentTokenId};
 use agentics_domain::models::names::{ChallengeKeyword, ChallengeName, MetricName, TargetName};
-use agentics_domain::models::pioneer_codes::PioneerCode;
 use agentics_domain::models::request::{
     AdminCapacityResponse, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
     CreatePioneerCodeRequest, CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse,
@@ -37,9 +34,7 @@ use agentics_domain::models::request::{
     SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
 use agentics_error::ServiceError;
-use agentics_persistence::{
-    ChallengeCatalogFilters, PioneerCodeRegistrationKind, RegisterAgentInput, Repositories,
-};
+use agentics_persistence::ChallengeCatalogFilters;
 use agentics_services::auth;
 use agentics_services::challenge_metadata;
 use agentics_services::evaluation_lifecycle::{self, QueueEvaluationJobRequest};
@@ -47,8 +42,6 @@ use agentics_services::public_projection;
 use agentics_services::solution_submissions::{self, CreateSolutionSubmissionServiceRequest};
 
 use crate::extractors::{AdminAuth, AgentAuth, SolutionSubmissionPath, ValidatedJson};
-use crate::pioneer_code_security::{is_invalid_pioneer_code, reject_failed_pioneer_code};
-use crate::presenters;
 use crate::state::AppState;
 
 /// Parses a boundary string into a domain type and converts validation failures to API errors.
@@ -88,58 +81,9 @@ pub async fn register_agent(
     State(state): State<AppState>,
     ValidatedJson(body): ValidatedJson<RegisterAgentRequest>,
 ) -> Result<(StatusCode, Json<RegisterAgentResponse>)> {
-    let max_active_agents = i64::from(state.config.quotas.max_active_agents);
-
-    let token = auth::create_agent_token();
-    let token_hash = auth::hash_agent_token(&token);
-
-    let repos = Repositories::new(&state.db);
-    let input = RegisterAgentInput {
-        agent_id: AgentId::generate(),
-        token_id: AgentTokenId::generate(),
-        token_hash,
-        display_name: body.display_name.trim().to_string(),
-        agent_description: body.agent_description.trim().to_string(),
-        model_info: body.model_info,
-    };
-
-    let agent = match state.config.agent_registration_mode() {
-        AgentRegistrationMode::PioneerCode => {
-            let Some(code) = body.pioneer_code.as_ref() else {
-                return Err(reject_failed_pioneer_code().await.into());
-            };
-            let Ok(code) = PioneerCode::try_new(code.expose_secret().to_string()) else {
-                return Err(reject_failed_pioneer_code().await.into());
-            };
-            let code_hash = auth::hash_opaque_token(code.expose_secret());
-            match repos
-                .agents()
-                .register_agent_with_pioneer_code(
-                    &input,
-                    &code_hash,
-                    max_active_agents,
-                    PioneerCodeRegistrationKind::AgentApi,
-                )
-                .await
-            {
-                Ok(agent) => agent,
-                Err(error) if is_invalid_pioneer_code(&error) => {
-                    return Err(reject_failed_pioneer_code().await.into());
-                }
-                Err(error) => return Err(error.into()),
-            }
-        }
-        AgentRegistrationMode::Public => {
-            repos
-                .agents()
-                .register_agent(&input, max_active_agents)
-                .await?
-        }
-    };
-
     Ok((
         StatusCode::CREATED,
-        Json(presenters::present_register_agent(&agent, &token)?),
+        Json(auth::register_agent(&state.db, &state.config, body).await?),
     ))
 }
 

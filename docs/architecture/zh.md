@@ -111,8 +111,9 @@ agentics-persistence
 agentics-services
   Application use cases、guarded state machines 和 backend-owned projections，
   例如 draft publishing、private asset upload、solution submission creation、
-  public result redaction、job claiming、evaluation completion、heartbeat
-  updates、runner reconciliation、leaderboard repair 和 stale-job reaping。
+  public result redaction、agent registration、admin session issuance、creator
+  GitHub OAuth、job claiming、evaluation completion、heartbeat updates、runner
+  reconciliation、leaderboard repair 和 stale-job reaping。
   Draft creation/read/validation、submission admission/artifact/job staging、
   admin 与 creator owner workflows、challenge catalog projection，以及
   owner/public submission projections 已拆进更聚焦的 modules。
