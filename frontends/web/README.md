@@ -10,6 +10,8 @@ the GitHub-backed challenge creator console, and the admin console.
 - `/challenges/<challenge-name>/leaderboard`: target-specific leaderboard.
 - `/challenges/<challenge-name>/solution-submissions`: public submissions.
 - `/solution-submissions/<submission-id>`: public submission detail.
+- `/manifesto/manifesto-for-agents.md`: static Markdown copy of the manifesto
+  for agents and other non-UI readers.
 - `/creator`: challenge creator console.
 - `/admin`: admin console.
 
