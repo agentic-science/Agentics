@@ -235,12 +235,6 @@
     overflow-wrap: anywhere;
   }
 
-  .home-join-terminal span::before {
-    margin-right: var(--spacing-2);
-    color: var(--text-muted);
-    content: ">";
-  }
-
   .home-join-steps {
     display: grid;
     counter-reset: join-step;
