@@ -120,6 +120,79 @@ function renderBrandText(children: ReactNode) {
   });
 }
 
+function renderMarkdownText(children: ReactNode) {
+  return Children.map(children, (child) => {
+    if (typeof child !== "string") {
+      return child;
+    }
+
+    const nodes: ReactNode[] = [];
+    let text = child;
+    const keySeed =
+      child
+        .slice(0, 64)
+        .replace(/[^a-zA-Z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "text";
+
+    if (text.startsWith("* ")) {
+      nodes.push(
+        <sup
+          className={`${styles.noteAsterisk} ${styles.noteAsteriskLeading}`}
+          key={`note-asterisk-${keySeed}`}
+        >
+          *
+        </sup>,
+      );
+      text = text.slice(2);
+    } else if (text.startsWith("*")) {
+      nodes.push(
+        <sup
+          className={`${styles.noteAsterisk} ${styles.noteAsteriskLeading}`}
+          key={`note-asterisk-${keySeed}`}
+        >
+          *
+        </sup>,
+      );
+      text = text.slice(1);
+    }
+
+    const markerPattern =
+      /(Agentics|continual learning weights\*|持续学习权重\*)/g;
+    let lastIndex = 0;
+
+    for (const match of text.matchAll(markerPattern)) {
+      const matchIndex = match.index;
+      if (matchIndex > lastIndex) {
+        nodes.push(text.slice(lastIndex, matchIndex));
+      }
+
+      const marker = match[0];
+      if (marker === "Agentics") {
+        nodes.push(<BrandAgentics key={`agentics-${keySeed}-${matchIndex}`} />);
+      } else {
+        const label = marker.slice(0, -1);
+        nodes.push(label);
+        nodes.push(
+          <sup
+            className={`${styles.noteAsterisk} ${styles.noteAsteriskInline}`}
+            key={`inline-asterisk-${keySeed}-${matchIndex}`}
+          >
+            *
+          </sup>,
+        );
+      }
+
+      lastIndex = matchIndex + marker.length;
+    }
+
+    if (lastIndex < text.length) {
+      nodes.push(text.slice(lastIndex));
+    }
+
+    return nodes;
+  });
+}
+
 const markdownComponents = {
   a({ children, href }) {
     const isExternal = href?.startsWith("http");
@@ -153,22 +226,26 @@ const markdownComponents = {
     );
   },
   h2({ children }) {
-    return <h2 id={slugifyHeading(children)}>{renderBrandText(children)}</h2>;
+    return (
+      <h2 id={slugifyHeading(children)}>{renderMarkdownText(children)}</h2>
+    );
   },
   h3({ children }) {
-    return <h3 id={slugifyHeading(children)}>{renderBrandText(children)}</h3>;
+    return (
+      <h3 id={slugifyHeading(children)}>{renderMarkdownText(children)}</h3>
+    );
   },
   p({ children }) {
-    return <p>{renderBrandText(children)}</p>;
+    return <p>{renderMarkdownText(children)}</p>;
   },
   li({ children }) {
-    return <li>{renderBrandText(children)}</li>;
+    return <li>{renderMarkdownText(children)}</li>;
   },
   td({ children }) {
-    return <td>{renderBrandText(children)}</td>;
+    return <td>{renderMarkdownText(children)}</td>;
   },
   th({ children }) {
-    return <th>{renderBrandText(children)}</th>;
+    return <th>{renderMarkdownText(children)}</th>;
   },
 } satisfies Components;
 
@@ -361,8 +438,7 @@ export default async function ManifestoPage() {
             <span className={styles.introHighlight}>{copy.hero.highlight}</span>
             {copy.hero.introPunctuation}
           </p>
-          <p>{renderBrandText(copy.hero.childrenDay)}</p>
-          <p>{copy.hero.loopIntro}</p>
+          <p>{renderBrandText(copy.hero.loopIntro)}</p>
           <ResearchLoopCards ariaLabel={copy.aria.researchLoop} copy={copy} />
           <p>{renderBrandText(copy.hero.join)}</p>
           <div className={styles.heroActions}>

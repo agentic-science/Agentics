@@ -304,6 +304,13 @@ a.brandAgentics:hover {
 }
 
 .articleBody {
+  --side-note-gap: clamp(1.5rem, 4vw, 4rem);
+  --side-note-width: clamp(
+    12rem,
+    calc((100vw - 48rem - (2 * var(--side-note-gap))) / 2),
+    17rem
+  );
+
   display: flex;
   grid-column: 2;
   min-width: 0;
@@ -328,16 +335,6 @@ a.brandAgentics:hover {
 
 .chainIntroText p:last-child {
   margin-bottom: 0;
-}
-
-.chainIntroText blockquote:first-of-type p:first-child::before {
-  display: inline-block;
-  margin-right: 0.06em;
-  color: var(--accent-primary-text);
-  font-size: 0.72em;
-  line-height: 0;
-  content: "*";
-  transform: translateY(-0.32em);
 }
 
 .chainOutroText p:first-child {
@@ -434,6 +431,22 @@ a.brandAgentics:hover {
   font-weight: 700;
 }
 
+.noteAsterisk {
+  color: var(--accent-primary-text);
+  font-family: var(--font-mono);
+  font-size: 0.72em;
+  font-weight: 650;
+  line-height: 0;
+}
+
+.noteAsteriskInline {
+  margin-left: 0.08em;
+}
+
+.noteAsteriskLeading {
+  margin-right: 0.12em;
+}
+
 .markdownImage {
   display: block;
   width: min(100%, 25.5rem);
@@ -458,6 +471,26 @@ a.brandAgentics:hover {
   margin-bottom: 0;
 }
 
+@media (min-width: 1280px) {
+  .markdown blockquote {
+    float: right;
+    width: var(--side-note-width);
+    margin: 0 calc(-1 * (var(--side-note-width) + var(--side-note-gap)))
+      var(--spacing-5) var(--spacing-5);
+    padding: var(--spacing-3) var(--spacing-4);
+    border-left-width: 1.5px;
+    border-radius: 0;
+    font-size: var(--text-body-sm);
+    line-height: 1.6;
+    transform: translateY(-100%);
+  }
+
+  .markdown blockquote p {
+    font-size: var(--text-body-sm);
+    line-height: 1.6;
+  }
+}
+
 .markdown pre {
   margin: clamp(1.25rem, 2.4vw, 1.75rem) 0;
 }
@@ -465,6 +498,12 @@ a.brandAgentics:hover {
 .markdown table {
   display: block;
   overflow-x: auto;
+}
+
+.markdown tbody td:first-child {
+  background: color-mix(in srgb, var(--accent-secondary-500), transparent 92%);
+  color: var(--text-primary);
+  font-weight: 700;
 }
 
 .equations {
