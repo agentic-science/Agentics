@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { NavConsoleDropdown } from "@/components/NavConsoleDropdown";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 /** Renders the observer layout component. */
@@ -30,6 +31,13 @@ export default async function ObserverLayout({
               >
                 {t("nav.challenges")}
               </Link>
+              <NavConsoleDropdown
+                copy={{
+                  adminPanel: t("nav.adminPanel"),
+                  consoles: t("nav.consoles"),
+                  creatorConsole: t("nav.creatorConsole"),
+                }}
+              />
               <Link
                 href="/manifesto"
                 className="hover:text-fg transition-colors"

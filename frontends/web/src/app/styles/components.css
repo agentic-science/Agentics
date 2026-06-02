@@ -94,6 +94,92 @@
     background-image: url("/github-logos/GitHub_Invertocat_Black.svg");
   }
 
+  .nav-dropdown {
+    position: relative;
+  }
+
+  .nav-dropdown-trigger {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-1);
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font: inherit;
+    list-style: none;
+    transition: color var(--duration-fast) var(--ease-default);
+  }
+
+  .nav-dropdown-trigger:hover,
+  .nav-dropdown[data-open="true"] .nav-dropdown-trigger {
+    color: var(--text-primary);
+  }
+
+  .nav-dropdown-trigger:focus-visible {
+    outline: 2px solid var(--accent-primary-500);
+    outline-offset: 4px;
+    border-radius: var(--radius-sm);
+  }
+
+  .nav-dropdown-trigger::-webkit-details-marker {
+    display: none;
+  }
+
+  .nav-dropdown-trigger::after {
+    width: 0.42rem;
+    height: 0.42rem;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    content: "";
+    transform: translateY(-0.12rem) rotate(45deg);
+    transition: transform var(--duration-fast) var(--ease-default);
+  }
+
+  .nav-dropdown[data-open="true"] .nav-dropdown-trigger::after {
+    transform: translateY(0.08rem) rotate(225deg);
+  }
+
+  .nav-dropdown-menu {
+    position: absolute;
+    top: calc(100% + var(--spacing-3));
+    left: 50%;
+    z-index: 20;
+    display: grid;
+    width: max-content;
+    min-width: 0;
+    padding: var(--spacing-2);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: #070b16;
+    box-shadow: var(--shadow-md);
+    transform: translateX(-50%);
+  }
+
+  html[data-theme="light"] .nav-dropdown-menu {
+    background: #ffffff;
+  }
+
+  .nav-dropdown-item {
+    display: block;
+    padding: 0.6rem 0.72rem;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    transition:
+      background var(--duration-fast) var(--ease-default),
+      color var(--duration-fast) var(--ease-default);
+  }
+
+  .nav-dropdown-item:hover,
+  .nav-dropdown-item:focus-visible {
+    background: color-mix(in srgb, var(--accent-primary-500), transparent 88%);
+    color: var(--text-primary);
+    outline: none;
+  }
+
   /* ===================================================================
    Cards
    =================================================================== */

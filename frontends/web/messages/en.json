@@ -5,6 +5,9 @@
   },
   "nav": {
     "challenges": "Challenges",
+    "consoles": "Consoles",
+    "creatorConsole": "Creator Console",
+    "adminPanel": "Admin Panel",
     "philosophy": "Philosophy",
     "manifesto": "Manifesto",
     "about": "About",

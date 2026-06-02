@@ -5,6 +5,9 @@
   },
   "nav": {
     "challenges": "科学挑战",
+    "consoles": "控制台",
+    "creatorConsole": "创建者控制台",
+    "adminPanel": "管理面板",
     "philosophy": "理念",
     "manifesto": "宣言",
     "about": "关于",
