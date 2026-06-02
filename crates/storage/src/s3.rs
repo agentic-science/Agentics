@@ -187,7 +187,11 @@ impl Storage for S3Storage {
         let promote_result = async {
             self.get_to_file(temporary_key, &local_temp, intent).await?;
             self.put_file(durable_key, &local_temp, intent).await?;
-            self.delete(temporary_key).await?;
+            // After `put_file` returns, the durable object has been created and
+            // length-verified. Temp cleanup is intentionally best-effort so a
+            // transient delete failure cannot make callers roll back the DB row
+            // while the durable object already exists.
+            drop(self.delete(temporary_key).await);
             Ok(durable_key.clone())
         }
         .await;

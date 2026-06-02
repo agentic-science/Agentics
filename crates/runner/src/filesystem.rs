@@ -269,12 +269,30 @@ fn copy_dir_all_blocking(source: &Path, destination: &Path) -> Result<()> {
     std::fs::create_dir_all(destination)?;
     for entry in std::fs::read_dir(source)? {
         let entry = entry?;
+        let source_path = entry.path();
         let target = destination.join(entry.file_name());
-        let file_type = entry.file_type()?;
+        let metadata = std::fs::symlink_metadata(&source_path)?;
+        let file_type = metadata.file_type();
+        if file_type.is_symlink() {
+            return Err(ServiceError::Runner(format!(
+                "workspace copy encountered unsupported symlink `{}`",
+                source_path.display()
+            )));
+        }
         if file_type.is_dir() {
-            copy_dir_all_blocking(&entry.path(), &target)?;
+            copy_dir_all_blocking(&source_path, &target)?;
         } else if file_type.is_file() {
-            std::fs::copy(entry.path(), target)?;
+            let mut source_file = std::fs::File::open(&source_path)?;
+            let mut target_file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&target)?;
+            std::io::copy(&mut source_file, &mut target_file)?;
+        } else {
+            return Err(ServiceError::Runner(format!(
+                "workspace copy encountered unsupported non-regular entry `{}`",
+                source_path.display()
+            )));
         }
     }
     Ok(())
@@ -641,5 +659,45 @@ mod tests {
 
         assert!(error.to_string().contains("non-regular file"));
         drop(std::fs::remove_dir_all(root));
+    }
+
+    /// Verifies bounded workspace propagation rejects symlinks instead of skipping them.
+    #[cfg(unix)]
+    #[test]
+    fn workspace_copy_rejects_symlinks() {
+        let source = temp_path("workspace-copy-symlink-source");
+        let destination = temp_path("workspace-copy-symlink-destination");
+        let outside = temp_path("workspace-copy-symlink-target.txt");
+        std::fs::create_dir_all(&source).expect("failed to create source");
+        std::fs::write(&outside, b"outside").expect("failed to write outside file");
+        std::os::unix::fs::symlink(&outside, source.join("link"))
+            .expect("failed to create symlink");
+
+        let error = copy_dir_all_blocking(&source, &destination)
+            .expect_err("workspace copy should reject symlinks");
+
+        assert!(error.to_string().contains("unsupported symlink"));
+        drop(std::fs::remove_file(outside));
+        drop(std::fs::remove_dir_all(source));
+        drop(std::fs::remove_dir_all(destination));
+    }
+
+    /// Verifies bounded workspace propagation rejects special files instead of skipping them.
+    #[cfg(unix)]
+    #[test]
+    fn workspace_copy_rejects_special_files() {
+        let source = temp_path("workspace-copy-special-source");
+        let destination = temp_path("workspace-copy-special-destination");
+        std::fs::create_dir_all(&source).expect("failed to create source");
+        let socket_path = source.join("socket");
+        let _listener =
+            std::os::unix::net::UnixListener::bind(&socket_path).expect("failed to bind socket");
+
+        let error = copy_dir_all_blocking(&source, &destination)
+            .expect_err("workspace copy should reject special files");
+
+        assert!(error.to_string().contains("non-regular entry"));
+        drop(std::fs::remove_dir_all(source));
+        drop(std::fs::remove_dir_all(destination));
     }
 }
