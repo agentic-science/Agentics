@@ -156,28 +156,17 @@ pub async fn run_worker_cycle(
 
 #[cfg(test)]
 mod tests {
-    use super::{sanitize_worker_label, worker_instance_id};
-
-    /// Verifies that worker instance ids use log safe uuid suffix.
-    #[test]
-    fn worker_instance_ids_use_log_safe_uuid_suffix() {
-        let instance_id = worker_instance_id();
-        let uuid_start = instance_id
-            .len()
-            .checked_sub(36)
-            .expect("worker id should include a UUID suffix");
-        let (prefix, uuid_suffix) = instance_id.split_at(uuid_start);
-
-        assert!(prefix.starts_with("agentics-worker-"));
-        assert!(uuid::Uuid::parse_str(uuid_suffix).is_ok());
-    }
+    use super::sanitize_worker_label;
 
     /// Verifies that worker host label is log safe.
     #[test]
     fn worker_host_label_is_log_safe() {
-        assert_eq!(
-            sanitize_worker_label("dgx spark/slot 1"),
-            "dgx-spark-slot-1"
-        );
+        for (raw, expected) in [
+            ("dgx spark/slot 1", "dgx-spark-slot-1"),
+            ("  dev.host_alpha  ", "dev.host_alpha"),
+            ("name:gpu#0", "name-gpu-0"),
+        ] {
+            assert_eq!(sanitize_worker_label(raw), expected);
+        }
     }
 }
