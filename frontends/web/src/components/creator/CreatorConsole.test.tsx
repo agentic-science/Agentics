@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { SWRConfig } from "swr";
 import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getHumanSession } from "@/lib/authApi";
 import {
   createChallengeReviewRecord,
   createChallengeShortlistRevision,
@@ -10,7 +11,6 @@ import {
   getChallengeShortlist,
   getCreatorChallengeParticipants,
   getCreatorChallengeStats,
-  getCreatorSession,
   startGithubLogin,
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
@@ -47,12 +47,16 @@ vi.mock("@/lib/creatorApi", () => {
     getChallengeShortlist: vi.fn(),
     getCreatorChallengeParticipants: vi.fn(),
     getCreatorChallengeStats: vi.fn(),
-    getCreatorSession: vi.fn(),
     startGithubLogin: vi.fn(),
     uploadChallengePrivateAssetRequestSchema: passthroughSchema,
     uploadPrivateAsset: vi.fn(),
   };
 });
+
+vi.mock("@/lib/authApi", () => ({
+  HUMAN_SESSION_CACHE_KEY: "human-session",
+  getHumanSession: vi.fn(),
+}));
 
 ensureDomEnvironment();
 const { cleanup, fireEvent, render, waitFor, within } = await import(
@@ -67,14 +71,14 @@ const getChallengeShortlistMock = getChallengeShortlist as Mock;
 const getCreatorChallengeParticipantsMock =
   getCreatorChallengeParticipants as Mock;
 const getCreatorChallengeStatsMock = getCreatorChallengeStats as Mock;
-const getCreatorSessionMock = getCreatorSession as Mock;
+const getHumanSessionMock = getHumanSession as Mock;
 const startGithubLoginMock = startGithubLogin as Mock;
 const uploadPrivateAssetMock = uploadPrivateAsset as Mock;
 
 describe("CreatorConsole", () => {
   beforeEach(() => {
     window.localStorage.clear();
-    getCreatorSessionMock.mockRejectedValue(new Error("not signed in"));
+    getHumanSessionMock.mockRejectedValue(new Error("not signed in"));
     startGithubLoginMock.mockResolvedValue({
       authorization_url: "https://github.com/login/oauth/authorize",
     });
@@ -103,7 +107,7 @@ describe("CreatorConsole", () => {
     createChallengeShortlistRevisionMock.mockResolvedValue({
       id: "33333333-3333-4333-8333-333333333333",
       challenge_name: "frontier-cs-example-challenge",
-      uploader_agent_id: "11111111-1111-4111-8111-111111111111",
+      uploader_human_id: "11111111-1111-4111-8111-111111111111",
       requested_count: 1,
       added_count: 1,
       sha256:
@@ -141,7 +145,9 @@ describe("CreatorConsole", () => {
 
     fireEvent.click(view.getByRole("button", { name: "Sign in with GitHub" }));
 
-    await waitFor(() => expect(startGithubLoginMock).toHaveBeenCalledWith(""));
+    await waitFor(() =>
+      expect(startGithubLoginMock).toHaveBeenCalledWith("", "/creator"),
+    );
   });
 
   it("starts GitHub OAuth with a pioneer code", async () => {
@@ -153,15 +159,19 @@ describe("CreatorConsole", () => {
     fireEvent.click(view.getByRole("button", { name: "Sign in with GitHub" }));
 
     await waitFor(() =>
-      expect(startGithubLoginMock).toHaveBeenCalledWith("jack-deadbeef"),
+      expect(startGithubLoginMock).toHaveBeenCalledWith(
+        "jack-deadbeef",
+        "/creator",
+      ),
     );
   });
 
   it("creates a review record with the loaded creator identity and CSRF token", async () => {
-    getCreatorSessionMock.mockResolvedValue({
-      agent_id: "11111111-1111-4111-8111-111111111111",
+    getHumanSessionMock.mockResolvedValue({
+      human_id: "11111111-1111-4111-8111-111111111111",
       github_user_id: 123,
       github_login: "octocat",
+      roles: ["creator"],
       csrf_token: "csrf-token",
       expires_at: "2026-05-16T00:00:00Z",
     });
@@ -202,10 +212,11 @@ describe("CreatorConsole", () => {
   });
 
   it("rejects malformed PR numbers before creating a review record", async () => {
-    getCreatorSessionMock.mockResolvedValue({
-      agent_id: "11111111-1111-4111-8111-111111111111",
+    getHumanSessionMock.mockResolvedValue({
+      human_id: "11111111-1111-4111-8111-111111111111",
       github_user_id: 123,
       github_login: "octocat",
+      roles: ["creator"],
       csrf_token: "csrf-token",
       expires_at: "2026-05-16T00:00:00Z",
     });
@@ -228,7 +239,7 @@ describe("CreatorConsole", () => {
   });
 
   it("uploads a private asset and refreshes the review record detail", async () => {
-    getCreatorSessionMock.mockResolvedValue(creatorSessionResponse);
+    getHumanSessionMock.mockResolvedValue(creatorSessionResponse);
     uploadPrivateAssetMock.mockResolvedValue(privateAssetResponse);
     getChallengeReviewRecordMock.mockResolvedValue(
       challengeReviewRecordWithPrivateAsset,
@@ -278,7 +289,7 @@ describe("CreatorConsole", () => {
   });
 
   it("uploads a shortlist revision and refreshes owner surfaces", async () => {
-    getCreatorSessionMock.mockResolvedValue(creatorSessionResponse);
+    getHumanSessionMock.mockResolvedValue(creatorSessionResponse);
     getChallengeShortlistMock.mockResolvedValue(shortlistWithAgent);
 
     const view = renderCreatorConsole();
@@ -336,7 +347,7 @@ const challengeReviewRecordResponse = {
   challenge_name: "frontier-cs-example-challenge",
   request: "new_challenge",
   status: "pending_review",
-  creator_agent_id: "11111111-1111-4111-8111-111111111111",
+  creator_human_id: "11111111-1111-4111-8111-111111111111",
   creator_github_user_id: 123,
   creator_github_login: "octocat",
   repo_url: "https://github.com/agentics-reifying/agentics-challenges",
@@ -372,9 +383,10 @@ const challengeReviewRecordResponse = {
 } satisfies CreatorChallengeReviewRecordResponse;
 
 const creatorSessionResponse = {
-  agent_id: "11111111-1111-4111-8111-111111111111",
+  human_id: "11111111-1111-4111-8111-111111111111",
   github_user_id: 123,
   github_login: "octocat",
+  roles: ["creator"],
   csrf_token: "csrf-token",
   expires_at: "2026-05-16T00:00:00Z",
 };
@@ -387,7 +399,7 @@ const privateAssetResponse = {
   required: true,
   storage_key:
     "challenge-review-records/44444444-4444-4444-8444-444444444444/private-assets/official-seed-config.zip",
-  uploader_agent_id: "11111111-1111-4111-8111-111111111111",
+  uploader_human_id: "11111111-1111-4111-8111-111111111111",
   size_bytes: 9,
   sha256: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
   created_at: "2026-05-15T00:00:00Z",
@@ -404,7 +416,7 @@ const shortlistWithAgent = {
     {
       agent_id: "11111111-1111-4111-8111-111111111111",
       agent_display_name: "Ada Agent",
-      added_by_agent_id: "22222222-2222-4222-8222-222222222222",
+      added_by_human_id: "22222222-2222-4222-8222-222222222222",
       created_at: "2026-05-15T00:00:00Z",
     },
   ],

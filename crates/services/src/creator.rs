@@ -5,7 +5,7 @@ use tracing::warn;
 use agentics_config::Config;
 use agentics_contracts::challenge_creation;
 use agentics_domain::models::challenge::ChallengeBundleSpec;
-use agentics_domain::models::ids::{AgentId, ChallengeShortlistRevisionId};
+use agentics_domain::models::ids::{AgentId, ChallengeShortlistRevisionId, HumanId};
 use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse, ChallengeShortlistedAgentDto,
@@ -26,12 +26,12 @@ use crate::storage_errors::storage_error_to_service_error;
 /// Fetch owner-visible aggregate challenge statistics for shortlist decisions.
 pub async fn get_creator_challenge_stats(
     pool: &sqlx::PgPool,
-    agent_id: &AgentId,
+    human_id: &HumanId,
     challenge_name: &ChallengeName,
     requested_target: Option<&str>,
 ) -> Result<CreatorChallengeStatsResponse> {
     let (challenge_name, target) =
-        resolve_creator_challenge_scope(pool, agent_id, challenge_name, requested_target).await?;
+        resolve_creator_challenge_scope(pool, human_id, challenge_name, requested_target).await?;
     Repositories::new(pool)
         .challenges()
         .creator_stats(&challenge_name, target.as_ref())
@@ -42,12 +42,12 @@ pub async fn get_creator_challenge_stats(
 /// Fetch owner-visible participant rows for shortlist decisions.
 pub async fn list_creator_challenge_participants(
     pool: &sqlx::PgPool,
-    agent_id: &AgentId,
+    human_id: &HumanId,
     challenge_name: &ChallengeName,
     requested_target: Option<&str>,
 ) -> Result<CreatorChallengeParticipantsResponse> {
     let (challenge_name, target) =
-        resolve_creator_challenge_scope(pool, agent_id, challenge_name, requested_target).await?;
+        resolve_creator_challenge_scope(pool, human_id, challenge_name, requested_target).await?;
     Repositories::new(pool)
         .challenges()
         .creator_participants(&challenge_name, target.as_ref())
@@ -60,12 +60,12 @@ pub async fn create_challenge_shortlist_revision(
     pool: &sqlx::PgPool,
     storage: &dyn Storage,
     config: &Config,
-    agent_id: &AgentId,
+    human_id: &HumanId,
     challenge_name: &ChallengeName,
     body: CreateChallengeShortlistRevisionRequest,
 ) -> Result<ChallengeShortlistRevisionResponse> {
     let (challenge_name, _) =
-        resolve_creator_challenge_scope(pool, agent_id, challenge_name, None).await?;
+        resolve_creator_challenge_scope(pool, human_id, challenge_name, None).await?;
     let requested_count = i64::try_from(body.agent_ids_to_add.len())
         .map_err(|_| ServiceError::BadRequest("shortlist payload is too large".to_string()))?;
     let raw_json = serde_json::to_vec(&body)
@@ -94,7 +94,7 @@ pub async fn create_challenge_shortlist_revision(
         .create_shortlist_revision(&CreateChallengeShortlistRevisionInput {
             revision_id,
             challenge_name,
-            uploader_agent_id: agent_id.clone(),
+            uploader_human_id: human_id.clone(),
             storage_key: stored_key.clone(),
             sha256,
             requested_count,
@@ -114,11 +114,11 @@ pub async fn create_challenge_shortlist_revision(
 /// Fetch the effective owner-managed shortlist union.
 pub async fn get_challenge_shortlist(
     pool: &sqlx::PgPool,
-    agent_id: &AgentId,
+    human_id: &HumanId,
     challenge_name: &ChallengeName,
 ) -> Result<ChallengeShortlistResponse> {
     let (challenge_name, _) =
-        resolve_creator_challenge_scope(pool, agent_id, challenge_name, None).await?;
+        resolve_creator_challenge_scope(pool, human_id, challenge_name, None).await?;
     Repositories::new(pool)
         .challenges()
         .list_shortlist(&challenge_name)
@@ -183,7 +183,7 @@ fn shortlist_revision_from_record(
     ChallengeShortlistRevisionResponse {
         id: record.id,
         challenge_name: record.challenge_name,
-        uploader_agent_id: record.uploader_agent_id,
+        uploader_human_id: record.uploader_human_id,
         requested_count: record.requested_count,
         added_count: record.added_count,
         sha256: record.sha256,
@@ -201,7 +201,7 @@ fn challenge_shortlist_from_record(record: ChallengeShortlistRecord) -> Challeng
             .map(|item| ChallengeShortlistedAgentDto {
                 agent_id: item.agent_id,
                 agent_display_name: item.agent_display_name,
-                added_by_agent_id: item.added_by_agent_id,
+                added_by_human_id: item.added_by_human_id,
                 created_at: item.created_at.to_rfc3339(),
             })
             .collect(),
@@ -211,7 +211,7 @@ fn challenge_shortlist_from_record(record: ChallengeShortlistRecord) -> Challeng
 /// Resolve and authorize a creator-owned challenge plus optional target filter.
 async fn resolve_creator_challenge_scope(
     pool: &sqlx::PgPool,
-    agent_id: &AgentId,
+    human_id: &HumanId,
     challenge_name: &ChallengeName,
     requested_target: Option<&str>,
 ) -> Result<(ChallengeName, Option<TargetName>)> {
@@ -220,11 +220,11 @@ async fn resolve_creator_challenge_scope(
     let challenge = challenge.ok_or(ServiceError::NotFound)?;
     if !repos
         .challenges()
-        .agent_owns(&challenge.challenge_name, agent_id)
+        .human_owns(&challenge.challenge_name, human_id)
         .await?
     {
         return Err(ServiceError::Forbidden(
-            "agent is not an owner of this challenge".to_string(),
+            "human is not an owner of this challenge".to_string(),
         ));
     }
 

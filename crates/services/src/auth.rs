@@ -4,17 +4,17 @@ use std::time::Duration as StdDuration;
 
 use agentics_config::{AgentRegistrationMode, Config};
 use agentics_domain::models::auth::{
-    AdminLoginRequest, AdminSessionResponse, CreatorSessionResponse, GithubOauthCallbackRequest,
-    GithubOauthLoginRequest, GithubOauthLoginResponse,
+    GithubOauthCallbackRequest, GithubOauthCallbackResponse, GithubOauthLoginRequest,
+    GithubOauthLoginResponse, HumanSessionResponse,
 };
-use agentics_domain::models::ids::{AgentId, AgentTokenId};
+use agentics_domain::models::ids::{AgentId, AgentTokenId, HumanId, HumanSessionId};
 use agentics_domain::models::pioneer_codes::{INVALID_OR_UNAVAILABLE_PIONEER_CODE, PioneerCode};
 use agentics_domain::models::request::{RegisterAgentRequest, RegisterAgentResponse};
 use agentics_domain::models::urls::GithubOauthAuthorizationUrl;
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::{
-    ConsumedGithubOauthState, CreateAdminSessionInput, CreateCreatorSessionInput,
-    CreateGithubOauthStateInput, PioneerCodeRegistrationKind, RegisterAgentInput, Repositories,
+    ConsumedGithubOauthState, CreateGithubOauthStateInput, CreateHumanSessionInput, HumanRecord,
+    PioneerCodeRegistrationKind, RegisterAgentInput, Repositories, ResolveGithubHumanInput,
 };
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
@@ -183,16 +183,14 @@ pub struct ParsedBearerToken {
     pub token: SecretString,
 }
 
-/// Parsed basic-auth authorization header.
-#[derive(Debug, Clone)]
-pub struct ParsedBasicAuth {
-    pub username: String,
-    pub password: SecretString,
-}
-
 /// Create an opaque bearer token for an agent.
 pub fn create_agent_token() -> String {
     format!("agentics_{}", random_url_token(24))
+}
+
+/// Create an opaque bearer token for admin automation.
+pub fn create_admin_service_token() -> String {
+    format!("agentics_admin_{}", random_url_token(32))
 }
 
 /// Create an opaque browser session token.
@@ -300,75 +298,34 @@ pub async fn register_agent(
     })
 }
 
-/// Authenticate an administrator and issue a browser session.
-pub async fn issue_admin_session(
-    pool: &PgPool,
-    config: &Config,
-    request: &AdminLoginRequest,
-) -> Result<IssuedWebSession<AdminSessionResponse>> {
-    if request.username.trim().is_empty() || request.password.expose_secret().is_empty() {
-        return Err(ServiceError::Unauthorized);
-    }
-    if request.username != config.auth.admin_username
-        || !config.admin_password_matches(request.password.expose_secret())
-    {
-        return Err(ServiceError::Unauthorized);
-    }
-    let username = request.username.trim().to_string();
-    let session_token = create_web_session_token();
-    let csrf_token = create_csrf_token();
-    let ttl_seconds = session_ttl_seconds(config)?;
-    let expires_at = session_expires_at(ttl_seconds)?;
-    let repos = Repositories::new(pool);
-    repos.sessions().delete_expired_web_auth_rows().await?;
-    repos
-        .sessions()
-        .create_admin_session(&CreateAdminSessionInput {
-            session_id: uuid::Uuid::new_v4().to_string(),
-            session_token_hash: hash_opaque_token(&session_token),
-            csrf_token_hash: hash_opaque_token(&csrf_token),
-            admin_username: username.clone(),
-            expires_at,
-        })
-        .await?;
-
-    Ok(IssuedWebSession {
-        session_token,
-        csrf_token: csrf_token.clone(),
-        ttl_seconds,
-        response: AdminSessionResponse {
-            username,
-            csrf_token,
-            expires_at: expires_at.to_rfc3339(),
-        },
-    })
-}
-
 /// End a browser session by opaque session token.
 pub async fn delete_web_session_by_token(pool: &PgPool, session_token: &str) -> Result<()> {
     Repositories::new(pool)
         .sessions()
-        .delete_web_session_by_token(session_token)
+        .delete_human_session_by_token(session_token)
         .await
 }
 
-/// Return the current admin session when browser cookies are still valid.
-pub async fn authenticate_admin_session(
+/// Return the current human session when browser cookies are still valid.
+pub async fn authenticate_human_session(
     pool: &PgPool,
     session_token: &str,
     csrf_token: &str,
-) -> Result<AdminSessionResponse> {
+) -> Result<HumanSessionResponse> {
     let session = Repositories::new(pool)
         .sessions()
-        .authenticate_admin(session_token)
+        .authenticate_human(session_token)
         .await?
         .ok_or(ServiceError::Unauthorized)?;
     if hash_opaque_token(csrf_token) != session.csrf_token_hash {
         return Err(ServiceError::Unauthorized);
     }
 
-    Ok(AdminSessionResponse {
-        username: session.admin_username,
+    Ok(HumanSessionResponse {
+        human_id: session.human_id,
+        github_user_id: session.github_user_id,
+        github_login: session.github_login,
+        roles: session.roles,
         csrf_token: csrf_token.to_string(),
         expires_at: session.expires_at.to_rfc3339(),
     })
@@ -408,6 +365,7 @@ pub async fn start_github_oauth_login(
         },
         AgentRegistrationMode::Public => None,
     };
+    let return_to = normalize_return_to(request.return_to)?;
     let expires_at = Utc::now()
         .checked_add_signed(Duration::minutes(OAUTH_STATE_TTL_MINUTES))
         .ok_or_else(|| ServiceError::Internal("OAuth state TTL overflow".to_string()))?;
@@ -419,6 +377,7 @@ pub async fn start_github_oauth_login(
             state_hash,
             browser_nonce_hash,
             pioneer_code_hash,
+            return_to,
             expires_at,
         })
         .await?;
@@ -439,19 +398,28 @@ pub async fn start_github_oauth_login(
     })
 }
 
-/// Complete GitHub OAuth and issue a creator web session.
+/// Complete GitHub OAuth and issue a human web session.
 pub async fn complete_github_oauth_callback(
     pool: &PgPool,
     config: &Config,
     client: &dyn GithubOauthClient,
     request: GithubOauthCallbackRequest,
     browser_nonce: &str,
-) -> Result<IssuedWebSession<CreatorSessionResponse>> {
+) -> Result<IssuedWebSession<GithubOauthCallbackResponse>> {
     let oauth_state = consume_callback_oauth_state(pool, &request.state, browser_nonce).await?;
     let access_token = client.exchange_code(config, &request.code).await?;
     let github_user = client.fetch_user(config, &access_token).await?;
-    let agent_id = upsert_callback_creator_agent(pool, config, &oauth_state, &github_user).await?;
-    issue_creator_session(pool, config, agent_id, &github_user).await
+    let human = resolve_callback_human(pool, config, &oauth_state, &github_user).await?;
+    let issued = issue_human_session(pool, config, human).await?;
+    Ok(IssuedWebSession {
+        session_token: issued.session_token,
+        csrf_token: issued.csrf_token,
+        ttl_seconds: issued.ttl_seconds,
+        response: GithubOauthCallbackResponse {
+            session: issued.response,
+            return_to: oauth_state.return_to,
+        },
+    })
 }
 
 /// Parse an `Authorization: Bearer ...` header.
@@ -472,37 +440,6 @@ pub fn parse_bearer_token(value: Option<&str>) -> Option<ParsedBearerToken> {
     Some(ParsedBearerToken {
         token: SecretString::from(token),
     })
-}
-
-/// Parse an `Authorization: Basic ...` header.
-pub fn parse_basic_auth(value: Option<&str>) -> Option<ParsedBasicAuth> {
-    let value = value?;
-    let mut parts = value.split_whitespace();
-    let scheme = parts.next()?;
-    let encoded = parts.next()?;
-
-    if parts.next().is_some() || !scheme.eq_ignore_ascii_case("basic") {
-        return None;
-    }
-
-    let decoded = base64_decode(encoded)?;
-    let (username, password) = decoded.split_once(':')?;
-
-    if username.is_empty() || password.is_empty() {
-        return None;
-    }
-
-    Some(ParsedBasicAuth {
-        username: username.to_string(),
-        password: SecretString::from(password),
-    })
-}
-
-/// Handles base64 decode for this module.
-fn base64_decode(input: &str) -> Option<String> {
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
-    let bytes = STANDARD.decode(input).ok()?;
-    String::from_utf8(bytes).ok()
 }
 
 /// Sleep before returning a generic failed pioneer-code response.
@@ -543,6 +480,28 @@ fn form_urlencoded(values: &[(&str, &str)]) -> Result<String> {
     url.query()
         .map(ToOwned::to_owned)
         .ok_or_else(|| ServiceError::Internal("failed to encode OAuth token request".to_string()))
+}
+
+/// Restrict OAuth post-login navigation to same-site paths.
+fn normalize_return_to(value: Option<String>) -> Result<Option<String>> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let value = value.trim();
+    if value.is_empty() {
+        return Ok(None);
+    }
+    if !value.starts_with('/')
+        || value.starts_with("//")
+        || value.contains('\n')
+        || value.contains('\r')
+        || value.contains("://")
+    {
+        return Err(ServiceError::BadRequest(
+            "return_to must be a same-site path".to_string(),
+        ));
+    }
+    Ok(Some(value.to_string()))
 }
 
 /// Converts configured session lifetime hours into seconds with overflow checking.
@@ -590,54 +549,55 @@ fn validate_github_user(user: GithubUserResponse) -> Result<GithubOauthUser> {
     })
 }
 
-/// Create or update the creator agent row tied to a GitHub account.
-async fn upsert_callback_creator_agent(
+/// Resolve or create the human tied to a GitHub account.
+async fn resolve_callback_human(
     pool: &PgPool,
     config: &Config,
     oauth_state: &ConsumedGithubOauthState,
     github_user: &GithubOauthUser,
-) -> Result<AgentId> {
-    let fallback_agent_id = AgentId::generate();
+) -> Result<HumanRecord> {
+    let fallback_human_id = HumanId::generate();
     let require_pioneer_code =
         config.agent_registration_mode() == AgentRegistrationMode::PioneerCode;
+    let bootstrap_admin_candidate = config
+        .auth
+        .bootstrap_admin_github_user_ids
+        .contains(&github_user.id);
     match Repositories::new(pool)
         .sessions()
-        .upsert_github_creator_agent_with_pioneer_code(
-            &fallback_agent_id,
-            github_user.id,
-            &github_user.login,
-            oauth_state.pioneer_code_hash.as_deref(),
-            require_pioneer_code,
-            i64::from(config.quotas.max_active_agents),
-        )
+        .resolve_github_human(&ResolveGithubHumanInput {
+            fallback_human_id,
+            github_user_id: github_user.id,
+            github_login: github_user.login.clone(),
+            pioneer_code_hash: oauth_state.pioneer_code_hash.clone(),
+            pioneer_code_required_for_new_human: require_pioneer_code,
+            bootstrap_admin_candidate,
+        })
         .await
     {
-        Ok(agent_id) => Ok(agent_id),
+        Ok(human) => Ok(human),
         Err(error) if is_invalid_pioneer_code(&error) => Err(reject_failed_pioneer_code().await),
         Err(error) => Err(error),
     }
 }
 
-/// Persist a creator session for the authenticated GitHub user.
-async fn issue_creator_session(
+/// Persist a human session for the authenticated GitHub user.
+async fn issue_human_session(
     pool: &PgPool,
     config: &Config,
-    agent_id: AgentId,
-    github_user: &GithubOauthUser,
-) -> Result<IssuedWebSession<CreatorSessionResponse>> {
+    human: HumanRecord,
+) -> Result<IssuedWebSession<HumanSessionResponse>> {
     let session_token = create_web_session_token();
     let csrf_token = create_csrf_token();
     let ttl_seconds = session_ttl_seconds(config)?;
     let expires_at = session_expires_at(ttl_seconds)?;
     Repositories::new(pool)
         .sessions()
-        .create_creator_session(&CreateCreatorSessionInput {
-            session_id: uuid::Uuid::new_v4().to_string(),
+        .create_human_session(&CreateHumanSessionInput {
+            session_id: HumanSessionId::generate(),
             session_token_hash: hash_opaque_token(&session_token),
             csrf_token_hash: hash_opaque_token(&csrf_token),
-            agent_id: agent_id.as_str().to_string(),
-            github_user_id: github_user.id,
-            github_login: github_user.login.clone(),
+            human_id: human.human_id.clone(),
             expires_at,
         })
         .await?;
@@ -646,10 +606,11 @@ async fn issue_creator_session(
         session_token,
         csrf_token: csrf_token.clone(),
         ttl_seconds,
-        response: CreatorSessionResponse {
-            agent_id,
-            github_user_id: github_user.id,
-            github_login: github_user.login.clone(),
+        response: HumanSessionResponse {
+            human_id: human.human_id,
+            github_user_id: human.github_user_id,
+            github_login: human.github_login,
+            roles: human.roles,
             csrf_token,
             expires_at: expires_at.to_rfc3339(),
         },

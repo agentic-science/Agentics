@@ -16,6 +16,7 @@ export function CreatorOAuthCallback() {
     "loading",
   );
   const [message, setMessage] = useState(t("fallback"));
+  const [returnTo, setReturnTo] = useState("/creator");
 
   useEffect(() => {
     if (started.current) {
@@ -32,9 +33,10 @@ export function CreatorOAuthCallback() {
     }
 
     void completeGithubLogin(code, state)
-      .then((session) => {
+      .then((response) => {
         setStatus("success");
-        setMessage(t("signedIn", { login: session.github_login }));
+        setReturnTo(response.return_to ?? "/creator");
+        setMessage(t("signedIn", { login: response.session.github_login }));
       })
       .catch((error) => {
         setStatus("error");
@@ -60,7 +62,7 @@ export function CreatorOAuthCallback() {
           <LoaderCircle className="w-5 h-5 animate-spin text-action-fg" />
         ) : null}
         {status !== "loading" ? (
-          <Link href="/creator" className="btn btn-primary">
+          <Link href={returnTo} className="btn btn-primary">
             {t("return")}
           </Link>
         ) : null}

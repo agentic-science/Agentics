@@ -270,7 +270,7 @@ pub(super) fn challenge_review_record_json(status: &str) -> serde_json::Value {
         "challenge_name": "sample-sum",
         "request": "new_challenge",
         "status": status,
-        "creator_agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "creator_human_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
         "creator_github_user_id": 1001,
         "creator_github_login": "creator",
         "repo_url": "https://github.com/agentics-reifying/agentics-challenges",

@@ -4,7 +4,8 @@ use agentics_domain::models::challenge::ChallengeBundleSpec;
 use agentics_domain::models::challenge_creation::ChallengeReviewRecordStatus;
 use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::ids::{
-    AgentId, ChallengeReviewAuditEventId, ChallengeReviewPublishClaimId, ChallengeReviewRecordId,
+    AdminServiceTokenId, ChallengeReviewAuditEventId, ChallengeReviewPublishClaimId,
+    ChallengeReviewRecordId, HumanId,
 };
 use agentics_domain::models::localization::LocalizedText;
 use agentics_domain::models::names::ChallengeName;
@@ -32,9 +33,11 @@ pub struct PublishNewChallengeReviewRecordInput {
     pub spec: ChallengeBundleSpec,
     pub title: String,
     pub summary: LocalizedText,
-    pub owner_agent_id: AgentId,
+    pub owner_human_id: HumanId,
     pub audit_event_id: ChallengeReviewAuditEventId,
-    pub admin_username: String,
+    pub actor_human_id: Option<HumanId>,
+    pub actor_admin_service_token_id: Option<AdminServiceTokenId>,
+    pub actor_display: String,
     pub repository_path: String,
     pub bundle_sha256: Sha256Digest,
 }
@@ -45,9 +48,11 @@ pub struct PublishArchiveChallengeReviewRecordInput {
     pub review_record_id: ChallengeReviewRecordId,
     pub publish_claim_id: ChallengeReviewPublishClaimId,
     pub challenge_name: ChallengeName,
-    pub owner_agent_id: AgentId,
+    pub owner_human_id: HumanId,
     pub audit_event_id: ChallengeReviewAuditEventId,
-    pub admin_username: String,
+    pub actor_human_id: Option<HumanId>,
+    pub actor_admin_service_token_id: Option<AdminServiceTokenId>,
+    pub actor_display: String,
     pub repository_path: String,
     pub bundle_sha256: Sha256Digest,
 }
@@ -236,7 +241,7 @@ pub async fn publish_new_challenge_review_record(
         },
     )
     .await?;
-    add_challenge_owner_tx(&mut tx, &published.challenge_name, &input.owner_agent_id).await?;
+    add_challenge_owner_tx(&mut tx, &published.challenge_name, &input.owner_human_id).await?;
     mark_challenge_review_record_published_tx(
         &mut tx,
         input.review_record_id.as_str(),
@@ -249,8 +254,9 @@ pub async fn publish_new_challenge_review_record(
         &CreateChallengeReviewRecordAuditEventInput {
             event_id: input.audit_event_id.clone(),
             review_record_id: input.review_record_id.clone(),
-            actor_agent_id: None,
-            actor_admin_username: Some(input.admin_username.clone()),
+            actor_human_id: input.actor_human_id.clone(),
+            actor_admin_service_token_id: input.actor_admin_service_token_id.clone(),
+            actor_display: Some(input.actor_display.clone()),
             action: "review_record_published".to_string(),
             message: "challenge review record published".to_string(),
             metadata: serde_json::json!({
@@ -274,7 +280,7 @@ pub async fn publish_archive_challenge_review_record(
     let mut tx = pool.begin().await?;
     let challenge_name =
         resolve_active_challenge_name_by_name_tx(&mut tx, &input.challenge_name).await?;
-    ensure_agent_owns_challenge_tx(&mut tx, &challenge_name, &input.owner_agent_id).await?;
+    ensure_human_owns_challenge_tx(&mut tx, &challenge_name, &input.owner_human_id).await?;
     archive_challenge_tx(&mut tx, &challenge_name).await?;
     mark_challenge_review_record_published_tx(
         &mut tx,
@@ -288,8 +294,9 @@ pub async fn publish_archive_challenge_review_record(
         &CreateChallengeReviewRecordAuditEventInput {
             event_id: input.audit_event_id.clone(),
             review_record_id: input.review_record_id.clone(),
-            actor_agent_id: None,
-            actor_admin_username: Some(input.admin_username.clone()),
+            actor_human_id: input.actor_human_id.clone(),
+            actor_admin_service_token_id: input.actor_admin_service_token_id.clone(),
+            actor_display: Some(input.actor_display.clone()),
             action: "review_record_published".to_string(),
             message: "challenge review record published".to_string(),
             metadata: serde_json::json!({
@@ -330,22 +337,22 @@ async fn resolve_active_challenge_name_by_name_tx(
 }
 
 /// Require that an archive review_record creator currently owns the target challenge.
-async fn ensure_agent_owns_challenge_tx(
+async fn ensure_human_owns_challenge_tx(
     tx: &mut Transaction<'_, Postgres>,
     challenge_name: &ChallengeName,
-    agent_id: &AgentId,
+    human_id: &HumanId,
 ) -> Result<()> {
     let owns_challenge = sqlx::query_scalar::<_, bool>(
         r#"
         SELECT EXISTS (
             SELECT 1
             FROM challenge_owners
-            WHERE challenge_name = $1 AND agent_id = $2::uuid
+            WHERE challenge_name = $1 AND human_id = $2::uuid
         )
         "#,
     )
     .bind(challenge_name.as_str())
-    .bind(agent_id.as_str())
+    .bind(human_id.as_str())
     .fetch_one(&mut **tx)
     .await?;
     if !owns_challenge {

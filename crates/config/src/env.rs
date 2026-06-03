@@ -1,16 +1,15 @@
 //! Raw `AGENTICS_*` environment loading and validation.
 
 use super::{
-    AgentRegistrationMode, Config, DEFAULT_ADMIN_USERNAME, DEFAULT_AGENT_REGISTRATION_MODE,
-    DEFAULT_ALLOW_INSECURE_DEFAULT_ADMIN_CREDENTIALS, DEFAULT_API_HOST, DEFAULT_API_PORT,
-    DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD,
+    AgentRegistrationMode, Config, DEFAULT_AGENT_REGISTRATION_MODE, DEFAULT_API_HOST,
+    DEFAULT_API_PORT, DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD,
     DEFAULT_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES,
     DEFAULT_CHALLENGE_REVIEW_RECORD_PUBLISH_TIMEOUT_MINUTES,
     DEFAULT_CHALLENGE_REVIEW_RECORD_TTL_DAYS,
     DEFAULT_CHALLENGE_REVIEW_RECORD_VALIDATION_TIMEOUT_MINUTES,
     DEFAULT_CHALLENGE_REVIEW_RECORD_VALIDATIONS_PER_DAY, DEFAULT_HOST_PROBE_COMMAND,
     DEFAULT_HOST_PROBE_MODE, DEFAULT_LOG_LEVEL, DEFAULT_MAX_ACTIVE_AGENTS,
-    DEFAULT_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_AGENT, DEFAULT_MAX_ACTIVE_OFFICIAL_JOBS,
+    DEFAULT_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_HUMAN, DEFAULT_MAX_ACTIVE_OFFICIAL_JOBS,
     DEFAULT_OFFICIAL_LOG_REDACTION_MODE, DEFAULT_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY,
     DEFAULT_POSTGRES_PORT, DEFAULT_REQUIRE_DIGEST_PINNED_IMAGES, DEFAULT_RUNNER_DOCKER_LAYER_QUOTA,
     DEFAULT_RUNNER_INTERACTION_SHUTDOWN_GRACE_SECS,
@@ -24,17 +23,16 @@ use super::{
     DEFAULT_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY, DEFAULT_WEB_CSRF_COOKIE_NAME,
     DEFAULT_WEB_PORT, DEFAULT_WEB_SESSION_COOKIE_NAME, DEFAULT_WEB_SESSION_COOKIE_SECURE,
     DEFAULT_WEB_SESSION_TTL_HOURS, DEFAULT_WORKER_ACCELERATORS, DEFAULT_WORKER_POLL_INTERVAL_MS,
-    DEFAULT_WORKER_STALE_JOB_MINUTES, ENV_AGENTICS_ADMIN_PASSWORD, ENV_AGENTICS_ADMIN_USERNAME,
+    DEFAULT_WORKER_STALE_JOB_MINUTES, ENV_AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS,
     ENV_AGENTICS_HOST_PROBE_COMMAND, ENV_AGENTICS_MOLTBOOK_SUBMOLT_NAME,
     ENV_AGENTICS_MOLTBOOK_SUBMOLT_URL, ENV_AGENTICS_RUNNER_NAMESPACE, ENV_AGENTICS_S3_ENDPOINT_URL,
     ENV_AGENTICS_S3_REGION, ENV_AGENTICS_STORAGE_ROOT, GithubApiUserUrl, GithubOauthAuthorizeUrl,
-    GithubOauthRedirectUrl, GithubOauthTokenUrl, HostProbeMode, INSECURE_DEFAULT_ADMIN_PASSWORD,
-    MoltbookSubmoltName, MoltbookSubmoltUrl, OfficialLogRedactionMode, RunnerNamespace,
-    RunnerSecurityProfile, RunnerWritableStorageMode, StorageBackend, WorkerAccelerators,
-    builtin_github_api_user_url, builtin_github_oauth_authorize_url,
-    builtin_github_oauth_token_url, builtin_moltbook_submolt_name, builtin_moltbook_submolt_url,
-    builtin_runner_namespace, builtin_s3_endpoint_url, local_cors_allowed_origins,
-    local_database_url, storage_config,
+    GithubOauthRedirectUrl, GithubOauthTokenUrl, HostProbeMode, MoltbookSubmoltName,
+    MoltbookSubmoltUrl, OfficialLogRedactionMode, RunnerNamespace, RunnerSecurityProfile,
+    RunnerWritableStorageMode, StorageBackend, WorkerAccelerators, builtin_github_api_user_url,
+    builtin_github_oauth_authorize_url, builtin_github_oauth_token_url,
+    builtin_moltbook_submolt_name, builtin_moltbook_submolt_url, builtin_runner_namespace,
+    builtin_s3_endpoint_url, local_cors_allowed_origins, local_database_url, storage_config,
 };
 use secrecy::SecretString;
 use serde::{Deserialize, de::DeserializeOwned};
@@ -131,9 +129,7 @@ pub struct RawStorageEnv {
 /// Raw administrator and registration environment values.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct RawAuthEnv {
-    pub admin_username: Option<String>,
-    pub admin_password: Option<String>,
-    pub allow_insecure_default_admin_credentials: Option<bool>,
+    pub bootstrap_admin_github_user_ids: Option<String>,
     pub agent_registration_mode: Option<AgentRegistrationMode>,
 }
 
@@ -160,7 +156,7 @@ pub struct RawQuotaEnv {
     pub official_runs_per_agent_challenge_day: Option<u32>,
     pub max_active_official_jobs: Option<u32>,
     pub max_active_agents: Option<u32>,
-    pub max_active_challenge_review_records_per_agent: Option<u32>,
+    pub max_active_challenge_review_records_per_human: Option<u32>,
     pub challenge_private_asset_bytes_per_review_record: Option<u64>,
     pub challenge_review_record_validations_per_day: Option<u32>,
     pub challenge_review_record_validation_timeout_minutes: Option<i32>,
@@ -313,20 +309,12 @@ fn apply_storage_env(config: &mut Config, raw: RawStorageEnv) -> anyhow::Result<
 }
 
 fn apply_auth_env(config: &mut Config, raw: RawAuthEnv) -> anyhow::Result<()> {
-    config.auth.admin_username = string_or_default(
-        ENV_AGENTICS_ADMIN_USERNAME,
-        raw.admin_username,
-        DEFAULT_ADMIN_USERNAME,
-    )?;
-    config.auth.admin_password = match raw.admin_password {
+    config.auth.bootstrap_admin_github_user_ids = match raw.bootstrap_admin_github_user_ids {
         Some(value) => {
-            SecretString::from(required_secret_string(ENV_AGENTICS_ADMIN_PASSWORD, value)?)
+            parse_github_user_id_list(ENV_AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS, &value)?
         }
-        None => SecretString::from(INSECURE_DEFAULT_ADMIN_PASSWORD),
+        None => Vec::new(),
     };
-    config.auth.allow_insecure_default_admin_credentials = raw
-        .allow_insecure_default_admin_credentials
-        .unwrap_or(DEFAULT_ALLOW_INSECURE_DEFAULT_ADMIN_CREDENTIALS);
     config.auth.agent_registration_mode = raw
         .agent_registration_mode
         .unwrap_or(DEFAULT_AGENT_REGISTRATION_MODE);
@@ -376,9 +364,9 @@ fn apply_quota_env(config: &mut Config, raw: RawQuotaEnv) -> anyhow::Result<()> 
         .max_active_official_jobs
         .unwrap_or(DEFAULT_MAX_ACTIVE_OFFICIAL_JOBS);
     config.quotas.max_active_agents = raw.max_active_agents.unwrap_or(DEFAULT_MAX_ACTIVE_AGENTS);
-    config.quotas.max_active_challenge_review_records_per_agent = raw
-        .max_active_challenge_review_records_per_agent
-        .unwrap_or(DEFAULT_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_AGENT);
+    config.quotas.max_active_challenge_review_records_per_human = raw
+        .max_active_challenge_review_records_per_human
+        .unwrap_or(DEFAULT_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_HUMAN);
     config
         .quotas
         .challenge_private_asset_bytes_per_review_record = raw
@@ -538,11 +526,25 @@ fn required_trimmed_string(field: &'static str, value: String) -> anyhow::Result
     Ok(trimmed)
 }
 
-fn required_secret_string(field: &'static str, value: String) -> anyhow::Result<String> {
-    if value.trim().is_empty() {
-        anyhow::bail!("{field} must not be empty");
+fn parse_github_user_id_list(field: &'static str, value: &str) -> anyhow::Result<Vec<i64>> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
     }
-    Ok(value)
+    trimmed
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(|item| {
+            let id = item
+                .parse::<i64>()
+                .map_err(|error| anyhow::anyhow!("invalid {field} entry `{item}`: {error}"))?;
+            if id <= 0 {
+                anyhow::bail!("{field} entries must be positive GitHub user ids");
+            }
+            Ok(id)
+        })
+        .collect()
 }
 
 fn parse_url_env(field: &'static str, value: String) -> anyhow::Result<url::Url> {

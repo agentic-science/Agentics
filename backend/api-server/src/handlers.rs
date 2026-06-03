@@ -21,6 +21,10 @@ use crate::error::ApiResult as Result;
 use agentics_contracts::validation::public_api::{
     self, DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT, PublicPagination,
 };
+use agentics_domain::models::auth::{
+    AdminHumanListResponse, AdminHumanRoleResponse, AdminServiceTokenCreatedResponse,
+    AdminServiceTokenListResponse, CreateAdminServiceTokenRequest, RevokeAdminServiceTokenResponse,
+};
 use agentics_domain::models::evaluation::{EvaluationJobStatus, ScoringMode};
 use agentics_domain::models::names::{ChallengeKeyword, ChallengeName, MetricName, TargetName};
 use agentics_domain::models::request::{

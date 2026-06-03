@@ -236,7 +236,7 @@ bun run build
 agentics-check-local-mvp
 ```
 
-设置 `AGENTICS_ADMIN_PASSWORD` 和 `AGENTICS_WEB_BASE_URL` 后，会包含 admin 和
+设置 `AGENTICS_ADMIN_SERVICE_TOKEN` 和 `AGENTICS_WEB_BASE_URL` 后，会包含 admin 和
 web checks。
 
 S3-compatible storage 改动需要通过 Docker 运行 RustFS-backed storage test：

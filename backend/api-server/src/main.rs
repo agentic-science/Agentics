@@ -21,7 +21,6 @@ use agentics_config::Config;
 use agentics_persistence::pool::create_pool;
 use agentics_storage::build_storage;
 use anyhow::Context;
-use api_server::admin_auth_throttle::AdminAuthThrottle;
 use api_server::router;
 use api_server::state::AppState;
 use tokio::net::TcpListener;
@@ -65,7 +64,6 @@ async fn main() -> anyhow::Result<()> {
         db: db.clone(),
         config: Arc::new(config.clone()),
         storage,
-        admin_auth_throttle: Arc::new(AdminAuthThrottle::new()?),
     };
 
     let app = router::router(&config).with_state(state);

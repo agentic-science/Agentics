@@ -76,8 +76,9 @@ pub async fn validate_challenge_review_record(
             let audit_event = persistence::CreateChallengeReviewRecordAuditEventInput {
                 event_id: ChallengeReviewAuditEventId::generate(),
                 review_record_id: review_record.id.clone(),
-                actor_agent_id: None,
-                actor_admin_username: Some(admin.username.clone()),
+                actor_human_id: admin.human_id.clone(),
+                actor_admin_service_token_id: admin.admin_service_token_id.clone(),
+                actor_display: Some(admin.display.clone()),
                 action: "draft_validated".to_string(),
                 message: message.clone(),
                 metadata: serde_json::json!({
@@ -110,8 +111,9 @@ pub async fn validate_challenge_review_record(
             let audit_event = persistence::CreateChallengeReviewRecordAuditEventInput {
                 event_id: ChallengeReviewAuditEventId::generate(),
                 review_record_id: review_record.id.clone(),
-                actor_agent_id: None,
-                actor_admin_username: Some(admin.username.clone()),
+                actor_human_id: admin.human_id.clone(),
+                actor_admin_service_token_id: admin.admin_service_token_id.clone(),
+                actor_display: Some(admin.display.clone()),
                 action: "draft_validation_failed".to_string(),
                 message: message.clone(),
                 metadata: serde_json::json!({ "repository_path": repository_path.to_string() }),

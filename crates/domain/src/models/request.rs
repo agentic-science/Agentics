@@ -15,11 +15,13 @@ use super::evaluation::{
 };
 use super::hashes::Sha256Digest;
 use super::ids::{
-    AgentId, AgentPioneerCodeId, ChallengeShortlistRevisionId, EvaluationJobId,
+    AgentId, ChallengeShortlistRevisionId, EvaluationJobId, HumanId, PioneerCodeId,
     SolutionSubmissionId,
 };
 use super::names::{ChallengeName, MetricName, TargetName};
-use super::pioneer_codes::{PioneerCode, PioneerCodeInput, PioneerCodeStatus, PioneerCodeUseKind};
+use super::pioneer_codes::{
+    PioneerCode, PioneerCodeInput, PioneerCodeStatus, PioneerCodeSubjectKind, PioneerCodeUseKind,
+};
 use super::urls::MoltbookPostUrl;
 use crate::storage::StorageKey;
 
@@ -100,7 +102,7 @@ pub struct CreatePioneerCodeRequest {
 /// Admin-visible pioneer-code metadata.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PioneerCodeDto {
-    pub id: AgentPioneerCodeId,
+    pub id: PioneerCodeId,
     pub code_display: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
@@ -110,7 +112,7 @@ pub struct PioneerCodeDto {
     pub status: PioneerCodeStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<String>,
-    pub created_by_admin_username: String,
+    pub created_by_display: String,
     pub created_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub revoked_at: Option<String>,
@@ -122,11 +124,18 @@ pub struct PioneerCodeListResponse {
     pub items: Vec<PioneerCodeDto>,
 }
 
-/// Agent account created through a pioneer code.
+/// Account created through a pioneer code.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PioneerCodeUseDto {
-    pub agent_id: AgentId,
-    pub agent_display_name: String,
+    pub subject_kind: PioneerCodeSubjectKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub human_id: Option<HumanId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub human_github_login: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_id: Option<AgentId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_display_name: Option<String>,
     pub registration_kind: PioneerCodeUseKind,
     pub used_at: String,
 }
@@ -141,8 +150,11 @@ pub struct PioneerCodeDetailResponse {
 /// Response returned after revoking a pioneer code.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RevokePioneerCodeResponse {
-    pub id: AgentPioneerCodeId,
+    pub id: PioneerCodeId,
     pub status: PioneerCodeStatus,
+    pub revoked_human_count: i64,
+    pub revoked_human_session_count: i64,
+    pub revoked_admin_service_token_count: i64,
     pub revoked_agent_count: i64,
     pub revoked_token_count: i64,
 }
@@ -426,7 +438,7 @@ pub struct CreateChallengeShortlistRevisionRequest {
 pub struct ChallengeShortlistRevisionResponse {
     pub id: ChallengeShortlistRevisionId,
     pub challenge_name: ChallengeName,
-    pub uploader_agent_id: AgentId,
+    pub uploader_human_id: HumanId,
     pub requested_count: i64,
     pub added_count: i64,
     pub sha256: Sha256Digest,
@@ -439,7 +451,7 @@ pub struct ChallengeShortlistRevisionResponse {
 pub struct ChallengeShortlistedAgentDto {
     pub agent_id: AgentId,
     pub agent_display_name: String,
-    pub added_by_agent_id: AgentId,
+    pub added_by_human_id: HumanId,
     pub created_at: String,
 }
 

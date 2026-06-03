@@ -1,14 +1,16 @@
 //! Admin and pioneer-code HTTP handlers.
 
 use super::{
-    AdminAuth, AdminCapacityResponse, AdminServiceHeartbeatListResponse,
-    AdminSolutionSubmissionListResponse, AppState, ChallengeName, CreatePioneerCodeRequest,
-    DisableAgentResponse, EvaluationJobResponse, EvaluationJobStatus, Json, Path,
-    PioneerCodeDetailResponse, PioneerCodeListResponse, QueueEvaluationJobRequest, Result,
+    AdminAuth, AdminCapacityResponse, AdminHumanListResponse, AdminHumanRoleResponse,
+    AdminServiceHeartbeatListResponse, AdminServiceTokenCreatedResponse,
+    AdminServiceTokenListResponse, AdminSolutionSubmissionListResponse, AppState, ChallengeName,
+    CreateAdminServiceTokenRequest, CreatePioneerCodeRequest, DisableAgentResponse,
+    EvaluationJobResponse, EvaluationJobStatus, Json, Path, PioneerCodeDetailResponse,
+    PioneerCodeListResponse, QueueEvaluationJobRequest, Result, RevokeAdminServiceTokenResponse,
     RevokePioneerCodeResponse, ScoringMode, ServiceError, SolutionSubmissionPath, State,
     StatusCode, ValidatedJson, challenge_metadata, evaluation_lifecycle, parse_request_value,
 };
-use agentics_domain::models::ids::{AgentId, AgentPioneerCodeId};
+use agentics_domain::models::ids::{AdminServiceTokenId, AgentId, HumanId, PioneerCodeId};
 use agentics_domain::models::request::{
     ChallengeMoltbookDiscussionResponse, SetChallengeMoltbookDiscussionRequest,
 };
@@ -27,8 +29,13 @@ pub async fn create_pioneer_code(
     Ok((
         StatusCode::CREATED,
         Json(
-            admin_service::create_pioneer_code(&state.db, &state.config, admin.username, body)
-                .await?,
+            admin_service::create_pioneer_code(
+                &state.db,
+                &state.config,
+                admin_actor_input(&admin),
+                body,
+            )
+            .await?,
         ),
     ))
 }
@@ -47,8 +54,7 @@ pub async fn get_pioneer_code(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<PioneerCodeDetailResponse>> {
-    let id =
-        AgentPioneerCodeId::try_new(id).map_err(|e| ServiceError::BadRequest(e.to_string()))?;
+    let id = PioneerCodeId::try_new(id).map_err(|e| ServiceError::BadRequest(e.to_string()))?;
     Ok(Json(admin_service::get_pioneer_code(&state.db, &id).await?))
 }
 
@@ -58,10 +64,82 @@ pub async fn revoke_pioneer_code(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<RevokePioneerCodeResponse>> {
-    let id =
-        AgentPioneerCodeId::try_new(id).map_err(|e| ServiceError::BadRequest(e.to_string()))?;
+    let id = PioneerCodeId::try_new(id).map_err(|e| ServiceError::BadRequest(e.to_string()))?;
     Ok(Json(
         admin_service::revoke_pioneer_code(&state.db, id).await?,
+    ))
+}
+
+/// List human accounts and roles for admins.
+pub async fn list_humans(
+    admin: AdminAuth,
+    State(state): State<AppState>,
+) -> Result<Json<AdminHumanListResponse>> {
+    require_human_admin(&admin)?;
+    Ok(Json(admin_service::list_humans(&state.db).await?))
+}
+
+/// Grant the admin role to a human.
+pub async fn grant_human_admin_role(
+    admin: AdminAuth,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<AdminHumanRoleResponse>> {
+    let granted_by = require_human_admin(&admin)?.clone();
+    let target = HumanId::try_new(id).map_err(|e| ServiceError::BadRequest(e.to_string()))?;
+    Ok(Json(
+        admin_service::grant_human_admin_role(&state.db, &target, &granted_by).await?,
+    ))
+}
+
+/// Revoke the admin role from a human.
+pub async fn revoke_human_admin_role(
+    admin: AdminAuth,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<AdminHumanRoleResponse>> {
+    let revoked_by = require_human_admin(&admin)?.clone();
+    let target = HumanId::try_new(id).map_err(|e| ServiceError::BadRequest(e.to_string()))?;
+    Ok(Json(
+        admin_service::revoke_human_admin_role(&state.db, &target, &revoked_by).await?,
+    ))
+}
+
+/// List admin service tokens.
+pub async fn list_admin_service_tokens(
+    admin: AdminAuth,
+    State(state): State<AppState>,
+) -> Result<Json<AdminServiceTokenListResponse>> {
+    require_human_admin(&admin)?;
+    Ok(Json(
+        admin_service::list_admin_service_tokens(&state.db).await?,
+    ))
+}
+
+/// Create an admin service token.
+pub async fn create_admin_service_token(
+    admin: AdminAuth,
+    State(state): State<AppState>,
+    ValidatedJson(body): ValidatedJson<CreateAdminServiceTokenRequest>,
+) -> Result<(StatusCode, Json<AdminServiceTokenCreatedResponse>)> {
+    let human_id = require_human_admin(&admin)?.clone();
+    Ok((
+        StatusCode::CREATED,
+        Json(admin_service::create_admin_service_token(&state.db, &human_id, body).await?),
+    ))
+}
+
+/// Revoke an admin service token.
+pub async fn revoke_admin_service_token(
+    admin: AdminAuth,
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<RevokeAdminServiceTokenResponse>> {
+    let revoked_by = require_human_admin(&admin)?.clone();
+    let id =
+        AdminServiceTokenId::try_new(id).map_err(|e| ServiceError::BadRequest(e.to_string()))?;
+    Ok(Json(
+        admin_service::revoke_admin_service_token(&state.db, &id, &revoked_by).await?,
     ))
 }
 
@@ -213,4 +291,30 @@ pub async fn disable_agent(
 ) -> Result<Json<DisableAgentResponse>> {
     let id = AgentId::try_new(id).map_err(|e| ServiceError::BadRequest(e.to_string()))?;
     Ok(Json(admin_service::disable_agent(&state.db, id).await?))
+}
+
+fn admin_actor_input(admin: &AdminAuth) -> admin_service::AdminActorInput {
+    match &admin.actor {
+        crate::extractors::AdminActor::Human {
+            human_id,
+            github_login,
+            ..
+        } => admin_service::AdminActorInput::Human {
+            human_id: human_id.clone(),
+            display: format!("@{github_login}"),
+        },
+        crate::extractors::AdminActor::ServiceToken { token_id, label } => {
+            admin_service::AdminActorInput::ServiceToken {
+                token_id: token_id.clone(),
+                display: format!("service-token:{label}"),
+            }
+        }
+    }
+}
+
+fn require_human_admin(admin: &AdminAuth) -> Result<&HumanId> {
+    admin.actor.human_id().ok_or_else(|| {
+        ServiceError::Forbidden("identity management requires human admin session".to_string())
+            .into()
+    })
 }

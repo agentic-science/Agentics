@@ -1,4 +1,9 @@
 import type { ZodType } from "zod";
+import {
+  completeGithubLogin,
+  getHumanSession as getCreatorSession,
+  startGithubLogin,
+} from "@/lib/authApi";
 import { ApiClientError, browserApiBaseUrl, fetchJson } from "@/lib/http";
 import {
   type ChallengePrivateAssetResponse,
@@ -9,8 +14,6 @@ import {
   type CreatorChallengeParticipantsResponse,
   type CreatorChallengeReviewRecordResponse,
   type CreatorChallengeStatsResponse,
-  type CreatorMeResponse,
-  type CreatorSessionResponse,
   challengePrivateAssetResponseSchema,
   challengeShortlistResponseSchema,
   challengeShortlistRevisionResponseSchema,
@@ -19,14 +22,6 @@ import {
   creatorChallengeParticipantsResponseSchema,
   creatorChallengeReviewRecordResponseSchema,
   creatorChallengeStatsResponseSchema,
-  creatorMeResponseSchema,
-  creatorSessionResponseSchema,
-  type GithubOauthCallbackRequest,
-  type GithubOauthLoginRequest,
-  type GithubOauthLoginResponse,
-  githubOauthCallbackRequestSchema,
-  githubOauthLoginRequestSchema,
-  githubOauthLoginResponseSchema,
   type UploadChallengePrivateAssetRequest,
   uploadChallengePrivateAssetRequestSchema,
 } from "@/lib/schemas";
@@ -45,58 +40,13 @@ export type {
 };
 export {
   ApiClientError as CreatorApiError,
+  completeGithubLogin,
   createChallengeReviewRecordRequestSchema,
   createChallengeShortlistRevisionRequestSchema,
+  getCreatorSession,
+  startGithubLogin,
   uploadChallengePrivateAssetRequestSchema,
 };
-
-/** Fetches creator me for the requested UI scope. */
-export async function getCreatorMe(): Promise<CreatorMeResponse> {
-  return creatorFetchJson("/api/creator/me", creatorMeResponseSchema);
-}
-
-/** Fetches creator session bootstrap data including the current csrf token. */
-export async function getCreatorSession(): Promise<CreatorSessionResponse> {
-  return creatorFetchJson("/api/creator/session", creatorSessionResponseSchema);
-}
-
-/** Starts github login and returns the next navigation target. */
-export async function startGithubLogin(
-  pioneerCode: string,
-): Promise<GithubOauthLoginResponse> {
-  const request = githubOauthLoginRequestSchema.parse({
-    ...(pioneerCode ? { pioneer_code: pioneerCode } : {}),
-  } satisfies GithubOauthLoginRequest);
-  return creatorFetchJson(
-    "/api/auth/github/login",
-    githubOauthLoginResponseSchema,
-    undefined,
-    {
-      method: "POST",
-      body: JSON.stringify(request),
-    },
-  );
-}
-
-/** Completes github login using the returned state. */
-export async function completeGithubLogin(
-  code: string,
-  state: string,
-): Promise<CreatorSessionResponse> {
-  const request = githubOauthCallbackRequestSchema.parse({
-    code,
-    state,
-  } satisfies GithubOauthCallbackRequest);
-  return creatorFetchJson(
-    "/api/auth/github/callback",
-    creatorSessionResponseSchema,
-    undefined,
-    {
-      method: "POST",
-      body: JSON.stringify(request),
-    },
-  );
-}
 
 /** Creates challenge review record through the API. */
 export async function createChallengeReviewRecord(

@@ -3,6 +3,7 @@
 import { ShieldCheck } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useMemo, useState } from "react";
+import { AdminIdentityPanel } from "@/components/admin/AdminIdentityPanel";
 import {
   type AdminRefresh,
   CapacityPanel,
@@ -14,18 +15,14 @@ import { ChallengeReviewRecordPanel } from "@/components/admin/ChallengeReviewRe
 import { CredentialPanel } from "@/components/admin/CredentialPanel";
 import { adminErrorMessage } from "@/components/admin/errors";
 import { PioneerCodePanel } from "@/components/admin/PioneerCodePanel";
-import {
-  AdminApiError,
-  type AdminCredentials,
-  adminLogin,
-  adminLogout,
-} from "@/lib/adminApi";
+import { AdminApiError } from "@/lib/adminApi";
 import {
   clearAdminDashboard,
   mutateAdminDashboard,
   useAdminDashboard,
   useAdminSession,
 } from "@/lib/adminData";
+import { logoutHuman, startGithubLogin } from "@/lib/authApi";
 
 /** Describes the admin tab shape used by this module. */
 type AdminTab =
@@ -33,6 +30,7 @@ type AdminTab =
   | "challenges"
   | "reviewRecords"
   | "pioneer-codes"
+  | "identity"
   | "capacity"
   | "operations";
 
@@ -40,38 +38,25 @@ type AdminTab =
 export function AdminConsole() {
   const locale = useLocale();
   const t = useTranslations("admin");
-  const [credentials, setCredentials] = useState<AdminCredentials>({
-    username: "admin",
-    password: "",
-  });
   const [csrfToken, setCsrfToken] = useState("");
-  const [sessionUsername, setSessionUsername] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const restoredSession = useAdminSession();
-  const dashboard = useAdminDashboard(csrfToken);
+  const hasAdminRole =
+    restoredSession.session?.roles.includes("admin") ?? false;
+  const dashboard = useAdminDashboard(hasAdminRole ? csrfToken : "");
   const data = dashboard.data;
 
-  const isConfigured = credentials.username.trim() && credentials.password;
-
   const loginAndRefresh: AdminRefresh = async (options = {}) => {
-    if (!isConfigured) {
-      setError(t("messages.enterCredentials"));
-      return;
-    }
-
     setLoading(true);
     setError(null);
     try {
-      const session = await adminLogin(credentials);
-      setCsrfToken(session.csrf_token);
-      setSessionUsername(session.username);
-      setCredentials({ username: session.username, password: "" });
-      await mutateAdminDashboard(session.csrf_token);
+      const response = await startGithubLogin("", "/admin");
+      window.location.href = response.authorization_url;
       if (!options.quiet) {
-        setMessage(t("messages.sessionStarted"));
+        setMessage(t("messages.redirectingToGithub"));
       }
     } catch (e) {
       setError(
@@ -86,13 +71,13 @@ export function AdminConsole() {
   };
 
   useEffect(() => {
-    if (restoredSession.session && !csrfToken) {
+    if (
+      restoredSession.session &&
+      restoredSession.session.csrf_token !== csrfToken
+    ) {
       setCsrfToken(restoredSession.session.csrf_token);
-      setSessionUsername(restoredSession.session.username);
-      setCredentials({
-        username: restoredSession.session.username,
-        password: "",
-      });
+    } else if (!restoredSession.session && csrfToken) {
+      setCsrfToken("");
     }
   }, [csrfToken, restoredSession.session]);
 
@@ -126,17 +111,16 @@ export function AdminConsole() {
   /** Handles sign out for the current session. */
   const signOut = async () => {
     if (!csrfToken) {
-      setSessionUsername(null);
       return;
     }
 
     setLoading(true);
     setError(null);
     try {
-      await adminLogout(csrfToken);
+      await logoutHuman(csrfToken);
       await clearAdminDashboard(csrfToken);
+      await restoredSession.mutate(undefined, { revalidate: false });
       setCsrfToken("");
-      setSessionUsername(null);
       setMessage(t("messages.sessionEnded"));
     } catch (e) {
       setError(
@@ -153,6 +137,10 @@ export function AdminConsole() {
   const refresh: AdminRefresh = async (options = {}) => {
     if (!csrfToken) {
       setError(t("messages.signInBeforeRefresh"));
+      return;
+    }
+    if (!hasAdminRole) {
+      setError(t("messages.accessDenied"));
       return;
     }
 
@@ -206,9 +194,8 @@ export function AdminConsole() {
             </p>
           </div>
           <CredentialPanel
-            credentials={credentials}
-            sessionUsername={sessionUsername}
-            onChange={setCredentials}
+            sessionLogin={restoredSession.session?.github_login ?? null}
+            hasAdminRole={hasAdminRole}
             onLogin={loginAndRefresh}
             onLogout={signOut}
             loading={loading || restoredSession.isLoading}
@@ -222,37 +209,45 @@ export function AdminConsole() {
       {message ? (
         <div className="card border-success/30 text-success">{message}</div>
       ) : null}
+      {restoredSession.session && !hasAdminRole ? (
+        <div className="card border-warning/40 text-warning">
+          {t("messages.accessDenied")}
+        </div>
+      ) : null}
 
-      <nav className="tab-list overflow-x-auto">
-        {[
-          ["overview", t("tabs.overview")],
-          ["challenges", t("tabs.challenges")],
-          ["reviewRecords", t("tabs.reviewRecords")],
-          ["pioneer-codes", t("tabs.pioneerCodes")],
-          ["capacity", t("tabs.capacity")],
-          ["operations", t("tabs.operations")],
-        ].map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            className={`tab-link ${activeTab === id ? "active" : ""}`}
-            onClick={() => setActiveTab(id as AdminTab)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
+      {hasAdminRole ? (
+        <nav className="tab-list overflow-x-auto">
+          {[
+            ["overview", t("tabs.overview")],
+            ["challenges", t("tabs.challenges")],
+            ["reviewRecords", t("tabs.reviewRecords")],
+            ["pioneer-codes", t("tabs.pioneerCodes")],
+            ["identity", t("tabs.identity")],
+            ["capacity", t("tabs.capacity")],
+            ["operations", t("tabs.operations")],
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              className={`tab-link ${activeTab === id ? "active" : ""}`}
+              onClick={() => setActiveTab(id as AdminTab)}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      ) : null}
 
-      {activeTab === "overview" ? (
+      {hasAdminRole && activeTab === "overview" ? (
         <OverviewPanel data={data} statusCounts={statusCounts} />
       ) : null}
-      {activeTab === "challenges" ? (
+      {hasAdminRole && activeTab === "challenges" ? (
         <ChallengeAdminPanel
           challenges={data.challenges.items}
           locale={locale}
         />
       ) : null}
-      {activeTab === "reviewRecords" ? (
+      {hasAdminRole && activeTab === "reviewRecords" ? (
         <ChallengeReviewRecordPanel
           csrfToken={csrfToken}
           reviewRecords={data.reviewRecords.items}
@@ -262,7 +257,7 @@ export function AdminConsole() {
           onMessage={setMessage}
         />
       ) : null}
-      {activeTab === "pioneer-codes" ? (
+      {hasAdminRole && activeTab === "pioneer-codes" ? (
         <PioneerCodePanel
           csrfToken={csrfToken}
           pioneerCodes={data.pioneerCodes}
@@ -271,10 +266,25 @@ export function AdminConsole() {
           onMessage={setMessage}
         />
       ) : null}
-      {activeTab === "capacity" ? (
+      {hasAdminRole && activeTab === "identity" ? (
+        <AdminIdentityPanel
+          csrfToken={csrfToken}
+          currentHumanId={restoredSession.session?.human_id ?? null}
+          humans={data.humans}
+          serviceTokens={data.adminServiceTokens}
+          locale={locale}
+          onRefresh={refresh}
+          onSessionChanged={async () => {
+            await restoredSession.mutate();
+          }}
+          onError={setError}
+          onMessage={setMessage}
+        />
+      ) : null}
+      {hasAdminRole && activeTab === "capacity" ? (
         <CapacityPanel capacity={data.capacity} />
       ) : null}
-      {activeTab === "operations" ? (
+      {hasAdminRole && activeTab === "operations" ? (
         <OperationsPanel
           csrfToken={csrfToken}
           submissions={data.submissions.items}

@@ -205,15 +205,15 @@ MVP 中 creator-side review record creation 和 private asset upload 仅支持 w
 Creator-authenticated APIs 使用 creator session cookie，并在 unsafe requests 中
 使用 `X-Agentics-CSRF-Token`：
 `POST /api/auth/github/login` 在 JSON body 中接受 `{ "pioneer_code": "..." }`，
-避免把 code 放进浏览器 URL。`GET /api/creator/session` 是 creator console
-bootstrap route；它返回当前 creator session state 和后续 creator mutations 使用的
-CSRF token。
+避免把 code 放进浏览器 URL。`GET /api/auth/session` 是共用的 human-session
+bootstrap route；它返回当前 human session state 和后续 creator mutations 使用的 CSRF
+token。
 
 ```text
 POST /api/auth/github/login
 POST /api/auth/github/callback
-GET  /api/creator/session
-GET  /api/creator/me
+GET  /api/auth/session
+POST /api/auth/logout
 POST /api/creator/challenge-review-records
 GET  /api/creator/challenge-review-records/{id}
 POST /api/creator/challenge-review-records/{id}/private-assets

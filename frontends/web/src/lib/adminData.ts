@@ -1,19 +1,24 @@
 "use client";
 
 import useSWR, { mutate } from "swr";
-import { adminFetchJson, adminSession } from "@/lib/adminApi";
+import { adminFetchJson } from "@/lib/adminApi";
+import { getHumanSession, HUMAN_SESSION_CACHE_KEY } from "@/lib/authApi";
 import {
   type AdminCapacityResponse,
   type AdminChallengeListResponse,
+  type AdminHumanListResponse,
   type AdminServiceHeartbeatListResponse,
-  type AdminSessionResponse,
+  type AdminServiceTokenListResponse,
   type AdminSolutionSubmissionListResponse,
   adminCapacityResponseSchema,
   adminChallengeListResponseSchema,
+  adminHumanListResponseSchema,
   adminServiceHeartbeatListResponseSchema,
+  adminServiceTokenListResponseSchema,
   adminSolutionSubmissionListResponseSchema,
   type ChallengeReviewRecordListResponse,
   challengeReviewRecordListResponseSchema,
+  type HumanSessionResponse,
   type PioneerCodeListResponse,
   pioneerCodeListResponseSchema,
 } from "@/lib/schemas";
@@ -25,6 +30,8 @@ export interface AdminData {
   submissions: AdminSolutionSubmissionListResponse;
   heartbeats: AdminServiceHeartbeatListResponse;
   pioneerCodes: PioneerCodeListResponse;
+  humans: AdminHumanListResponse;
+  adminServiceTokens: AdminServiceTokenListResponse;
   capacity: AdminCapacityResponse | null;
 }
 
@@ -34,14 +41,20 @@ export const emptyAdminData: AdminData = {
   submissions: { items: [] },
   heartbeats: { items: [] },
   pioneerCodes: { items: [] },
+  humans: { items: [] },
+  adminServiceTokens: { items: [] },
   capacity: null,
 };
 
 /** Restores the cookie-backed admin browser session through SWR. */
 export function useAdminSession() {
-  const swr = useSWR<AdminSessionResponse>("admin-session", adminSession, {
-    shouldRetryOnError: false,
-  });
+  const swr = useSWR<HumanSessionResponse>(
+    HUMAN_SESSION_CACHE_KEY,
+    getHumanSession,
+    {
+      shouldRetryOnError: false,
+    },
+  );
   return {
     session: swr.data,
     error: swr.error,
@@ -96,6 +109,8 @@ export async function fetchAdminDashboardData(
     submissions,
     heartbeats,
     pioneerCodes,
+    humans,
+    adminServiceTokens,
     capacity,
   ] = await Promise.all([
     adminFetchJson(
@@ -123,6 +138,12 @@ export async function fetchAdminDashboardData(
       pioneerCodeListResponseSchema,
       csrfToken,
     ),
+    adminFetchJson("/admin/humans", adminHumanListResponseSchema, csrfToken),
+    adminFetchJson(
+      "/admin/admin-service-tokens",
+      adminServiceTokenListResponseSchema,
+      csrfToken,
+    ),
     adminFetchJson("/admin/capacity", adminCapacityResponseSchema, csrfToken),
   ]);
 
@@ -132,6 +153,8 @@ export async function fetchAdminDashboardData(
     submissions,
     heartbeats,
     pioneerCodes,
+    humans,
+    adminServiceTokens,
     capacity,
   };
 }

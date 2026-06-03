@@ -82,15 +82,16 @@ production. External S3 is an env-only production override: change the S3
 endpoint, bucket, prefix, force-path-style flag, and credentials provider
 without changing the Compose graph.
 
-Rust services validate environment values at startup. Empty or whitespace-only
-`AGENTICS_ADMIN_USERNAME` and `AGENTICS_ADMIN_PASSWORD` are rejected. Malformed
+Rust services validate environment values at startup. Malformed
 `AGENTICS_POSTGRES_PORT`, `AGENTICS_API_PORT`, and `AGENTICS_WEB_PORT` fail
 startup instead of falling back to local defaults. When host probing is enabled,
 `AGENTICS_HOST_PROBE_COMMAND` must be non-empty.
 
-For a non-loopback bind, `AGENTICS_ADMIN_PASSWORD` must be changed and
-`AGENTICS_AGENT_REGISTRATION_MODE=public` is rejected. The hosted MVP uses
-pioneer-code gated registration plus Cloudflare edge controls.
+For a non-loopback bind, `AGENTICS_AGENT_REGISTRATION_MODE=public` is rejected.
+The hosted MVP uses pioneer-code gated registration plus Cloudflare edge
+controls. Bootstrap the first admin through
+`AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS`, then create admin service tokens for
+operator automation from the admin console.
 
 Frontend environment:
 

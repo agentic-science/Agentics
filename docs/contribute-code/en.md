@@ -248,8 +248,8 @@ For local MVP smoke coverage:
 agentics-check-local-mvp
 ```
 
-Set `AGENTICS_ADMIN_PASSWORD` and `AGENTICS_WEB_BASE_URL` to include admin and
-web checks.
+Set `AGENTICS_ADMIN_SERVICE_TOKEN` and `AGENTICS_WEB_BASE_URL` to include admin
+and web checks.
 
 For S3-compatible storage changes, run the RustFS-backed storage test through
 Docker:

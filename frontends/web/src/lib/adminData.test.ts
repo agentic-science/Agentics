@@ -18,6 +18,8 @@ describe("adminData", () => {
       "/admin-api/solution-submissions": { items: [] },
       "/admin-api/service-heartbeats": { items: [] },
       "/admin-api/pioneer-codes": { items: [] },
+      "/admin-api/humans": { items: [] },
+      "/admin-api/admin-service-tokens": { items: [] },
       "/admin-api/capacity": {
         quota_window_seconds: 86400,
         quotas: {
@@ -53,7 +55,7 @@ describe("adminData", () => {
     const data = await fetchAdminDashboardData("csrf-token");
 
     expect(data.capacity?.quotas.max_active_agents).toBe(50);
-    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenCalledTimes(8);
     const calls = fetchMock.mock.calls as Array<
       [RequestInfo | URL, RequestInit | undefined]
     >;

@@ -15,7 +15,7 @@ use agentics_persistence::Repositories;
 use agentics_storage::build_storage;
 use clap::{Parser, Subcommand, ValueEnum};
 use reqwest::{Client, Url};
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::ExposeSecret;
 use sqlx::postgres::PgPoolOptions;
 
 use crate::support::run_with_ctrl_c;
@@ -77,12 +77,9 @@ pub struct RunArgs {
     /// Web base URL. Falls back to AGENTICS_WEB_BASE_URL. Browser phase is skipped when absent.
     #[arg(long)]
     web_base_url: Option<String>,
-    /// Admin username. Falls back to AGENTICS_ADMIN_USERNAME from Config.
+    /// Read admin service token from stdin instead of AGENTICS_ADMIN_SERVICE_TOKEN.
     #[arg(long)]
-    admin_username: Option<String>,
-    /// Read admin password from stdin instead of AGENTICS_ADMIN_PASSWORD.
-    #[arg(long)]
-    admin_password_stdin: bool,
+    admin_service_token_stdin: bool,
     /// Output directory for report and evidence.
     #[arg(long)]
     output_dir: Option<PathBuf>,
@@ -178,8 +175,7 @@ async fn run(args: RunArgs) -> Result<RehearsalReport, ProductionRehearsalError>
         &client,
         &resolved.api_base_url,
         resolved.web_base_url.as_ref(),
-        &resolved.admin_username,
-        &resolved.admin_password,
+        &resolved.admin_service_token,
         args.gpu,
     )
     .await;
@@ -216,8 +212,7 @@ async fn run(args: RunArgs) -> Result<RehearsalReport, ProductionRehearsalError>
     let identity = run_identity_phase(
         &client,
         &resolved.api_base_url,
-        &resolved.admin_username,
-        &resolved.admin_password,
+        &resolved.admin_service_token,
         &resolved.run_id,
         &mut state,
     )
@@ -287,8 +282,7 @@ async fn run_preflight_phase(
     client: &Client,
     api_base_url: &Url,
     web_base_url: Option<&Url>,
-    admin_username: &str,
-    admin_password: &SecretString,
+    admin_service_token: &secrecy::SecretString,
     gpu_mode: GpuMode,
 ) -> PhaseEvidence {
     let start = Instant::now();
@@ -323,15 +317,7 @@ async fn run_preflight_phase(
     );
 
     checks.push(
-        match admin_get_json(
-            client,
-            api_base_url,
-            "admin/capacity",
-            admin_username,
-            admin_password,
-        )
-        .await
-        {
+        match admin_get_json(client, api_base_url, "admin/capacity", admin_service_token).await {
             Ok(value) if value.get("usage").is_some() => CheckEvidence::passed(
                 "admin capacity",
                 "admin capacity endpoint returned quota usage",
@@ -349,8 +335,7 @@ async fn run_preflight_phase(
             client,
             api_base_url,
             "admin/service-heartbeats",
-            admin_username,
-            admin_password,
+            admin_service_token,
         )
         .await
         {
@@ -413,8 +398,7 @@ fn heartbeat_check(value: serde_json::Value, gpu_mode: GpuMode) -> CheckEvidence
 async fn run_identity_phase(
     client: &Client,
     api_base_url: &Url,
-    admin_username: &str,
-    admin_password: &SecretString,
+    admin_service_token: &secrecy::SecretString,
     run_id: &str,
     state: &mut RehearsalState,
 ) -> PhaseEvidence {
@@ -426,8 +410,7 @@ async fn run_identity_phase(
         client,
         api_base_url,
         "admin/pioneer-codes",
-        admin_username,
-        admin_password,
+        admin_service_token,
         &serde_json::json!({
             "label": "reh",
             "code": code.as_str(),
@@ -863,8 +846,7 @@ async fn run_cleanup_phase(
                 client,
                 &resolved.api_base_url,
                 &format!("admin/pioneer-codes/{code_id}/revoke"),
-                &resolved.admin_username,
-                &resolved.admin_password,
+                &resolved.admin_service_token,
                 &serde_json::json!({}),
             )
             .await

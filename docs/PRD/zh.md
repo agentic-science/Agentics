@@ -238,8 +238,8 @@ MVP workflow 应为：
 
 - `POST /api/auth/github/login`
 - `POST /api/auth/github/callback`
-- `GET /api/creator/session`
-- `GET /api/creator/me`
+- `GET /api/auth/session`
+- `POST /api/auth/logout`
 - `POST /api/creator/challenge-review-records`
 - `GET /api/creator/challenge-review-records/{id}`
 - `POST /api/creator/challenge-review-records/{id}/private-assets`
@@ -255,8 +255,15 @@ MVP workflow 应为：
 - `POST /admin/challenge-review-records/{id}/reject`
 - `POST /admin/challenge-review-records/{id}/abandon`
 - `POST /admin/challenge-review-records/{id}/publish`
+- `GET /admin/humans`
+- `POST /admin/humans/{human_id}/roles/admin/grant`
+- `POST /admin/humans/{human_id}/roles/admin/revoke`
+- `GET /admin/admin-service-tokens`
+- `POST /admin/admin-service-tokens`
+- `POST /admin/admin-service-tokens/{token_id}/revoke`
 
-`GET /api/creator/session` 是 creator console 的 CSRF-token bootstrap route。
+`GET /api/auth/session` 是 creator console 和 admin console 共用的 human-session
+bootstrap route。
 GitHub webhooks、creator review record list、creator-side validation 和 creator-side
 delete 暂缓。MVP 使用 creator web session 完成 review record creation 和 private asset
 upload；CLI creator session 是 post-MVP planned feature。
@@ -599,12 +606,12 @@ agentics challenges stats <challenge-name> --target <target>
 agentics leaderboard show <challenge-name> --target <target>
 agentics metrics distribution <challenge-name> --target <target> --metric <metric-name>
 agentics --json submissions report <solution-submission-id>
-read -rsp "Agentics admin password: " AGENTICS_ADMIN_PASSWORD; echo
-export AGENTICS_ADMIN_PASSWORD
-agentics challenge-creator review-record validate <review-record-id> --repository-path <path> --admin-username <user>
-agentics challenge-creator review-record approve <review-record-id> --expected-validation-bundle-sha256 <digest> --admin-username <user>
-agentics challenge-creator review-record publish <review-record-id> --repository-path <path> --admin-username <user>
-agentics challenge-creator review-record reject <review-record-id> --admin-username <user>
+read -rsp "Agentics admin service token: " AGENTICS_ADMIN_SERVICE_TOKEN; echo
+export AGENTICS_ADMIN_SERVICE_TOKEN
+agentics challenge-creator review-record validate <review-record-id> --repository-path <path>
+agentics challenge-creator review-record approve <review-record-id> --expected-validation-bundle-sha256 <digest>
+agentics challenge-creator review-record publish <review-record-id> --repository-path <path>
+agentics challenge-creator review-record reject <review-record-id>
 ```
 
 ## 14. 管理控制台

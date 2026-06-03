@@ -36,7 +36,7 @@ struct RawCliEnv {
     api_port: Option<u16>,
     token: Option<String>,
     pioneer_code: Option<String>,
-    admin_password: Option<String>,
+    admin_service_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -46,7 +46,7 @@ pub(crate) struct Environment {
     pub api_port: Option<u16>,
     pub token: Option<SecretString>,
     pub pioneer_code: Option<SecretString>,
-    pub admin_password: Option<SecretString>,
+    pub admin_service_token: Option<SecretString>,
 }
 
 impl Environment {
@@ -60,7 +60,7 @@ impl Environment {
             api_port: raw.api_port,
             token: non_empty_owned(raw.token).map(SecretString::from),
             pioneer_code: non_empty_owned(raw.pioneer_code).map(SecretString::from),
-            admin_password: non_empty_owned(raw.admin_password).map(SecretString::from),
+            admin_service_token: non_empty_owned(raw.admin_service_token).map(SecretString::from),
         })
     }
 }
@@ -97,7 +97,7 @@ pub(crate) struct ResolvedSettings {
     pub token: Option<SecretString>,
     pub token_source: SettingSource,
     pub pioneer_code: Option<SecretString>,
-    pub admin_password: Option<SecretString>,
+    pub admin_service_token: Option<SecretString>,
     pub config_path: PathBuf,
 }
 
@@ -129,7 +129,7 @@ impl ResolvedSettings {
             token: token.map(|value| SecretString::from(value.to_string())),
             token_source,
             pioneer_code: env.pioneer_code.clone(),
-            admin_password: env.admin_password.clone(),
+            admin_service_token: env.admin_service_token.clone(),
             config_path,
         })
     }
@@ -372,7 +372,7 @@ mod tests {
             api_port: None,
             token: Some(SecretString::from("env-token")),
             pioneer_code: None,
-            admin_password: None,
+            admin_service_token: None,
         };
 
         let settings = ResolvedSettings::resolve(

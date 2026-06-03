@@ -7,9 +7,9 @@ use super::{
     CreateChallengeReviewRecordAuditEventInput, clear_stale_active_validation_tx,
     create_challenge_review_audit_event_tx, lock_quota_scope,
 };
-use crate::db::ids::agent_id_from_row;
+use crate::db::ids::human_id_from_row;
 use agentics_domain::models::challenge_creation::ChallengeReviewRecordStatus;
-use agentics_domain::models::ids::{AgentId, ChallengePrivateAssetId, ChallengeReviewAuditEventId};
+use agentics_domain::models::ids::{ChallengePrivateAssetId, ChallengeReviewAuditEventId, HumanId};
 use agentics_domain::storage::StorageKey;
 use agentics_error::{Result, ServiceError};
 
@@ -66,7 +66,7 @@ pub async fn reserve_challenge_private_asset(
             storage_key,
             temporary_storage_key,
             status,
-            uploader_agent_id
+            uploader_human_id
         )
         VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8, $9, 'pending', $10::uuid)
         RETURNING *
@@ -81,7 +81,7 @@ pub async fn reserve_challenge_private_asset(
     .bind(input.sha256.to_string())
     .bind(input.storage_key.as_str())
     .bind(input.temporary_storage_key.as_str())
-    .bind(input.uploader_agent_id.as_str())
+    .bind(input.uploader_human_id.as_str())
     .fetch_one(&mut *tx)
     .await?;
 
@@ -123,7 +123,7 @@ pub async fn activate_challenge_private_asset_with_audit(
     pool: &PgPool,
     asset_row_id: &ChallengePrivateAssetId,
     audit_event_id: ChallengeReviewAuditEventId,
-    actor_agent_id: &AgentId,
+    actor_human_id: &HumanId,
 ) -> Result<ChallengePrivateAssetRecord> {
     let mut tx = pool.begin().await?;
     let response = activate_challenge_private_asset_tx(&mut tx, asset_row_id).await?;
@@ -132,8 +132,9 @@ pub async fn activate_challenge_private_asset_with_audit(
         &CreateChallengeReviewRecordAuditEventInput {
             event_id: audit_event_id,
             review_record_id: response.review_record_id.clone(),
-            actor_agent_id: Some(actor_agent_id.clone()),
-            actor_admin_username: None,
+            actor_human_id: Some(actor_human_id.clone()),
+            actor_admin_service_token_id: None,
+            actor_display: None,
             action: "private_asset_uploaded".to_string(),
             message: "private benchmark asset uploaded".to_string(),
             metadata: serde_json::json!({
@@ -246,7 +247,7 @@ async fn ensure_private_asset_upload_allowed_tx(
 ) -> Result<()> {
     let row = sqlx::query(
         r#"
-        SELECT status, creator_agent_id, active_validation_record_id::text AS active_validation_record_id
+        SELECT status, creator_human_id, active_validation_record_id::text AS active_validation_record_id
         FROM challenge_review_records
         WHERE id = $1::uuid
         FOR UPDATE
@@ -259,8 +260,8 @@ async fn ensure_private_asset_upload_allowed_tx(
         return Err(ServiceError::NotFound);
     };
 
-    let creator_agent_id = agent_id_from_row(&row, "creator_agent_id")?;
-    if creator_agent_id != input.uploader_agent_id {
+    let creator_human_id = human_id_from_row(&row, "creator_human_id")?;
+    if creator_human_id != input.uploader_human_id {
         return Err(ServiceError::NotFound);
     }
     if row

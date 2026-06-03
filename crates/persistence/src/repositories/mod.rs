@@ -55,8 +55,9 @@ pub use crate::db::pioneer_codes::{
     RevokePioneerCodeOutcome,
 };
 pub use crate::db::sessions::{
-    AuthenticatedAdminSession, AuthenticatedCreatorSession, ConsumedGithubOauthState,
-    CreateAdminSessionInput, CreateCreatorSessionInput, CreateGithubOauthStateInput,
+    AdminServiceTokenRecord, AuthenticatedAdminServiceToken, AuthenticatedHumanSession,
+    ConsumedGithubOauthState, CreateAdminServiceTokenInput, CreateGithubOauthStateInput,
+    CreateHumanSessionInput, HumanRecord, ResolveGithubHumanInput,
 };
 pub use crate::db::solution_submissions::{
     AdminSolutionSubmissionListItemRecord, CreateSolutionSubmissionInput,

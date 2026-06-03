@@ -1,19 +1,19 @@
 "use client";
 
 import useSWR, { mutate } from "swr";
+import { getHumanSession, HUMAN_SESSION_CACHE_KEY } from "@/lib/authApi";
 import {
   getChallengeReviewRecord,
   getChallengeShortlist,
   getCreatorChallengeParticipants,
   getCreatorChallengeStats,
-  getCreatorSession,
 } from "@/lib/creatorApi";
 import type {
   ChallengeShortlistResponse,
   CreatorChallengeParticipantsResponse,
   CreatorChallengeReviewRecordResponse,
   CreatorChallengeStatsResponse,
-  CreatorSessionResponse,
+  HumanSessionResponse,
 } from "@/lib/schemas";
 
 /** Creator owner surfaces fetched together for one challenge and optional target. */
@@ -31,9 +31,9 @@ export interface CreatorOwnerScope {
 
 /** Restores the cookie-backed creator session through SWR. */
 export function useCreatorSession() {
-  const swr = useSWR<CreatorSessionResponse>(
-    "creator-session",
-    getCreatorSession,
+  const swr = useSWR<HumanSessionResponse>(
+    HUMAN_SESSION_CACHE_KEY,
+    getHumanSession,
     {
       shouldRetryOnError: false,
     },

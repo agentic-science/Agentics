@@ -10,7 +10,7 @@ use crate::repositories::{
     PublishArchiveChallengeReviewRecordInput, PublishNewChallengeReviewRecordInput,
 };
 use agentics_domain::models::ids::{
-    AgentId, ChallengeReviewPublishClaimId, ChallengeReviewRecordId,
+    ChallengeReviewPublishClaimId, ChallengeReviewRecordId, HumanId,
 };
 use agentics_domain::storage::StorageKey;
 use agentics_error::Result;
@@ -66,13 +66,13 @@ impl ChallengeReviewRecordsRepository<'_> {
         &self,
         asset_row_id: &agentics_domain::models::ids::ChallengePrivateAssetId,
         audit_event_id: agentics_domain::models::ids::ChallengeReviewAuditEventId,
-        uploader_agent_id: &AgentId,
+        uploader_human_id: &HumanId,
     ) -> Result<ChallengePrivateAssetRecord> {
         db::challenge_creation::activate_challenge_private_asset_with_audit(
             self.pool,
             asset_row_id,
             audit_event_id,
-            uploader_agent_id,
+            uploader_human_id,
         )
         .await
     }
@@ -176,16 +176,14 @@ impl ChallengeReviewRecordsRepository<'_> {
         review_record_id: &ChallengeReviewRecordId,
         expected_validation_bundle_sha256: &agentics_domain::models::hashes::Sha256Digest,
         message: Option<&str>,
-        admin_username: String,
-        audit_event_id: agentics_domain::models::ids::ChallengeReviewAuditEventId,
+        audit_event: &CreateChallengeReviewRecordAuditEventInput,
     ) -> Result<()> {
         db::challenge_creation::approve_validated_challenge_review_record_with_audit(
             self.pool,
             review_record_id,
             expected_validation_bundle_sha256,
             message,
-            admin_username,
-            audit_event_id,
+            audit_event,
         )
         .await
     }

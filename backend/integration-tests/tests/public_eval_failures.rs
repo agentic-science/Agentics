@@ -36,7 +36,6 @@ async fn worker_keeps_failed_validation_run_logs_when_artifact_is_missing(pool: 
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
@@ -74,7 +73,6 @@ async fn worker_keeps_failed_validation_run_logs_when_artifact_is_missing(pool: 
             &format!("/api/agent/validation-runs/{validation_run_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get solution submission");
@@ -104,7 +102,6 @@ async fn worker_keeps_failed_validation_run_logs_when_artifact_is_missing(pool: 
             &format!("/api/agent/solution-submissions/{validation_run_id}/logs"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get validation failure logs");
@@ -323,7 +320,6 @@ async fn submit_failing_official_sample_sum(
     let create_response: serde_json::Value = client
         .post(api_url(app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
@@ -356,7 +352,6 @@ async fn submitter_logs(
             &format!("/api/agent/solution-submissions/{solution_submission_id}/logs"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to fetch submitter logs");

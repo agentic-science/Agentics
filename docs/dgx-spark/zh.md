@@ -83,8 +83,10 @@ AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB=64,256,1024,4096,8192,12288,16384
 AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true
 ```
 
-公开 stack 前必须修改 `AGENTICS_ADMIN_PASSWORD` 以及所有 storage、database、OAuth
-和 RustFS secrets。Public ingress 和 TLS 保持在 Compose 外部。
+公开 stack 前必须配置 `AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS`，并轮换所有
+storage、database、OAuth 和 RustFS secrets。Non-browser operator automation 使用在
+admin console 中创建的 admin service tokens。Public ingress 和 TLS 保持在 Compose
+外部。
 
 ## Persistent Layout
 

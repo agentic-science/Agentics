@@ -37,7 +37,7 @@ pub async fn get_creator_challenge_stats(
     let challenge_name = parse_request_value::<ChallengeName>(&challenge_name)?;
     let response = creator_service::get_creator_challenge_stats(
         &state.db,
-        &creator.agent_id,
+        &creator.human_id,
         &challenge_name,
         query.target.as_deref(),
     )
@@ -55,7 +55,7 @@ pub async fn list_creator_challenge_participants(
     let challenge_name = parse_request_value::<ChallengeName>(&challenge_name)?;
     let response = creator_service::list_creator_challenge_participants(
         &state.db,
-        &creator.agent_id,
+        &creator.human_id,
         &challenge_name,
         query.target.as_deref(),
     )
@@ -75,7 +75,7 @@ pub async fn create_challenge_shortlist_revision(
         &state.db,
         state.storage.as_ref(),
         &state.config,
-        &creator.agent_id,
+        &creator.human_id,
         &challenge_name,
         body,
     )
@@ -91,7 +91,7 @@ pub async fn get_challenge_shortlist(
 ) -> Result<Json<ChallengeShortlistResponse>> {
     let challenge_name = parse_request_value::<ChallengeName>(&challenge_name)?;
     let response =
-        creator_service::get_challenge_shortlist(&state.db, &creator.agent_id, &challenge_name)
+        creator_service::get_challenge_shortlist(&state.db, &creator.human_id, &challenge_name)
             .await?;
     Ok(Json(response))
 }

@@ -118,7 +118,7 @@ async fn challenge_creator_uploads_private_asset_file() {
             "size_bytes": 17,
             "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "storage_key": "challenge-review-records/dddddddd-dddd-4ddd-8ddd-dddddddddddd/private-assets/official-cases.bin",
-            "uploader_agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "uploader_human_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
             "created_at": "2026-05-01T00:00:00Z"
         })))
         .mount(&server)
@@ -169,16 +169,13 @@ async fn challenge_creator_uploads_private_asset_file() {
 #[tokio::test]
 async fn challenge_creator_validates_review_record_with_admin_auth() {
     let server = MockServer::start().await;
-    let admin_auth = format!("Basic {}", {
-        use base64::{Engine as _, engine::general_purpose::STANDARD};
-        STANDARD.encode("admin:secret")
-    });
+    let admin_token = "agentics_admin_secret";
+    let admin_auth = format!("Bearer {admin_token}");
     Mock::given(method("POST"))
         .and(path(
             "/admin/challenge-review-records/dddddddd-dddd-4ddd-8ddd-dddddddddddd/validate",
         ))
         .and(header("authorization", admin_auth))
-        .and(header("x-agentics-admin-automation", "true"))
         .and(body_json(json!({ "repository_path": "/tmp/challenges" })))
         .respond_with(
             ResponseTemplate::new(200).set_body_json(challenge_review_record_json("validated")),
@@ -200,14 +197,12 @@ async fn challenge_creator_validates_review_record_with_admin_auth() {
         "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
         "--repository-path",
         "/tmp/challenges",
-        "--admin-username",
-        "admin",
     ]);
 
     let output = execute(
         cli,
         Environment {
-            admin_password: Some(SecretString::from("secret")),
+            admin_service_token: Some(SecretString::from(admin_token)),
             ..Environment::default()
         },
     )
@@ -239,15 +234,13 @@ async fn challenge_creator_rejects_non_utf8_admin_repository_path() {
         OsString::from("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),
         OsString::from("--repository-path"),
         OsString::from_vec(b"/tmp/challenges-\xff".to_vec()),
-        OsString::from("--admin-username"),
-        OsString::from("admin"),
     ];
     let cli = Cli::parse_from(args);
 
     let error = execute(
         cli,
         Environment {
-            admin_password: Some(SecretString::from("secret")),
+            admin_service_token: Some(SecretString::from("agentics_admin_secret")),
             ..Environment::default()
         },
     )

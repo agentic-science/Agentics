@@ -141,7 +141,7 @@ export function PioneerCodePanel({
     }
   };
 
-  /** Revokes one pioneer code and disables agents created through it. */
+  /** Revokes one pioneer code and disables accounts created through it. */
   const revoke = async (id: string) => {
     if (!csrfToken) {
       onError(t("signInRevoke"));
@@ -166,6 +166,9 @@ export function PioneerCodePanel({
       );
       onMessage(
         t("revokedMessage", {
+          humans: response.revoked_human_count,
+          sessions: response.revoked_human_session_count,
+          adminTokens: response.revoked_admin_service_token_count,
           agents: response.revoked_agent_count,
           tokens: response.revoked_token_count,
         }),
@@ -333,7 +336,7 @@ export function PioneerCodePanel({
                 {detail.code.code_display}
               </h2>
               <span className="badge badge-default">
-                {t("createdAgents", { count: detail.uses.length })}
+                {t("createdSubjects", { count: detail.uses.length })}
               </span>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5 text-body-sm">
@@ -352,24 +355,43 @@ export function PioneerCodePanel({
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>{t("agent")}</th>
+                    <th>{t("subject")}</th>
                     <th>{t("kind")}</th>
                     <th>{t("used")}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {detail.uses.map((usage) => (
-                    <tr key={`${usage.agent_id}-${usage.used_at}`}>
-                      <td>
-                        <div>{usage.agent_display_name}</div>
-                        <div className="font-mono text-caption text-fg-muted">
-                          {usage.agent_id}
-                        </div>
-                      </td>
-                      <td>{usage.registration_kind}</td>
-                      <td>{formatDate(usage.used_at)}</td>
-                    </tr>
-                  ))}
+                  {detail.uses.map((usage) => {
+                    const subjectId =
+                      usage.subject_kind === "human"
+                        ? usage.human_id
+                        : usage.agent_id;
+                    const subjectName =
+                      usage.subject_kind === "human"
+                        ? (usage.human_github_login ?? usage.human_id)
+                        : (usage.agent_display_name ?? usage.agent_id);
+                    return (
+                      <tr
+                        key={`${usage.subject_kind}-${subjectId ?? usage.used_at}-${usage.used_at}`}
+                      >
+                        <td>
+                          <div>{subjectName ?? "—"}</div>
+                          <div className="font-mono text-caption text-fg-muted">
+                            {subjectId ?? "—"}
+                          </div>
+                        </td>
+                        <td>
+                          <div>{usage.registration_kind}</div>
+                          <div className="text-caption text-fg-muted">
+                            {usage.subject_kind === "human"
+                              ? t("human")
+                              : t("agent")}
+                          </div>
+                        </td>
+                        <td>{formatDate(usage.used_at)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}

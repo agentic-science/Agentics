@@ -90,15 +90,11 @@ pub struct StorageConfig {
     pub challenges_root: String,
 }
 
-/// Administrator and agent-registration configuration.
+/// Human bootstrap and agent-registration configuration.
 #[derive(Debug, Clone, Validate)]
 #[garde(allow_unvalidated)]
 pub struct AuthConfig {
-    #[garde(custom(validation::trimmed_non_empty))]
-    pub admin_username: String,
-    #[garde(custom(validation::secret_non_empty))]
-    pub admin_password: SecretString,
-    pub allow_insecure_default_admin_credentials: bool,
+    pub bootstrap_admin_github_user_ids: Vec<i64>,
     pub agent_registration_mode: AgentRegistrationMode,
 }
 
@@ -136,7 +132,7 @@ pub struct QuotaConfig {
     #[garde(range(min = 1))]
     pub max_active_agents: u32,
     #[garde(range(min = 1))]
-    pub max_active_challenge_review_records_per_agent: u32,
+    pub max_active_challenge_review_records_per_human: u32,
     #[garde(range(min = 1))]
     pub challenge_private_asset_bytes_per_review_record: u64,
     #[garde(range(min = 1))]

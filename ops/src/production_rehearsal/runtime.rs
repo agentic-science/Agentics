@@ -24,8 +24,7 @@ struct RawRehearsalEnv {
 
 pub(super) struct ResolvedRunConfig {
     pub config: Config,
-    pub admin_username: String,
-    pub admin_password: SecretString,
+    pub admin_service_token: SecretString,
     pub api_base_url: Url,
     pub web_base_url: Option<Url>,
     pub run_id: String,
@@ -40,11 +39,7 @@ pub(super) fn resolve_run_config(
     load_rehearsal_env_file(args.env_file.as_deref())?;
     let config = Config::from_env()?;
     let env = read_env()?;
-    let admin_username = args
-        .admin_username
-        .clone()
-        .unwrap_or_else(|| config.auth.admin_username.clone());
-    let admin_password = admin_password(args, &config)?;
+    let admin_service_token = admin_service_token(args)?;
     let api_base_url = resolve_api_base_url(args.api_base_url.as_deref(), &env, &config)?;
     let web_base_url = resolve_optional_url(
         "web_base_url",
@@ -79,8 +74,7 @@ pub(super) fn resolve_run_config(
 
     Ok(ResolvedRunConfig {
         config,
-        admin_username,
-        admin_password,
+        admin_service_token,
         api_base_url,
         web_base_url,
         run_id,
@@ -100,19 +94,32 @@ pub(super) fn registration_code() -> String {
     format!("reh-{random_hex}")
 }
 
-fn admin_password(
-    args: &RunArgs,
-    config: &Config,
-) -> Result<SecretString, ProductionRehearsalError> {
-    if args.admin_password_stdin {
-        let mut password = String::new();
+fn admin_service_token(args: &RunArgs) -> Result<SecretString, ProductionRehearsalError> {
+    if args.admin_service_token_stdin {
+        let mut token = String::new();
         use std::io::Read as _;
-        std::io::stdin().read_to_string(&mut password)?;
-        return Ok(SecretString::from(password.trim_end().to_string()));
+        std::io::stdin().read_to_string(&mut token)?;
+        let token = token.trim_end().to_string();
+        if token.trim().is_empty() {
+            return Err(ProductionRehearsalError::Config(
+                "admin service token from stdin is empty".to_string(),
+            ));
+        }
+        return Ok(SecretString::from(token));
     }
-    Ok(SecretString::from(
-        config.expose_admin_password_for_http_basic().to_string(),
-    ))
+    let token = std::env::var("AGENTICS_ADMIN_SERVICE_TOKEN").map_err(|_| {
+        ProductionRehearsalError::Config(
+            "AGENTICS_ADMIN_SERVICE_TOKEN is required unless --admin-service-token-stdin is used"
+                .to_string(),
+        )
+    })?;
+    let token = token.trim().to_string();
+    if token.is_empty() {
+        return Err(ProductionRehearsalError::Config(
+            "AGENTICS_ADMIN_SERVICE_TOKEN must not be empty".to_string(),
+        ));
+    }
+    Ok(SecretString::from(token))
 }
 
 fn read_env() -> Result<RawRehearsalEnv, ProductionRehearsalError> {

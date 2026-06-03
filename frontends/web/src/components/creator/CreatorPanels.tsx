@@ -19,7 +19,7 @@ import type {
   CreatorChallengeParticipantsResponse,
   CreatorChallengeReviewRecordResponse,
   CreatorChallengeStatsResponse,
-  CreatorMeResponse,
+  HumanSessionResponse,
 } from "@/lib/schemas";
 
 /** Renders the creator identity panel component. */
@@ -31,7 +31,7 @@ export function CreatorIdentityPanel({
   onSignIn,
   onRefresh,
 }: {
-  creator: CreatorMeResponse | null;
+  creator: HumanSessionResponse | null;
   loading: boolean;
   pioneerCode: string;
   onPioneerCodeChange: (value: string) => void;
@@ -58,10 +58,10 @@ export function CreatorIdentityPanel({
           </div>
           <div>
             <div className="text-caption uppercase tracking-wide text-fg-muted">
-              {t("agentId")}
+              {t("humanId")}
             </div>
             <div className="font-mono text-caption text-fg-muted break-all">
-              {creator.agent_id}
+              {creator.human_id}
             </div>
           </div>
           <button
@@ -432,7 +432,7 @@ export function OwnerSurfaces({
                       {agent.agent_id}
                     </div>
                   </td>
-                  <td className="font-mono">{agent.added_by_agent_id}</td>
+                  <td className="font-mono">{agent.added_by_human_id}</td>
                   <td>{agent.created_at}</td>
                 </tr>
               ))}

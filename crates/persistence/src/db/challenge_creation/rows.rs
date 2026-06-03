@@ -9,7 +9,7 @@ use agentics_domain::models::challenge_creation::{
 use agentics_domain::models::github::GithubPullRequestNumber;
 use agentics_domain::models::hashes::{GitCommitSha, Sha256Digest};
 use agentics_domain::models::ids::{
-    AgentId, ChallengePrivateAssetId, ChallengeReviewRecordId, ChallengeReviewValidationRecordId,
+    ChallengePrivateAssetId, ChallengeReviewRecordId, ChallengeReviewValidationRecordId, HumanId,
 };
 use agentics_domain::models::names::{AssetName, ChallengeName};
 use agentics_domain::models::paths::RepoRelativePath;
@@ -18,9 +18,9 @@ use agentics_domain::storage::StorageKey;
 use agentics_error::{Result, ServiceError};
 
 use super::super::ids::{
-    agent_id_from_row, asset_name_from_row, challenge_name_from_row,
-    challenge_private_asset_id_from_row, challenge_review_record_id_from_row,
-    challenge_review_validation_record_id_from_row, optional_challenge_name_from_row,
+    asset_name_from_row, challenge_name_from_row, challenge_private_asset_id_from_row,
+    challenge_review_record_id_from_row, challenge_review_validation_record_id_from_row,
+    human_id_from_row, optional_challenge_name_from_row,
 };
 
 /// Review record validation row before DTO projection.
@@ -47,7 +47,7 @@ pub struct ChallengePrivateAssetRecord {
     pub size_bytes: i64,
     pub sha256: Sha256Digest,
     pub storage_key: StorageKey,
-    pub uploader_agent_id: AgentId,
+    pub uploader_human_id: HumanId,
     pub created_at: DateTime<Utc>,
 }
 
@@ -64,7 +64,7 @@ pub struct AdminChallengePrivateAssetRecord {
     pub sha256: Sha256Digest,
     pub storage_key: StorageKey,
     pub temporary_storage_key: Option<StorageKey>,
-    pub uploader_agent_id: AgentId,
+    pub uploader_human_id: HumanId,
     pub created_at: DateTime<Utc>,
     pub activated_at: Option<DateTime<Utc>>,
     pub failed_at: Option<DateTime<Utc>>,
@@ -78,7 +78,7 @@ pub struct ChallengeReviewRecordRecord {
     pub challenge_name: ChallengeName,
     pub request: ChallengeCreationRequestKind,
     pub status: ChallengeReviewRecordStatus,
-    pub creator_agent_id: AgentId,
+    pub creator_human_id: HumanId,
     pub creator_github_user_id: i64,
     pub creator_github_login: String,
     pub repo_url: GithubRepoRemote,
@@ -179,7 +179,7 @@ pub(super) fn row_to_review_record(
         challenge_name: challenge_name_from_row(&row, "challenge_name")?,
         request: request_kind_from_row(&row, "request_kind")?,
         status: review_record_status_from_row(&row, "status")?,
-        creator_agent_id: agent_id_from_row(&row, "creator_agent_id")?,
+        creator_human_id: human_id_from_row(&row, "creator_human_id")?,
         creator_github_user_id: row.try_get("creator_github_user_id")?,
         creator_github_login: row.try_get("creator_github_login")?,
         repo_url: github_repo_remote_from_row(&row, "repo_url")?,
@@ -217,7 +217,7 @@ pub(super) fn row_to_private_asset_record(
         size_bytes: row.try_get("size_bytes")?,
         sha256: sha256_digest_from_row(&row, "sha256")?,
         storage_key: storage_key_from_row(&row, "storage_key")?,
-        uploader_agent_id: agent_id_from_row(&row, "uploader_agent_id")?,
+        uploader_human_id: human_id_from_row(&row, "uploader_human_id")?,
         created_at: row.try_get("created_at")?,
     })
 }
@@ -237,7 +237,7 @@ fn row_to_admin_private_asset_record(
         sha256: sha256_digest_from_row(&row, "sha256")?,
         storage_key: storage_key_from_row(&row, "storage_key")?,
         temporary_storage_key: optional_storage_key_from_row(&row, "temporary_storage_key")?,
-        uploader_agent_id: agent_id_from_row(&row, "uploader_agent_id")?,
+        uploader_human_id: human_id_from_row(&row, "uploader_human_id")?,
         created_at: row.try_get("created_at")?,
         activated_at: row.try_get("activated_at")?,
         failed_at: row.try_get("failed_at")?,

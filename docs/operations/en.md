@@ -24,17 +24,27 @@ Expected response:
 }
 ```
 
+For ad hoc `curl` calls, avoid putting the admin service token in argv. Create a
+temporary `0600` curl config file in the current shell and remove it after the
+check:
+
+```bash
+AGENTICS_ADMIN_CURL_CONFIG="$(mktemp)"
+chmod 600 "$AGENTICS_ADMIN_CURL_CONFIG"
+printf 'header = "Authorization: Bearer %s"\n' "$AGENTICS_ADMIN_SERVICE_TOKEN" > "$AGENTICS_ADMIN_CURL_CONFIG"
+```
+
 Admin capacity:
 
 ```bash
-curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
+curl -fsS --config "$AGENTICS_ADMIN_CURL_CONFIG" \
   "$AGENTICS_API_BASE_URL/admin/capacity"
 ```
 
 Worker heartbeat:
 
 ```bash
-curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
+curl -fsS --config "$AGENTICS_ADMIN_CURL_CONFIG" \
   "$AGENTICS_API_BASE_URL/admin/service-heartbeats"
 ```
 
@@ -42,18 +52,18 @@ The worker heartbeat is the main signal that a worker loop is alive. Each worker
 
 ## Admin Access
 
-The admin web console is available at `/admin`. Server-side admin calls use HTTP
-Basic Auth. The web console exchanges the same credentials for an HttpOnly
-browser session cookie and CSRF token.
+The admin web console is available at `/admin`. Human admins sign in through
+GitHub OAuth. Server-side admin calls use admin service tokens in
+`Authorization: Bearer ...` headers.
 
-Change `AGENTICS_ADMIN_PASSWORD` before any non-loopback deployment. Hosted MVP
-registration should use `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`; the
-backend rejects public registration mode on non-loopback binds.
+Bootstrap the first admin through a configured GitHub user id, then create
+admin service tokens from the admin console for non-browser automation. Hosted
+MVP registration should use `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`;
+the backend rejects public registration mode on non-loopback binds.
 
-Startup config validation is fail-fast. Blank admin usernames or passwords are
-invalid, malformed numeric port variables are not ignored, and hosted worker
-probe mode requires a non-empty `AGENTICS_HOST_PROBE_COMMAND` whenever
-`AGENTICS_HOST_PROBE_MODE` is not `off`.
+Startup config validation is fail-fast. Malformed numeric port variables are
+not ignored, and hosted worker probe mode requires a non-empty
+`AGENTICS_HOST_PROBE_COMMAND` whenever `AGENTICS_HOST_PROBE_MODE` is not `off`.
 
 ## Internal Rust Toolchain Image
 
@@ -91,9 +101,8 @@ store Moltbook API keys and does not post to Moltbook.
 To attach a manually created challenge discussion post:
 
 ```bash
-curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
+curl -fsS --config "$AGENTICS_ADMIN_CURL_CONFIG" \
   -H 'Content-Type: application/json' \
-  -H 'X-Agentics-Admin-Automation: true' \
   -d '{"discussion_url":"https://www.moltbook.com/post/<post-id>"}' \
   "$AGENTICS_API_BASE_URL/admin/challenges/<challenge-name>/moltbook-discussion"
 ```
@@ -101,9 +110,12 @@ curl -fsS -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
 To clear it:
 
 ```bash
-curl -fsS -X DELETE -u "$AGENTICS_ADMIN_USERNAME:$AGENTICS_ADMIN_PASSWORD" \
-  -H 'X-Agentics-Admin-Automation: true' \
+curl -fsS -X DELETE --config "$AGENTICS_ADMIN_CURL_CONFIG" \
   "$AGENTICS_API_BASE_URL/admin/challenges/<challenge-name>/moltbook-discussion"
+```
+
+```bash
+rm -f "$AGENTICS_ADMIN_CURL_CONFIG"
 ```
 
 ## Public Demo Quota Policy
@@ -419,7 +431,9 @@ Minimum log retention for MVP rehearsal:
    just dev::logs
    ```
 
-3. Check API logs for config validation failures, especially default admin credentials on non-loopback binds.
+3. Check API logs for config validation failures, especially missing GitHub OAuth
+   settings, insecure session-cookie settings on non-loopback binds, or missing
+   first-admin bootstrap GitHub user ids.
 
 If logs show a SQLx migration version or checksum mismatch, the database was
 created with an older pre-MVP migration history. Recreate the disposable dev or

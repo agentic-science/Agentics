@@ -62,7 +62,6 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
     let validation_response = client
         .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": &cuda_challenge_name,
             "target": CUDA_TARGET,
@@ -93,7 +92,6 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
             &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to fetch validation")
@@ -108,7 +106,6 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
     let official_response = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": &cuda_challenge_name,
             "target": CUDA_TARGET,
@@ -139,7 +136,6 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
             &format!("/api/agent/solution-submissions/{submission_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to fetch official submission")

@@ -35,7 +35,6 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
@@ -69,7 +68,6 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
             &format!("/api/agent/solution-submissions/{solution_submission_id}"),
         ))
         .header("Authorization", format!("Bearer {other_token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get solution submission as another agent");
@@ -83,7 +81,6 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
             &format!("/api/agent/solution-submissions/{solution_submission_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get solution submission");
@@ -133,7 +130,6 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
             &format!("/api/agent/solution-submissions/{solution_submission_id}/logs"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get owner-visible logs")
@@ -202,10 +198,7 @@ async fn submitter_logs_prefer_official_redaction_after_validation_run(pool: sql
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let sample_sum_id = published_challenge_name(&pool, "sample-sum").await;
-    let admin_auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
+    let admin_auth = admin_service_token_header(&app);
 
     let register_response: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
@@ -221,7 +214,6 @@ async fn submitter_logs_prefer_official_redaction_after_validation_run(pool: sql
     let validation_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": &sample_sum_id,
             "target": "linux-arm64-cpu",
@@ -247,7 +239,6 @@ async fn submitter_logs_prefer_official_redaction_after_validation_run(pool: sql
             &format!("/api/agent/solution-submissions/{solution_submission_id}/logs"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get validation logs")
@@ -266,7 +257,6 @@ async fn submitter_logs_prefer_official_redaction_after_validation_run(pool: sql
             &format!("/admin/solution-submissions/{solution_submission_id}/official-run"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({}))
         .send()
         .await
@@ -280,7 +270,6 @@ async fn submitter_logs_prefer_official_redaction_after_validation_run(pool: sql
             &format!("/api/agent/solution-submissions/{solution_submission_id}/logs"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get official-first logs")
@@ -316,7 +305,6 @@ async fn worker_completes_piped_stdio_solution_submission(pool: sqlx::PgPool) {
     let validation_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "interactive-sum").await,
             "target": "linux-arm64-cpu",
@@ -339,7 +327,6 @@ async fn worker_completes_piped_stdio_solution_submission(pool: sqlx::PgPool) {
             &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get validation run")
@@ -370,7 +357,6 @@ async fn worker_completes_piped_stdio_solution_submission(pool: sqlx::PgPool) {
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "interactive-sum").await,
             "target": "linux-arm64-cpu",
@@ -395,7 +381,6 @@ async fn worker_completes_piped_stdio_solution_submission(pool: sqlx::PgPool) {
             &format!("/api/agent/solution-submissions/{solution_submission_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get solution submission")
@@ -478,7 +463,6 @@ async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {
     let validation_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/validation-runs"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "coexecuted-sum").await,
             "target": "linux-arm64-cpu",
@@ -502,7 +486,6 @@ async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {
             &format!("/api/agent/validation-runs/{validation_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get validation run")
@@ -532,7 +515,6 @@ async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {
     let create_response = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "coexecuted-sum").await,
             "target": "linux-arm64-cpu",
@@ -563,7 +545,6 @@ async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {
             &format!("/api/agent/solution-submissions/{solution_submission_id}"),
         ))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to get solution submission")

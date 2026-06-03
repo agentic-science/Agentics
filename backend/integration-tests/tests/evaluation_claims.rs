@@ -37,7 +37,6 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
@@ -117,7 +116,6 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
@@ -206,7 +204,6 @@ async fn evaluation_rows_cannot_cross_submission_targets(pool: sqlx::PgPool) {
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
@@ -437,7 +434,6 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
     let create_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(&pool, "sample-sum").await,
             "target": "linux-arm64-cpu",
@@ -829,7 +825,6 @@ async fn create_official_submission(
     let create_response: serde_json::Value = client
         .post(api_url(app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": published_challenge_name(pool, "sample-sum").await,
             "target": "linux-arm64-cpu",

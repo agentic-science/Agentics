@@ -5,8 +5,9 @@ mod helpers;
 use std::path::Path;
 
 use helpers::{
-    api_url, basic_auth_header, copy_dir_all, examples_challenges_root, published_challenge_name,
-    run_worker_once, sample_sum_solution, solution_zip_base64, spawn_app_with_config, test_config,
+    admin_service_token_header, api_url, copy_dir_all, examples_challenges_root,
+    published_challenge_name, run_worker_once, sample_sum_solution, solution_zip_base64,
+    spawn_app_with_config, test_config,
 };
 
 /// Create an admin-published bundle by adapting the legacy `sample-sum` fixture.
@@ -54,10 +55,7 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
     let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let admin_sum_id = published_challenge_name(&pool, "admin-sum").await;
-    let admin_auth = basic_auth_header(
-        &config.auth.admin_username,
-        config.expose_admin_password_for_http_basic(),
-    );
+    let admin_auth = admin_service_token_header(&app);
 
     let register_a: serde_json::Value = client
         .post(api_url(&app, "/api/agents/register"))
@@ -89,7 +87,6 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
     let solution_submission_a: serde_json::Value = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token_a}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": &admin_sum_id,
             "target": "linux-arm64-cpu",
@@ -111,7 +108,6 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
     let solution_submission_b: serde_json::Value = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token_b}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": &admin_sum_id,
             "target": "linux-arm64-cpu",
@@ -166,7 +162,6 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
             &format!("/admin/solution-submissions/{solution_submission_b_id}/official-run"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({}))
         .send()
         .await
@@ -179,7 +174,6 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
             &format!("/admin/solution-submissions/{solution_submission_b_id}/official-run"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({}))
         .send()
         .await
@@ -192,7 +186,6 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
             &format!("/admin/solution-submissions/{solution_submission_a_id}/official-run"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({}))
         .send()
         .await
@@ -262,7 +255,6 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
             &format!("/admin/solution-submissions/{solution_submission_b_id}/rejudge"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({}))
         .send()
         .await
@@ -340,7 +332,6 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
     let second_participant_submission = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
         .header("Authorization", format!("Bearer {token_b}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({
             "challenge_name": &admin_sum_id,
             "target": "linux-arm64-cpu",
@@ -371,7 +362,6 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
             &format!("/admin/solution-submissions/{solution_submission_b_id}/official-run"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({}))
         .send()
         .await
@@ -388,7 +378,6 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
             &format!("/admin/agents/{agent_b_id}/disable"),
         ))
         .header("Authorization", &admin_auth)
-        .header("X-Agentics-Admin-Automation", "true")
         .json(&serde_json::json!({}))
         .send()
         .await
@@ -398,7 +387,6 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
     let disabled_agent_access = client
         .get(api_url(&app, "/api/agent/challenges"))
         .header("Authorization", format!("Bearer {token_b}"))
-        .header("X-Agentics-Admin-Automation", "true")
         .send()
         .await
         .expect("failed to check disabled agent access");

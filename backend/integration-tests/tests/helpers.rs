@@ -15,7 +15,6 @@ use agentics_runner::connect_docker;
 use agentics_storage::{
     S3Storage, StorageFactoryOptions, StorageKey, StorageWriteIntent, build_storage,
 };
-use api_server::admin_auth_throttle::AdminAuthThrottle;
 use api_server::router;
 use api_server::state::AppState;
 use chrono::{Duration, Utc};
@@ -38,6 +37,7 @@ pub async fn published_challenge_name(pool: &PgPool, challenge_name: &str) -> St
 pub struct TestApp {
     pub addr: SocketAddr,
     pub _client: reqwest::Client,
+    pub admin_service_token: String,
     server_task: JoinHandle<()>,
 }
 
@@ -49,7 +49,7 @@ impl Drop for TestApp {
 
 /// Creator session material used by tests instead of a live GitHub OAuth round trip.
 pub struct TestCreatorSession {
-    pub agent_id: String,
+    pub human_id: String,
     pub cookie_header: String,
     pub csrf_token: String,
 }
@@ -84,14 +84,12 @@ pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
         .await
         .expect("failed to seed challenges");
     }
+    let admin_service_token = create_test_admin_service_token(&pool).await;
 
     let state = AppState {
         db: pool,
         config: Arc::new(config.clone()),
         storage,
-        admin_auth_throttle: Arc::new(
-            AdminAuthThrottle::new().expect("admin auth throttle should initialize"),
-        ),
     };
 
     let app = router::router(&config).with_state(state);
@@ -118,6 +116,7 @@ pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
     TestApp {
         addr,
         _client: client,
+        admin_service_token,
         server_task,
     }
 }
@@ -149,9 +148,6 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
     config.storage.tmp_object_grace_hours = 24;
     config.storage.challenges_root = challenges_root.to_string_lossy().to_string();
 
-    config.auth.admin_username = "admin".to_string();
-    config.auth.admin_password = SecretString::from("secret");
-    config.auth.allow_insecure_default_admin_credentials = false;
     config.auth.agent_registration_mode = AgentRegistrationMode::Public;
 
     config.moltbook.submolt_name = "agentics-platform"
@@ -170,7 +166,7 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
     config.quotas.official_runs_per_agent_challenge_day = 5;
     config.quotas.max_active_official_jobs = 20;
     config.quotas.max_active_agents = 1_000;
-    config.quotas.max_active_challenge_review_records_per_agent = 10;
+    config.quotas.max_active_challenge_review_records_per_human = 10;
     config
         .quotas
         .challenge_private_asset_bytes_per_review_record = 250 * 1024 * 1024;
@@ -396,37 +392,68 @@ pub fn api_url(app: &TestApp, path: &str) -> String {
     format!("http://{}{}", app.addr, path)
 }
 
-/// Encode credentials into an HTTP basic-auth header.
-pub fn basic_auth_header(username: &str, password: &str) -> String {
-    use base64::{Engine as _, engine::general_purpose::STANDARD};
-    let creds = format!("{}:{}", username, password);
-    format!("Basic {}", STANDARD.encode(creds))
+/// Build an admin service-token Authorization header for the spawned app.
+pub fn admin_service_token_header(app: &TestApp) -> String {
+    format!("Bearer {}", app.admin_service_token)
 }
 
-/// Insert a GitHub OAuth-equivalent creator session for integration tests.
+async fn create_test_admin_service_token(pool: &PgPool) -> String {
+    let repos = agentics_persistence::Repositories::new(pool);
+    let human = repos
+        .sessions()
+        .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
+            fallback_human_id: agentics_domain::models::ids::HumanId::generate(),
+            github_user_id: 9_001,
+            github_login: "integration-admin".to_string(),
+            pioneer_code_hash: None,
+            pioneer_code_required_for_new_human: false,
+            bootstrap_admin_candidate: true,
+        })
+        .await
+        .expect("test admin human should resolve");
+    let token = agentics_services::auth::create_admin_service_token();
+    repos
+        .sessions()
+        .create_admin_service_token(&agentics_persistence::CreateAdminServiceTokenInput {
+            id: agentics_domain::models::ids::AdminServiceTokenId::generate(),
+            token_hash: agentics_services::auth::hash_opaque_token(&token),
+            label: "integration-tests".to_string(),
+            created_by_human_id: human.human_id,
+            expires_at: None,
+        })
+        .await
+        .expect("test admin service token should insert");
+    token
+}
+
+/// Insert a GitHub OAuth-equivalent human creator session for integration tests.
 pub async fn create_creator_session(
     pool: &PgPool,
     github_user_id: i64,
     github_login: &str,
 ) -> TestCreatorSession {
-    let fallback_agent_id = agentics_domain::models::ids::AgentId::generate();
     let repos = agentics_persistence::Repositories::new(pool);
-    let agent_id = repos
+    let human = repos
         .sessions()
-        .upsert_github_creator_agent(&fallback_agent_id, github_user_id, github_login, 1_000)
+        .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
+            fallback_human_id: agentics_domain::models::ids::HumanId::generate(),
+            github_user_id,
+            github_login: github_login.to_string(),
+            pioneer_code_hash: None,
+            pioneer_code_required_for_new_human: false,
+            bootstrap_admin_candidate: false,
+        })
         .await
-        .expect("creator account should upsert");
+        .expect("creator human should resolve");
     let session_token = agentics_services::auth::create_web_session_token();
     let csrf_token = agentics_services::auth::create_csrf_token();
     repos
         .sessions()
-        .create_creator_session(&agentics_persistence::CreateCreatorSessionInput {
-            session_id: uuid::Uuid::new_v4().to_string(),
+        .create_human_session(&agentics_persistence::CreateHumanSessionInput {
+            session_id: agentics_domain::models::ids::HumanSessionId::generate(),
             session_token_hash: agentics_services::auth::hash_opaque_token(&session_token),
             csrf_token_hash: agentics_services::auth::hash_opaque_token(&csrf_token),
-            agent_id: agent_id.as_str().to_string(),
-            github_user_id,
-            github_login: github_login.to_string(),
+            human_id: human.human_id.clone(),
             expires_at: Utc::now()
                 .checked_add_signed(Duration::hours(24))
                 .expect("test creator session TTL should not overflow"),
@@ -435,7 +462,7 @@ pub async fn create_creator_session(
         .expect("creator session should insert");
 
     TestCreatorSession {
-        agent_id: agent_id.as_str().to_string(),
+        human_id: human.human_id.as_str().to_string(),
         cookie_header: format!("agentics_session={session_token}"),
         csrf_token,
     }

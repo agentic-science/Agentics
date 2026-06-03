@@ -34,7 +34,7 @@ describe("creatorApi", () => {
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    const response = await startGithubLogin("jack-deadbeef");
+    const response = await startGithubLogin("jack-deadbeef", "/creator");
 
     expect(response.authorization_url).toBe(
       "https://github.com/login/oauth/authorize?client_id=test&state=oauth-state",
@@ -43,7 +43,10 @@ describe("creatorApi", () => {
       "/api/auth/github/login",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ pioneer_code: "jack-deadbeef" }),
+        body: JSON.stringify({
+          pioneer_code: "jack-deadbeef",
+          return_to: "/creator",
+        }),
       }),
     );
     const requestedPath = fetchMock.mock.calls[0]?.[0];
@@ -55,11 +58,15 @@ describe("creatorApi", () => {
       async (_input: RequestInfo | URL, _init?: RequestInit) => {
         return new Response(
           JSON.stringify({
-            agent_id: "11111111-1111-4111-8111-111111111111",
-            github_user_id: 123,
-            github_login: "octocat",
-            csrf_token: "csrf-token",
-            expires_at: "2026-05-15T00:00:00Z",
+            session: {
+              human_id: "11111111-1111-4111-8111-111111111111",
+              github_user_id: 123,
+              github_login: "octocat",
+              roles: ["creator"],
+              csrf_token: "csrf-token",
+              expires_at: "2026-05-15T00:00:00Z",
+            },
+            return_to: "/creator",
           }),
           {
             status: 200,

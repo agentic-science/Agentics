@@ -15,8 +15,8 @@ The Review Records tab supports validation, approval, rejection, publication,
 abandonment, and stale review record cleanup. Server-side scripts can also use the
 admin CLI helpers.
 
-Server-side admin routes use HTTP Basic Auth. The web console exchanges the
-same admin credentials for an HttpOnly browser session cookie and CSRF token.
+Server-side admin routes use admin service tokens in `Authorization: Bearer ...`
+headers. Human admins use GitHub OAuth in the web console.
 
 ## Review Checklist
 
@@ -122,33 +122,31 @@ POST /admin/challenge-review-records/{id}/abandon
 POST /admin/challenge-review-records/{id}/publish
 ```
 
-Server-side Basic-auth callers must include
-`X-Agentics-Admin-Automation: true` on unsafe admin requests. Browser admin
-requests should use the session-cookie and CSRF-token flow instead.
+Server-side callers authenticate with `AGENTICS_ADMIN_SERVICE_TOKEN` or
+`--admin-service-token-stdin`. Browser admin requests use the GitHub OAuth
+session cookie and CSRF-token flow instead. Do not pass service tokens as argv
+values.
 
 ## Admin CLI Helpers
 
 ```bash
-read -rsp "Agentics admin password: " AGENTICS_ADMIN_PASSWORD; echo
-export AGENTICS_ADMIN_PASSWORD
+read -rsp "Agentics admin service token: " AGENTICS_ADMIN_SERVICE_TOKEN; echo
+export AGENTICS_ADMIN_SERVICE_TOKEN
 
 cargo run -p agentics-cli --bin agentics -- challenge-creator review-record validate <review-record-id> \
-  --repository-path <repo-dir> \
-  --admin-username admin
+  --repository-path <repo-dir>
 
 cargo run -p agentics-cli --bin agentics -- challenge-creator review-record approve <review-record-id> \
   --expected-validation-bundle-sha256 <validation-digest> \
-  --message "approved" \
-  --admin-username admin
+  --message "approved"
 
 cargo run -p agentics-cli --bin agentics -- challenge-creator review-record publish <review-record-id> \
-  --repository-path <repo-dir> \
-  --admin-username admin
+  --repository-path <repo-dir>
 ```
 
 The CLI also supports review record rejection, abandonment, and cleanup with
-`challenge-creator review-record <command>`. Use `AGENTICS_ADMIN_PASSWORD` or
-`--admin-password-stdin`; do not pass admin passwords as argv values.
+`challenge-creator review-record <command>`. Use `AGENTICS_ADMIN_SERVICE_TOKEN`
+or `--admin-service-token-stdin`; do not pass service tokens as argv values.
 
 ## Publication Notes
 
