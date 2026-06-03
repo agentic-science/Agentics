@@ -607,25 +607,41 @@ async fn find_github_human_for_update_tx(
 ) -> Result<Option<HumanRecord>> {
     let row = sqlx::query(
         r#"
+        WITH locked_human AS (
+            SELECT
+                h.id,
+                h.status,
+                h.created_at,
+                h.disabled_at,
+                e.provider_user_id,
+                e.provider_login
+            FROM human_external_identities e
+            JOIN humans h ON h.id = e.human_id
+            WHERE e.provider = 'github'
+              AND e.provider_user_id = $1
+            FOR UPDATE OF h, e
+        )
         SELECT
-            h.id::text AS human_id,
-            h.status,
-            h.created_at,
-            h.disabled_at,
-            e.provider_user_id AS github_user_id,
-            e.provider_login AS github_login,
+            locked_human.id::text AS human_id,
+            locked_human.status,
+            locked_human.created_at,
+            locked_human.disabled_at,
+            locked_human.provider_user_id AS github_user_id,
+            locked_human.provider_login AS github_login,
             COALESCE(
               array_agg(r.role ORDER BY r.role)
                 FILTER (WHERE r.revoked_at IS NULL),
               ARRAY[]::TEXT[]
             ) AS roles
-        FROM human_external_identities e
-        JOIN humans h ON h.id = e.human_id
-        LEFT JOIN human_roles r ON r.human_id = h.id
-        WHERE e.provider = 'github'
-          AND e.provider_user_id = $1
-        GROUP BY h.id, h.status, h.created_at, h.disabled_at, e.provider_user_id, e.provider_login
-        FOR UPDATE OF h, e
+        FROM locked_human
+        LEFT JOIN human_roles r ON r.human_id = locked_human.id
+        GROUP BY
+            locked_human.id,
+            locked_human.status,
+            locked_human.created_at,
+            locked_human.disabled_at,
+            locked_human.provider_user_id,
+            locked_human.provider_login
         "#,
     )
     .bind(github_user_id)
