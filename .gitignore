@@ -21,6 +21,7 @@ target
 #.idea/
 node_modules
 .playwright-mcp/
+.github-user-id
 .agentics-demo/
 .agentics-compose/
 /storage/
