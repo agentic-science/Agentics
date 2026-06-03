@@ -282,6 +282,99 @@ Pioneer codes remain invitation gates, not ongoing login credentials.
     `admin_username`, `parse_basic_auth`, `x-agentics-admin-automation`, or
     `creator_agent_id` in live code/docs except historical notes.
 
+## Linux Handoff After Review Fixes
+
+This section is for the Linux agent picking up the environment-dependent
+verification after the full code-review pass.
+
+Current reviewed commits:
+
+- `1c4b9fb4 fix(identity): harden admin revocation paths`
+- `c733bce6 fix(cli): remove argv admin token input`
+- `98a3be00 docs(review): log identity code review`
+
+Review log:
+
+- `reviews/2026-06-03-beb005c2.md`
+
+What changed after review:
+
+- Human admin role revocation is guarded so identity management cannot revoke
+  the final active human admin.
+- Pioneer-code revocation now revokes active admin service tokens created by
+  humans derived from that code.
+- Human role and admin service-token revocations record the revoking human.
+- Hosted bootstrap/admin operation now requires GitHub OAuth config when needed.
+- Admin and creator browser consoles share one human-session SWR cache key.
+- Admin service tokens can no longer be passed through CLI argv. Use
+  `AGENTICS_ADMIN_SERVICE_TOKEN` or `--admin-service-token-stdin`.
+
+Accepted MVP tradeoffs, not blockers:
+
+- Public observer stats may expose aggregate total attempt counts.
+- Pioneer codes remain visible to admins after creation.
+- Agent-facing registration examples may pass pioneer codes through argv.
+
+Mac verification already completed:
+
+- `cargo fmt --all`
+- `bunx biome check --write src messages`
+- `cargo test -p integration-tests --no-run`
+- `cargo check --workspace --all-targets`
+- `bun run generate:schemas:check`
+- `bun run lint`
+- `bun x tsc --noEmit --pretty false`
+- `cargo test -p agentics-cli admin_service_token_argv_flag_is_removed`
+- `cargo test -p agentics-config github_oauth`
+- `cargo test -p agentics-config hosted_bind_requires_secure_cookies_and_invited_registration`
+- `bun run test -- src/components/admin/AdminConsole.test.tsx src/components/creator/CreatorConsole.test.tsx src/lib/creatorApi.test.ts src/lib/adminData.test.ts src/lib/creatorData.test.ts src/lib/schemas.test.ts`
+- `just rust::clippy`
+- `just web::schema-check`
+- `git diff --check`
+
+Linux work to do:
+
+1. Check the dedicated test environment:
+
+   ```bash
+   just test-env-status-cpu
+   ```
+
+2. If storage or the dedicated Docker daemon is missing, prepare/start it with
+   the documented Linux flow:
+
+   ```bash
+   sudo AGENTICS_DGX_TEST_CONFIRM=prepare-test-storage \
+     agentics-prepare-dgx-spark-test-storage
+   sudo env AGENTICS_TEST_ROOT=/srv/agentics-test just test-env-up
+   just test-env-status-cpu
+   ```
+
+3. Run the canonical CPU suite:
+
+   ```bash
+   just test-all-cpu
+   ```
+
+4. If the full suite fails and the failure appears localized, first isolate the
+   new identity regressions:
+
+   ```bash
+   cargo test -p integration-tests final_human_admin_role_cannot_be_revoked
+   cargo test -p integration-tests pioneer_code_revoke_revokes_derived_human_admin_service_tokens
+   ```
+
+   These direct SQLx commands require a reachable test Postgres and
+   `DATABASE_URL` in the shell. Prefer `just test-all-cpu` when the Compose
+   harness is available.
+
+5. If Linux verification requires a fix, keep commits focused:
+   - Backend/test fixes in one `fix(identity): ...` or `test(identity): ...`
+     commit.
+   - Docs-only updates in a separate `docs(...)` commit.
+   - Do not change the accepted MVP tradeoffs unless product requirements
+     change.
+
 ## Assumptions
 
 - No `reviewer` role in this refactor.
