@@ -348,9 +348,9 @@ async fn challenge_review_record_rejects_mismatched_pr_author(pool: sqlx::PgPool
     assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
 }
 
-/// Verifies that challenge creator routes require oauth session and csrf.
+/// Verifies that challenge creator routes require GitHub sign-in session and csrf.
 #[sqlx::test(migrations = "../migrations")]
-async fn challenge_creator_routes_require_oauth_session_and_csrf(pool: sqlx::PgPool) {
+async fn challenge_creator_routes_require_github_sign_in_session_and_csrf(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("storage tempdir");
     let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
     let config = test_config(storage.path(), seeded_challenges.path());

@@ -92,7 +92,7 @@ pub(crate) fn challenge_shortlist(
     _settings: &ResolvedSettings,
 ) -> Result<String> {
     bail!(
-        "challenge shortlist commands require GitHub OAuth web-session support; use the creator web UI"
+        "challenge shortlist commands require GitHub sign-in web-session support; use the creator web UI"
     )
 }
 

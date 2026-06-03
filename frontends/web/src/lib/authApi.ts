@@ -1,13 +1,13 @@
 import { browserApiBaseUrl, fetchJson, fetchNoContent } from "@/lib/http";
 import {
-  type GithubOauthCallbackRequest,
-  type GithubOauthCallbackResponse,
-  type GithubOauthLoginRequest,
-  type GithubOauthLoginResponse,
-  githubOauthCallbackRequestSchema,
-  githubOauthCallbackResponseSchema,
-  githubOauthLoginRequestSchema,
-  githubOauthLoginResponseSchema,
+  type GithubSignInCallbackRequest,
+  type GithubSignInCallbackResponse,
+  type GithubSignInLoginRequest,
+  type GithubSignInLoginResponse,
+  githubSignInCallbackRequestSchema,
+  githubSignInCallbackResponseSchema,
+  githubSignInLoginRequestSchema,
+  githubSignInLoginResponseSchema,
   type HumanSessionResponse,
   humanSessionResponseSchema,
 } from "@/lib/schemas";
@@ -23,16 +23,16 @@ export async function getHumanSession(): Promise<HumanSessionResponse> {
   });
 }
 
-/** Starts GitHub login and returns the GitHub authorization URL. */
+/** Starts GitHub sign-in and returns the GitHub authorization URL. */
 export async function startGithubLogin(
   pioneerCode: string,
   returnTo: string,
-): Promise<GithubOauthLoginResponse> {
-  const request = githubOauthLoginRequestSchema.parse({
+): Promise<GithubSignInLoginResponse> {
+  const request = githubSignInLoginRequestSchema.parse({
     ...(pioneerCode ? { pioneer_code: pioneerCode } : {}),
     ...(returnTo ? { return_to: returnTo } : {}),
-  } satisfies GithubOauthLoginRequest);
-  return fetchJson("/api/auth/github/login", githubOauthLoginResponseSchema, {
+  } satisfies GithubSignInLoginRequest);
+  return fetchJson("/api/auth/github/login", githubSignInLoginResponseSchema, {
     init: {
       method: "POST",
       body: JSON.stringify(request),
@@ -42,18 +42,18 @@ export async function startGithubLogin(
   });
 }
 
-/** Completes GitHub login and returns the issued human session. */
+/** Completes GitHub sign-in and returns the issued human session. */
 export async function completeGithubLogin(
   code: string,
   state: string,
-): Promise<GithubOauthCallbackResponse> {
-  const request = githubOauthCallbackRequestSchema.parse({
+): Promise<GithubSignInCallbackResponse> {
+  const request = githubSignInCallbackRequestSchema.parse({
     code,
     state,
-  } satisfies GithubOauthCallbackRequest);
+  } satisfies GithubSignInCallbackRequest);
   return fetchJson(
     "/api/auth/github/callback",
-    githubOauthCallbackResponseSchema,
+    githubSignInCallbackResponseSchema,
     {
       init: {
         method: "POST",

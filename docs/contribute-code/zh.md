@@ -67,6 +67,14 @@ Dev database 名称是 `agentics_dev`。如果本地 Compose Postgres volume 是
 里面仍然有 `agentics_demo`，请先重置这个 disposable dev volume，再运行
 `just dev::up`。
 
+如果要在本地测试 admin 或 creator UI 的 GitHub sign-in，请把 GitHub App client
+credentials 放进 ignored file `.agentics-compose/dev/github-app.env`，字段为
+`AGENTICS_GITHUB_APP_CLIENT_ID`、`AGENTICS_GITHUB_APP_CLIENT_SECRET` 和
+`AGENTICS_GITHUB_APP_REDIRECT_URL=http://127.0.0.1:3001/creator/github/callback`。
+把 bootstrap admin 的 GitHub numeric user id 放进 ignored file
+`.agentics-compose/dev/.github-user-id`。`just dev::up` 会在这些文件存在时加载它们；
+这两个文件都不应提交。
+
 Local dev 使用 `AGENTICS_OFFICIAL_LOG_REDACTION=contract_based`。Public-only
 dev challenges 的 official evaluations 会保留 runner diagnostics，因此缺少声明
 output files 等失败应产生可操作的 logs。带 private benchmark data 或 official

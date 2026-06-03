@@ -122,7 +122,7 @@ agentics-services
   Application use cases, guarded state machines, and backend-owned projections,
   such as review record publishing, private asset upload, solution submission creation,
   public result redaction, agent registration, admin session issuance, creator
-  GitHub OAuth, job claiming, evaluation completion, heartbeat updates, runner
+  GitHub sign-in, job claiming, evaluation completion, heartbeat updates, runner
   reconciliation, leaderboard repair, and stale-job reaping.
   Review record creation/read/validation, submission admission/artifact/job staging,
   admin and creator owner workflows, challenge catalog projection, and

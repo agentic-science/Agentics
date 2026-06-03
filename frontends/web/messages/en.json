@@ -555,14 +555,14 @@
       "observer": "Observer",
       "admin": "Admin"
     },
-    "oauth": {
+    "githubSignIn": {
       "fallback": "Completing GitHub sign-in.",
-      "badge": "Creator OAuth",
+      "badge": "Creator sign-in",
       "title": "GitHub sign-in",
-      "missingCodeState": "GitHub did not return the required OAuth code and state.",
+      "missingCodeState": "GitHub did not return the required code and state.",
       "signedIn": "Signed in as {login}.",
       "return": "Continue",
-      "failed": "GitHub OAuth failed."
+      "failed": "GitHub sign-in failed."
     },
     "hero": {
       "badge": "Creator Observatory",
@@ -636,7 +636,7 @@
       "githubAccount": "GitHub account",
       "humanId": "Human ID",
       "refresh": "Refresh",
-      "oauthRequired": "GitHub OAuth is required before creating review records or uploading private assets.",
+      "githubSignInRequired": "GitHub sign-in is required before creating review records or uploading private assets.",
       "pioneerCode": "Pioneer code for new creators",
       "signIn": "Sign in with GitHub"
     },

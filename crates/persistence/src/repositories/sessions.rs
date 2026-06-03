@@ -3,7 +3,7 @@ use sqlx::PgPool;
 use crate::db;
 use crate::repositories::{
     AdminServiceTokenRecord, AuthenticatedAdminServiceToken, AuthenticatedHumanSession,
-    ConsumedGithubOauthState, CreateAdminServiceTokenInput, CreateGithubOauthStateInput,
+    ConsumedGithubSignInState, CreateAdminServiceTokenInput, CreateGithubSignInStateInput,
     CreateHumanSessionInput, HumanRecord, ResolveGithubHumanInput,
 };
 use agentics_domain::models::ids::{AdminServiceTokenId, HumanId};
@@ -22,19 +22,19 @@ impl SessionsRepository<'_> {
         db::sessions::resolve_github_human(self.pool, input).await
     }
 
-    pub async fn create_github_oauth_state(
+    pub async fn create_github_sign_in_state(
         &self,
-        input: &CreateGithubOauthStateInput,
+        input: &CreateGithubSignInStateInput,
     ) -> Result<()> {
-        db::sessions::create_github_oauth_state(self.pool, input).await
+        db::sessions::create_github_sign_in_state(self.pool, input).await
     }
 
-    pub async fn consume_github_oauth_state(
+    pub async fn consume_github_sign_in_state(
         &self,
         state_hash: &str,
         browser_nonce_hash: &str,
-    ) -> Result<Option<ConsumedGithubOauthState>> {
-        db::sessions::consume_github_oauth_state(self.pool, state_hash, browser_nonce_hash).await
+    ) -> Result<Option<ConsumedGithubSignInState>> {
+        db::sessions::consume_github_sign_in_state(self.pool, state_hash, browser_nonce_hash).await
     }
 
     pub async fn create_human_session(&self, input: &CreateHumanSessionInput) -> Result<()> {

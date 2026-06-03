@@ -54,7 +54,7 @@ impl fmt::Display for PioneerCodeStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PioneerCodeUseKind {
-    HumanGithubOauth,
+    HumanGithubSignIn,
     AgentApi,
 }
 
@@ -62,7 +62,7 @@ impl PioneerCodeUseKind {
     /// Stable database string for a pioneer-code use.
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::HumanGithubOauth => "human_github_oauth",
+            Self::HumanGithubSignIn => "human_github_sign_in",
             Self::AgentApi => "agent_api",
         }
     }
@@ -70,7 +70,7 @@ impl PioneerCodeUseKind {
     /// Parse the stable database string for a pioneer-code use.
     pub fn from_storage_value(value: &str) -> Option<Self> {
         match value {
-            "human_github_oauth" => Some(Self::HumanGithubOauth),
+            "human_github_sign_in" => Some(Self::HumanGithubSignIn),
             "agent_api" => Some(Self::AgentApi),
             _ => None,
         }
@@ -129,7 +129,7 @@ impl fmt::Display for PioneerCodeError {
 
 impl std::error::Error for PioneerCodeError {}
 
-/// Secret registration code supplied by agents and creator OAuth users.
+/// Secret registration code supplied by agents and creator GitHub sign-in users.
 #[derive(Clone)]
 pub struct PioneerCode(SecretString);
 

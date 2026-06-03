@@ -13,7 +13,7 @@
 )]
 
 use super::Config;
-use agentics_domain::models::urls::GithubOauthRedirectUrl;
+use agentics_domain::models::urls::GithubAppRedirectUrl;
 use secrecy::{ExposeSecret, SecretString};
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
@@ -29,12 +29,12 @@ fn loopback_bind_allows_local_default_credentials() {
 fn config_debug_redacts_secrets() {
     let mut config = test_config();
     config.database.url = SecretString::from("postgres://agentics:secret@localhost/agentics");
-    config.github_oauth.client_secret = Some(SecretString::from("secret-oauth-client"));
+    config.github_app.client_secret = Some(SecretString::from("secret-github-app-client"));
 
     let debug = format!("{config:?}");
 
     assert!(!debug.contains("secret@localhost"));
-    assert!(!debug.contains("secret-oauth-client"));
+    assert!(!debug.contains("secret-github-app-client"));
     assert!(debug.contains("[REDACTED"));
 }
 
@@ -87,6 +87,64 @@ fn raw_app_env_deserializes_prefixed_values() {
     assert_eq!(
         config.quotas.max_active_challenge_review_records_per_human,
         7
+    );
+}
+
+/// Verifies GitHub App sign-in env values map to the grouped config.
+#[test]
+fn raw_app_env_deserializes_github_app_sign_in_values() {
+    let raw = super::RawAppEnv::from_env_iter([
+        (
+            "AGENTICS_GITHUB_APP_CLIENT_ID".to_string(),
+            "app-client-id".to_string(),
+        ),
+        (
+            "AGENTICS_GITHUB_APP_CLIENT_SECRET".to_string(),
+            "app-client-secret".to_string(),
+        ),
+        (
+            "AGENTICS_GITHUB_APP_REDIRECT_URL".to_string(),
+            "http://127.0.0.1:3001/creator/github/callback".to_string(),
+        ),
+    ])
+    .expect("GitHub App env should deserialize");
+    let config = Config::try_from(raw).expect("GitHub App env should convert");
+
+    assert_eq!(
+        config.github_app.client_id.as_deref(),
+        Some("app-client-id")
+    );
+    assert_eq!(
+        config
+            .github_app
+            .client_secret
+            .as_ref()
+            .map(ExposeSecret::expose_secret),
+        Some("app-client-secret")
+    );
+    assert_eq!(
+        config
+            .github_app
+            .redirect_url
+            .as_ref()
+            .map(|url| url.as_str()),
+        Some("http://127.0.0.1:3001/creator/github/callback")
+    );
+}
+
+/// Verifies partial GitHub App sign-in env fails hosted API validation.
+#[test]
+fn partial_github_app_sign_in_config_fails_validation() {
+    let mut config = test_config();
+    config.github_app.client_id = Some("only-client-id".to_string());
+
+    let error = config
+        .validate_api_security()
+        .expect_err("partial GitHub App config should fail");
+    assert!(
+        error
+            .to_string()
+            .contains("AGENTICS_GITHUB_APP_CLIENT_SECRET must be set")
     );
 }
 
@@ -254,29 +312,29 @@ fn hosted_bind_requires_secure_cookies_and_invited_registration() {
     config.auth.agent_registration_mode = super::AgentRegistrationMode::PioneerCode;
     config.api_web.web_session_cookie_secure = true;
     assert!(config.validate_api_security().is_err());
-    configure_test_github_oauth(&mut config);
+    configure_test_github_sign_in(&mut config);
     assert!(config.validate_api_security().is_ok());
 
     config.auth.agent_registration_mode = super::AgentRegistrationMode::Public;
     assert!(config.validate_api_security().is_err());
 }
 
-/// Verifies bootstrap admin IDs cannot be configured without GitHub OAuth.
+/// Verifies bootstrap admin IDs cannot be configured without GitHub sign-in.
 #[test]
-fn bootstrap_admin_requires_github_oauth_config() {
+fn bootstrap_admin_requires_github_sign_in_config() {
     let mut config = test_config();
     config.auth.bootstrap_admin_github_user_ids = vec![9001];
 
     let error = config
         .validate_api_security()
-        .expect_err("bootstrap admin requires OAuth");
+        .expect_err("bootstrap admin requires GitHub sign-in");
     assert!(
         error
             .to_string()
-            .contains("GitHub OAuth must be fully configured")
+            .contains("GitHub sign-in must be fully configured")
     );
 
-    configure_test_github_oauth(&mut config);
+    configure_test_github_sign_in(&mut config);
     assert!(config.validate_api_security().is_ok());
 }
 
@@ -685,12 +743,12 @@ fn test_config() -> Config {
     config
 }
 
-fn configure_test_github_oauth(config: &mut Config) {
-    config.github_oauth.client_id = Some("test-client-id".to_string());
-    config.github_oauth.client_secret = Some(SecretString::from("test-client-secret"));
-    config.github_oauth.redirect_url = Some(
-        GithubOauthRedirectUrl::try_new("https://agentics.example/auth/github/callback")
-            .expect("test OAuth redirect URL should parse"),
+fn configure_test_github_sign_in(config: &mut Config) {
+    config.github_app.client_id = Some("test-client-id".to_string());
+    config.github_app.client_secret = Some(SecretString::from("test-client-secret"));
+    config.github_app.redirect_url = Some(
+        GithubAppRedirectUrl::try_new("https://agentics.example/auth/github/callback")
+            .expect("test GitHub App redirect URL should parse"),
     );
 }
 

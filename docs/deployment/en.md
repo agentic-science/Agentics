@@ -92,6 +92,11 @@ The hosted MVP uses pioneer-code gated registration plus Cloudflare edge
 controls. Bootstrap the first admin through
 `AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS`, then create admin service tokens for
 operator automation from the admin console.
+Human browser login is GitHub sign-in backed by a GitHub App user-authorization
+flow. Configure `AGENTICS_GITHUB_APP_CLIENT_ID`,
+`AGENTICS_GITHUB_APP_CLIENT_SECRET`, and `AGENTICS_GITHUB_APP_REDIRECT_URL`;
+production should set the redirect URL to the public web origin plus
+`/creator/github/callback`.
 
 Frontend environment:
 

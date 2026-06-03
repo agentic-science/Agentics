@@ -9,8 +9,8 @@ use axum::{
 
 use crate::error::ApiResult as Result;
 use agentics_domain::models::auth::{
-    GithubOauthCallbackRequest, GithubOauthCallbackResponse, GithubOauthLoginRequest,
-    GithubOauthLoginResponse, HumanSessionResponse,
+    GithubSignInCallbackRequest, GithubSignInCallbackResponse, GithubSignInLoginRequest,
+    GithubSignInLoginResponse, HumanSessionResponse,
 };
 use agentics_error::ServiceError;
 use agentics_services::auth;
@@ -18,8 +18,8 @@ use agentics_services::auth;
 use crate::extractors::{HumanAuth, ValidatedJson};
 use crate::state::AppState;
 
-const OAUTH_STATE_TTL_MINUTES: i64 = 10;
-const OAUTH_NONCE_COOKIE_NAME: &str = "agentics_oauth_nonce";
+const GITHUB_SIGN_IN_STATE_TTL_MINUTES: i64 = 10;
+const GITHUB_SIGN_IN_NONCE_COOKIE_NAME: &str = "agentics_github_sign_in_nonce";
 
 /// End a human browser session and clear auth cookies.
 pub async fn human_logout(
@@ -55,39 +55,39 @@ pub async fn human_session(
     ))
 }
 
-/// Start a GitHub OAuth login for challenge creators.
-pub async fn github_oauth_login(
+/// Start a GitHub sign-in login for challenge creators.
+pub async fn github_sign_in_login(
     State(state): State<AppState>,
-    ValidatedJson(request): ValidatedJson<GithubOauthLoginRequest>,
+    ValidatedJson(request): ValidatedJson<GithubSignInLoginRequest>,
 ) -> Result<(
     StatusCode,
     AppendHeaders<[(HeaderName, String); 1]>,
-    Json<GithubOauthLoginResponse>,
+    Json<GithubSignInLoginResponse>,
 )> {
-    let issue = auth::start_github_oauth_login(&state.db, &state.config, request).await?;
+    let issue = auth::start_github_sign_in_login(&state.db, &state.config, request).await?;
 
     Ok((
         StatusCode::OK,
-        AppendHeaders([oauth_nonce_cookie(&state, &issue.browser_nonce)]),
+        AppendHeaders([github_sign_in_nonce_cookie(&state, &issue.browser_nonce)]),
         Json(issue.response),
     ))
 }
 
-/// Complete GitHub OAuth and issue a creator web session.
-pub async fn github_oauth_callback(
+/// Complete GitHub sign-in and issue a creator web session.
+pub async fn github_sign_in_callback(
     State(state): State<AppState>,
     headers: HeaderMap,
-    ValidatedJson(request): ValidatedJson<GithubOauthCallbackRequest>,
+    ValidatedJson(request): ValidatedJson<GithubSignInCallbackRequest>,
 ) -> Result<(
     StatusCode,
     AppendHeaders<[(HeaderName, String); 3]>,
-    Json<GithubOauthCallbackResponse>,
+    Json<GithubSignInCallbackResponse>,
 )> {
     let cookie_header = headers.get(header::COOKIE).and_then(|h| h.to_str().ok());
-    let browser_nonce =
-        cookie_value(cookie_header, OAUTH_NONCE_COOKIE_NAME).ok_or(ServiceError::Unauthorized)?;
-    let github_client = auth::ReqwestGithubOauthClient;
-    let issued_session = auth::complete_github_oauth_callback(
+    let browser_nonce = cookie_value(cookie_header, GITHUB_SIGN_IN_NONCE_COOKIE_NAME)
+        .ok_or(ServiceError::Unauthorized)?;
+    let github_client = auth::ReqwestGithubSignInClient;
+    let issued_session = auth::complete_github_sign_in_callback(
         &state.db,
         &state.config,
         &github_client,
@@ -107,32 +107,32 @@ pub async fn github_oauth_callback(
         AppendHeaders([
             session_cookie,
             csrf_cookie,
-            expired_oauth_nonce_cookie(&state),
+            expired_github_sign_in_nonce_cookie(&state),
         ]),
         Json(issued_session.response),
     ))
 }
 
-/// Builds a browser-binding OAuth nonce cookie.
-fn oauth_nonce_cookie(state: &AppState, browser_nonce: &str) -> (HeaderName, String) {
+/// Builds a browser-binding GitHub sign-in nonce cookie.
+fn github_sign_in_nonce_cookie(state: &AppState, browser_nonce: &str) -> (HeaderName, String) {
     (
         header::SET_COOKIE,
         build_cookie(
-            OAUTH_NONCE_COOKIE_NAME,
+            GITHUB_SIGN_IN_NONCE_COOKIE_NAME,
             browser_nonce,
-            OAUTH_STATE_TTL_MINUTES * 60,
+            GITHUB_SIGN_IN_STATE_TTL_MINUTES * 60,
             true,
             state.config.api_web.web_session_cookie_secure,
         ),
     )
 }
 
-/// Builds an expired OAuth nonce cookie after a successful callback.
-fn expired_oauth_nonce_cookie(state: &AppState) -> (HeaderName, String) {
+/// Builds an expired GitHub sign-in nonce cookie after a successful callback.
+fn expired_github_sign_in_nonce_cookie(state: &AppState) -> (HeaderName, String) {
     (
         header::SET_COOKIE,
         build_cookie(
-            OAUTH_NONCE_COOKIE_NAME,
+            GITHUB_SIGN_IN_NONCE_COOKIE_NAME,
             "",
             0,
             true,

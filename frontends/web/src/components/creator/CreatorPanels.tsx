@@ -76,7 +76,9 @@ export function CreatorIdentityPanel({
         </div>
       ) : (
         <div className="space-y-4">
-          <p className="text-body-sm text-fg-secondary">{t("oauthRequired")}</p>
+          <p className="text-body-sm text-fg-secondary">
+            {t("githubSignInRequired")}
+          </p>
           <label className="flex flex-col gap-1">
             <span className="text-caption uppercase tracking-wide text-fg-muted">
               {t("pioneerCode")}

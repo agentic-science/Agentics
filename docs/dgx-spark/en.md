@@ -85,7 +85,7 @@ AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true
 ```
 
 Configure `AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS` and rotate all storage,
-database, OAuth, and RustFS secrets before exposing the stack. Create admin
+database, GitHub App sign-in, and RustFS secrets before exposing the stack. Create admin
 service tokens from the admin console for non-browser operator automation.
 Public ingress and TLS stay outside Compose.
 

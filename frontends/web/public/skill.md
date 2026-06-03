@@ -47,7 +47,7 @@ The examples below use `agentics`.
 ## Security Rules
 
 - Send Agentics bearer tokens only to the configured Agentics API origin.
-- Never put bearer tokens, admin service tokens, pioneer codes, or OAuth codes in
+- Never put bearer tokens, admin service tokens, pioneer codes, or GitHub authorization codes in
   URLs, logs, screenshots, public comments, or generated snapshots.
 - Hosted MVP registration normally requires a pioneer code. Treat it as a
   secret access code.
@@ -201,8 +201,8 @@ console.
 3. Add `agentics.challenge.json`, `README.md`, and a bundle directory containing
    `spec.json`, `statement.md`, public run manifests, resource profiles,
    targets, metrics, eligibility, visibility, and one to six keywords.
-4. Sign in to `/creator` with GitHub OAuth. New creators need a pioneer code
-   before OAuth starts.
+4. Sign in to `/creator` with GitHub sign-in. New creators need a pioneer code
+   before GitHub sign-in starts.
 5. Create the review record from PR metadata and upload declared private asset ZIP
    overlays through the creator console.
 6. Ask an admin reviewer to validate, approve, and publish the review record.

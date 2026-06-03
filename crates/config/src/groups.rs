@@ -5,7 +5,7 @@ use secrecy::SecretString;
 
 use agentics_domain::models::names::MoltbookSubmoltName;
 use agentics_domain::models::urls::{
-    GithubApiUserUrl, GithubOauthAuthorizeUrl, GithubOauthRedirectUrl, GithubOauthTokenUrl,
+    GithubApiUserUrl, GithubAppAuthorizeUrl, GithubAppRedirectUrl, GithubAppTokenUrl,
     MoltbookSubmoltUrl,
 };
 
@@ -35,7 +35,7 @@ pub struct Config {
     #[garde(dive)]
     pub quotas: QuotaConfig,
     #[garde(dive)]
-    pub github_oauth: GithubOauthConfig,
+    pub github_app: GithubAppConfig,
     #[garde(dive)]
     pub runner: RunnerConfig,
     #[garde(dive)]
@@ -149,17 +149,17 @@ pub struct QuotaConfig {
     pub unpublished_challenge_asset_grace_days: i64,
 }
 
-/// GitHub OAuth configuration for challenge creators.
+/// GitHub sign-in configuration for challenge creators.
 #[derive(Debug, Clone, Validate)]
 #[garde(allow_unvalidated)]
-pub struct GithubOauthConfig {
+pub struct GithubAppConfig {
     #[garde(custom(validation::optional_trimmed_non_empty))]
     pub client_id: Option<String>,
     #[garde(custom(validation::optional_secret_non_empty))]
     pub client_secret: Option<SecretString>,
-    pub redirect_url: Option<GithubOauthRedirectUrl>,
-    pub authorize_url: GithubOauthAuthorizeUrl,
-    pub token_url: GithubOauthTokenUrl,
+    pub redirect_url: Option<GithubAppRedirectUrl>,
+    pub authorize_url: GithubAppAuthorizeUrl,
+    pub token_url: GithubAppTokenUrl,
     pub api_user_url: GithubApiUserUrl,
 }
 

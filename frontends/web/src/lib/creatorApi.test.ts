@@ -17,13 +17,13 @@ describe("creatorApi", () => {
     globalThis.fetch = originalFetch;
   });
 
-  it("starts GitHub OAuth with POST body instead of URL query secrets", async () => {
+  it("starts GitHub sign-in with POST body instead of URL query secrets", async () => {
     const fetchMock = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit) => {
         return new Response(
           JSON.stringify({
             authorization_url:
-              "https://github.com/login/oauth/authorize?client_id=test&state=oauth-state",
+              "https://github.com/login/oauth/authorize?client_id=test&state=github-sign-in-state",
           }),
           {
             status: 200,
@@ -37,7 +37,7 @@ describe("creatorApi", () => {
     const response = await startGithubLogin("jack-deadbeef", "/creator");
 
     expect(response.authorization_url).toBe(
-      "https://github.com/login/oauth/authorize?client_id=test&state=oauth-state",
+      "https://github.com/login/oauth/authorize?client_id=test&state=github-sign-in-state",
     );
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/auth/github/login",
@@ -53,7 +53,7 @@ describe("creatorApi", () => {
     expect(requestedPath?.toString()).not.toContain("pioneer_code");
   });
 
-  it("completes GitHub OAuth with POST body instead of query forwarding", async () => {
+  it("completes GitHub sign-in with POST body instead of query forwarding", async () => {
     const fetchMock = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit) => {
         return new Response(
@@ -77,18 +77,21 @@ describe("creatorApi", () => {
     );
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    await completeGithubLogin("oauth-code", "oauth-state");
+    await completeGithubLogin("github-sign-in-code", "github-sign-in-state");
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/auth/github/callback",
       expect.objectContaining({
         method: "POST",
-        body: JSON.stringify({ code: "oauth-code", state: "oauth-state" }),
+        body: JSON.stringify({
+          code: "github-sign-in-code",
+          state: "github-sign-in-state",
+        }),
       }),
     );
     const requestedPath = fetchMock.mock.calls[0]?.[0];
-    expect(requestedPath?.toString()).not.toContain("oauth-code");
-    expect(requestedPath?.toString()).not.toContain("oauth-state");
+    expect(requestedPath?.toString()).not.toContain("github-sign-in-code");
+    expect(requestedPath?.toString()).not.toContain("github-sign-in-state");
   });
 
   it("validates creator mutation request bodies before fetch", async () => {

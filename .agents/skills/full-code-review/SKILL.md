@@ -213,7 +213,7 @@ Always inspect these platform-specific risks:
 - Challenge bundle schemas, CLI packaging rules, web schemas, README examples,
   PRDs, milestones, and skills must stay aligned when behavior changes.
 - Challenge and solution workflows must be reviewed as workflows, not only as
-  files. Walk through agent registration, creator OAuth login, review record creation,
+  files. Walk through agent registration, creator GitHub sign-in, review record creation,
   private asset upload, challenge publication, solution submission, worker
   claim/requeue/complete, public result viewing, leaderboard reads, and score
   distribution reads. Confirm who is authorized, what transaction protects the

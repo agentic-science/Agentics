@@ -4,16 +4,16 @@ use std::time::Duration as StdDuration;
 
 use agentics_config::{AgentRegistrationMode, Config};
 use agentics_domain::models::auth::{
-    GithubOauthCallbackRequest, GithubOauthCallbackResponse, GithubOauthLoginRequest,
-    GithubOauthLoginResponse, HumanSessionResponse,
+    GithubSignInCallbackRequest, GithubSignInCallbackResponse, GithubSignInLoginRequest,
+    GithubSignInLoginResponse, HumanSessionResponse,
 };
 use agentics_domain::models::ids::{AgentId, AgentTokenId, HumanId, HumanSessionId};
 use agentics_domain::models::pioneer_codes::{INVALID_OR_UNAVAILABLE_PIONEER_CODE, PioneerCode};
 use agentics_domain::models::request::{RegisterAgentRequest, RegisterAgentResponse};
-use agentics_domain::models::urls::GithubOauthAuthorizationUrl;
+use agentics_domain::models::urls::GithubSignInAuthorizationUrl;
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::{
-    ConsumedGithubOauthState, CreateGithubOauthStateInput, CreateHumanSessionInput, HumanRecord,
+    ConsumedGithubSignInState, CreateGithubSignInStateInput, CreateHumanSessionInput, HumanRecord,
     PioneerCodeRegistrationKind, RegisterAgentInput, Repositories, ResolveGithubHumanInput,
 };
 use async_trait::async_trait;
@@ -25,7 +25,7 @@ use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use url::Url;
 
-const OAUTH_STATE_TTL_MINUTES: i64 = 10;
+const GITHUB_SIGN_IN_STATE_TTL_MINUTES: i64 = 10;
 const GITHUB_USER_AGENT: &str = "Agentics";
 const FAILED_PIONEER_CODE_DELAY: StdDuration = StdDuration::from_millis(500);
 
@@ -38,36 +38,36 @@ pub struct IssuedWebSession<T> {
     pub response: T,
 }
 
-/// OAuth login result plus browser nonce the HTTP layer stores in a cookie.
+/// GitHub sign-in result plus browser nonce the HTTP layer stores in a cookie.
 #[derive(Debug, Clone)]
-pub struct GithubOauthLoginIssue {
+pub struct GithubSignInLoginIssue {
     pub browser_nonce: String,
-    pub response: GithubOauthLoginResponse,
+    pub response: GithubSignInLoginResponse,
 }
 
-/// GitHub identity returned by a provider after OAuth token exchange.
+/// GitHub identity returned after exchanging an authorization code.
 #[derive(Debug, Clone)]
-pub struct GithubOauthUser {
+pub struct GithubSignInUser {
     pub id: i64,
     pub login: String,
 }
 
-/// External GitHub OAuth operations used by the creator login workflow.
+/// External GitHub sign-in operations used by the creator login workflow.
 #[async_trait]
-pub trait GithubOauthClient: Send + Sync {
+pub trait GithubSignInClient: Send + Sync {
     async fn exchange_code(&self, config: &Config, code: &str) -> Result<SecretString>;
     async fn fetch_user(
         &self,
         config: &Config,
         access_token: &SecretString,
-    ) -> Result<GithubOauthUser>;
+    ) -> Result<GithubSignInUser>;
 }
 
-/// Reqwest-backed GitHub OAuth client for production API handlers.
+/// Reqwest-backed GitHub sign-in client for production API handlers.
 #[derive(Debug, Default, Clone, Copy)]
-pub struct ReqwestGithubOauthClient;
+pub struct ReqwestGithubSignInClient;
 
-/// Minimal JSON shape returned by GitHub's OAuth token exchange endpoint.
+/// Minimal JSON shape returned by GitHub's user authorization token endpoint.
 #[derive(Debug, Deserialize)]
 struct GithubAccessTokenResponse {
     access_token: Option<SecretString>,
@@ -83,27 +83,27 @@ struct GithubUserResponse {
 }
 
 #[async_trait]
-impl GithubOauthClient for ReqwestGithubOauthClient {
+impl GithubSignInClient for ReqwestGithubSignInClient {
     async fn exchange_code(&self, config: &Config, code: &str) -> Result<SecretString> {
-        let client_id = required_oauth_config(
-            config.github_oauth.client_id.as_deref(),
-            "AGENTICS_GITHUB_OAUTH_CLIENT_ID",
+        let client_id = required_github_app_config(
+            config.github_app.client_id.as_deref(),
+            "AGENTICS_GITHUB_APP_CLIENT_ID",
         )?;
-        let client_secret = required_oauth_config(
+        let client_secret = required_github_app_config(
             config
-                .github_oauth
+                .github_app
                 .client_secret
                 .as_ref()
                 .map(ExposeSecret::expose_secret),
-            "AGENTICS_GITHUB_OAUTH_CLIENT_SECRET",
+            "AGENTICS_GITHUB_APP_CLIENT_SECRET",
         )?;
-        let redirect_url = required_oauth_config(
+        let redirect_url = required_github_app_config(
             config
-                .github_oauth
+                .github_app
                 .redirect_url
                 .as_ref()
                 .map(|url| url.as_str()),
-            "AGENTICS_GITHUB_OAUTH_REDIRECT_URL",
+            "AGENTICS_GITHUB_APP_REDIRECT_URL",
         )?;
         let token_body = form_urlencoded(&[
             ("client_id", client_id),
@@ -112,7 +112,7 @@ impl GithubOauthClient for ReqwestGithubOauthClient {
             ("redirect_uri", redirect_url),
         ])?;
         let response = reqwest::Client::new()
-            .post(config.github_oauth.token_url.as_str())
+            .post(config.github_app.token_url.as_str())
             .header(reqwest::header::ACCEPT, "application/json")
             .header(reqwest::header::USER_AGENT, GITHUB_USER_AGENT)
             .header(
@@ -123,11 +123,11 @@ impl GithubOauthClient for ReqwestGithubOauthClient {
             .send()
             .await
             .map_err(|e| {
-                ServiceError::Internal(format!("GitHub OAuth token request failed: {e}"))
+                ServiceError::Internal(format!("GitHub sign-in token request failed: {e}"))
             })?;
         if !response.status().is_success() {
             return Err(ServiceError::BadRequest(format!(
-                "GitHub OAuth token request failed with status {}",
+                "GitHub sign-in token request failed with status {}",
                 response.status()
             )));
         }
@@ -135,17 +135,17 @@ impl GithubOauthClient for ReqwestGithubOauthClient {
             .json::<GithubAccessTokenResponse>()
             .await
             .map_err(|e| {
-                ServiceError::Internal(format!("invalid GitHub OAuth token response: {e}"))
+                ServiceError::Internal(format!("invalid GitHub sign-in token response: {e}"))
             })?;
         if let Some(error) = body.error {
             return Err(ServiceError::BadRequest(format!(
-                "GitHub OAuth token exchange failed: {}",
+                "GitHub sign-in token exchange failed: {}",
                 body.error_description.unwrap_or(error)
             )));
         }
         Ok(body.access_token.ok_or_else(|| {
             ServiceError::BadRequest(
-                "GitHub OAuth token response did not include an access token".to_string(),
+                "GitHub sign-in token response did not include an access token".to_string(),
             )
         })?)
     }
@@ -154,9 +154,9 @@ impl GithubOauthClient for ReqwestGithubOauthClient {
         &self,
         config: &Config,
         access_token: &SecretString,
-    ) -> Result<GithubOauthUser> {
+    ) -> Result<GithubSignInUser> {
         let response = reqwest::Client::new()
-            .get(config.github_oauth.api_user_url.as_str())
+            .get(config.github_app.api_user_url.as_str())
             .bearer_auth(access_token.expose_secret())
             .header(reqwest::header::ACCEPT, "application/vnd.github+json")
             .header(reqwest::header::USER_AGENT, GITHUB_USER_AGENT)
@@ -210,14 +210,14 @@ fn random_url_token(byte_len: usize) -> String {
     base64_urlencode(&bytes)
 }
 
-/// Create an opaque OAuth state token.
-pub fn create_oauth_state() -> String {
-    format!("agentics_oauth_{}", random_url_token(32))
+/// Create an opaque GitHub sign-in state token.
+pub fn create_github_sign_in_state_token() -> String {
+    format!("agentics_github_sign_in_{}", random_url_token(32))
 }
 
-/// Create an opaque browser nonce that binds an OAuth state to one browser.
-pub fn create_oauth_browser_nonce() -> String {
-    format!("agentics_oauth_nonce_{}", random_url_token(32))
+/// Create an opaque browser nonce that binds a sign-in state to one browser.
+pub fn create_github_sign_in_browser_nonce() -> String {
+    format!("agentics_github_sign_in_nonce_{}", random_url_token(32))
 }
 
 /// Hash an opaque token before storing or comparing it.
@@ -331,27 +331,27 @@ pub async fn authenticate_human_session(
     })
 }
 
-/// Start a GitHub OAuth login for challenge creators.
-pub async fn start_github_oauth_login(
+/// Start a GitHub sign-in login for challenge creators.
+pub async fn start_github_sign_in_login(
     pool: &PgPool,
     config: &Config,
-    request: GithubOauthLoginRequest,
-) -> Result<GithubOauthLoginIssue> {
-    let client_id = required_oauth_config(
-        config.github_oauth.client_id.as_deref(),
-        "AGENTICS_GITHUB_OAUTH_CLIENT_ID",
+    request: GithubSignInLoginRequest,
+) -> Result<GithubSignInLoginIssue> {
+    let client_id = required_github_app_config(
+        config.github_app.client_id.as_deref(),
+        "AGENTICS_GITHUB_APP_CLIENT_ID",
     )?;
-    let redirect_url = required_oauth_config(
+    let redirect_url = required_github_app_config(
         config
-            .github_oauth
+            .github_app
             .redirect_url
             .as_ref()
             .map(|url| url.as_str()),
-        "AGENTICS_GITHUB_OAUTH_REDIRECT_URL",
+        "AGENTICS_GITHUB_APP_REDIRECT_URL",
     )?;
-    let state_token = create_oauth_state();
+    let state_token = create_github_sign_in_state_token();
     let state_hash = hash_opaque_token(&state_token);
-    let browser_nonce = create_oauth_browser_nonce();
+    let browser_nonce = create_github_sign_in_browser_nonce();
     let browser_nonce_hash = hash_opaque_token(&browser_nonce);
     let pioneer_code_hash = match config.agent_registration_mode() {
         AgentRegistrationMode::PioneerCode => match request.pioneer_code.as_ref() {
@@ -367,13 +367,13 @@ pub async fn start_github_oauth_login(
     };
     let return_to = normalize_return_to(request.return_to)?;
     let expires_at = Utc::now()
-        .checked_add_signed(Duration::minutes(OAUTH_STATE_TTL_MINUTES))
-        .ok_or_else(|| ServiceError::Internal("OAuth state TTL overflow".to_string()))?;
+        .checked_add_signed(Duration::minutes(GITHUB_SIGN_IN_STATE_TTL_MINUTES))
+        .ok_or_else(|| ServiceError::Internal("GitHub sign-in state TTL overflow".to_string()))?;
     let repos = Repositories::new(pool);
     repos.sessions().delete_expired_web_auth_rows().await?;
     repos
         .sessions()
-        .create_github_oauth_state(&CreateGithubOauthStateInput {
+        .create_github_sign_in_state(&CreateGithubSignInStateInput {
             state_hash,
             browser_nonce_hash,
             pioneer_code_hash,
@@ -382,42 +382,45 @@ pub async fn start_github_oauth_login(
         })
         .await?;
 
-    let mut authorization_url = config.github_oauth.authorize_url.to_url();
+    let mut authorization_url = config.github_app.authorize_url.to_url();
     authorization_url
         .query_pairs_mut()
         .append_pair("client_id", client_id)
         .append_pair("redirect_uri", redirect_url)
         .append_pair("state", &state_token);
 
-    let authorization_url = GithubOauthAuthorizationUrl::try_from_url(authorization_url)
-        .map_err(|e| ServiceError::Internal(format!("generated invalid GitHub OAuth URL: {e}")))?;
+    let authorization_url =
+        GithubSignInAuthorizationUrl::try_from_url(authorization_url).map_err(|e| {
+            ServiceError::Internal(format!("generated invalid GitHub sign-in URL: {e}"))
+        })?;
 
-    Ok(GithubOauthLoginIssue {
+    Ok(GithubSignInLoginIssue {
         browser_nonce,
-        response: GithubOauthLoginResponse { authorization_url },
+        response: GithubSignInLoginResponse { authorization_url },
     })
 }
 
-/// Complete GitHub OAuth and issue a human web session.
-pub async fn complete_github_oauth_callback(
+/// Complete GitHub sign-in and issue a human web session.
+pub async fn complete_github_sign_in_callback(
     pool: &PgPool,
     config: &Config,
-    client: &dyn GithubOauthClient,
-    request: GithubOauthCallbackRequest,
+    client: &dyn GithubSignInClient,
+    request: GithubSignInCallbackRequest,
     browser_nonce: &str,
-) -> Result<IssuedWebSession<GithubOauthCallbackResponse>> {
-    let oauth_state = consume_callback_oauth_state(pool, &request.state, browser_nonce).await?;
+) -> Result<IssuedWebSession<GithubSignInCallbackResponse>> {
+    let sign_in_state =
+        consume_callback_github_sign_in_state(pool, &request.state, browser_nonce).await?;
     let access_token = client.exchange_code(config, &request.code).await?;
     let github_user = client.fetch_user(config, &access_token).await?;
-    let human = resolve_callback_human(pool, config, &oauth_state, &github_user).await?;
+    let human = resolve_callback_human(pool, config, &sign_in_state, &github_user).await?;
     let issued = issue_human_session(pool, config, human).await?;
     Ok(IssuedWebSession {
         session_token: issued.session_token,
         csrf_token: issued.csrf_token,
         ttl_seconds: issued.ttl_seconds,
-        response: GithubOauthCallbackResponse {
+        response: GithubSignInCallbackResponse {
             session: issued.response,
-            return_to: oauth_state.return_to,
+            return_to: sign_in_state.return_to,
         },
     })
 }
@@ -458,8 +461,8 @@ fn invalid_pioneer_code() -> ServiceError {
     ServiceError::Forbidden(INVALID_OR_UNAVAILABLE_PIONEER_CODE.to_string())
 }
 
-/// Reads one required OAuth configuration value with a user-facing error name.
-fn required_oauth_config<'a>(value: Option<&'a str>, name: &str) -> Result<&'a str> {
+/// Reads one required GitHub App configuration value with a user-facing error name.
+fn required_github_app_config<'a>(value: Option<&'a str>, name: &str) -> Result<&'a str> {
     let value = value
         .map(str::trim)
         .filter(|value| !value.is_empty())
@@ -467,7 +470,7 @@ fn required_oauth_config<'a>(value: Option<&'a str>, name: &str) -> Result<&'a s
     Ok(value)
 }
 
-/// Encodes OAuth form fields using the URL crate instead of hand-built escaping.
+/// Encodes form fields using the URL crate instead of hand-built escaping.
 fn form_urlencoded(values: &[(&str, &str)]) -> Result<String> {
     let mut url = Url::parse("https://agentics.local/")
         .map_err(|e| ServiceError::Internal(format!("invalid form helper URL: {e}")))?;
@@ -477,12 +480,12 @@ fn form_urlencoded(values: &[(&str, &str)]) -> Result<String> {
             pairs.append_pair(key, value);
         }
     }
-    url.query()
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| ServiceError::Internal("failed to encode OAuth token request".to_string()))
+    url.query().map(ToOwned::to_owned).ok_or_else(|| {
+        ServiceError::Internal("failed to encode GitHub sign-in token request".to_string())
+    })
 }
 
-/// Restrict OAuth post-login navigation to same-site paths.
+/// Restrict post-login navigation to same-site paths.
 fn normalize_return_to(value: Option<String>) -> Result<Option<String>> {
     let Some(value) = value else {
         return Ok(None);
@@ -520,30 +523,30 @@ fn session_expires_at(ttl_seconds: i64) -> Result<chrono::DateTime<Utc>> {
         .ok_or_else(|| ServiceError::Internal("web session TTL overflow".to_string()))
 }
 
-/// Consume an OAuth state after the callback nonce has been verified.
-async fn consume_callback_oauth_state(
+/// Consume a GitHub sign-in state after the callback nonce has been verified.
+async fn consume_callback_github_sign_in_state(
     pool: &PgPool,
     state_token: &str,
     browser_nonce: &str,
-) -> Result<ConsumedGithubOauthState> {
+) -> Result<ConsumedGithubSignInState> {
     let state_hash = hash_opaque_token(state_token);
     let browser_nonce_hash = hash_opaque_token(browser_nonce);
     Repositories::new(pool)
         .sessions()
-        .consume_github_oauth_state(&state_hash, &browser_nonce_hash)
+        .consume_github_sign_in_state(&state_hash, &browser_nonce_hash)
         .await?
         .ok_or(ServiceError::Unauthorized)
 }
 
-/// Validate the GitHub account identity associated with an OAuth access token.
-fn validate_github_user(user: GithubUserResponse) -> Result<GithubOauthUser> {
+/// Validate the GitHub account identity associated with the temporary access token.
+fn validate_github_user(user: GithubUserResponse) -> Result<GithubSignInUser> {
     let login = user.login.trim();
     if user.id <= 0 || login.is_empty() {
         return Err(ServiceError::BadRequest(
-            "GitHub OAuth returned an invalid creator identity".to_string(),
+            "GitHub sign-in returned an invalid creator identity".to_string(),
         ));
     }
-    Ok(GithubOauthUser {
+    Ok(GithubSignInUser {
         id: user.id,
         login: login.to_string(),
     })
@@ -553,8 +556,8 @@ fn validate_github_user(user: GithubUserResponse) -> Result<GithubOauthUser> {
 async fn resolve_callback_human(
     pool: &PgPool,
     config: &Config,
-    oauth_state: &ConsumedGithubOauthState,
-    github_user: &GithubOauthUser,
+    sign_in_state: &ConsumedGithubSignInState,
+    github_user: &GithubSignInUser,
 ) -> Result<HumanRecord> {
     let fallback_human_id = HumanId::generate();
     let require_pioneer_code =
@@ -569,7 +572,7 @@ async fn resolve_callback_human(
             fallback_human_id,
             github_user_id: github_user.id,
             github_login: github_user.login.clone(),
-            pioneer_code_hash: oauth_state.pioneer_code_hash.clone(),
+            pioneer_code_hash: sign_in_state.pioneer_code_hash.clone(),
             pioneer_code_required_for_new_human: require_pioneer_code,
             bootstrap_admin_candidate,
         })

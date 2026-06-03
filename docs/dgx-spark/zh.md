@@ -84,7 +84,7 @@ AGENTICS_RUNNER_DOCKER_LAYER_QUOTA=true
 ```
 
 公开 stack 前必须配置 `AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS`，并轮换所有
-storage、database、OAuth 和 RustFS secrets。Non-browser operator automation 使用在
+storage、database、GitHub App sign-in 和 RustFS secrets。Non-browser operator automation 使用在
 admin console 中创建的 admin service tokens。Public ingress 和 TLS 保持在 Compose
 外部。
 

@@ -15,7 +15,7 @@ Review Records tab 支持 validation、approval、rejection、publication、aban
 stale review record cleanup。Server-side scripts 也可以使用 admin CLI helpers。
 
 Server-side admin routes 使用放在 `Authorization: Bearer ...` header 中的 admin
-service tokens。Human admins 在 web console 中使用 GitHub OAuth。
+service tokens。Human admins 在 web console 中使用 GitHub sign-in。
 
 ## Review Checklist
 
@@ -113,7 +113,7 @@ POST /admin/challenge-review-records/{id}/publish
 ```
 
 Server-side callers 使用 `AGENTICS_ADMIN_SERVICE_TOKEN` 或
-`--admin-service-token-stdin` 认证。Browser admin requests 使用 GitHub OAuth session
+`--admin-service-token-stdin` 认证。Browser admin requests 使用 GitHub sign-in session
 cookie 和 CSRF-token flow。不要把 service token 作为 argv 参数传入。
 
 ## Admin CLI Helpers

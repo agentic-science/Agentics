@@ -140,7 +140,7 @@ describe("CreatorConsole", () => {
     expect(createChallengeReviewRecordMock).not.toHaveBeenCalled();
   });
 
-  it("starts GitHub OAuth without a pioneer code for returning creators", async () => {
+  it("starts GitHub sign-in without a pioneer code for returning creators", async () => {
     const view = renderCreatorConsole();
 
     fireEvent.click(view.getByRole("button", { name: "Sign in with GitHub" }));
@@ -150,7 +150,7 @@ describe("CreatorConsole", () => {
     );
   });
 
-  it("starts GitHub OAuth with a pioneer code", async () => {
+  it("starts GitHub sign-in with a pioneer code", async () => {
     const view = renderCreatorConsole();
 
     fireEvent.input(view.getByLabelText("Pioneer code for new creators"), {

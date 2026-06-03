@@ -53,13 +53,18 @@ The worker heartbeat is the main signal that a worker loop is alive. Each worker
 ## Admin Access
 
 The admin web console is available at `/admin`. Human admins sign in through
-GitHub OAuth. Server-side admin calls use admin service tokens in
+GitHub sign-in. Server-side admin calls use admin service tokens in
 `Authorization: Bearer ...` headers.
 
 Bootstrap the first admin through a configured GitHub user id, then create
 admin service tokens from the admin console for non-browser automation. Hosted
 MVP registration should use `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`;
 the backend rejects public registration mode on non-loopback binds.
+GitHub sign-in uses GitHub App client credentials only:
+`AGENTICS_GITHUB_APP_CLIENT_ID`, `AGENTICS_GITHUB_APP_CLIENT_SECRET`, and
+`AGENTICS_GITHUB_APP_REDIRECT_URL`. The MVP does not configure GitHub App
+private keys, webhooks, installation ids, installation tokens, or repository
+permissions for login.
 
 Startup config validation is fail-fast. Malformed numeric port variables are
 not ignored, and hosted worker probe mode requires a non-empty
@@ -431,7 +436,7 @@ Minimum log retention for MVP rehearsal:
    just dev::logs
    ```
 
-3. Check API logs for config validation failures, especially missing GitHub OAuth
+3. Check API logs for config validation failures, especially missing GitHub sign-in
    settings, insecure session-cookie settings on non-loopback binds, or missing
    first-admin bootstrap GitHub user ids.
 

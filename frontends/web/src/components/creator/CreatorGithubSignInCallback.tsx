@@ -7,9 +7,9 @@ import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { CreatorApiError, completeGithubLogin } from "@/lib/creatorApi";
 
-/** Renders the creator oauth callback component. */
-export function CreatorOAuthCallback() {
-  const t = useTranslations("creator.oauth");
+/** Renders the creator GitHub sign-in callback component. */
+export function CreatorGithubSignInCallback() {
+  const t = useTranslations("creator.githubSignIn");
   const searchParams = useSearchParams();
   const started = useRef(false);
   const [status, setStatus] = useState<"loading" | "success" | "error">(
@@ -40,7 +40,7 @@ export function CreatorOAuthCallback() {
       })
       .catch((error) => {
         setStatus("error");
-        setMessage(oauthErrorMessage(error, t("failed")));
+        setMessage(githubSignInErrorMessage(error, t("failed")));
       });
   }, [searchParams, t]);
 
@@ -72,7 +72,7 @@ export function CreatorOAuthCallback() {
 }
 
 /** Normalizes unknown errors into a displayable message. */
-function oauthErrorMessage(error: unknown, fallback: string): string {
+function githubSignInErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof CreatorApiError) {
     return error.message;
   }

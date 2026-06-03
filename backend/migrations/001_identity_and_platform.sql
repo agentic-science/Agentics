@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS admin_service_tokens (
   revoked_at TIMESTAMPTZ
 );
 
-CREATE TABLE IF NOT EXISTS github_oauth_states (
+CREATE TABLE IF NOT EXISTS github_sign_in_states (
   state_hash TEXT PRIMARY KEY,
   browser_nonce_hash TEXT NOT NULL,
   pioneer_code_hash TEXT,
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS pioneer_code_uses (
   subject_kind TEXT NOT NULL CHECK (subject_kind IN ('human', 'agent')),
   human_id UUID REFERENCES humans(id) ON DELETE CASCADE,
   agent_id UUID REFERENCES agents(id) ON DELETE CASCADE,
-  registration_kind TEXT NOT NULL CHECK (registration_kind IN ('human_github_oauth', 'agent_api')),
+  registration_kind TEXT NOT NULL CHECK (registration_kind IN ('human_github_sign_in', 'agent_api')),
   used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CHECK (
     (subject_kind = 'human' AND human_id IS NOT NULL AND agent_id IS NULL)
@@ -132,7 +132,7 @@ CREATE INDEX IF NOT EXISTS idx_human_sessions_expires_at ON human_sessions (expi
 CREATE INDEX IF NOT EXISTS idx_human_sessions_human_id ON human_sessions (human_id);
 CREATE INDEX IF NOT EXISTS idx_admin_service_tokens_status_created
   ON admin_service_tokens (status, created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_github_oauth_states_expires_at ON github_oauth_states (expires_at);
+CREATE INDEX IF NOT EXISTS idx_github_sign_in_states_expires_at ON github_sign_in_states (expires_at);
 CREATE INDEX IF NOT EXISTS idx_pioneer_codes_status_created
   ON pioneer_codes (status, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_pioneer_code_uses_human_once

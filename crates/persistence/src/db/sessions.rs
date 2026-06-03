@@ -1,4 +1,4 @@
-//! Human browser session, GitHub OAuth state, and admin service-token queries.
+//! Human browser session, GitHub sign-in state, and admin service-token queries.
 
 use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Row, Transaction};
@@ -79,9 +79,9 @@ pub struct CreateHumanSessionInput {
     pub expires_at: DateTime<Utc>,
 }
 
-/// Input for storing a short-lived GitHub OAuth state token.
+/// Input for storing a short-lived GitHub sign-in state token.
 #[derive(Debug, Clone)]
-pub struct CreateGithubOauthStateInput {
+pub struct CreateGithubSignInStateInput {
     pub state_hash: String,
     pub browser_nonce_hash: String,
     pub pioneer_code_hash: Option<String>,
@@ -89,9 +89,9 @@ pub struct CreateGithubOauthStateInput {
     pub expires_at: DateTime<Utc>,
 }
 
-/// Stored OAuth state consumed by a callback after browser redirect.
+/// Stored GitHub sign-in state consumed by a callback after browser redirect.
 #[derive(Debug, Clone)]
-pub struct ConsumedGithubOauthState {
+pub struct ConsumedGithubSignInState {
     pub pioneer_code_hash: Option<String>,
     pub return_to: Option<String>,
 }
@@ -183,14 +183,14 @@ pub async fn resolve_github_human(
     get_human_by_id(pool, &input.fallback_human_id).await
 }
 
-/// Store a GitHub OAuth state token hash for callback validation.
-pub async fn create_github_oauth_state(
+/// Store a GitHub sign-in state token hash for callback validation.
+pub async fn create_github_sign_in_state(
     pool: &PgPool,
-    input: &CreateGithubOauthStateInput,
+    input: &CreateGithubSignInStateInput,
 ) -> Result<()> {
     sqlx::query(
         r#"
-        INSERT INTO github_oauth_states (
+        INSERT INTO github_sign_in_states (
             state_hash,
             browser_nonce_hash,
             pioneer_code_hash,
@@ -211,15 +211,15 @@ pub async fn create_github_oauth_state(
     Ok(())
 }
 
-/// Consume one non-expired GitHub OAuth state token.
-pub async fn consume_github_oauth_state(
+/// Consume one non-expired GitHub sign-in state token.
+pub async fn consume_github_sign_in_state(
     pool: &PgPool,
     state_hash: &str,
     browser_nonce_hash: &str,
-) -> Result<Option<ConsumedGithubOauthState>> {
+) -> Result<Option<ConsumedGithubSignInState>> {
     let row = sqlx::query(
         r#"
-        DELETE FROM github_oauth_states
+        DELETE FROM github_sign_in_states
         WHERE state_hash = $1
           AND browser_nonce_hash = $2
           AND expires_at > NOW()
@@ -235,7 +235,7 @@ pub async fn consume_github_oauth_state(
         return Ok(None);
     };
 
-    Ok(Some(ConsumedGithubOauthState {
+    Ok(Some(ConsumedGithubSignInState {
         pioneer_code_hash: row.try_get("pioneer_code_hash")?,
         return_to: row.try_get("return_to")?,
     }))
@@ -579,7 +579,7 @@ pub async fn authenticate_admin_service_token(
 
 /// Delete expired transient auth rows.
 pub async fn delete_expired_web_auth_rows(pool: &PgPool) -> Result<()> {
-    sqlx::query("DELETE FROM github_oauth_states WHERE expires_at <= NOW()")
+    sqlx::query("DELETE FROM github_sign_in_states WHERE expires_at <= NOW()")
         .execute(pool)
         .await?;
     sqlx::query("DELETE FROM human_sessions WHERE expires_at <= NOW()")

@@ -27,19 +27,19 @@ pub const MOLTBOOK_SUBMOLT_URL_ERROR_MESSAGE: &str =
 pub const MOLTBOOK_POST_URL_ERROR_MESSAGE: &str =
     "moltbook post url must be https://www.moltbook.com/post/{post-id}";
 
-/// Validation message for GitHub OAuth redirect URLs.
-pub const GITHUB_OAUTH_REDIRECT_URL_ERROR_MESSAGE: &str =
-    "github OAuth redirect URL must be an absolute HTTP(S) URL without query or fragment";
+/// Validation message for GitHub App redirect URLs.
+pub const GITHUB_APP_REDIRECT_URL_ERROR_MESSAGE: &str =
+    "GitHub sign-in redirect URL must be an absolute HTTP(S) URL without query or fragment";
 
-/// Validation message for GitHub OAuth authorization endpoint URLs.
-pub const GITHUB_OAUTH_AUTHORIZE_URL_ERROR_MESSAGE: &str =
-    "github OAuth authorize URL must be https://github.com/login/oauth/authorize";
-pub const GITHUB_OAUTH_AUTHORIZATION_URL_ERROR_MESSAGE: &str =
-    "github OAuth authorization URL must be an HTTPS GitHub authorize URL without fragment";
+/// Validation message for GitHub App authorization endpoint URLs.
+pub const GITHUB_APP_AUTHORIZE_URL_ERROR_MESSAGE: &str =
+    "GitHub sign-in authorize URL must be https://github.com/login/oauth/authorize";
+pub const GITHUB_SIGN_IN_AUTHORIZATION_URL_ERROR_MESSAGE: &str =
+    "GitHub sign-in authorization URL must be an HTTPS GitHub authorize URL without fragment";
 
-/// Validation message for GitHub OAuth token endpoint URLs.
-pub const GITHUB_OAUTH_TOKEN_URL_ERROR_MESSAGE: &str =
-    "github OAuth token URL must be https://github.com/login/oauth/access_token";
+/// Validation message for GitHub App token endpoint URLs.
+pub const GITHUB_APP_TOKEN_URL_ERROR_MESSAGE: &str =
+    "GitHub sign-in token URL must be https://github.com/login/oauth/access_token";
 
 /// Validation message for the GitHub user API URL.
 pub const GITHUB_API_USER_URL_ERROR_MESSAGE: &str =
@@ -518,22 +518,22 @@ macro_rules! define_url_wrapper {
 }
 
 define_url_wrapper!(
-    GithubOauthRedirectUrl,
-    "GithubOauthRedirectUrl",
-    validate_oauth_redirect_url,
-    GITHUB_OAUTH_REDIRECT_URL_ERROR_MESSAGE
+    GithubAppRedirectUrl,
+    "GithubAppRedirectUrl",
+    validate_github_app_redirect_url,
+    GITHUB_APP_REDIRECT_URL_ERROR_MESSAGE
 );
 define_url_wrapper!(
-    GithubOauthAuthorizeUrl,
-    "GithubOauthAuthorizeUrl",
-    validate_github_oauth_authorize_url,
-    GITHUB_OAUTH_AUTHORIZE_URL_ERROR_MESSAGE
+    GithubAppAuthorizeUrl,
+    "GithubAppAuthorizeUrl",
+    validate_github_app_authorize_url,
+    GITHUB_APP_AUTHORIZE_URL_ERROR_MESSAGE
 );
 define_url_wrapper!(
-    GithubOauthTokenUrl,
-    "GithubOauthTokenUrl",
-    validate_github_oauth_token_url,
-    GITHUB_OAUTH_TOKEN_URL_ERROR_MESSAGE
+    GithubAppTokenUrl,
+    "GithubAppTokenUrl",
+    validate_github_app_token_url,
+    GITHUB_APP_TOKEN_URL_ERROR_MESSAGE
 );
 define_url_wrapper!(
     GithubApiUserUrl,
@@ -542,14 +542,14 @@ define_url_wrapper!(
     GITHUB_API_USER_URL_ERROR_MESSAGE
 );
 
-/// GitHub OAuth authorization URL with request query parameters.
+/// GitHub sign-in authorization URL with request query parameters.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct GithubOauthAuthorizationUrl(Url);
+pub struct GithubSignInAuthorizationUrl(Url);
 
-impl GithubOauthAuthorizationUrl {
+impl GithubSignInAuthorizationUrl {
     /// Validate a generated authorization URL.
     pub fn try_from_url(url: Url) -> Result<Self, UrlFieldError> {
-        validate_github_oauth_authorization_url(&url)?;
+        validate_github_sign_in_authorization_url(&url)?;
         Ok(Self(url))
     }
 
@@ -559,27 +559,27 @@ impl GithubOauthAuthorizationUrl {
     }
 }
 
-impl fmt::Display for GithubOauthAuthorizationUrl {
+impl fmt::Display for GithubSignInAuthorizationUrl {
     /// Handles fmt for this module.
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
 }
 
-impl FromStr for GithubOauthAuthorizationUrl {
+impl FromStr for GithubSignInAuthorizationUrl {
     type Err = UrlFieldError;
 
     /// Handles from str for this module.
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        let url = parse_url(value.trim(), GITHUB_OAUTH_AUTHORIZATION_URL_ERROR_MESSAGE)?;
+        let url = parse_url(value.trim(), GITHUB_SIGN_IN_AUTHORIZATION_URL_ERROR_MESSAGE)?;
         Self::try_from_url(url)
     }
 }
 
-impl_string_url_serde!(GithubOauthAuthorizationUrl);
+impl_string_url_serde!(GithubSignInAuthorizationUrl);
 impl_string_url_schema!(
-    GithubOauthAuthorizationUrl,
-    "GithubOauthAuthorizationUrl",
+    GithubSignInAuthorizationUrl,
+    "GithubSignInAuthorizationUrl",
     r"^https://github\.com/login/oauth/authorize\?[^#]+$"
 );
 
@@ -629,31 +629,31 @@ fn github_pull_request_parts(url: &Url) -> Result<(String, String, String), UrlF
     ))
 }
 
-/// Validates oauth redirect url invariants for this contract.
-fn validate_oauth_redirect_url(url: &Url) -> Result<(), UrlFieldError> {
+/// Validates GitHub App redirect URL invariants for this contract.
+fn validate_github_app_redirect_url(url: &Url) -> Result<(), UrlFieldError> {
     if !matches!(url.scheme(), "http" | "https")
         || url.cannot_be_a_base()
         || url.host_str().is_none()
         || url.query().is_some()
         || url.fragment().is_some()
     {
-        return Err(UrlFieldError::new(GITHUB_OAUTH_REDIRECT_URL_ERROR_MESSAGE));
+        return Err(UrlFieldError::new(GITHUB_APP_REDIRECT_URL_ERROR_MESSAGE));
     }
     Ok(())
 }
 
-/// Validates github oauth authorize url invariants for this contract.
-fn validate_github_oauth_authorize_url(url: &Url) -> Result<(), UrlFieldError> {
+/// Validates GitHub App authorization endpoint invariants for this contract.
+fn validate_github_app_authorize_url(url: &Url) -> Result<(), UrlFieldError> {
     validate_exact_https_url(
         url,
         "github.com",
         "/login/oauth/authorize",
-        GITHUB_OAUTH_AUTHORIZE_URL_ERROR_MESSAGE,
+        GITHUB_APP_AUTHORIZE_URL_ERROR_MESSAGE,
     )
 }
 
-/// Validates github oauth authorization url invariants for this contract.
-fn validate_github_oauth_authorization_url(url: &Url) -> Result<(), UrlFieldError> {
+/// Validates generated GitHub sign-in authorization URL invariants.
+fn validate_github_sign_in_authorization_url(url: &Url) -> Result<(), UrlFieldError> {
     if url.scheme() != "https"
         || url.cannot_be_a_base()
         || url.host_str() != Some("github.com")
@@ -663,19 +663,19 @@ fn validate_github_oauth_authorization_url(url: &Url) -> Result<(), UrlFieldErro
         || url.fragment().is_some()
     {
         return Err(UrlFieldError::new(
-            GITHUB_OAUTH_AUTHORIZATION_URL_ERROR_MESSAGE,
+            GITHUB_SIGN_IN_AUTHORIZATION_URL_ERROR_MESSAGE,
         ));
     }
     Ok(())
 }
 
-/// Validates github oauth token url invariants for this contract.
-fn validate_github_oauth_token_url(url: &Url) -> Result<(), UrlFieldError> {
+/// Validates GitHub App token endpoint invariants for this contract.
+fn validate_github_app_token_url(url: &Url) -> Result<(), UrlFieldError> {
     validate_exact_https_url(
         url,
         "github.com",
         "/login/oauth/access_token",
-        GITHUB_OAUTH_TOKEN_URL_ERROR_MESSAGE,
+        GITHUB_APP_TOKEN_URL_ERROR_MESSAGE,
     )
 }
 

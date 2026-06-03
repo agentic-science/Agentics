@@ -2945,12 +2945,12 @@ export const evaluationJobResponseSchema = z
     "Admin response returned when an official evaluation job is queued.",
   );
 
-export const githubOauthCallbackRequestSchema = z
+export const githubSignInCallbackRequestSchema = z
   .object({ code: z.string(), state: z.string() })
   .strict()
-  .describe("Browser-submitted request that completes GitHub OAuth.");
+  .describe("Browser-submitted request that completes GitHub sign-in.");
 
-export const githubOauthCallbackResponseSchema = z
+export const githubSignInCallbackResponseSchema = z
   .object({
     session: z
       .object({
@@ -2975,17 +2975,17 @@ export const githubOauthCallbackResponseSchema = z
     return_to: z.string().optional(),
   })
   .strict()
-  .describe("Response returned after completing GitHub OAuth.");
+  .describe("Response returned after completing GitHub sign-in.");
 
-export const githubOauthLoginRequestSchema = z
+export const githubSignInLoginRequestSchema = z
   .object({
     pioneer_code: z.string().optional(),
     return_to: z.string().optional(),
   })
   .strict()
-  .describe("Browser-submitted request to start GitHub OAuth.");
+  .describe("Browser-submitted request to start GitHub sign-in.");
 
-export const githubOauthLoginResponseSchema = z
+export const githubSignInLoginResponseSchema = z
   .object({
     authorization_url: z
       .string()
@@ -2993,7 +2993,7 @@ export const githubOauthLoginResponseSchema = z
       .regex(/^https:\/\/github\.com\/login\/oauth\/authorize\?[^#]+$/),
   })
   .strict()
-  .describe("URL returned to a browser or CLI so it can start GitHub OAuth.");
+  .describe("URL returned to a browser or CLI so it can start GitHub sign-in.");
 
 export const humanSessionResponseSchema = z
   .object({
@@ -3115,7 +3115,7 @@ export const pioneerCodeDetailResponseSchema = z
             .optional(),
           agent_display_name: z.string().optional(),
           registration_kind: z
-            .enum(["human_github_oauth", "agent_api"])
+            .enum(["human_github_sign_in", "agent_api"])
             .describe(
               "Registration flow recorded for a consumed pioneer code.",
             ),
@@ -4986,17 +4986,17 @@ export type CreatorChallengeStatsResponse = z.infer<
 export type DisableAgentResponse = z.infer<typeof disableAgentResponseSchema>;
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;
 export type EvaluationJobResponse = z.infer<typeof evaluationJobResponseSchema>;
-export type GithubOauthCallbackRequest = z.infer<
-  typeof githubOauthCallbackRequestSchema
+export type GithubSignInCallbackRequest = z.infer<
+  typeof githubSignInCallbackRequestSchema
 >;
-export type GithubOauthCallbackResponse = z.infer<
-  typeof githubOauthCallbackResponseSchema
+export type GithubSignInCallbackResponse = z.infer<
+  typeof githubSignInCallbackResponseSchema
 >;
-export type GithubOauthLoginRequest = z.infer<
-  typeof githubOauthLoginRequestSchema
+export type GithubSignInLoginRequest = z.infer<
+  typeof githubSignInLoginRequestSchema
 >;
-export type GithubOauthLoginResponse = z.infer<
-  typeof githubOauthLoginResponseSchema
+export type GithubSignInLoginResponse = z.infer<
+  typeof githubSignInLoginResponseSchema
 >;
 export type HumanSessionResponse = z.infer<typeof humanSessionResponseSchema>;
 export type LeaderboardResponse = z.infer<typeof leaderboardResponseSchema>;

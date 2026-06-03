@@ -176,9 +176,9 @@ async fn finite_pioneer_code_consumption_is_atomic(pool: sqlx::PgPool) {
     assert!(statuses.contains(&StatusCode::FORBIDDEN));
 }
 
-/// Verifies GitHub OAuth starts with a POST body so pioneer codes stay out of URLs.
+/// Verifies GitHub sign-in starts with a POST body so pioneer codes stay out of URLs.
 #[sqlx::test(migrations = "../migrations")]
-async fn github_oauth_login_start_uses_post_body(pool: sqlx::PgPool) {
+async fn github_sign_in_login_start_uses_post_body(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
     config.auth.agent_registration_mode = AgentRegistrationMode::PioneerCode;
@@ -201,7 +201,7 @@ async fn github_oauth_login_start_uses_post_body(pool: sqlx::PgPool) {
         ))
         .send()
         .await
-        .expect("failed to call old OAuth start route");
+        .expect("failed to call unsupported GET login route");
     assert_eq!(get_response.status(), StatusCode::METHOD_NOT_ALLOWED);
 
     let post_response = client
@@ -209,7 +209,7 @@ async fn github_oauth_login_start_uses_post_body(pool: sqlx::PgPool) {
         .json(&serde_json::json!({ "pioneer_code": "deadbeef" }))
         .send()
         .await
-        .expect("failed to start OAuth login");
+        .expect("failed to start GitHub sign-in");
     assert_eq!(post_response.status(), StatusCode::OK);
     let set_cookie = post_response
         .headers()
@@ -220,35 +220,39 @@ async fn github_oauth_login_start_uses_post_body(pool: sqlx::PgPool) {
     assert!(
         set_cookie
             .iter()
-            .any(|value| value.starts_with("agentics_oauth_nonce=")
+            .any(|value| value.starts_with("agentics_github_sign_in_nonce=")
                 && value.contains("HttpOnly")
                 && value.contains("SameSite=Lax")),
-        "OAuth start should bind state to an HttpOnly browser nonce cookie"
+        "GitHub sign-in start should bind state to an HttpOnly browser nonce cookie"
     );
     let post_response: serde_json::Value = post_response
         .json()
         .await
-        .expect("failed to decode OAuth login response");
+        .expect("failed to decode GitHub sign-in response");
     let authorization_url = post_response["authorization_url"]
         .as_str()
         .expect("authorization_url should exist");
     assert!(authorization_url.starts_with("https://github.com/login/oauth/authorize"));
     assert!(!authorization_url.contains("pioneer_code"));
     assert!(
+        !authorization_url.contains("scope="),
+        "GitHub App login-only sign-in should not request repository scopes"
+    );
+    assert!(
         post_response.get("state").is_none(),
-        "raw OAuth state stays inside the authorization URL"
+        "raw GitHub sign-in state stays inside the authorization URL"
     );
 }
 
-/// Verifies OAuth callback state cannot be consumed without the initiating browser nonce.
+/// Verifies GitHub sign-in callback state cannot be consumed without the initiating browser nonce.
 #[sqlx::test(migrations = "../migrations")]
-async fn github_oauth_state_requires_browser_nonce(pool: sqlx::PgPool) {
-    let state = "oauth-state";
-    let nonce = "oauth-browser-nonce";
+async fn github_sign_in_state_requires_browser_nonce(pool: sqlx::PgPool) {
+    let state = "github-sign-in-state";
+    let nonce = "github-sign-in-browser-nonce";
     let repos = agentics_persistence::Repositories::new(&pool);
     repos
         .sessions()
-        .create_github_oauth_state(&agentics_persistence::CreateGithubOauthStateInput {
+        .create_github_sign_in_state(&agentics_persistence::CreateGithubSignInStateInput {
             state_hash: agentics_services::auth::hash_opaque_token(state),
             browser_nonce_hash: agentics_services::auth::hash_opaque_token(nonce),
             pioneer_code_hash: None,
@@ -256,11 +260,11 @@ async fn github_oauth_state_requires_browser_nonce(pool: sqlx::PgPool) {
             expires_at: chrono::Utc::now() + chrono::Duration::minutes(10),
         })
         .await
-        .expect("OAuth state should insert");
+        .expect("GitHub sign-in state should insert");
 
     let wrong_nonce = repos
         .sessions()
-        .consume_github_oauth_state(
+        .consume_github_sign_in_state(
             &agentics_services::auth::hash_opaque_token(state),
             &agentics_services::auth::hash_opaque_token("wrong-browser-nonce"),
         )
@@ -270,7 +274,7 @@ async fn github_oauth_state_requires_browser_nonce(pool: sqlx::PgPool) {
 
     let consumed = repos
         .sessions()
-        .consume_github_oauth_state(
+        .consume_github_sign_in_state(
             &agentics_services::auth::hash_opaque_token(state),
             &agentics_services::auth::hash_opaque_token(nonce),
         )
@@ -279,9 +283,9 @@ async fn github_oauth_state_requires_browser_nonce(pool: sqlx::PgPool) {
     assert!(consumed.is_some());
 }
 
-/// Verifies human OAuth account creation uses the same code consumption primitive.
+/// Verifies human GitHub sign-in account creation uses the same code consumption primitive.
 #[sqlx::test(migrations = "../migrations")]
-async fn human_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
+async fn human_github_sign_in_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
     let code = "team-deadbeef";
     let code_hash = agentics_services::auth::hash_opaque_token(code);
     let code_id = PioneerCodeId::generate();
@@ -305,7 +309,7 @@ async fn human_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
             code_display: code.to_string(),
             code_hash: code_hash.clone(),
             label: Some("team".to_string()),
-            note: "human oauth".to_string(),
+            note: "human github sign-in".to_string(),
             max_uses: 1,
             expires_at: None,
             created_by_human_id: Some(admin_human.human_id.clone()),
@@ -327,7 +331,7 @@ async fn human_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
             bootstrap_admin_candidate: false,
         })
         .await
-        .expect("first oauth login should create human");
+        .expect("first GitHub sign-in should create human");
     assert_eq!(stored_human.human_id, first_human_id);
 
     let repeated = repos
@@ -341,7 +345,7 @@ async fn human_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
             bootstrap_admin_candidate: false,
         })
         .await
-        .expect("repeat oauth login should not consume another code");
+        .expect("repeat GitHub sign-in should not consume another code");
     assert_eq!(repeated.human_id, first_human_id);
 
     let repeated_without_code = repos
@@ -355,7 +359,7 @@ async fn human_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
             bootstrap_admin_candidate: false,
         })
         .await
-        .expect("existing oauth creator should not need another pioneer code");
+        .expect("existing GitHub sign-in creator should not need another pioneer code");
     assert_eq!(repeated_without_code.human_id, first_human_id);
 
     let missing_code = repos
@@ -383,7 +387,7 @@ async fn human_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
         .expect("pioneer code detail should load");
     assert_eq!(detail.use_count, 1);
     assert_eq!(uses.len(), 1);
-    assert_eq!(uses[0].registration_kind, "human_github_oauth");
+    assert_eq!(uses[0].registration_kind, "human_github_sign_in");
     assert_eq!(uses[0].human_id.as_ref(), Some(&first_human_id));
 
     sqlx::query("UPDATE humans SET status = 'disabled', disabled_at = NOW() WHERE id = $1::uuid")
@@ -402,7 +406,7 @@ async fn human_oauth_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
             bootstrap_admin_candidate: false,
         })
         .await
-        .expect_err("disabled linked human should block oauth login");
+        .expect_err("disabled linked human should block GitHub sign-in");
     assert!(
         disabled
             .to_string()
@@ -436,7 +440,7 @@ async fn pioneer_code_revoke_revokes_derived_human_admin_service_tokens(pool: sq
             code_display: code.to_string(),
             code_hash: code_hash.clone(),
             label: Some("team".to_string()),
-            note: "human oauth".to_string(),
+            note: "human github sign-in".to_string(),
             max_uses: 1,
             expires_at: None,
             created_by_human_id: Some(admin_human.human_id.clone()),
@@ -456,7 +460,7 @@ async fn pioneer_code_revoke_revokes_derived_human_admin_service_tokens(pool: sq
             bootstrap_admin_candidate: false,
         })
         .await
-        .expect("oauth login should create human");
+        .expect("GitHub sign-in should create human");
     let admin_token = agentics_services::auth::create_admin_service_token();
     let token_hash = agentics_services::auth::hash_opaque_token(&admin_token);
     repos

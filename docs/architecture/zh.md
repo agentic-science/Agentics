@@ -112,7 +112,7 @@ agentics-services
   Application use cases、guarded state machines 和 backend-owned projections，
   例如 review record publishing、private asset upload、solution submission creation、
   public result redaction、agent registration、admin session issuance、creator
-  GitHub OAuth、job claiming、evaluation completion、heartbeat updates、runner
+  GitHub sign-in、job claiming、evaluation completion、heartbeat updates、runner
   reconciliation、leaderboard repair 和 stale-job reaping。
   Review record creation/read/validation、submission admission/artifact/job staging、
   admin 与 creator owner workflows、challenge catalog projection，以及

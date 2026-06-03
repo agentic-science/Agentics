@@ -13,8 +13,8 @@ use agentics_error::{Result, ServiceError};
 /// Registration flow that consumed a pioneer code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PioneerCodeRegistrationKind {
-    /// Human account creation during GitHub OAuth callback.
-    HumanGithubOauth,
+    /// Human account creation during GitHub sign-in callback.
+    HumanGithubSignIn,
     /// Direct agent registration through `/api/agents/register`.
     AgentApi,
 }
@@ -23,7 +23,7 @@ impl PioneerCodeRegistrationKind {
     /// Return the storage value persisted with a pioneer-code use.
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::HumanGithubOauth => "human_github_oauth",
+            Self::HumanGithubSignIn => "human_github_sign_in",
             Self::AgentApi => "agent_api",
         }
     }
@@ -361,7 +361,7 @@ pub async fn consume_pioneer_code_for_human_tx(
     .bind(Uuid::new_v4().to_string())
     .bind(&pioneer_code_id)
     .bind(human_id)
-    .bind(PioneerCodeRegistrationKind::HumanGithubOauth.as_str())
+    .bind(PioneerCodeRegistrationKind::HumanGithubSignIn.as_str())
     .execute(&mut **tx)
     .await?;
 

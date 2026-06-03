@@ -85,6 +85,11 @@ Rust services 会在 startup 时验证 environment values。格式错误的
 registration 和 Cloudflare edge controls。通过
 `AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS` bootstrap 第一个 admin，然后在 admin
 console 中创建给 operator automation 使用的 admin service tokens。
+Human browser login 是基于 GitHub App user-authorization flow 的 GitHub sign-in。
+需要配置 `AGENTICS_GITHUB_APP_CLIENT_ID`、
+`AGENTICS_GITHUB_APP_CLIENT_SECRET` 和 `AGENTICS_GITHUB_APP_REDIRECT_URL`；
+production 的 redirect URL 应设置为 public web origin 加
+`/creator/github/callback`。
 
 Frontend 环境：
 

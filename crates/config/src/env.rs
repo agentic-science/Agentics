@@ -26,13 +26,13 @@ use super::{
     DEFAULT_WORKER_STALE_JOB_MINUTES, ENV_AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS,
     ENV_AGENTICS_HOST_PROBE_COMMAND, ENV_AGENTICS_MOLTBOOK_SUBMOLT_NAME,
     ENV_AGENTICS_MOLTBOOK_SUBMOLT_URL, ENV_AGENTICS_RUNNER_NAMESPACE, ENV_AGENTICS_S3_ENDPOINT_URL,
-    ENV_AGENTICS_S3_REGION, ENV_AGENTICS_STORAGE_ROOT, GithubApiUserUrl, GithubOauthAuthorizeUrl,
-    GithubOauthRedirectUrl, GithubOauthTokenUrl, HostProbeMode, MoltbookSubmoltName,
+    ENV_AGENTICS_S3_REGION, ENV_AGENTICS_STORAGE_ROOT, GithubApiUserUrl, GithubAppAuthorizeUrl,
+    GithubAppRedirectUrl, GithubAppTokenUrl, HostProbeMode, MoltbookSubmoltName,
     MoltbookSubmoltUrl, OfficialLogRedactionMode, RunnerNamespace, RunnerSecurityProfile,
     RunnerWritableStorageMode, StorageBackend, WorkerAccelerators, builtin_github_api_user_url,
-    builtin_github_oauth_authorize_url, builtin_github_oauth_token_url,
-    builtin_moltbook_submolt_name, builtin_moltbook_submolt_url, builtin_runner_namespace,
-    builtin_s3_endpoint_url, local_cors_allowed_origins, local_database_url, storage_config,
+    builtin_github_app_authorize_url, builtin_github_app_token_url, builtin_moltbook_submolt_name,
+    builtin_moltbook_submolt_url, builtin_runner_namespace, builtin_s3_endpoint_url,
+    local_cors_allowed_origins, local_database_url, storage_config,
 };
 use secrecy::SecretString;
 use serde::{Deserialize, de::DeserializeOwned};
@@ -49,7 +49,7 @@ pub struct RawAppEnv {
     pub moltbook: RawMoltbookEnv,
     pub worker: RawWorkerEnv,
     pub quotas: RawQuotaEnv,
-    pub oauth: RawGithubOauthEnv,
+    pub github_app: RawGithubAppEnv,
     pub runner: RawRunnerEnv,
     pub logging: RawLoggingEnv,
 }
@@ -74,7 +74,7 @@ impl RawAppEnv {
             moltbook: load_group(&vars)?,
             worker: load_group(&vars)?,
             quotas: load_group(&vars)?,
-            oauth: load_group(&vars)?,
+            github_app: load_group(&vars)?,
             runner: load_group(&vars)?,
             logging: load_group(&vars)?,
         })
@@ -166,14 +166,14 @@ pub struct RawQuotaEnv {
     pub unpublished_challenge_asset_grace_days: Option<i64>,
 }
 
-/// Raw GitHub OAuth environment values.
+/// Raw GitHub sign-in environment values.
 #[derive(Debug, Clone, Default, Deserialize)]
-pub struct RawGithubOauthEnv {
-    pub github_oauth_client_id: Option<String>,
-    pub github_oauth_client_secret: Option<String>,
-    pub github_oauth_redirect_url: Option<String>,
-    pub github_oauth_authorize_url: Option<String>,
-    pub github_oauth_token_url: Option<String>,
+pub struct RawGithubAppEnv {
+    pub github_app_client_id: Option<String>,
+    pub github_app_client_secret: Option<String>,
+    pub github_app_redirect_url: Option<String>,
+    pub github_app_authorize_url: Option<String>,
+    pub github_app_token_url: Option<String>,
     pub github_api_user_url: Option<String>,
 }
 
@@ -255,7 +255,7 @@ impl TryFrom<RawAppEnv> for Config {
         apply_moltbook_env(&mut config, raw.moltbook)?;
         apply_worker_env(&mut config, raw.worker)?;
         apply_quota_env(&mut config, raw.quotas)?;
-        apply_oauth_env(&mut config, raw.oauth)?;
+        apply_github_app_env(&mut config, raw.github_app)?;
         apply_runner_env(&mut config, raw.runner)?;
         config.logging.log_level = string_or_default(
             "AGENTICS_LOG_LEVEL",
@@ -399,32 +399,32 @@ fn apply_quota_env(config: &mut Config, raw: RawQuotaEnv) -> anyhow::Result<()> 
     Ok(())
 }
 
-fn apply_oauth_env(config: &mut Config, raw: RawGithubOauthEnv) -> anyhow::Result<()> {
-    config.github_oauth.client_id = optional_non_empty_string(raw.github_oauth_client_id);
-    config.github_oauth.client_secret =
-        optional_non_empty_string(raw.github_oauth_client_secret).map(SecretString::from);
-    config.github_oauth.redirect_url = raw
-        .github_oauth_redirect_url
-        .map(|value| -> anyhow::Result<GithubOauthRedirectUrl> {
-            let value = required_trimmed_string("AGENTICS_GITHUB_OAUTH_REDIRECT_URL", value)?;
-            Ok(GithubOauthRedirectUrl::try_new(value)?)
+fn apply_github_app_env(config: &mut Config, raw: RawGithubAppEnv) -> anyhow::Result<()> {
+    config.github_app.client_id = optional_non_empty_string(raw.github_app_client_id);
+    config.github_app.client_secret =
+        optional_non_empty_string(raw.github_app_client_secret).map(SecretString::from);
+    config.github_app.redirect_url = raw
+        .github_app_redirect_url
+        .map(|value| -> anyhow::Result<GithubAppRedirectUrl> {
+            let value = required_trimmed_string("AGENTICS_GITHUB_APP_REDIRECT_URL", value)?;
+            Ok(GithubAppRedirectUrl::try_new(value)?)
         })
         .transpose()?;
-    config.github_oauth.authorize_url = match raw.github_oauth_authorize_url {
-        Some(value) => GithubOauthAuthorizeUrl::try_new(required_trimmed_string(
-            "AGENTICS_GITHUB_OAUTH_AUTHORIZE_URL",
+    config.github_app.authorize_url = match raw.github_app_authorize_url {
+        Some(value) => GithubAppAuthorizeUrl::try_new(required_trimmed_string(
+            "AGENTICS_GITHUB_APP_AUTHORIZE_URL",
             value,
         )?)?,
-        None => builtin_github_oauth_authorize_url(),
+        None => builtin_github_app_authorize_url(),
     };
-    config.github_oauth.token_url = match raw.github_oauth_token_url {
-        Some(value) => GithubOauthTokenUrl::try_new(required_trimmed_string(
-            "AGENTICS_GITHUB_OAUTH_TOKEN_URL",
+    config.github_app.token_url = match raw.github_app_token_url {
+        Some(value) => GithubAppTokenUrl::try_new(required_trimmed_string(
+            "AGENTICS_GITHUB_APP_TOKEN_URL",
             value,
         )?)?,
-        None => builtin_github_oauth_token_url(),
+        None => builtin_github_app_token_url(),
     };
-    config.github_oauth.api_user_url = match raw.github_api_user_url {
+    config.github_app.api_user_url = match raw.github_api_user_url {
         Some(value) => GithubApiUserUrl::try_new(required_trimmed_string(
             "AGENTICS_GITHUB_API_USER_URL",
             value,

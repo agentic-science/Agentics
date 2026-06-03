@@ -199,8 +199,8 @@ repairs it by deleting that unreferenced object before promoting the new upload.
 
 1. Prepare a challenge proposal in the public challenge repository.
 2. Open a GitHub PR.
-3. Sign in to the Agentics creator console at `/creator` with GitHub OAuth.
-   New creators enter an issued pioneer code before OAuth starts; returning
+3. Sign in to the Agentics creator console at `/creator` with GitHub sign-in.
+   New creators enter an issued pioneer code before GitHub sign-in starts; returning
    creators do not need to re-enter a consumed code.
 4. Create a review record from the reviewed PR metadata.
 5. Upload required private assets through the creator console.
@@ -215,7 +215,7 @@ GitHub account ownership proof is still handled by the reviewed workflow rather
 than by a server-side GitHub authorization check.
 
 Creator-side review record creation and private asset upload are web-only in the MVP.
-The CLI does not yet provide GitHub OAuth creator sessions.
+The CLI does not yet provide GitHub sign-in creator sessions.
 
 Creator-authenticated APIs are backed by a creator session cookie and
 `X-Agentics-CSRF-Token` for unsafe requests:
@@ -237,7 +237,7 @@ POST /api/creator/challenge-review-records/{id}/private-assets
 ## Review Record Lifecycle
 
 1. A creator opens a PR in the challenge repository.
-2. The creator signs in to Agentics with GitHub OAuth.
+2. The creator signs in to Agentics with GitHub sign-in.
 3. The creator creates an Agentics challenge review record from PR metadata.
 4. The creator uploads declared private assets through Agentics.
 5. An admin validates the review record against a checked-out repository path.

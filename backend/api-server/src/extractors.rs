@@ -202,7 +202,7 @@ impl FromRequestParts<AppState> for AdminAuth {
     }
 }
 
-/// GitHub OAuth-authenticated human context from a web session.
+/// GitHub sign-in-authenticated human context from a web session.
 #[derive(Debug, Clone)]
 pub struct HumanAuth {
     pub session_id: HumanSessionId,

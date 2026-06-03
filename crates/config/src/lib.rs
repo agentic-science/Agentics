@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use agentics_domain::models::names::MoltbookSubmoltName;
 use agentics_domain::models::urls::{
-    GithubApiUserUrl, GithubOauthAuthorizeUrl, GithubOauthRedirectUrl, GithubOauthTokenUrl,
+    GithubApiUserUrl, GithubAppAuthorizeUrl, GithubAppRedirectUrl, GithubAppTokenUrl,
     MoltbookSubmoltUrl,
 };
 use agentics_storage::{LocalStorageOptions, S3StorageOptions, StorageFactoryOptions};
@@ -30,11 +30,11 @@ mod runtime_modes;
 mod storage_config;
 mod validation;
 pub use env::{
-    RawApiWebEnv, RawAppEnv, RawAuthEnv, RawDatabaseEnv, RawGithubOauthEnv, RawLoggingEnv,
+    RawApiWebEnv, RawAppEnv, RawAuthEnv, RawDatabaseEnv, RawGithubAppEnv, RawLoggingEnv,
     RawMoltbookEnv, RawQuotaEnv, RawRunnerEnv, RawStorageEnv, RawWorkerEnv,
 };
 pub use groups::{
-    ApiWebConfig, AuthConfig, Config, DatabaseConfig, GithubOauthConfig, LoggingConfig,
+    ApiWebConfig, AuthConfig, Config, DatabaseConfig, GithubAppConfig, LoggingConfig,
     MoltbookConfig, QuotaConfig, RunnerConfig, StorageConfig, WorkerConfig,
 };
 
@@ -215,12 +215,12 @@ impl Default for Config {
                 unpublished_challenge_asset_grace_days:
                     DEFAULT_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS,
             },
-            github_oauth: GithubOauthConfig {
+            github_app: GithubAppConfig {
                 client_id: None,
                 client_secret: None,
                 redirect_url: None,
-                authorize_url: builtin_github_oauth_authorize_url(),
-                token_url: builtin_github_oauth_token_url(),
+                authorize_url: builtin_github_app_authorize_url(),
+                token_url: builtin_github_app_token_url(),
                 api_user_url: builtin_github_api_user_url(),
             },
             runner: RunnerConfig {
@@ -322,20 +322,20 @@ fn builtin_moltbook_submolt_url() -> MoltbookSubmoltUrl {
     clippy::expect_used,
     reason = "static URLs are validated by type constructors and have no runtime fallback"
 )]
-/// Built-in GitHub OAuth authorize URL.
-fn builtin_github_oauth_authorize_url() -> GithubOauthAuthorizeUrl {
-    GithubOauthAuthorizeUrl::try_new("https://github.com/login/oauth/authorize")
-        .expect("built-in GitHub OAuth authorize URL must be valid")
+/// Built-in GitHub sign-in authorize URL.
+fn builtin_github_app_authorize_url() -> GithubAppAuthorizeUrl {
+    GithubAppAuthorizeUrl::try_new("https://github.com/login/oauth/authorize")
+        .expect("built-in GitHub sign-in authorize URL must be valid")
 }
 
 #[allow(
     clippy::expect_used,
     reason = "static URLs are validated by type constructors and have no runtime fallback"
 )]
-/// Built-in GitHub OAuth token URL.
-fn builtin_github_oauth_token_url() -> GithubOauthTokenUrl {
-    GithubOauthTokenUrl::try_new("https://github.com/login/oauth/access_token")
-        .expect("built-in GitHub OAuth token URL must be valid")
+/// Built-in GitHub sign-in token URL.
+fn builtin_github_app_token_url() -> GithubAppTokenUrl {
+    GithubAppTokenUrl::try_new("https://github.com/login/oauth/access_token")
+        .expect("built-in GitHub sign-in token URL must be valid")
 }
 
 #[allow(
@@ -371,7 +371,7 @@ impl Config {
         validation::validate_report(&self.auth)?;
         validation::validate_report(&self.api_web)?;
         validation::validate_report(&self.quotas)?;
-        validation::validate_report(&self.github_oauth)?;
+        validation::validate_report(&self.github_app)?;
         if !local_urls::is_loopback_host(&self.api_web.api_host)
             && self.auth.agent_registration_mode == AgentRegistrationMode::Public
         {
@@ -394,35 +394,35 @@ impl Config {
                 "AGENTICS_WEB_SESSION_COOKIE_SECURE must be true when the API is reachable from another machine"
             );
         }
-        if self.github_oauth.client_id.is_some()
-            || self.github_oauth.client_secret.is_some()
-            || self.github_oauth.redirect_url.is_some()
+        if self.github_app.client_id.is_some()
+            || self.github_app.client_secret.is_some()
+            || self.github_app.redirect_url.is_some()
         {
             validate_required_trimmed(
-                self.github_oauth.client_id.as_deref(),
-                "AGENTICS_GITHUB_OAUTH_CLIENT_ID",
+                self.github_app.client_id.as_deref(),
+                "AGENTICS_GITHUB_APP_CLIENT_ID",
             )?;
             validate_required_trimmed(
-                self.github_oauth
+                self.github_app
                     .client_secret
                     .as_ref()
                     .map(ExposeSecret::expose_secret),
-                "AGENTICS_GITHUB_OAUTH_CLIENT_SECRET",
+                "AGENTICS_GITHUB_APP_CLIENT_SECRET",
             )?;
             validate_required_trimmed(
-                self.github_oauth
+                self.github_app
                     .redirect_url
                     .as_ref()
-                    .map(GithubOauthRedirectUrl::as_str),
-                "AGENTICS_GITHUB_OAUTH_REDIRECT_URL",
+                    .map(GithubAppRedirectUrl::as_str),
+                "AGENTICS_GITHUB_APP_REDIRECT_URL",
             )?;
         }
         if (!local_urls::is_loopback_host(&self.api_web.api_host)
             || !self.auth.bootstrap_admin_github_user_ids.is_empty())
-            && !self.github_oauth_enabled()
+            && !self.github_app_enabled()
         {
             anyhow::bail!(
-                "GitHub OAuth must be fully configured with AGENTICS_GITHUB_OAUTH_CLIENT_ID, AGENTICS_GITHUB_OAUTH_CLIENT_SECRET, and AGENTICS_GITHUB_OAUTH_REDIRECT_URL before human admin login or bootstrap can work"
+                "GitHub sign-in must be fully configured with AGENTICS_GITHUB_APP_CLIENT_ID, AGENTICS_GITHUB_APP_CLIENT_SECRET, and AGENTICS_GITHUB_APP_REDIRECT_URL before human admin login or bootstrap can work"
             );
         }
         self.validate_hosted_image_policy()?;
@@ -758,19 +758,19 @@ impl Config {
             .collect()
     }
 
-    /// Return whether GitHub OAuth is fully configured for creator login.
-    pub fn github_oauth_enabled(&self) -> bool {
-        self.github_oauth
+    /// Return whether GitHub sign-in is fully configured for creator login.
+    pub fn github_app_enabled(&self) -> bool {
+        self.github_app
             .client_id
             .as_deref()
             .is_some_and(|value| !value.trim().is_empty())
             && self
-                .github_oauth
+                .github_app
                 .client_secret
                 .as_ref()
                 .map(ExposeSecret::expose_secret)
                 .is_some_and(|value| !value.trim().is_empty())
-            && self.github_oauth.redirect_url.is_some()
+            && self.github_app.redirect_url.is_some()
     }
 }
 

@@ -47,7 +47,7 @@ impl Drop for TestApp {
     }
 }
 
-/// Creator session material used by tests instead of a live GitHub OAuth round trip.
+/// Creator session material used by tests instead of a live GitHub sign-in round trip.
 pub struct TestCreatorSession {
     pub human_id: String,
     pub cookie_header: String,
@@ -183,20 +183,20 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
     config.quotas.challenge_review_record_ttl_days = 14;
     config.quotas.unpublished_challenge_asset_grace_days = 7;
 
-    config.github_oauth.client_id = Some("test-client-id".to_string());
-    config.github_oauth.client_secret = Some(SecretString::from("test-client-secret"));
-    config.github_oauth.redirect_url = Some(
+    config.github_app.client_id = Some("test-client-id".to_string());
+    config.github_app.client_secret = Some(SecretString::from("test-client-secret"));
+    config.github_app.redirect_url = Some(
         "http://127.0.0.1/auth/github/callback"
             .parse()
-            .expect("valid test GitHub OAuth redirect URL"),
+            .expect("valid test GitHub sign-in redirect URL"),
     );
-    config.github_oauth.authorize_url = "https://github.com/login/oauth/authorize"
+    config.github_app.authorize_url = "https://github.com/login/oauth/authorize"
         .parse()
-        .expect("valid test GitHub OAuth authorize URL");
-    config.github_oauth.token_url = "https://github.com/login/oauth/access_token"
+        .expect("valid test GitHub sign-in authorize URL");
+    config.github_app.token_url = "https://github.com/login/oauth/access_token"
         .parse()
-        .expect("valid test GitHub OAuth token URL");
-    config.github_oauth.api_user_url = "https://api.github.com/user"
+        .expect("valid test GitHub sign-in token URL");
+    config.github_app.api_user_url = "https://api.github.com/user"
         .parse()
         .expect("valid test GitHub API user URL");
 
@@ -426,7 +426,7 @@ async fn create_test_admin_service_token(pool: &PgPool) -> String {
     token
 }
 
-/// Insert a GitHub OAuth-equivalent human creator session for integration tests.
+/// Insert a GitHub sign-in-equivalent human creator session for integration tests.
 pub async fn create_creator_session(
     pool: &PgPool,
     github_user_id: i64,

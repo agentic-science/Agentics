@@ -51,7 +51,7 @@ Worker heartbeat 是判断 worker loop 是否存活的主要信号。每个 work
 
 ## Admin Access
 
-Admin web console 位于 `/admin`。Human admins 通过 GitHub OAuth 登录。
+Admin web console 位于 `/admin`。Human admins 通过 GitHub sign-in 登录。
 Server-side admin calls 使用 admin service token，并放在
 `Authorization: Bearer ...` header 中。
 
@@ -59,6 +59,10 @@ Server-side admin calls 使用 admin service token，并放在
 admin service tokens 给 non-browser automation 使用。Hosted MVP registration 应使用
 `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`；backend 会在 non-loopback bind 下拒绝
 public registration mode。
+GitHub sign-in 只使用 GitHub App client credentials：
+`AGENTICS_GITHUB_APP_CLIENT_ID`、`AGENTICS_GITHUB_APP_CLIENT_SECRET` 和
+`AGENTICS_GITHUB_APP_REDIRECT_URL`。MVP login 不配置 GitHub App private key、
+webhook、installation id、installation token 或 repository permissions。
 
 Startup config validation 会 fail fast。格式错误的 numeric port variables 不会被忽略；
 当 `AGENTICS_HOST_PROBE_MODE` 不是 `off` 时，hosted worker probe mode 要求
@@ -412,7 +416,7 @@ MVP rehearsal 最小日志保留策略：
    just dev::logs
    ```
 
-3. 检查 API logs 中的 config validation failures，尤其是 GitHub OAuth 设置缺失、non-loopback bind 使用不安全 session-cookie 设置，或缺少 first-admin bootstrap GitHub user ids。
+3. 检查 API logs 中的 config validation failures，尤其是 GitHub sign-in 设置缺失、non-loopback bind 使用不安全 session-cookie 设置，或缺少 first-admin bootstrap GitHub user ids。
 
 如果 logs 显示 SQLx migration version 或 checksum mismatch，说明该 database 来自旧的
 pre-MVP migration history。请重建 disposable dev/test database，或从与当前 code

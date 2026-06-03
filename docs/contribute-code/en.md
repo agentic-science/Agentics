@@ -70,6 +70,15 @@ The dev database name is `agentics_dev`. If your local Compose Postgres volume
 was created before this rename and still contains `agentics_demo`, reset the
 disposable dev volume before running `just dev::up`.
 
+For local admin or creator UI testing with GitHub sign-in, put GitHub App
+client credentials in the ignored file `.agentics-compose/dev/github-app.env`
+using `AGENTICS_GITHUB_APP_CLIENT_ID`,
+`AGENTICS_GITHUB_APP_CLIENT_SECRET`, and
+`AGENTICS_GITHUB_APP_REDIRECT_URL=http://127.0.0.1:3001/creator/github/callback`.
+Put the numeric bootstrap admin GitHub user id in the ignored file
+`.agentics-compose/dev/.github-user-id`. The `just dev::up` recipe loads those
+files when they exist, and neither file should be committed.
+
 Local dev uses `AGENTICS_OFFICIAL_LOG_REDACTION=contract_based`. Official
 evaluations for public-only dev challenges keep runner diagnostics, so failures
 such as missing declared output files should produce actionable logs. Challenges

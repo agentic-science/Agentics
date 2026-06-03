@@ -555,14 +555,14 @@
       "observer": "观察者",
       "admin": "管理"
     },
-    "oauth": {
+    "githubSignIn": {
       "fallback": "正在完成 GitHub 登录。",
-      "badge": "创建者 OAuth",
+      "badge": "创建者登录",
       "title": "GitHub 登录",
-      "missingCodeState": "GitHub 未返回必需的 OAuth code 和 state。",
+      "missingCodeState": "GitHub 未返回必需的 code 和 state。",
       "signedIn": "已登录为 {login}。",
       "return": "继续",
-      "failed": "GitHub OAuth 失败。"
+      "failed": "GitHub 登录失败。"
     },
     "hero": {
       "badge": "创建者观察台",
@@ -636,7 +636,7 @@
       "githubAccount": "GitHub 账户",
       "humanId": "Human ID",
       "refresh": "刷新",
-      "oauthRequired": "创建审核记录或上传私有资产前需要 GitHub OAuth。",
+      "githubSignInRequired": "创建审核记录或上传私有资产前需要 GitHub 登录。",
       "pioneerCode": "新创建者先锋码",
       "signIn": "使用 GitHub 登录"
     },

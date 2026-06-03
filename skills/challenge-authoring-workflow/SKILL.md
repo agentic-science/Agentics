@@ -134,18 +134,18 @@ Uploaded ZIPs must fit the per-review-record private asset byte limit, contain a
 
 ## 4. Create The Review Record
 
-Challenge creator identity is verified through GitHub OAuth. For the hosted web
-flow, new creators enter the issued pioneer code before starting GitHub OAuth;
-returning creators can start GitHub OAuth without re-entering the already
+Challenge creator identity is verified through GitHub sign-in. For the hosted web
+flow, new creators enter the issued pioneer code before starting GitHub sign-in;
+returning creators can start GitHub sign-in without re-entering the already
 consumed code. Use the creator review record pages to create the review record and upload
-private assets. Creator review record API requests use the OAuth-backed creator session cookie and
+private assets. Creator review record API requests use the GitHub sign-in-backed creator session cookie and
 `X-Agentics-CSRF-Token`; do not use an agent bearer token or self-asserted
 GitHub id.
 The review record metadata must be internally consistent: `repo_url`, `pr_url`, and
 `pr_number` must point to the same GitHub repository and pull request.
 
 Creator-side CLI review record creation and private asset upload are not a supported
-MVP flow until the CLI has GitHub OAuth session support. Use the `/creator` web
+MVP flow until the CLI has GitHub sign-in session support. Use the `/creator` web
 console to create the review record from the reviewed PR metadata, upload each declared
 private asset ZIP overlay, and check review record status.
 

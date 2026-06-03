@@ -155,7 +155,7 @@ async fn dispatch_challenge_creator(
             target: _,
         } => {
             anyhow::bail!(
-                "creator stats require GitHub OAuth web-session support; use the creator web UI"
+                "creator stats require GitHub sign-in web-session support; use the creator web UI"
             )
         }
         ChallengeCreatorCommand::Participants {
@@ -163,7 +163,7 @@ async fn dispatch_challenge_creator(
             target: _,
         } => {
             anyhow::bail!(
-                "creator participants require GitHub OAuth web-session support; use the creator web UI"
+                "creator participants require GitHub sign-in web-session support; use the creator web UI"
             )
         }
         ChallengeCreatorCommand::Shortlist { command } => {

@@ -8,8 +8,8 @@ use serde_json::{Map, Value};
 use agentics_domain::models::ErrorResponse;
 use agentics_domain::models::auth::{
     AdminHumanListResponse, AdminHumanRoleResponse, AdminServiceTokenCreatedResponse,
-    AdminServiceTokenListResponse, CreateAdminServiceTokenRequest, GithubOauthCallbackRequest,
-    GithubOauthCallbackResponse, GithubOauthLoginRequest, GithubOauthLoginResponse,
+    AdminServiceTokenListResponse, CreateAdminServiceTokenRequest, GithubSignInCallbackRequest,
+    GithubSignInCallbackResponse, GithubSignInLoginRequest, GithubSignInLoginResponse,
     HumanSessionResponse, RevokeAdminServiceTokenResponse,
 };
 use agentics_domain::models::challenge::{
@@ -149,15 +149,15 @@ web_schema_exports! {
     (EvaluationJobResponse, "evaluationJobResponseSchema"),
     (ErrorResponse, "errorResponseSchema"),
     (
-        GithubOauthCallbackRequest,
-        "githubOauthCallbackRequestSchema",
+        GithubSignInCallbackRequest,
+        "githubSignInCallbackRequestSchema",
     ),
     (
-        GithubOauthCallbackResponse,
-        "githubOauthCallbackResponseSchema",
+        GithubSignInCallbackResponse,
+        "githubSignInCallbackResponseSchema",
     ),
-    (GithubOauthLoginRequest, "githubOauthLoginRequestSchema"),
-    (GithubOauthLoginResponse, "githubOauthLoginResponseSchema"),
+    (GithubSignInLoginRequest, "githubSignInLoginRequestSchema"),
+    (GithubSignInLoginResponse, "githubSignInLoginResponseSchema"),
     (HumanSessionResponse, "humanSessionResponseSchema"),
     (LeaderboardResponse, "leaderboardResponseSchema"),
     (PioneerCodeDetailResponse, "pioneerCodeDetailResponseSchema"),

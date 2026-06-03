@@ -184,7 +184,7 @@ describe("AdminConsole", () => {
     expect(adminFetchJsonMock).not.toHaveBeenCalled();
   });
 
-  it("starts GitHub OAuth when signing in", async () => {
+  it("starts GitHub sign-in when signing in", async () => {
     const view = renderAdminConsole();
 
     fireEvent.click(

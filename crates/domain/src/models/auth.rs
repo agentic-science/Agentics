@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::ids::{AdminServiceTokenId, HumanId};
 use super::pioneer_codes::PioneerCodeInput;
-use super::urls::GithubOauthAuthorizationUrl;
+use super::urls::GithubSignInAuthorizationUrl;
 
 /// Role granted to a human account.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -60,28 +60,28 @@ impl HumanStatus {
     }
 }
 
-/// Browser-submitted request to start GitHub OAuth.
+/// Browser-submitted request to start GitHub sign-in.
 #[derive(Debug, Clone, Deserialize, garde::Validate, schemars::JsonSchema)]
 #[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
-pub struct GithubOauthLoginRequest {
+pub struct GithubSignInLoginRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pioneer_code: Option<PioneerCodeInput>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub return_to: Option<String>,
 }
 
-/// URL returned to a browser or CLI so it can start GitHub OAuth.
+/// URL returned to a browser or CLI so it can start GitHub sign-in.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct GithubOauthLoginResponse {
-    pub authorization_url: GithubOauthAuthorizationUrl,
+pub struct GithubSignInLoginResponse {
+    pub authorization_url: GithubSignInAuthorizationUrl,
 }
 
-/// Browser-submitted request that completes GitHub OAuth.
+/// Browser-submitted request that completes GitHub sign-in.
 #[derive(Debug, Clone, Deserialize, garde::Validate, schemars::JsonSchema)]
 #[garde(allow_unvalidated)]
 #[serde(deny_unknown_fields)]
-pub struct GithubOauthCallbackRequest {
+pub struct GithubSignInCallbackRequest {
     #[garde(custom(crate::validation::trimmed_non_empty))]
     pub code: String,
     #[garde(custom(crate::validation::trimmed_non_empty))]
@@ -99,9 +99,9 @@ pub struct HumanSessionResponse {
     pub expires_at: String,
 }
 
-/// Response returned after completing GitHub OAuth.
+/// Response returned after completing GitHub sign-in.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct GithubOauthCallbackResponse {
+pub struct GithubSignInCallbackResponse {
     pub session: HumanSessionResponse,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub return_to: Option<String>,

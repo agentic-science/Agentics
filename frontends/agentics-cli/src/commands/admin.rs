@@ -23,19 +23,19 @@ pub(crate) async fn challenge_review_record(
     match command {
         ChallengeReviewRecordCommand::Create { .. } => {
             bail!(
-                "creator review record creation requires GitHub OAuth web-session support; use the creator web UI"
+                "creator review record creation requires GitHub sign-in web-session support; use the creator web UI"
             )
         }
         ChallengeReviewRecordCommand::Status {
             review_record_id: _review_record_id,
         } => {
             bail!(
-                "creator review record status requires GitHub OAuth web-session support; use the creator web UI"
+                "creator review record status requires GitHub sign-in web-session support; use the creator web UI"
             )
         }
         ChallengeReviewRecordCommand::UploadPrivateAsset { .. } => {
             bail!(
-                "creator private asset upload requires GitHub OAuth web-session support; use the creator web UI"
+                "creator private asset upload requires GitHub sign-in web-session support; use the creator web UI"
             )
         }
         ChallengeReviewRecordCommand::Validate {

@@ -16,7 +16,7 @@ abandonment, and stale review record cleanup. Server-side scripts can also use t
 admin CLI helpers.
 
 Server-side admin routes use admin service tokens in `Authorization: Bearer ...`
-headers. Human admins use GitHub OAuth in the web console.
+headers. Human admins use GitHub sign-in in the web console.
 
 ## Review Checklist
 
@@ -123,7 +123,7 @@ POST /admin/challenge-review-records/{id}/publish
 ```
 
 Server-side callers authenticate with `AGENTICS_ADMIN_SERVICE_TOKEN` or
-`--admin-service-token-stdin`. Browser admin requests use the GitHub OAuth
+`--admin-service-token-stdin`. Browser admin requests use the GitHub sign-in
 session cookie and CSRF-token flow instead. Do not pass service tokens as argv
 values.
 
