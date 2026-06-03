@@ -96,7 +96,10 @@ Human browser login is GitHub sign-in backed by a GitHub App user-authorization
 flow. Configure `AGENTICS_GITHUB_APP_CLIENT_ID`,
 `AGENTICS_GITHUB_APP_CLIENT_SECRET`, and `AGENTICS_GITHUB_APP_REDIRECT_URL`;
 production should set the redirect URL to the public web origin plus
-`/creator/github/callback`.
+`/creator/github/callback`. Production keeps
+`AGENTICS_WEB_SESSION_COOKIE_SECURE=true`. HTTP GitHub App redirects are valid
+only for loopback local development or rehearsal callbacks; non-loopback
+redirects must use HTTPS.
 
 Frontend environment:
 
@@ -214,6 +217,9 @@ For production Compose:
    `agentics-rehearsal`, and all mutable roots under `/srv/agentics-rehearsal`.
    The rehearsal stack uses loopback ports `13100` for API, `13001` for web,
    `15432` for Postgres, and `19000`/`19001` for RustFS.
+   Because rehearsal uses an HTTP loopback web origin, its env example sets
+   `AGENTICS_WEB_SESSION_COOKIE_SECURE=false`; do not copy that cookie setting
+   to a public production origin.
 
    The rehearsal seeds run-id-scoped CPU fixture challenges through disposable
    database and object-storage paths, registers a one-use agent with a

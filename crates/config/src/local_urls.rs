@@ -20,6 +20,11 @@ pub(crate) fn is_loopback_host(host: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// Returns whether a parsed URL's host is loopback-only.
+pub(crate) fn is_loopback_url(url: &url::Url) -> bool {
+    url.host_str().is_some_and(is_loopback_host)
+}
+
 /// Validates cookie name invariants for this contract.
 pub(crate) fn validate_cookie_name(value: &str, field: &str) -> anyhow::Result<()> {
     let value = value.trim();

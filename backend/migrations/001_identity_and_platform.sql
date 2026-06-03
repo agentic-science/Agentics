@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS humans (
 CREATE TABLE IF NOT EXISTS human_external_identities (
   human_id UUID NOT NULL REFERENCES humans(id) ON DELETE CASCADE,
   provider TEXT NOT NULL CHECK (provider IN ('github')),
-  provider_user_id BIGINT NOT NULL,
+  provider_user_id BIGINT NOT NULL CHECK (provider_user_id > 0),
   provider_login TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

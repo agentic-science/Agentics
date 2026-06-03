@@ -12,6 +12,7 @@ use agentics_config::{
     ENV_AGENTICS_S3_REGION, RunnerWritableStorageMode, StorageBackend,
 };
 use agentics_runner::connect_docker;
+use agentics_services::auth::{GithubSignInClient, ReqwestGithubSignInClient};
 use agentics_storage::{
     S3Storage, StorageFactoryOptions, StorageKey, StorageWriteIntent, build_storage,
 };
@@ -66,6 +67,15 @@ pub async fn spawn_app(pool: PgPool) -> TestApp {
 /// Tests use this to point storage and seeded challenge roots at temporary
 /// directories while exercising the real router and startup seeding path.
 pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
+    spawn_app_with_config_and_github_client(pool, config, Arc::new(ReqwestGithubSignInClient)).await
+}
+
+/// Spawn the API server with a caller-provided config and GitHub sign-in client.
+pub async fn spawn_app_with_config_and_github_client(
+    pool: PgPool,
+    config: Config,
+    github_sign_in_client: Arc<dyn GithubSignInClient>,
+) -> TestApp {
     ensure_test_storage_bucket(&config).await;
     let storage = build_storage(
         config
@@ -90,6 +100,7 @@ pub async fn spawn_app_with_config(pool: PgPool, config: Config) -> TestApp {
         db: pool,
         config: Arc::new(config.clone()),
         storage,
+        github_sign_in_client,
     };
 
     let app = router::router(&config).with_state(state);
@@ -403,7 +414,8 @@ async fn create_test_admin_service_token(pool: &PgPool) -> String {
         .sessions()
         .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
             fallback_human_id: agentics_domain::models::ids::HumanId::generate(),
-            github_user_id: 9_001,
+            github_user_id: agentics_domain::models::auth::GithubUserId::try_new(9_001)
+                .expect("valid test GitHub user id"),
             github_login: "integration-admin".to_string(),
             pioneer_code_hash: None,
             pioneer_code_required_for_new_human: false,
@@ -432,6 +444,8 @@ pub async fn create_creator_session(
     github_user_id: i64,
     github_login: &str,
 ) -> TestCreatorSession {
+    let github_user_id = agentics_domain::models::auth::GithubUserId::try_new(github_user_id)
+        .expect("test GitHub user id should be positive");
     let repos = agentics_persistence::Repositories::new(pool);
     let human = repos
         .sessions()

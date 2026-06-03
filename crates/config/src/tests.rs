@@ -83,7 +83,15 @@ fn raw_app_env_deserializes_prefixed_values() {
             .contains(":6543/agentics")
     );
     assert_eq!(config.storage.challenges_root, "/tmp/agentics-challenges");
-    assert_eq!(config.auth.bootstrap_admin_github_user_ids, vec![123, 456]);
+    assert_eq!(
+        config.auth.bootstrap_admin_github_user_ids,
+        vec![
+            agentics_domain::models::auth::GithubUserId::try_new(123)
+                .expect("valid test GitHub user id"),
+            agentics_domain::models::auth::GithubUserId::try_new(456)
+                .expect("valid test GitHub user id"),
+        ]
+    );
     assert_eq!(
         config.quotas.max_active_challenge_review_records_per_human,
         7
@@ -323,7 +331,10 @@ fn hosted_bind_requires_secure_cookies_and_invited_registration() {
 #[test]
 fn bootstrap_admin_requires_github_sign_in_config() {
     let mut config = test_config();
-    config.auth.bootstrap_admin_github_user_ids = vec![9001];
+    config.auth.bootstrap_admin_github_user_ids = vec![
+        agentics_domain::models::auth::GithubUserId::try_new(9001)
+            .expect("valid test GitHub user id"),
+    ];
 
     let error = config
         .validate_api_security()
@@ -354,6 +365,29 @@ fn hosted_bind_rejects_public_agent_registration_mode() {
             .to_string()
             .contains("AGENTICS_AGENT_REGISTRATION_MODE=public")
     );
+}
+
+/// Verifies GitHub sign-in redirects may use HTTP only on loopback hosts.
+#[test]
+fn github_app_redirect_http_is_loopback_only() {
+    let mut loopback = test_config();
+    configure_test_github_sign_in(&mut loopback);
+    loopback.github_app.redirect_url = Some(
+        GithubAppRedirectUrl::try_new("http://127.0.0.1:3001/creator/github/callback")
+            .expect("loopback HTTP redirect URL should parse"),
+    );
+    assert!(loopback.validate_api_security().is_ok());
+
+    let mut non_loopback = test_config();
+    configure_test_github_sign_in(&mut non_loopback);
+    non_loopback.github_app.redirect_url = Some(
+        GithubAppRedirectUrl::try_new("http://agentics.example/creator/github/callback")
+            .expect("non-loopback HTTP redirect URL should parse before config policy"),
+    );
+    let error = non_loopback
+        .validate_api_security()
+        .expect_err("non-loopback HTTP redirect should fail config validation");
+    assert!(error.to_string().contains("must use HTTPS"));
 }
 
 /// Verifies invalid configured CORS origins fail startup validation.

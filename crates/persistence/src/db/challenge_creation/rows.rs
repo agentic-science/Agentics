@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::{PgPool, Row};
 
+use agentics_domain::models::auth::GithubUserId;
 use agentics_domain::models::challenge_creation::{
     ChallengeCreationManifest, ChallengeCreationRequestKind, ChallengePrivateAssetKind,
     ChallengePrivateAssetStatus, ChallengeReviewRecordStatus, ChallengeReviewValidationStatus,
@@ -79,7 +80,7 @@ pub struct ChallengeReviewRecordRecord {
     pub request: ChallengeCreationRequestKind,
     pub status: ChallengeReviewRecordStatus,
     pub creator_human_id: HumanId,
-    pub creator_github_user_id: i64,
+    pub creator_github_user_id: GithubUserId,
     pub creator_github_login: String,
     pub repo_url: GithubRepoRemote,
     pub pr_number: GithubPullRequestNumber,
@@ -180,7 +181,7 @@ pub(super) fn row_to_review_record(
         request: request_kind_from_row(&row, "request_kind")?,
         status: review_record_status_from_row(&row, "status")?,
         creator_human_id: human_id_from_row(&row, "creator_human_id")?,
-        creator_github_user_id: row.try_get("creator_github_user_id")?,
+        creator_github_user_id: github_user_id_from_row(&row, "creator_github_user_id")?,
         creator_github_login: row.try_get("creator_github_login")?,
         repo_url: github_repo_remote_from_row(&row, "repo_url")?,
         pr_number: github_pull_request_number_from_row(&row, "pr_number")?,
@@ -202,6 +203,12 @@ pub(super) fn row_to_review_record(
         created_at: row.try_get("created_at")?,
         updated_at: row.try_get("updated_at")?,
     })
+}
+
+fn github_user_id_from_row(row: &sqlx::postgres::PgRow, field: &str) -> Result<GithubUserId> {
+    let value = row.try_get::<i64, _>(field)?;
+    GithubUserId::try_new(value)
+        .map_err(|e| ServiceError::Internal(format!("stored invalid GitHub user id: {e}")))
 }
 
 /// Converts a database row into the private asset record model.

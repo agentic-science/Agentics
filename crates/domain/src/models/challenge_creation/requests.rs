@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::models::auth::GithubUserId;
 use crate::models::github::GithubPullRequestNumber;
 use crate::models::hashes::{GitCommitSha, Sha256Digest};
 use crate::models::names::AssetName;
@@ -21,8 +22,7 @@ pub struct CreateChallengeReviewRecordRequest {
     pub pr_url: GithubPullRequestUrl,
     pub commit_sha: GitCommitSha,
     pub challenge_path: RepoRelativePath,
-    #[garde(range(min = 1))]
-    pub pr_author_github_user_id: i64,
+    pub pr_author_github_user_id: GithubUserId,
     pub manifest: ChallengeCreationManifest,
 }
 

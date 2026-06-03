@@ -5,7 +5,7 @@ use std::time::Duration as StdDuration;
 use agentics_config::{AgentRegistrationMode, Config};
 use agentics_domain::models::auth::{
     GithubSignInCallbackRequest, GithubSignInCallbackResponse, GithubSignInLoginRequest,
-    GithubSignInLoginResponse, HumanSessionResponse,
+    GithubSignInLoginResponse, GithubUserId, HumanSessionResponse,
 };
 use agentics_domain::models::ids::{AgentId, AgentTokenId, HumanId, HumanSessionId};
 use agentics_domain::models::pioneer_codes::{INVALID_OR_UNAVAILABLE_PIONEER_CODE, PioneerCode};
@@ -48,7 +48,7 @@ pub struct GithubSignInLoginIssue {
 /// GitHub identity returned after exchanging an authorization code.
 #[derive(Debug, Clone)]
 pub struct GithubSignInUser {
-    pub id: i64,
+    pub id: GithubUserId,
     pub login: String,
 }
 
@@ -541,13 +541,18 @@ async fn consume_callback_github_sign_in_state(
 /// Validate the GitHub account identity associated with the temporary access token.
 fn validate_github_user(user: GithubUserResponse) -> Result<GithubSignInUser> {
     let login = user.login.trim();
-    if user.id <= 0 || login.is_empty() {
+    let Ok(id) = GithubUserId::try_new(user.id) else {
+        return Err(ServiceError::BadRequest(
+            "GitHub sign-in returned an invalid creator identity".to_string(),
+        ));
+    };
+    if login.is_empty() {
         return Err(ServiceError::BadRequest(
             "GitHub sign-in returned an invalid creator identity".to_string(),
         ));
     }
     Ok(GithubSignInUser {
-        id: user.id,
+        id,
         login: login.to_string(),
     })
 }

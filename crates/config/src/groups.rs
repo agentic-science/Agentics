@@ -3,6 +3,7 @@
 use garde::Validate;
 use secrecy::SecretString;
 
+use agentics_domain::models::auth::GithubUserId;
 use agentics_domain::models::names::MoltbookSubmoltName;
 use agentics_domain::models::urls::{
     GithubApiUserUrl, GithubAppAuthorizeUrl, GithubAppRedirectUrl, GithubAppTokenUrl,
@@ -94,7 +95,7 @@ pub struct StorageConfig {
 #[derive(Debug, Clone, Validate)]
 #[garde(allow_unvalidated)]
 pub struct AuthConfig {
-    pub bootstrap_admin_github_user_ids: Vec<i64>,
+    pub bootstrap_admin_github_user_ids: Vec<GithubUserId>,
     pub agent_registration_mode: AgentRegistrationMode,
 }
 

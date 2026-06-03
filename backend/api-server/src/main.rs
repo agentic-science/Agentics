@@ -64,6 +64,7 @@ async fn main() -> anyhow::Result<()> {
         db: db.clone(),
         config: Arc::new(config.clone()),
         storage,
+        github_sign_in_client: Arc::new(agentics_services::auth::ReqwestGithubSignInClient),
     };
 
     let app = router::router(&config).with_state(state);

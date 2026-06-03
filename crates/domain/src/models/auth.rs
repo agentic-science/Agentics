@@ -1,10 +1,94 @@
 //! Web authentication and human identity API models.
 
-use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
+use std::fmt;
+
+use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::ids::{AdminServiceTokenId, HumanId};
 use super::pioneer_codes::PioneerCodeInput;
 use super::urls::GithubSignInAuthorizationUrl;
+
+/// Validation failure for [`GithubUserId`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GithubUserIdError;
+
+impl fmt::Display for GithubUserIdError {
+    /// Format the user-facing GitHub user id validation error.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("github_user_id must be a positive integer")
+    }
+}
+
+impl std::error::Error for GithubUserIdError {}
+
+/// Positive numeric GitHub user id returned by GitHub sign-in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct GithubUserId(i64);
+
+impl GithubUserId {
+    /// Parse a positive GitHub user id from an external boundary.
+    pub fn try_new(value: i64) -> Result<Self, GithubUserIdError> {
+        if value <= 0 {
+            return Err(GithubUserIdError);
+        }
+        Ok(Self(value))
+    }
+
+    /// Borrow the numeric value for database and wire boundaries.
+    pub fn as_i64(self) -> i64 {
+        self.0
+    }
+}
+
+impl fmt::Display for GithubUserId {
+    /// Handles fmt for this module.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Serialize for GithubUserId {
+    /// Serialize as the existing JSON integer contract.
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_i64(self.0)
+    }
+}
+
+impl<'de> Deserialize<'de> for GithubUserId {
+    /// Deserialize from the existing JSON integer contract.
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = i64::deserialize(deserializer)?;
+        Self::try_new(value).map_err(serde::de::Error::custom)
+    }
+}
+
+impl JsonSchema for GithubUserId {
+    /// Keep the generated schema inline so DTO wire shape stays a number.
+    fn inline_schema() -> bool {
+        true
+    }
+
+    /// Handles schema name for this module.
+    fn schema_name() -> Cow<'static, str> {
+        "GithubUserId".into()
+    }
+
+    /// Handles json schema for this module.
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "type": "integer",
+            "minimum": 1
+        })
+    }
+}
 
 /// Role granted to a human account.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -92,7 +176,7 @@ pub struct GithubSignInCallbackRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct HumanSessionResponse {
     pub human_id: HumanId,
-    pub github_user_id: i64,
+    pub github_user_id: GithubUserId,
     pub github_login: String,
     pub roles: Vec<HumanRole>,
     pub csrf_token: String,
@@ -112,7 +196,7 @@ pub struct GithubSignInCallbackResponse {
 pub struct AdminHumanDto {
     pub human_id: HumanId,
     pub status: HumanStatus,
-    pub github_user_id: i64,
+    pub github_user_id: GithubUserId,
     pub github_login: String,
     pub roles: Vec<HumanRole>,
     pub created_at: String,
@@ -178,4 +262,22 @@ pub struct AdminServiceTokenListResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RevokeAdminServiceTokenResponse {
     pub token_record: AdminServiceTokenDto,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::GithubUserId;
+
+    /// Verifies GitHub user ids keep the integer wire contract while rejecting invalid ids.
+    #[test]
+    fn github_user_ids_are_positive_wire_integers() {
+        let id = GithubUserId::try_new(42).expect("positive id should parse");
+        assert_eq!(id.as_i64(), 42);
+        assert_eq!(
+            serde_json::to_value(id).expect("id should serialize"),
+            serde_json::json!(42)
+        );
+        assert!(GithubUserId::try_new(0).is_err());
+        assert!(serde_json::from_value::<GithubUserId>(serde_json::json!(-1)).is_err());
+    }
 }

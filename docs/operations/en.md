@@ -64,7 +64,9 @@ GitHub sign-in uses GitHub App client credentials only:
 `AGENTICS_GITHUB_APP_CLIENT_ID`, `AGENTICS_GITHUB_APP_CLIENT_SECRET`, and
 `AGENTICS_GITHUB_APP_REDIRECT_URL`. The MVP does not configure GitHub App
 private keys, webhooks, installation ids, installation tokens, or repository
-permissions for login.
+permissions for login. Production keeps secure browser cookies enabled and
+uses an HTTPS redirect URL. HTTP redirect URLs are accepted only for loopback
+development or rehearsal callbacks with `AGENTICS_WEB_SESSION_COOKIE_SECURE=false`.
 
 Startup config validation is fail-fast. Malformed numeric port variables are
 not ignored, and hosted worker probe mode requires a non-empty
@@ -373,6 +375,8 @@ namespace `agentics-rehearsal`, and all mutable paths under
 `/srv/agentics-rehearsal`. The rehearsal Compose override exposes only
 loopback ports: API `13100`, web `13001`, Postgres `15432`, and RustFS
 `19000`/`19001`.
+Because the rehearsal web origin is HTTP loopback, its env example keeps
+`AGENTICS_WEB_SESSION_COOKIE_SECURE=false`.
 
 The rehearsal seeds temporary fixture challenges, creates a one-use pioneer
 code, registers a rehearsal agent, runs validation and official submissions

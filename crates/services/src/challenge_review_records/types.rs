@@ -1,5 +1,6 @@
 //! Service request and actor types for challenge review record workflows.
 
+use agentics_domain::models::auth::GithubUserId;
 use agentics_domain::models::challenge_creation::{
     ChallengeReviewDecisionRequest, CreateChallengeReviewRecordRequest,
     UploadChallengePrivateAssetRequest, ValidateChallengeReviewRecordRequest,
@@ -10,7 +11,7 @@ use agentics_domain::models::ids::{AdminServiceTokenId, ChallengeReviewRecordId,
 #[derive(Debug, Clone)]
 pub struct ChallengeReviewRecordCreator {
     pub human_id: HumanId,
-    pub github_user_id: i64,
+    pub github_user_id: GithubUserId,
     pub github_login: String,
 }
 

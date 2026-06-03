@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::models::auth::GithubUserId;
 use crate::models::github::GithubPullRequestNumber;
 use crate::models::hashes::{GitCommitSha, Sha256Digest};
 use crate::models::ids::{ChallengeReviewRecordId, ChallengeReviewValidationRecordId, HumanId};
@@ -48,7 +49,7 @@ pub struct ChallengeReviewRecordResponse {
     pub request: ChallengeCreationRequestKind,
     pub status: ChallengeReviewRecordStatus,
     pub creator_human_id: HumanId,
-    pub creator_github_user_id: i64,
+    pub creator_github_user_id: GithubUserId,
     pub creator_github_login: String,
     pub repo_url: GithubRepoRemote,
     pub pr_number: GithubPullRequestNumber,
@@ -83,7 +84,7 @@ pub struct CreatorChallengeReviewRecordResponse {
     pub request: ChallengeCreationRequestKind,
     pub status: ChallengeReviewRecordStatus,
     pub creator_human_id: HumanId,
-    pub creator_github_user_id: i64,
+    pub creator_github_user_id: GithubUserId,
     pub creator_github_login: String,
     pub repo_url: GithubRepoRemote,
     pub pr_number: GithubPullRequestNumber,

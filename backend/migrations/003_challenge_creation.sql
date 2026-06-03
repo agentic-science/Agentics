@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS challenge_review_records (
   request_kind TEXT NOT NULL CHECK (request_kind IN ('new_challenge', 'archive_challenge')),
   status TEXT NOT NULL DEFAULT 'pending_review' CHECK (status IN ('pending_review', 'validated', 'approved', 'publishing', 'rejected', 'published', 'abandoned')),
   creator_human_id UUID NOT NULL REFERENCES humans(id) ON DELETE RESTRICT,
-  creator_github_user_id BIGINT NOT NULL,
+  creator_github_user_id BIGINT NOT NULL CHECK (creator_github_user_id > 0),
   creator_github_login TEXT NOT NULL DEFAULT '',
   repo_url TEXT NOT NULL,
   repo_key TEXT NOT NULL,

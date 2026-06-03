@@ -634,6 +634,7 @@ fn validate_github_app_redirect_url(url: &Url) -> Result<(), UrlFieldError> {
     if !matches!(url.scheme(), "http" | "https")
         || url.cannot_be_a_base()
         || url.host_str().is_none()
+        || url_has_userinfo(url)
         || url.query().is_some()
         || url.fragment().is_some()
     {
@@ -766,10 +767,19 @@ fn validate_exact_https_url(
     message: &'static str,
 ) -> Result<(), UrlFieldError> {
     validate_https_url(url, message)?;
-    if url.host_str() != Some(host) || url.port().is_some() || url.path() != path {
+    if url.host_str() != Some(host)
+        || url.port().is_some()
+        || url_has_userinfo(url)
+        || url.path() != path
+    {
         return Err(UrlFieldError::new(message));
     }
     Ok(())
+}
+
+/// Returns whether the URL includes username or password userinfo.
+fn url_has_userinfo(url: &Url) -> bool {
+    !url.username().is_empty() || url.password().is_some()
 }
 
 /// Validates github https base invariants for this contract.
@@ -833,7 +843,8 @@ fn reject_whitespace_or_control(value: &str, message: &'static str) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::{
-        ExternalDataUrl, GithubPullRequestUrl, GithubRepoRemote, MoltbookPostUrl,
+        ExternalDataUrl, GithubApiUserUrl, GithubAppAuthorizeUrl, GithubAppRedirectUrl,
+        GithubAppTokenUrl, GithubPullRequestUrl, GithubRepoRemote, MoltbookPostUrl,
         MoltbookSubmoltUrl,
     };
 
@@ -886,6 +897,33 @@ mod tests {
         assert!(ExternalDataUrl::try_new("https://example.com/data.bin").is_ok());
         assert!(ExternalDataUrl::try_new("http://example.com/data.bin").is_err());
         assert!(ExternalDataUrl::try_new("https://example.com/data.bin#section").is_err());
+    }
+
+    /// Verifies GitHub App URLs reject embedded credentials.
+    #[test]
+    fn rejects_github_app_url_userinfo() {
+        assert!(GithubAppAuthorizeUrl::try_new("https://github.com/login/oauth/authorize").is_ok());
+        assert!(GithubAppTokenUrl::try_new("https://github.com/login/oauth/access_token").is_ok());
+        assert!(GithubApiUserUrl::try_new("https://api.github.com/user").is_ok());
+        assert!(
+            GithubAppRedirectUrl::try_new("http://127.0.0.1:3001/creator/github/callback").is_ok()
+        );
+
+        assert!(
+            GithubAppAuthorizeUrl::try_new("https://user:pass@github.com/login/oauth/authorize")
+                .is_err()
+        );
+        assert!(
+            GithubAppTokenUrl::try_new("https://user:pass@github.com/login/oauth/access_token")
+                .is_err()
+        );
+        assert!(GithubApiUserUrl::try_new("https://user:pass@api.github.com/user").is_err());
+        assert!(
+            GithubAppRedirectUrl::try_new(
+                "http://user:pass@127.0.0.1:3001/creator/github/callback"
+            )
+            .is_err()
+        );
     }
 
     /// Verifies Moltbook URL wrappers accept only the www Moltbook contracts.

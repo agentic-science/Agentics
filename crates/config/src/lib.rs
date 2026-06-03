@@ -416,6 +416,7 @@ impl Config {
                     .map(GithubAppRedirectUrl::as_str),
                 "AGENTICS_GITHUB_APP_REDIRECT_URL",
             )?;
+            self.validate_github_app_redirect_policy()?;
         }
         if (!local_urls::is_loopback_host(&self.api_web.api_host)
             || !self.auth.bootstrap_admin_github_user_ids.is_empty())
@@ -429,6 +430,22 @@ impl Config {
         self.validate_object_storage_config()?;
 
         Ok(())
+    }
+
+    fn validate_github_app_redirect_policy(&self) -> anyhow::Result<()> {
+        let Some(redirect_url) = self.github_app.redirect_url.as_ref() else {
+            return Ok(());
+        };
+        let url = redirect_url.to_url();
+        if url.scheme() == "https" {
+            return Ok(());
+        }
+        if url.scheme() == "http" && local_urls::is_loopback_url(&url) {
+            return Ok(());
+        }
+        anyhow::bail!(
+            "AGENTICS_GITHUB_APP_REDIRECT_URL must use HTTPS except for loopback local development callbacks"
+        );
     }
 
     /// Validate durable object storage configuration.

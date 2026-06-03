@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::db::pioneer_codes::consume_pioneer_code_for_human_tx;
-use agentics_domain::models::auth::HumanRole;
+use agentics_domain::models::auth::{GithubUserId, HumanRole};
 use agentics_domain::models::ids::{AdminServiceTokenId, HumanId, HumanSessionId};
 use agentics_domain::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE;
 use agentics_error::{Result, ServiceError};
@@ -16,7 +16,7 @@ use super::ids::{admin_service_token_id_from_row, human_id_from_row};
 pub struct HumanRecord {
     pub human_id: HumanId,
     pub status: String,
-    pub github_user_id: i64,
+    pub github_user_id: GithubUserId,
     pub github_login: String,
     pub roles: Vec<HumanRole>,
     pub created_at: DateTime<Utc>,
@@ -28,7 +28,7 @@ pub struct HumanRecord {
 pub struct AuthenticatedHumanSession {
     pub session_id: HumanSessionId,
     pub human_id: HumanId,
-    pub github_user_id: i64,
+    pub github_user_id: GithubUserId,
     pub github_login: String,
     pub roles: Vec<HumanRole>,
     pub csrf_token_hash: String,
@@ -62,7 +62,7 @@ pub struct AdminServiceTokenRecord {
 #[derive(Debug, Clone)]
 pub struct ResolveGithubHumanInput {
     pub fallback_human_id: HumanId,
-    pub github_user_id: i64,
+    pub github_user_id: GithubUserId,
     pub github_login: String,
     pub pioneer_code_hash: Option<String>,
     pub pioneer_code_required_for_new_human: bool,
@@ -135,7 +135,7 @@ pub async fn resolve_github_human(
             "#,
         )
         .bind(input.github_login.trim())
-        .bind(input.github_user_id)
+        .bind(input.github_user_id.as_i64())
         .execute(&mut *tx)
         .await?;
         tx.commit().await?;
@@ -315,7 +315,7 @@ pub async fn authenticate_human_session(
     Ok(Some(AuthenticatedHumanSession {
         session_id,
         human_id: human_id_from_row(&row, "human_id")?,
-        github_user_id: row.try_get("github_user_id")?,
+        github_user_id: github_user_id_from_row(&row, "github_user_id")?,
         github_login: row.try_get("github_login")?,
         roles: roles_from_row(&row)?,
         csrf_token_hash: row.try_get("csrf_token_hash")?,
@@ -603,7 +603,7 @@ pub async fn delete_human_sessions_tx(
 
 async fn find_github_human_for_update_tx(
     tx: &mut Transaction<'_, Postgres>,
-    github_user_id: i64,
+    github_user_id: GithubUserId,
 ) -> Result<Option<HumanRecord>> {
     let row = sqlx::query(
         r#"
@@ -644,7 +644,7 @@ async fn find_github_human_for_update_tx(
             locked_human.provider_login
         "#,
     )
-    .bind(github_user_id)
+    .bind(github_user_id.as_i64())
     .fetch_optional(&mut **tx)
     .await?;
 
@@ -667,7 +667,7 @@ async fn insert_human_tx(tx: &mut Transaction<'_, Postgres>, human_id: &HumanId)
 async fn insert_github_identity_tx(
     tx: &mut Transaction<'_, Postgres>,
     human_id: &HumanId,
-    github_user_id: i64,
+    github_user_id: GithubUserId,
     github_login: &str,
 ) -> Result<()> {
     sqlx::query(
@@ -682,7 +682,7 @@ async fn insert_github_identity_tx(
         "#,
     )
     .bind(human_id.as_str())
-    .bind(github_user_id)
+    .bind(github_user_id.as_i64())
     .bind(github_login.trim())
     .execute(&mut **tx)
     .await?;
@@ -807,12 +807,18 @@ fn human_record_from_row(row: &sqlx::postgres::PgRow) -> Result<HumanRecord> {
     Ok(HumanRecord {
         human_id: human_id_from_row(row, "human_id")?,
         status: row.try_get("status")?,
-        github_user_id: row.try_get("github_user_id")?,
+        github_user_id: github_user_id_from_row(row, "github_user_id")?,
         github_login: row.try_get("github_login")?,
         roles: roles_from_row(row)?,
         created_at: row.try_get("created_at")?,
         disabled_at: row.try_get("disabled_at")?,
     })
+}
+
+fn github_user_id_from_row(row: &sqlx::postgres::PgRow, field: &str) -> Result<GithubUserId> {
+    let value = row.try_get::<i64, _>(field)?;
+    GithubUserId::try_new(value)
+        .map_err(|e| ServiceError::Internal(format!("stored invalid GitHub user id: {e}")))
 }
 
 fn roles_from_row(row: &sqlx::postgres::PgRow) -> Result<Vec<HumanRole>> {

@@ -2,6 +2,7 @@
 
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
+use agentics_domain::models::auth::GithubUserId;
 use agentics_domain::models::challenge_creation::{
     ChallengeCreationManifest, ChallengePrivateAssetKind, ChallengeReviewRecordStatus,
 };
@@ -55,7 +56,7 @@ pub struct CreateChallengeReviewRecordInput {
     pub review_record_id: ChallengeReviewRecordId,
     pub creator_human_id: HumanId,
     pub max_active_review_records: i64,
-    pub creator_github_user_id: i64,
+    pub creator_github_user_id: GithubUserId,
     pub creator_github_login: String,
     pub repo_url: GithubRepoRemote,
     pub pr_number: GithubPullRequestNumber,
@@ -141,7 +142,7 @@ pub async fn create_challenge_review_record(
     .bind(input.manifest.challenge_name.as_str())
     .bind(input.manifest.request.as_str())
     .bind(input.creator_human_id.as_str())
-    .bind(input.creator_github_user_id)
+    .bind(input.creator_github_user_id.as_i64())
     .bind(&input.creator_github_login)
     .bind(input.repo_url.as_str())
     .bind(input.repo_url.repository_key().as_str())

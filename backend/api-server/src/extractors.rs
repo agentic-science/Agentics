@@ -8,7 +8,7 @@ use secrecy::ExposeSecret;
 use serde::de::DeserializeOwned;
 
 use agentics_domain::models::ErrorDetail;
-use agentics_domain::models::auth::HumanRole;
+use agentics_domain::models::auth::{GithubUserId, HumanRole};
 use agentics_domain::models::ids::{
     AdminServiceTokenId, AgentId, AgentTokenId, ChallengeReviewRecordId, HumanId, HumanSessionId,
     SolutionSubmissionId,
@@ -117,7 +117,7 @@ impl FromRequestParts<AppState> for AgentAuth {
 pub enum AdminActor {
     Human {
         human_id: HumanId,
-        github_user_id: i64,
+        github_user_id: GithubUserId,
         github_login: String,
     },
     ServiceToken {
@@ -207,7 +207,7 @@ impl FromRequestParts<AppState> for AdminAuth {
 pub struct HumanAuth {
     pub session_id: HumanSessionId,
     pub human_id: HumanId,
-    pub github_user_id: i64,
+    pub github_user_id: GithubUserId,
     pub github_login: String,
     pub roles: Vec<HumanRole>,
     pub csrf_token: Option<String>,
@@ -250,7 +250,7 @@ impl FromRequestParts<AppState> for HumanAuth {
 pub struct CreatorAuth {
     pub session_id: HumanSessionId,
     pub human_id: HumanId,
-    pub github_user_id: i64,
+    pub github_user_id: GithubUserId,
     pub github_login: String,
     pub roles: Vec<HumanRole>,
     pub csrf_token: Option<String>,

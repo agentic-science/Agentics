@@ -523,7 +523,7 @@ export const adminHumanListResponseSchema = z
           status: z
             .enum(["active", "disabled"])
             .describe("Persistent lifecycle state for a human account."),
-          github_user_id: z.number().int(),
+          github_user_id: z.number().int().gte(1),
           github_login: z.string(),
           roles: z.array(
             z
@@ -553,7 +553,7 @@ export const adminHumanRoleResponseSchema = z
         status: z
           .enum(["active", "disabled"])
           .describe("Persistent lifecycle state for a human account."),
-        github_user_id: z.number().int(),
+        github_user_id: z.number().int().gte(1),
         github_login: z.string(),
         roles: z.array(
           z
@@ -1782,7 +1782,7 @@ export const challengeReviewRecordListResponseSchema = z
             .regex(
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
-          creator_github_user_id: z.number().int(),
+          creator_github_user_id: z.number().int().gte(1),
           creator_github_login: z.string(),
           repo_url: z
             .string()
@@ -2044,7 +2044,7 @@ export const challengeReviewRecordResponseSchema = z
       .string()
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
-    creator_github_user_id: z.number().int(),
+    creator_github_user_id: z.number().int().gte(1),
     creator_github_login: z.string(),
     repo_url: z
       .string()
@@ -2562,7 +2562,7 @@ export const creatorChallengeReviewRecordResponseSchema = z
       .string()
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
-    creator_github_user_id: z.number().int(),
+    creator_github_user_id: z.number().int().gte(1),
     creator_github_login: z.string(),
     repo_url: z
       .string()
@@ -2960,7 +2960,7 @@ export const githubSignInCallbackResponseSchema = z
           .regex(
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
           ),
-        github_user_id: z.number().int(),
+        github_user_id: z.number().int().gte(1),
         github_login: z.string(),
         roles: z.array(
           z
@@ -3001,7 +3001,7 @@ export const humanSessionResponseSchema = z
       .string()
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
-    github_user_id: z.number().int(),
+    github_user_id: z.number().int().gte(1),
     github_login: z.string(),
     roles: z.array(
       z.enum(["creator", "admin"]).describe("Role granted to a human account."),

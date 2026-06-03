@@ -86,11 +86,10 @@ pub async fn github_sign_in_callback(
     let cookie_header = headers.get(header::COOKIE).and_then(|h| h.to_str().ok());
     let browser_nonce = cookie_value(cookie_header, GITHUB_SIGN_IN_NONCE_COOKIE_NAME)
         .ok_or(ServiceError::Unauthorized)?;
-    let github_client = auth::ReqwestGithubSignInClient;
     let issued_session = auth::complete_github_sign_in_callback(
         &state.db,
         &state.config,
-        &github_client,
+        state.github_sign_in_client.as_ref(),
         request,
         &browser_nonce,
     )

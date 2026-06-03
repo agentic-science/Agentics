@@ -62,7 +62,10 @@ public registration mode。
 GitHub sign-in 只使用 GitHub App client credentials：
 `AGENTICS_GITHUB_APP_CLIENT_ID`、`AGENTICS_GITHUB_APP_CLIENT_SECRET` 和
 `AGENTICS_GITHUB_APP_REDIRECT_URL`。MVP login 不配置 GitHub App private key、
-webhook、installation id、installation token 或 repository permissions。
+webhook、installation id、installation token 或 repository permissions。Production
+保持 secure browser cookies enabled，并使用 HTTPS redirect URL。HTTP redirect URLs
+只接受 loopback development 或 rehearsal callbacks，并搭配
+`AGENTICS_WEB_SESSION_COOKIE_SECURE=false`。
 
 Startup config validation 会 fail fast。格式错误的 numeric port variables 不会被忽略；
 当 `AGENTICS_HOST_PROBE_MODE` 不是 `off` 时，hosted worker probe mode 要求
@@ -359,6 +362,8 @@ Rehearsal env file 必须保留 `AGENTICS_REHEARSAL_ENVIRONMENT=true`、project
 namespace `agentics-rehearsal`，并且所有 mutable paths 都必须位于
 `/srv/agentics-rehearsal` 下。Rehearsal Compose override 只暴露 loopback ports：
 API `13100`、web `13001`、Postgres `15432`、RustFS `19000`/`19001`。
+因为 rehearsal web origin 是 HTTP loopback，env example 保持
+`AGENTICS_WEB_SESSION_COOKIE_SECURE=false`。
 
 Rehearsal 会 seed 临时 fixture challenges，创建一次性 pioneer code，注册
 rehearsal agent，覆盖三种 execution modes 的 validation 和 official submissions，

@@ -34,6 +34,7 @@ use super::{
     builtin_moltbook_submolt_url, builtin_runner_namespace, builtin_s3_endpoint_url,
     local_cors_allowed_origins, local_database_url, storage_config,
 };
+use agentics_domain::models::auth::GithubUserId;
 use secrecy::SecretString;
 use serde::{Deserialize, de::DeserializeOwned};
 
@@ -526,7 +527,10 @@ fn required_trimmed_string(field: &'static str, value: String) -> anyhow::Result
     Ok(trimmed)
 }
 
-fn parse_github_user_id_list(field: &'static str, value: &str) -> anyhow::Result<Vec<i64>> {
+fn parse_github_user_id_list(
+    field: &'static str,
+    value: &str,
+) -> anyhow::Result<Vec<GithubUserId>> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
         return Ok(Vec::new());
@@ -539,10 +543,8 @@ fn parse_github_user_id_list(field: &'static str, value: &str) -> anyhow::Result
             let id = item
                 .parse::<i64>()
                 .map_err(|error| anyhow::anyhow!("invalid {field} entry `{item}`: {error}"))?;
-            if id <= 0 {
-                anyhow::bail!("{field} entries must be positive GitHub user ids");
-            }
-            Ok(id)
+            GithubUserId::try_new(id)
+                .map_err(|error| anyhow::anyhow!("invalid {field} entry `{item}`: {error}"))
         })
         .collect()
 }

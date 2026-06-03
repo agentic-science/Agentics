@@ -78,6 +78,9 @@ using `AGENTICS_GITHUB_APP_CLIENT_ID`,
 Put the numeric bootstrap admin GitHub user id in the ignored file
 `.agentics-compose/dev/.github-user-id`. The `just dev::up` recipe loads those
 files when they exist, and neither file should be committed.
+Local HTTP loopback sign-in also requires
+`AGENTICS_WEB_SESSION_COOKIE_SECURE=false`, which is the committed dev default.
+Non-loopback GitHub App redirect URLs must use HTTPS.
 
 Local dev uses `AGENTICS_OFFICIAL_LOG_REDACTION=contract_based`. Official
 evaluations for public-only dev challenges keep runner diagnostics, so failures

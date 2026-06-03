@@ -2,13 +2,86 @@
 
 mod helpers;
 
+use std::sync::Arc;
+
 use agentics_config::AgentRegistrationMode;
+use agentics_domain::models::auth::GithubUserId;
 use agentics_domain::models::ids::{HumanId, PioneerCodeId};
+use agentics_error::Result;
+use agentics_services::auth::{GithubSignInClient, GithubSignInUser};
+use async_trait::async_trait;
 use helpers::{
     admin_service_token_header, api_url, examples_challenges_root, spawn_app_with_config,
-    test_config,
+    spawn_app_with_config_and_github_client, test_config,
 };
-use reqwest::StatusCode;
+use reqwest::{StatusCode, header};
+use secrecy::SecretString;
+
+#[derive(Debug, Clone)]
+struct FakeGithubSignInClient {
+    user_id: GithubUserId,
+    login: String,
+}
+
+#[async_trait]
+impl GithubSignInClient for FakeGithubSignInClient {
+    async fn exchange_code(
+        &self,
+        _config: &agentics_config::Config,
+        code: &str,
+    ) -> Result<SecretString> {
+        if code.trim() == "valid-github-code" {
+            return Ok(SecretString::from("fake-github-access-token"));
+        }
+        Err(agentics_error::ServiceError::BadRequest(
+            "fake GitHub code rejected".to_string(),
+        ))
+    }
+
+    async fn fetch_user(
+        &self,
+        _config: &agentics_config::Config,
+        _access_token: &SecretString,
+    ) -> Result<GithubSignInUser> {
+        Ok(GithubSignInUser {
+            id: self.user_id,
+            login: self.login.clone(),
+        })
+    }
+}
+
+fn github_user_id(value: i64) -> GithubUserId {
+    GithubUserId::try_new(value).expect("test GitHub user id should be positive")
+}
+
+fn fake_github_client(user_id: i64, login: &str) -> Arc<dyn GithubSignInClient> {
+    Arc::new(FakeGithubSignInClient {
+        user_id: github_user_id(user_id),
+        login: login.to_string(),
+    })
+}
+
+fn github_sign_in_nonce_cookie(response: &reqwest::Response) -> String {
+    let cookie = response
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .find(|value| value.starts_with("agentics_github_sign_in_nonce="))
+        .expect("GitHub sign-in nonce cookie should be set");
+    cookie
+        .split(';')
+        .next()
+        .expect("cookie name and value should exist")
+        .to_string()
+}
+
+fn github_sign_in_state(authorization_url: &str) -> String {
+    let url = url::Url::parse(authorization_url).expect("authorization URL should parse");
+    url.query_pairs()
+        .find_map(|(key, value)| (key == "state").then(|| value.into_owned()))
+        .expect("authorization URL should include state")
+}
 
 /// Verifies default MVP registration mode rejects code-free registration and consumes finite codes.
 #[sqlx::test(migrations = "../migrations")]
@@ -16,7 +89,7 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
     config.auth.agent_registration_mode = AgentRegistrationMode::PioneerCode;
-    let app = spawn_app_with_config(pool, config.clone()).await;
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let auth = admin_service_token_header(&app);
 
@@ -131,7 +204,7 @@ async fn finite_pioneer_code_consumption_is_atomic(pool: sqlx::PgPool) {
     let storage = tempfile::tempdir().expect("failed to create storage tempdir");
     let mut config = test_config(storage.path(), &examples_challenges_root());
     config.auth.agent_registration_mode = AgentRegistrationMode::PioneerCode;
-    let app = spawn_app_with_config(pool, config.clone()).await;
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
     let client = reqwest::Client::new();
     let auth = admin_service_token_header(&app);
 
@@ -171,9 +244,17 @@ async fn finite_pioneer_code_consumption_is_atomic(pool: sqlx::PgPool) {
             .status()
     };
 
-    let statuses = [first.await, second.await];
+    let (first_status, second_status) = tokio::join!(first, second);
+    let statuses = [first_status, second_status];
     assert!(statuses.contains(&StatusCode::CREATED));
     assert!(statuses.contains(&StatusCode::FORBIDDEN));
+    let use_count = sqlx::query_scalar::<_, i64>(
+        "SELECT use_count FROM pioneer_codes WHERE code_display = 'deadbeef'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("pioneer code row should exist");
+    assert_eq!(use_count, 1);
 }
 
 /// Verifies GitHub sign-in starts with a POST body so pioneer codes stay out of URLs.
@@ -283,6 +364,259 @@ async fn github_sign_in_state_requires_browser_nonce(pool: sqlx::PgPool) {
     assert!(consumed.is_some());
 }
 
+/// Verifies the real GitHub callback route issues a human session with test GitHub IO.
+#[sqlx::test(migrations = "../migrations")]
+async fn github_sign_in_callback_route_issues_session(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let mut config = test_config(storage.path(), &examples_challenges_root());
+    config.auth.agent_registration_mode = AgentRegistrationMode::Public;
+    let app = spawn_app_with_config_and_github_client(
+        pool.clone(),
+        config,
+        fake_github_client(71001, "callback-creator"),
+    )
+    .await;
+    let client = reqwest::Client::new();
+
+    let login = client
+        .post(api_url(&app, "/api/auth/github/login"))
+        .json(&serde_json::json!({ "return_to": "/creator" }))
+        .send()
+        .await
+        .expect("failed to start GitHub sign-in");
+    assert_eq!(login.status(), StatusCode::OK);
+    let nonce_cookie = github_sign_in_nonce_cookie(&login);
+    let login_body: serde_json::Value = login.json().await.expect("login body should decode");
+    let state = github_sign_in_state(
+        login_body["authorization_url"]
+            .as_str()
+            .expect("authorization URL should be present"),
+    );
+
+    let callback = client
+        .post(api_url(&app, "/api/auth/github/callback"))
+        .header(header::COOKIE, nonce_cookie)
+        .json(&serde_json::json!({
+            "code": "valid-github-code",
+            "state": state
+        }))
+        .send()
+        .await
+        .expect("failed to complete GitHub sign-in");
+    assert_eq!(callback.status(), StatusCode::OK);
+    let set_cookies = callback
+        .headers()
+        .get_all(header::SET_COOKIE)
+        .iter()
+        .filter_map(|value| value.to_str().ok())
+        .collect::<Vec<_>>();
+    assert!(
+        set_cookies
+            .iter()
+            .any(|value| value.starts_with("agentics_session="))
+    );
+    assert!(
+        set_cookies
+            .iter()
+            .any(|value| value.starts_with("agentics_csrf="))
+    );
+    assert!(set_cookies.iter().any(|value| {
+        value.starts_with("agentics_github_sign_in_nonce=") && value.contains("Max-Age=0")
+    }));
+    let body: serde_json::Value = callback.json().await.expect("callback body should decode");
+    assert_eq!(body["return_to"], "/creator");
+    assert_eq!(body["session"]["github_user_id"], 71001);
+    assert_eq!(body["session"]["github_login"], "callback-creator");
+}
+
+/// Verifies the GitHub callback route rejects callbacks without the browser nonce cookie.
+#[sqlx::test(migrations = "../migrations")]
+async fn github_sign_in_callback_route_requires_nonce_cookie(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let mut config = test_config(storage.path(), &examples_challenges_root());
+    config.auth.agent_registration_mode = AgentRegistrationMode::Public;
+    let app = spawn_app_with_config_and_github_client(
+        pool.clone(),
+        config,
+        fake_github_client(71002, "missing-nonce"),
+    )
+    .await;
+    let client = reqwest::Client::new();
+    let login = client
+        .post(api_url(&app, "/api/auth/github/login"))
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .expect("failed to start GitHub sign-in");
+    let login_body: serde_json::Value = login.json().await.expect("login body should decode");
+    let state = github_sign_in_state(
+        login_body["authorization_url"]
+            .as_str()
+            .expect("authorization URL should be present"),
+    );
+
+    let callback = client
+        .post(api_url(&app, "/api/auth/github/callback"))
+        .json(&serde_json::json!({
+            "code": "valid-github-code",
+            "state": state
+        }))
+        .send()
+        .await
+        .expect("failed to call callback route");
+    assert_eq!(callback.status(), StatusCode::UNAUTHORIZED);
+}
+
+/// Verifies a callback state cannot be reused after one successful route callback.
+#[sqlx::test(migrations = "../migrations")]
+async fn github_sign_in_callback_route_consumes_state_once(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let mut config = test_config(storage.path(), &examples_challenges_root());
+    config.auth.agent_registration_mode = AgentRegistrationMode::Public;
+    let app = spawn_app_with_config_and_github_client(
+        pool.clone(),
+        config,
+        fake_github_client(71003, "state-reuse"),
+    )
+    .await;
+    let client = reqwest::Client::new();
+    let login = client
+        .post(api_url(&app, "/api/auth/github/login"))
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .expect("failed to start GitHub sign-in");
+    let nonce_cookie = github_sign_in_nonce_cookie(&login);
+    let login_body: serde_json::Value = login.json().await.expect("login body should decode");
+    let state = github_sign_in_state(
+        login_body["authorization_url"]
+            .as_str()
+            .expect("authorization URL should be present"),
+    );
+
+    let first = client
+        .post(api_url(&app, "/api/auth/github/callback"))
+        .header(header::COOKIE, nonce_cookie.clone())
+        .json(&serde_json::json!({
+            "code": "valid-github-code",
+            "state": state.clone()
+        }))
+        .send()
+        .await
+        .expect("first callback should complete");
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let second = client
+        .post(api_url(&app, "/api/auth/github/callback"))
+        .header(header::COOKIE, nonce_cookie)
+        .json(&serde_json::json!({
+            "code": "valid-github-code",
+            "state": state
+        }))
+        .send()
+        .await
+        .expect("second callback should return response");
+    assert_eq!(second.status(), StatusCode::UNAUTHORIZED);
+}
+
+/// Verifies the callback route rejects disabled linked humans.
+#[sqlx::test(migrations = "../migrations")]
+async fn github_sign_in_callback_route_rejects_disabled_human(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let mut config = test_config(storage.path(), &examples_challenges_root());
+    config.auth.agent_registration_mode = AgentRegistrationMode::Public;
+    let repos = agentics_persistence::Repositories::new(&pool);
+    let human = repos
+        .sessions()
+        .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
+            fallback_human_id: HumanId::generate(),
+            github_user_id: github_user_id(71004),
+            github_login: "disabled-callback".to_string(),
+            pioneer_code_hash: None,
+            pioneer_code_required_for_new_human: false,
+            bootstrap_admin_candidate: false,
+        })
+        .await
+        .expect("human should resolve");
+    sqlx::query("UPDATE humans SET status = 'disabled', disabled_at = NOW() WHERE id = $1::uuid")
+        .bind(human.human_id.as_str())
+        .execute(&pool)
+        .await
+        .expect("human should disable");
+    let app = spawn_app_with_config_and_github_client(
+        pool.clone(),
+        config,
+        fake_github_client(71004, "disabled-callback"),
+    )
+    .await;
+    let client = reqwest::Client::new();
+    let login = client
+        .post(api_url(&app, "/api/auth/github/login"))
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .expect("failed to start GitHub sign-in");
+    let nonce_cookie = github_sign_in_nonce_cookie(&login);
+    let login_body: serde_json::Value = login.json().await.expect("login body should decode");
+    let state = github_sign_in_state(
+        login_body["authorization_url"]
+            .as_str()
+            .expect("authorization URL should be present"),
+    );
+
+    let callback = client
+        .post(api_url(&app, "/api/auth/github/callback"))
+        .header(header::COOKIE, nonce_cookie)
+        .json(&serde_json::json!({
+            "code": "valid-github-code",
+            "state": state
+        }))
+        .send()
+        .await
+        .expect("failed to complete GitHub sign-in");
+    assert_eq!(callback.status(), StatusCode::FORBIDDEN);
+}
+
+/// Verifies new humans still need a pioneer code in gated mode.
+#[sqlx::test(migrations = "../migrations")]
+async fn github_sign_in_callback_route_requires_pioneer_code_for_new_human(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let mut config = test_config(storage.path(), &examples_challenges_root());
+    config.auth.agent_registration_mode = AgentRegistrationMode::PioneerCode;
+    let app = spawn_app_with_config_and_github_client(
+        pool.clone(),
+        config,
+        fake_github_client(71005, "new-human-without-code"),
+    )
+    .await;
+    let client = reqwest::Client::new();
+    let login = client
+        .post(api_url(&app, "/api/auth/github/login"))
+        .json(&serde_json::json!({}))
+        .send()
+        .await
+        .expect("failed to start GitHub sign-in");
+    let nonce_cookie = github_sign_in_nonce_cookie(&login);
+    let login_body: serde_json::Value = login.json().await.expect("login body should decode");
+    let state = github_sign_in_state(
+        login_body["authorization_url"]
+            .as_str()
+            .expect("authorization URL should be present"),
+    );
+
+    let callback = client
+        .post(api_url(&app, "/api/auth/github/callback"))
+        .header(header::COOKIE, nonce_cookie)
+        .json(&serde_json::json!({
+            "code": "valid-github-code",
+            "state": state
+        }))
+        .send()
+        .await
+        .expect("failed to complete GitHub sign-in");
+    assert_eq!(callback.status(), StatusCode::FORBIDDEN);
+}
+
 /// Verifies human GitHub sign-in account creation uses the same code consumption primitive.
 #[sqlx::test(migrations = "../migrations")]
 async fn human_github_sign_in_creation_consumes_pioneer_code_once(pool: sqlx::PgPool) {
@@ -294,7 +628,7 @@ async fn human_github_sign_in_creation_consumes_pioneer_code_once(pool: sqlx::Pg
         .sessions()
         .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
             fallback_human_id: HumanId::generate(),
-            github_user_id: 9001,
+            github_user_id: github_user_id(9001),
             github_login: "integration-admin".to_string(),
             pioneer_code_hash: None,
             pioneer_code_required_for_new_human: false,
@@ -324,7 +658,7 @@ async fn human_github_sign_in_creation_consumes_pioneer_code_once(pool: sqlx::Pg
         .sessions()
         .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
             fallback_human_id: first_human_id.clone(),
-            github_user_id: 42,
+            github_user_id: github_user_id(42),
             github_login: "creator-login".to_string(),
             pioneer_code_hash: Some(code_hash.clone()),
             pioneer_code_required_for_new_human: true,
@@ -338,7 +672,7 @@ async fn human_github_sign_in_creation_consumes_pioneer_code_once(pool: sqlx::Pg
         .sessions()
         .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
             fallback_human_id: HumanId::generate(),
-            github_user_id: 42,
+            github_user_id: github_user_id(42),
             github_login: "creator-login-renamed".to_string(),
             pioneer_code_hash: Some("not-a-valid-code-hash".to_string()),
             pioneer_code_required_for_new_human: true,
@@ -352,7 +686,7 @@ async fn human_github_sign_in_creation_consumes_pioneer_code_once(pool: sqlx::Pg
         .sessions()
         .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
             fallback_human_id: HumanId::generate(),
-            github_user_id: 42,
+            github_user_id: github_user_id(42),
             github_login: "creator-login-returned".to_string(),
             pioneer_code_hash: None,
             pioneer_code_required_for_new_human: true,
@@ -366,7 +700,7 @@ async fn human_github_sign_in_creation_consumes_pioneer_code_once(pool: sqlx::Pg
         .sessions()
         .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
             fallback_human_id: HumanId::generate(),
-            github_user_id: 43,
+            github_user_id: github_user_id(43),
             github_login: "new-creator-without-code".to_string(),
             pioneer_code_hash: None,
             pioneer_code_required_for_new_human: true,
@@ -399,7 +733,7 @@ async fn human_github_sign_in_creation_consumes_pioneer_code_once(pool: sqlx::Pg
         .sessions()
         .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
             fallback_human_id: HumanId::generate(),
-            github_user_id: 42,
+            github_user_id: github_user_id(42),
             github_login: "creator-login".to_string(),
             pioneer_code_hash: Some(code_hash),
             pioneer_code_required_for_new_human: true,
@@ -425,7 +759,7 @@ async fn pioneer_code_revoke_revokes_derived_human_admin_service_tokens(pool: sq
         .sessions()
         .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
             fallback_human_id: HumanId::generate(),
-            github_user_id: 9001,
+            github_user_id: github_user_id(9001),
             github_login: "integration-admin".to_string(),
             pioneer_code_hash: None,
             pioneer_code_required_for_new_human: false,
@@ -453,7 +787,7 @@ async fn pioneer_code_revoke_revokes_derived_human_admin_service_tokens(pool: sq
         .sessions()
         .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
             fallback_human_id: HumanId::generate(),
-            github_user_id: 42,
+            github_user_id: github_user_id(42),
             github_login: "creator-login".to_string(),
             pioneer_code_hash: Some(code_hash),
             pioneer_code_required_for_new_human: true,

@@ -89,7 +89,10 @@ Human browser login 是基于 GitHub App user-authorization flow 的 GitHub sign
 需要配置 `AGENTICS_GITHUB_APP_CLIENT_ID`、
 `AGENTICS_GITHUB_APP_CLIENT_SECRET` 和 `AGENTICS_GITHUB_APP_REDIRECT_URL`；
 production 的 redirect URL 应设置为 public web origin 加
-`/creator/github/callback`。
+`/creator/github/callback`。Production 保持
+`AGENTICS_WEB_SESSION_COOKIE_SECURE=true`。HTTP GitHub App redirects 只允许用于
+loopback local development 或 rehearsal callbacks；non-loopback redirects 必须使用
+HTTPS。
 
 Frontend 环境：
 
@@ -202,6 +205,9 @@ Production Compose：
    `agentics-rehearsal`，并且所有 mutable roots 都必须位于
    `/srv/agentics-rehearsal` 下。Rehearsal stack 使用 loopback ports：API
    `13100`、web `13001`、Postgres `15432`、RustFS `19000`/`19001`。
+   因为 rehearsal 使用 HTTP loopback web origin，env example 设置
+   `AGENTICS_WEB_SESSION_COOKIE_SECURE=false`；不要把这个 cookie 设置复制到公开的
+   production origin。
 
    Rehearsal 会通过 disposable database 和 object-storage paths seed
    run-id-scoped CPU fixture challenges，用临时 pioneer code 注册一次性 agent，
