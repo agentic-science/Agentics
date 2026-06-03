@@ -23,6 +23,8 @@ import {
   pioneerCodeListResponseSchema,
 } from "@/lib/schemas";
 
+const ADMIN_DASHBOARD_CACHE_KEY = ["admin-dashboard"] as const;
+
 /** Admin dashboard data fetched as one cacheable bundle. */
 export interface AdminData {
   challenges: AdminChallengeListResponse;
@@ -66,8 +68,8 @@ export function useAdminSession() {
 /** Fetches all admin dashboard data with one SWR key. */
 export function useAdminDashboard(csrfToken: string) {
   const swr = useSWR<AdminData>(
-    csrfToken ? adminDashboardKey(csrfToken) : null,
-    fetchAdminDashboardDataByKey,
+    csrfToken ? ADMIN_DASHBOARD_CACHE_KEY : null,
+    () => fetchAdminDashboardData(csrfToken),
     {
       keepPreviousData: true,
       shouldRetryOnError: false,
@@ -83,18 +85,14 @@ export function useAdminDashboard(csrfToken: string) {
 
 /** Refreshes the admin dashboard cache after a mutation. */
 export function mutateAdminDashboard(csrfToken: string) {
-  return mutate(
-    adminDashboardKey(csrfToken),
-    fetchAdminDashboardData(csrfToken),
-    {
-      revalidate: false,
-    },
-  );
+  return mutate(ADMIN_DASHBOARD_CACHE_KEY, fetchAdminDashboardData(csrfToken), {
+    revalidate: false,
+  });
 }
 
 /** Clears the admin dashboard cache after logout. */
-export function clearAdminDashboard(csrfToken: string) {
-  return mutate(adminDashboardKey(csrfToken), emptyAdminData, {
+export function clearAdminDashboard(_csrfToken: string) {
+  return mutate(ADMIN_DASHBOARD_CACHE_KEY, emptyAdminData, {
     revalidate: false,
   });
 }
@@ -157,16 +155,4 @@ export async function fetchAdminDashboardData(
     adminServiceTokens,
     capacity,
   };
-}
-
-function adminDashboardKey(
-  csrfToken: string,
-): readonly ["admin-dashboard", string] {
-  return ["admin-dashboard", csrfToken] as const;
-}
-
-function fetchAdminDashboardDataByKey(
-  key: readonly ["admin-dashboard", string],
-) {
-  return fetchAdminDashboardData(key[1]);
 }

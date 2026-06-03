@@ -27,28 +27,19 @@ import {
   createChallengeReviewRecordRequestSchema,
   createChallengeShortlistRevision,
   createChallengeShortlistRevisionRequestSchema,
-  getChallengeReviewRecord,
   startGithubLogin,
   uploadChallengePrivateAssetRequestSchema,
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
 import {
   type CreatorOwnerScope,
-  fetchCreatorOwnerBundle,
   mutateCreatorOwnerBundle,
   mutateCreatorReviewRecord,
   useCreatorOwnerBundle,
   useCreatorReviewRecord,
   useCreatorSession,
 } from "@/lib/creatorData";
-import type {
-  ChallengeShortlistResponse,
-  ChallengeShortlistRevisionResponse,
-  CreatorChallengeParticipantsResponse,
-  CreatorChallengeReviewRecordResponse,
-  CreatorChallengeStatsResponse,
-  HumanSessionResponse,
-} from "@/lib/schemas";
+import type { ChallengeShortlistRevisionResponse } from "@/lib/schemas";
 
 const LAST_REVIEW_RECORD_STORAGE_KEY = "agentics.creator.last_review_record_id";
 type CreatorPendingAction =
@@ -63,10 +54,6 @@ type CreatorPendingAction =
 /** Renders the creator console component. */
 export function CreatorConsole() {
   const t = useTranslations("creator");
-  const [creator, setCreator] = useState<HumanSessionResponse | null>(null);
-  const [csrfToken, setCsrfToken] = useState("");
-  const [reviewRecord, setReviewRecord] =
-    useState<CreatorChallengeReviewRecordResponse | null>(null);
   const [reviewRecordLookupId, setReviewRecordLookupId] = useState("");
   const [reviewRecordForm, setReviewRecordForm] =
     useState<CreatorReviewRecordFormState>({
@@ -93,14 +80,6 @@ export function CreatorConsole() {
       2,
     ),
   });
-  const [stats, setStats] = useState<CreatorChallengeStatsResponse | null>(
-    null,
-  );
-  const [participants, setParticipants] =
-    useState<CreatorChallengeParticipantsResponse | null>(null);
-  const [shortlist, setShortlist] = useState<ChallengeShortlistResponse | null>(
-    null,
-  );
   const [shortlistRevision, setShortlistRevision] =
     useState<ChallengeShortlistRevisionResponse | null>(null);
   const [ownerScope, setOwnerScope] = useState<CreatorOwnerScope | null>(null);
@@ -118,6 +97,12 @@ export function CreatorConsole() {
   const creatorSession = useCreatorSession();
   const reviewRecordResource = useCreatorReviewRecord(reviewRecordLookupId);
   const ownerBundle = useCreatorOwnerBundle(ownerScope);
+  const creator = creatorSession.session ?? null;
+  const csrfToken = creator?.csrf_token ?? "";
+  const reviewRecord = reviewRecordResource.reviewRecord ?? null;
+  const stats = ownerBundle.bundle?.stats ?? null;
+  const participants = ownerBundle.bundle?.participants ?? null;
+  const shortlist = ownerBundle.bundle?.shortlist ?? null;
 
   useEffect(() => {
     const lastReviewRecordId = window.localStorage.getItem(
@@ -131,30 +116,6 @@ export function CreatorConsole() {
       }));
     }
   }, []);
-
-  useEffect(() => {
-    if (creatorSession.session) {
-      setCreator(creatorSession.session);
-      setCsrfToken(creatorSession.session.csrf_token);
-    } else if (creatorSession.error) {
-      setCreator(null);
-      setCsrfToken("");
-    }
-  }, [creatorSession.error, creatorSession.session]);
-
-  useEffect(() => {
-    if (reviewRecordResource.reviewRecord) {
-      setReviewRecord(reviewRecordResource.reviewRecord);
-    }
-  }, [reviewRecordResource.reviewRecord]);
-
-  useEffect(() => {
-    if (ownerBundle.bundle) {
-      setStats(ownerBundle.bundle.stats);
-      setParticipants(ownerBundle.bundle.participants);
-      setShortlist(ownerBundle.bundle.shortlist);
-    }
-  }, [ownerBundle.bundle]);
 
   /** Handles sign in for the current session. */
   const signIn = async () => {
@@ -178,11 +139,8 @@ export function CreatorConsole() {
       if (!session) {
         throw new Error(t("messages.signInBeforeContinue"));
       }
-      setCreator(session);
-      setCsrfToken(session.csrf_token);
       setMessage(t("messages.identityRefreshed"));
     } catch (e) {
-      setCreator(null);
       setError(displayCreatorError(e));
     } finally {
       setPendingAction(null);
@@ -249,7 +207,7 @@ export function CreatorConsole() {
         csrfToken,
       );
       rememberReviewRecord(response.id);
-      setReviewRecord(response);
+      await mutateCreatorReviewRecord(response.id, response);
       setMessage(t("messages.reviewRecordCreated", { id: response.id }));
     } catch (e) {
       setError(displayCreatorError(e));
@@ -269,11 +227,13 @@ export function CreatorConsole() {
     setPendingAction("inspectReviewRecord");
     setError(null);
     try {
-      const response = await getChallengeReviewRecord(
+      const response = await mutateCreatorReviewRecord(
         reviewRecordLookupId.trim(),
       );
+      if (!response) {
+        throw new Error(t("messages.enterReviewRecord"));
+      }
       rememberReviewRecord(response.id);
-      setReviewRecord(response);
       setMessage(t("messages.reviewRecordLoaded", { id: response.id }));
     } catch (e) {
       setError(displayCreatorError(e));
@@ -316,12 +276,12 @@ export function CreatorConsole() {
         parsedRequest.data,
         csrfToken,
       );
-      const refreshed = await getChallengeReviewRecord(
+      const refreshed = await mutateCreatorReviewRecord(
         assetForm.reviewRecordId.trim(),
       );
-      rememberReviewRecord(refreshed.id);
-      setReviewRecord(refreshed);
-      await mutateCreatorReviewRecord(refreshed.id);
+      if (refreshed) {
+        rememberReviewRecord(refreshed.id);
+      }
       setMessage(t("messages.assetUploaded", { name: assetForm.assetName }));
     } catch (e) {
       setError(displayCreatorError(e));
@@ -344,10 +304,7 @@ export function CreatorConsole() {
       const target = ownerForm.target.trim() || undefined;
       const scope = { challengeName, target };
       setOwnerScope(scope);
-      const bundle = await fetchCreatorOwnerBundle(scope);
-      setStats(bundle.stats);
-      setParticipants(bundle.participants);
-      setShortlist(bundle.shortlist);
+      await mutateCreatorOwnerBundle(scope);
       setMessage(t("messages.ownerLoaded", { id: challengeName }));
     } catch (e) {
       setError(displayCreatorError(e));
@@ -401,8 +358,6 @@ export function CreatorConsole() {
       };
       setOwnerScope(scope);
       await mutateCreatorOwnerBundle(scope);
-      const bundle = await fetchCreatorOwnerBundle(scope);
-      setShortlist(bundle.shortlist);
       setMessage(t("messages.shortlistUploaded", { id: response.id }));
     } catch (e) {
       setError(displayCreatorError(e));

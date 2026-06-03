@@ -4,7 +4,8 @@ import type { Mock } from "vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { adminFetchJson } from "@/lib/adminApi";
 import type { ChallengeReviewRecordListItem } from "@/lib/schemas";
-import messages from "../../../messages/en.json";
+import messagesEn from "../../../messages/en.json";
+import messagesZh from "../../../messages/zh.json";
 import { ensureDomEnvironment } from "../../test/dom";
 import { ChallengeReviewRecordPanel } from "./ChallengeReviewRecordPanel";
 
@@ -121,11 +122,40 @@ describe("ChallengeReviewRecordPanel", () => {
     );
     confirm.mockRestore();
   });
+
+  it("localizes Chinese review action completion messages", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    adminFetchJsonMock.mockResolvedValue({ id: reviewRecord.id });
+    const onMessage = vi.fn();
+    const view = renderChallengeReviewRecordPanel(
+      <ChallengeReviewRecordPanel
+        csrfToken="csrf-token"
+        reviewRecords={[reviewRecord]}
+        locale="zh"
+        onRefresh={vi.fn(async () => {})}
+        onError={vi.fn()}
+        onMessage={onMessage}
+      />,
+      "zh",
+    );
+
+    fireEvent.click(view.getByRole("button", { name: "放弃" }));
+
+    await waitFor(() =>
+      expect(onMessage).toHaveBeenCalledWith(
+        "审核记录 44444444 的“已放弃”已完成。",
+      ),
+    );
+    confirm.mockRestore();
+  });
 });
 
-function renderChallengeReviewRecordPanel(children: ReactNode) {
+function renderChallengeReviewRecordPanel(children: ReactNode, locale = "en") {
   return render(
-    <NextIntlClientProvider locale="en" messages={messages}>
+    <NextIntlClientProvider
+      locale={locale}
+      messages={locale === "zh" ? messagesZh : messagesEn}
+    >
       {children}
     </NextIntlClientProvider>,
   );

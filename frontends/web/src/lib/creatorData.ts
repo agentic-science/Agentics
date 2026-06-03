@@ -78,7 +78,15 @@ export function useCreatorOwnerBundle(scope: CreatorOwnerScope | null) {
 }
 
 /** Refreshes one cached creator review record after asset upload or review record creation. */
-export function mutateCreatorReviewRecord(reviewRecordId: string) {
+export function mutateCreatorReviewRecord(
+  reviewRecordId: string,
+  data?: CreatorChallengeReviewRecordResponse,
+) {
+  if (data) {
+    return mutate(creatorReviewRecordKey(reviewRecordId), data, {
+      revalidate: false,
+    });
+  }
   return mutate(creatorReviewRecordKey(reviewRecordId));
 }
 

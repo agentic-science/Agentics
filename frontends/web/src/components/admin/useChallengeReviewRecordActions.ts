@@ -141,7 +141,10 @@ export function useChallengeReviewRecordActions({
       );
       onError(null);
       onMessage(
-        t("completed", { id: response.id.slice(0, 8), action: action }),
+        t("completed", {
+          id: response.id.slice(0, 8),
+          action: reviewRecordActionLabel(action, t),
+        }),
       );
       await onRefresh({ quiet: true });
     } catch (e) {
@@ -212,6 +215,24 @@ function parseAdminReviewRecordMutationRequest<T>(
     );
   }
   return parsed.data;
+}
+
+function reviewRecordActionLabel(
+  action: ReviewRecordAction,
+  t: ReviewRecordTranslator,
+) {
+  switch (action) {
+    case "validate":
+      return t("validated");
+    case "approve":
+      return t("approved");
+    case "publish":
+      return t("published");
+    case "reject":
+      return t("rejected");
+    case "abandon":
+      return t("abandoned");
+  }
 }
 
 function reviewRecordDecisionMessage(
