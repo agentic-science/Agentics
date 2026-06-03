@@ -387,13 +387,7 @@ impl Config {
             );
         }
         self.validate_moltbook_config()?;
-        if !local_urls::is_loopback_host(&self.api_web.api_host)
-            && !self.api_web.web_session_cookie_secure
-        {
-            anyhow::bail!(
-                "AGENTICS_WEB_SESSION_COOKIE_SECURE must be true when the API is reachable from another machine"
-            );
-        }
+        self.validate_session_cookie_security()?;
         if self.github_app.client_id.is_some()
             || self.github_app.client_secret.is_some()
             || self.github_app.redirect_url.is_some()
@@ -446,6 +440,24 @@ impl Config {
         anyhow::bail!(
             "AGENTICS_GITHUB_APP_REDIRECT_URL must use HTTPS except for loopback local development callbacks"
         );
+    }
+
+    fn validate_session_cookie_security(&self) -> anyhow::Result<()> {
+        if self.api_web.web_session_cookie_secure {
+            return Ok(());
+        }
+        if let Some(redirect_url) = self.github_app.redirect_url.as_ref() {
+            let url = redirect_url.to_url();
+            if local_urls::is_loopback_url(&url) {
+                return Ok(());
+            }
+        }
+        if !local_urls::is_loopback_host(&self.api_web.api_host) {
+            anyhow::bail!(
+                "AGENTICS_WEB_SESSION_COOKIE_SECURE=false is allowed only for loopback GitHub sign-in callbacks"
+            );
+        }
+        Ok(())
     }
 
     /// Validate durable object storage configuration.

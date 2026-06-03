@@ -309,22 +309,45 @@ fn storage_defaults_use_rustfs_s3() {
     assert!(config.validate_object_storage_config().is_ok());
 }
 
-/// Verifies that hosted API binds require secure cookies and invited registration.
+/// Verifies that hosted browser sign-in requires secure cookies and invited registration.
 #[test]
-fn hosted_bind_requires_secure_cookies_and_invited_registration() {
+fn hosted_browser_sign_in_requires_secure_cookies_and_invited_registration() {
     let mut config = test_config();
     config.api_web.api_host = "0.0.0.0".to_string();
 
     assert!(config.validate_api_security().is_err());
 
     config.auth.agent_registration_mode = super::AgentRegistrationMode::PioneerCode;
-    config.api_web.web_session_cookie_secure = true;
-    assert!(config.validate_api_security().is_err());
     configure_test_github_sign_in(&mut config);
+    let error = config
+        .validate_api_security()
+        .expect_err("hosted browser callback requires secure cookies");
+    assert!(
+        error
+            .to_string()
+            .contains("AGENTICS_WEB_SESSION_COOKIE_SECURE=false")
+    );
+
+    config.api_web.web_session_cookie_secure = true;
     assert!(config.validate_api_security().is_ok());
 
     config.auth.agent_registration_mode = super::AgentRegistrationMode::Public;
     assert!(config.validate_api_security().is_err());
+}
+
+/// Verifies containerized local development may bind broadly while the browser callback is loopback.
+#[test]
+fn loopback_github_callback_allows_insecure_dev_cookies() {
+    let mut config = test_config();
+    config.api_web.api_host = "0.0.0.0".to_string();
+    config.auth.agent_registration_mode = super::AgentRegistrationMode::PioneerCode;
+    configure_test_github_sign_in(&mut config);
+    config.github_app.redirect_url = Some(
+        GithubAppRedirectUrl::try_new("http://127.0.0.1:3001/creator/github/callback")
+            .expect("loopback HTTP redirect URL should parse"),
+    );
+
+    assert!(config.validate_api_security().is_ok());
 }
 
 /// Verifies bootstrap admin IDs cannot be configured without GitHub sign-in.
