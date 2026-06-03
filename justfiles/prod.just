@@ -52,8 +52,8 @@ rehearse *args:
 
 # Copy backed-up migrated challenge private bundles into production RustFS
 [working-directory: repo]
-restore-private-bundles:
-    {{compose_prod}} restore-private-bundles
+restore-private-bundles *args:
+    {{compose_prod}} restore-private-bundles {{args}}
 
 # Clean production runner containers by exact namespace labels
 [working-directory: repo]

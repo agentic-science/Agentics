@@ -39,6 +39,11 @@ rustfs-purge: rustfs-down
 s3-test:
     AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}}" AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}}" AGENTICS_S3_TEST_ENDPOINT="${AGENTICS_S3_TEST_ENDPOINT:-http://127.0.0.1:${AGENTICS_RUSTFS_PORT:-9000}}" AGENTICS_S3_TEST_BUCKET="${AGENTICS_S3_TEST_BUCKET:-agentics-test}" AGENTICS_S3_FORCE_PATH_STYLE="${AGENTICS_S3_FORCE_PATH_STYLE:-true}" cargo test -p agentics-storage rustfs_s3_storage_round_trips_when_configured -- --nocapture
 
+# Generate and optionally upload refreshed Frontier-CS private asset backups
+[working-directory: repo]
+refresh-frontier-cs-private-assets *args:
+    cargo run -p agentics-ops --bin agentics-refresh-frontier-cs-private-assets -- --upload {{args}}
+
 # Start the persistent RustFS backup store for migrated challenge private bundles
 [working-directory: repo]
 backup-up:

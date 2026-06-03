@@ -321,8 +321,34 @@ production Compose network, then runs a one-shot production Compose service
 with access to both private RustFS endpoints. It copies objects into the
 production bucket under `AGENTICS_S3_PREFIX` and the logical
 `private-bundle-backups/` prefix, skips existing byte-identical objects, and
-verifies SHA-256 after each upload. `just storage::backup-down` stops the
-backup container without deleting objects.
+verifies SHA-256 after each upload. Use `just prod::restore-private-bundles
+--overwrite` only for a disposable rehearsal or another explicitly approved
+refresh window where differing destination objects should be replaced.
+`just storage::backup-down` stops the backup container without deleting objects.
+
+For the migrated Frontier-CS algorithmic refresh batch, use the dedicated ops
+tool instead of creating ZIP overlays by hand:
+
+```bash
+just storage::backup-up
+just storage::refresh-frontier-cs-private-assets --dry-run
+just storage::refresh-frontier-cs-private-assets --confirm-overwrite
+just rehearsal::restore-private-bundles --overwrite
+```
+
+The refresh command reads
+`working-notes/frontier-cs-upstream-refresh-2026-06-02.md`, verifies the synced
+Frontier-CS commit, generates one `<challenge_name>/official-runs.zip` backup
+object per listed challenge, validates every ZIP overlay against the Agentics
+challenge contract, uploads to the persistent backup RustFS store, and verifies
+object length plus SHA-256 after upload. Generated private ZIPs are staged under
+`target/` and must not be committed.
+
+Some migrated interactive official benchmarks intentionally use runtime-random
+hidden state for MVP because the original Frontier-CS interactor generated that
+state during judging. Public validation remains deterministic, while official
+sessions store only public case parameters and random-policy metadata in
+`private-benchmark/session.json`.
 
 Credentials come only from the AWS SDK provider chain, for example environment
 variables or an instance profile. Do not store S3 credentials in Agentics DB

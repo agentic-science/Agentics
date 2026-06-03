@@ -220,7 +220,7 @@ pub fn test_config(storage_root: &Path, challenges_root: &Path) -> Config {
     config.runner.max_result_json_bytes = 4 * 1024 * 1024;
     config.runner.max_public_results = 1024;
     config.runner.max_result_log_bytes = 256 * 1024;
-    config.runner.max_interaction_bytes_per_direction = 16 * 1024 * 1024;
+    config.runner.max_interaction_bytes_per_direction = 256 * 1024 * 1024;
     config.runner.interaction_shutdown_grace_secs = 2;
 
     config.logging.log_level = "error".to_string();

@@ -96,6 +96,29 @@ When a persistent backup RustFS service is used for migrated private bundles,
 copy the final private ZIP into a directory named with the challenge handle so
 production rehearsals can restore it without recreating the review record.
 
+For the migrated Frontier-CS algorithmic refresh batch, do not hand-copy ZIPs.
+Use the repository ops tool:
+
+```bash
+just storage::backup-up
+just storage::refresh-frontier-cs-private-assets --dry-run
+just storage::refresh-frontier-cs-private-assets --confirm-overwrite
+just rehearsal::restore-private-bundles --overwrite
+```
+
+The refresh command reads the approved candidate working note, verifies the
+synced Frontier-CS commit, creates one `<challenge_name>/official-runs.zip`
+backup object per challenge, validates every overlay against the Agentics
+challenge contract, uploads to the persistent private-bundle RustFS store, and
+verifies length plus SHA-256 after upload. Generated private ZIPs live under
+`target/` and must never be committed.
+
+Some migrated interactive tasks use runtime-random official sessions for MVP
+because the original Frontier-CS interactor generated hidden state while
+judging. Keep public validation deterministic. For those official sessions,
+`private-benchmark/session.json` should contain public case parameters and
+random-policy metadata, not hidden arrays, signs, seeds, or answers.
+
 ## 5. Build The Challenge Bundle
 
 Create the standard challenge layout:
