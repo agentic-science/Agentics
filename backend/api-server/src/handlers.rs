@@ -18,15 +18,13 @@ use serde::Deserialize;
 use url::form_urlencoded;
 
 use crate::error::ApiResult as Result;
-use agentics_contracts::validation::public_api::{
-    self, DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT, PublicPagination,
-};
+use agentics_contracts::validation::public_api::PublicChallengeCatalogQuery;
 use agentics_domain::models::auth::{
     AdminHumanListResponse, AdminHumanRoleResponse, AdminServiceTokenCreatedResponse,
     AdminServiceTokenListResponse, CreateAdminServiceTokenRequest, RevokeAdminServiceTokenResponse,
 };
 use agentics_domain::models::evaluation::{EvaluationJobStatus, ScoringMode};
-use agentics_domain::models::names::{ChallengeKeyword, ChallengeName, MetricName, TargetName};
+use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
 use agentics_domain::models::request::{
     AdminCapacityResponse, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
     CreatePioneerCodeRequest, CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse,
@@ -37,7 +35,6 @@ use agentics_domain::models::request::{
     SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
 use agentics_error::ServiceError;
-use agentics_persistence::ChallengeCatalogFilters;
 use agentics_services::auth;
 use agentics_services::challenge_metadata;
 use agentics_services::evaluation_lifecycle::{self, QueueEvaluationJobRequest};
@@ -96,11 +93,9 @@ pub async fn list_agent_challenges(
     State(state): State<AppState>,
     RawQuery(raw_query): RawQuery,
 ) -> Result<Json<agentics_domain::models::challenge::ChallengeListResponse>> {
-    let query = ChallengeCatalogQuery::from_raw(raw_query.as_deref())?;
-    let page = query.page()?;
-    let filters = query.filters()?;
+    let query = parse_challenge_catalog_query(raw_query.as_deref())?;
     Ok(Json(
-        public_projection::list_challenges(&state.db, page.limit, page.offset, &filters).await?,
+        public_projection::list_challenges(&state.db, &query).await?,
     ))
 }
 
@@ -122,11 +117,9 @@ pub async fn list_challenges(
     State(state): State<AppState>,
     RawQuery(raw_query): RawQuery,
 ) -> Result<Json<agentics_domain::models::challenge::ChallengeListResponse>> {
-    let query = ChallengeCatalogQuery::from_raw(raw_query.as_deref())?;
-    let page = query.page()?;
-    let filters = query.filters()?;
+    let query = parse_challenge_catalog_query(raw_query.as_deref())?;
     Ok(Json(
-        public_projection::list_challenges(&state.db, page.limit, page.offset, &filters).await?,
+        public_projection::list_challenges(&state.db, &query).await?,
     ))
 }
 
@@ -193,95 +186,28 @@ async fn create_solution_submission_for_mode(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-/// Query parameters accepted by the public challenge catalog endpoint.
-#[derive(Debug, Clone, Default)]
-pub struct ChallengeCatalogQuery {
-    limit: Option<i64>,
-    offset: Option<i64>,
-    q: Option<String>,
-    keyword: Vec<String>,
-}
-
-impl ChallengeCatalogQuery {
-    /// Parse raw URL query parameters while preserving repeated keyword filters.
-    fn from_raw(raw: Option<&str>) -> Result<Self> {
-        let mut query = Self::default();
-        let Some(raw) = raw else {
-            return Ok(query);
-        };
+fn parse_challenge_catalog_query(raw: Option<&str>) -> Result<PublicChallengeCatalogQuery> {
+    let mut limit = None;
+    let mut offset = None;
+    let mut search = None;
+    let mut keywords = Vec::new();
+    if let Some(raw) = raw {
         for (key, value) in form_urlencoded::parse(raw.as_bytes()) {
             match key.as_ref() {
-                "limit" => {
-                    query.limit = Some(parse_i64_query_param(&value, "limit")?);
-                }
-                "offset" => {
-                    query.offset = Some(parse_i64_query_param(&value, "offset")?);
-                }
-                "q" => {
-                    query.q = Some(value.into_owned());
-                }
-                "keyword" => {
-                    query.keyword.push(value.into_owned());
-                }
+                "limit" => limit = Some(value.into_owned()),
+                "offset" => offset = Some(value.into_owned()),
+                "q" => search = Some(value.into_owned()),
+                "keyword" => keywords.push(value.into_owned()),
                 _ => {}
             }
         }
-        Ok(query)
     }
-
-    /// Returns validated challenge-list pagination parameters.
-    fn page(&self) -> Result<PublicPagination> {
-        Ok(public_api::public_pagination(
-            self.limit,
-            self.offset,
-            DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT,
-            "challenge list",
-        )?)
-    }
-
-    /// Returns validated search and keyword filters for challenge catalog queries.
-    fn filters(&self) -> Result<ChallengeCatalogFilters> {
-        let search = normalized_challenge_search(self.q.as_deref())?;
-        let keywords = self
-            .keyword
-            .iter()
-            .map(|raw| ChallengeKeyword::try_new(raw.clone()))
-            .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| ServiceError::Validation(e.to_string()))?;
-        if keywords.len() > 6 {
-            return Err(ServiceError::Validation(
-                "challenge catalog filters accept at most 6 keywords".to_string(),
-            )
-            .into());
-        }
-        Ok(ChallengeCatalogFilters { search, keywords })
-    }
-}
-
-/// Parse a signed integer query parameter for public catalog pagination.
-fn parse_i64_query_param(value: &str, field: &str) -> Result<i64> {
-    Ok(value
-        .parse()
-        .map_err(|_| ServiceError::BadRequest(format!("{field} must be an integer")))?)
-}
-
-/// Normalize a public challenge catalog text search query.
-fn normalized_challenge_search(raw: Option<&str>) -> Result<Option<String>> {
-    let Some(raw) = raw else {
-        return Ok(None);
-    };
-    let normalized = raw.trim();
-    if normalized.is_empty() {
-        return Ok(None);
-    }
-    if normalized.len() > 120 || normalized.chars().any(char::is_control) {
-        return Err(ServiceError::Validation(
-            "challenge search query must be at most 120 UTF-8 bytes and contain no control characters"
-                .to_string(),
-        )
-        .into());
-    }
-    Ok(Some(normalized.to_string()))
+    Ok(PublicChallengeCatalogQuery::try_from_raw_parts(
+        limit.as_deref(),
+        offset.as_deref(),
+        search,
+        keywords,
+    )?)
 }
 
 /// Create a private validation run, store its ZIP artifact, and queue validation evaluation.

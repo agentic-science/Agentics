@@ -1,4 +1,5 @@
 use agentics_config::Config;
+use agentics_contracts::validation::public_api::PublicChallengeCatalogQuery;
 use agentics_domain::models::challenge::{
     ChallengeBundleSpec, ChallengeDetailResponse, ChallengeListItemDto, ChallengeListResponse,
     MoltbookCommunityDto,
@@ -66,13 +67,15 @@ pub fn present_challenge_detail(
 /// List published challenges through the service-owned public projection layer.
 pub async fn list_challenges(
     pool: &sqlx::PgPool,
-    limit: i64,
-    offset: i64,
-    filters: &ChallengeCatalogFilters,
+    query: &PublicChallengeCatalogQuery,
 ) -> Result<ChallengeListResponse> {
+    let filters = ChallengeCatalogFilters {
+        search: query.search.clone(),
+        keywords: query.keywords.clone(),
+    };
     let records = Repositories::new(pool)
         .challenges()
-        .list_published(limit, offset, filters)
+        .list_published(query.limit, query.offset, &filters)
         .await?;
     present_challenge_list(records)
 }

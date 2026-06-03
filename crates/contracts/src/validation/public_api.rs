@@ -1,7 +1,7 @@
 //! Shared validation for public read API query contracts.
 
 use agentics_domain::models::challenge::ChallengeBundleSpec;
-use agentics_domain::models::names::TargetName;
+use agentics_domain::models::names::{ChallengeKeyword, TargetName};
 use agentics_error::{Result, ServiceError};
 
 /// Default public challenge catalog page size.
@@ -18,6 +18,79 @@ pub const MAX_PUBLIC_LIST_LIMIT: i64 = 100;
 pub struct PublicPagination {
     pub limit: i64,
     pub offset: i64,
+}
+
+/// Validated public challenge catalog query.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicChallengeCatalogQuery {
+    pub limit: i64,
+    pub offset: i64,
+    pub search: Option<String>,
+    pub keywords: Vec<ChallengeKeyword>,
+}
+
+impl PublicChallengeCatalogQuery {
+    /// Parse and validate the public challenge catalog query contract.
+    pub fn try_from_raw_parts(
+        limit: Option<&str>,
+        offset: Option<&str>,
+        search: Option<String>,
+        keywords: Vec<String>,
+    ) -> Result<Self> {
+        let limit = parse_optional_i64(limit, "limit")?;
+        let offset = parse_optional_i64(offset, "offset")?;
+        let page = public_pagination(
+            limit,
+            offset,
+            DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT,
+            "challenge list",
+        )?;
+        Ok(Self {
+            limit: page.limit,
+            offset: page.offset,
+            search: normalized_challenge_search(search.as_deref())?,
+            keywords: parse_challenge_keywords(keywords)?,
+        })
+    }
+}
+
+fn parse_optional_i64(value: Option<&str>, field: &str) -> Result<Option<i64>> {
+    value
+        .map(|value| {
+            value
+                .parse::<i64>()
+                .map_err(|_| ServiceError::BadRequest(format!("{field} must be an integer")))
+        })
+        .transpose()
+}
+
+fn parse_challenge_keywords(raw: Vec<String>) -> Result<Vec<ChallengeKeyword>> {
+    if raw.len() > 6 {
+        return Err(ServiceError::Validation(
+            "challenge catalog filters accept at most 6 keywords".to_string(),
+        ));
+    }
+    raw.into_iter()
+        .map(ChallengeKeyword::try_new)
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|e| ServiceError::Validation(e.to_string()))
+}
+
+fn normalized_challenge_search(raw: Option<&str>) -> Result<Option<String>> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    let normalized = raw.trim();
+    if normalized.is_empty() {
+        return Ok(None);
+    }
+    if normalized.len() > 120 || normalized.chars().any(char::is_control) {
+        return Err(ServiceError::Validation(
+            "challenge search query must be at most 120 UTF-8 bytes and contain no control characters"
+                .to_string(),
+        ));
+    }
+    Ok(Some(normalized.to_string()))
 }
 
 /// Validate a public list limit without silently widening expensive reads.
@@ -105,8 +178,8 @@ mod tests {
     use agentics_domain::models::paths::BundleRelativePath;
 
     use super::{
-        DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT, bounded_public_limit, public_pagination,
-        resolve_required_public_target,
+        DEFAULT_PUBLIC_CHALLENGE_LIST_LIMIT, PublicChallengeCatalogQuery, bounded_public_limit,
+        public_pagination, resolve_required_public_target,
     };
 
     fn target_name(value: &str) -> TargetName {
@@ -233,6 +306,52 @@ mod tests {
         assert_eq!(page.offset, 0);
         assert!(bounded_public_limit(Some(0), 100, "items").is_err());
         assert!(public_pagination(Some(1), Some(-1), 100, "items").is_err());
+    }
+
+    #[test]
+    fn validates_public_challenge_catalog_queries() {
+        let query = PublicChallengeCatalogQuery::try_from_raw_parts(
+            Some("25"),
+            Some("5"),
+            Some("  matrix  ".to_string()),
+            vec!["systems".to_string(), "math".to_string()],
+        )
+        .expect("catalog query should validate");
+        assert_eq!(query.limit, 25);
+        assert_eq!(query.offset, 5);
+        assert_eq!(query.search.as_deref(), Some("matrix"));
+        assert_eq!(query.keywords.len(), 2);
+
+        assert!(
+            PublicChallengeCatalogQuery::try_from_raw_parts(Some("abc"), None, None, Vec::new())
+                .is_err()
+        );
+        assert!(
+            PublicChallengeCatalogQuery::try_from_raw_parts(
+                None,
+                None,
+                Some("x".repeat(121)),
+                Vec::new()
+            )
+            .is_err()
+        );
+        assert!(
+            PublicChallengeCatalogQuery::try_from_raw_parts(
+                None,
+                None,
+                None,
+                vec![
+                    "one".to_string(),
+                    "two".to_string(),
+                    "three".to_string(),
+                    "four".to_string(),
+                    "five".to_string(),
+                    "six".to_string(),
+                    "seven".to_string(),
+                ],
+            )
+            .is_err()
+        );
     }
 
     #[test]
