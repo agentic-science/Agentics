@@ -70,7 +70,7 @@ Dev database 名称是 `agentics_dev`。如果本地 Compose Postgres volume 是
 如果要在本地测试 admin 或 creator UI 的 GitHub sign-in，请把 GitHub App client
 credentials 放进 ignored file `.agentics-compose/dev/github-app.env`，字段为
 `AGENTICS_GITHUB_APP_CLIENT_ID`、`AGENTICS_GITHUB_APP_CLIENT_SECRET` 和
-`AGENTICS_GITHUB_APP_REDIRECT_URL=http://127.0.0.1:3001/creator/github/callback`。
+`AGENTICS_GITHUB_APP_REDIRECT_URL=http://127.0.0.1:3001/auth/github/callback`。
 把 bootstrap admin 的 GitHub numeric user id 放进 ignored file
 `.agentics-compose/dev/.github-user-id`。`just dev::up` 会在这些文件存在时加载它们；
 这两个文件都不应提交。

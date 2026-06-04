@@ -239,6 +239,7 @@ MVP workflow 应为：
 - `POST /api/auth/github/login`
 - `POST /api/auth/github/callback`
 - `GET /api/auth/session`
+- `POST /api/auth/setup/pioneer-code`
 - `POST /api/auth/logout`
 - `POST /api/creator/challenge-review-records`
 - `GET /api/creator/challenge-review-records/{id}`
@@ -263,7 +264,8 @@ MVP workflow 应为：
 - `POST /admin/admin-service-tokens/{token_id}/revoke`
 
 `GET /api/auth/session` 是 creator console 和 admin console 共用的 human-session
-bootstrap route。
+bootstrap route。新的 GitHub 用户可以先登录；在兑换有效 human pioneer code 之前，
+session 会以 `setup_required` 返回，creator/admin workflows 不可用。
 GitHub webhooks、creator review record list、creator-side validation 和 creator-side
 delete 暂缓。MVP 使用 creator web session 完成 review record creation 和 private asset
 upload；CLI creator session 是 post-MVP planned feature。

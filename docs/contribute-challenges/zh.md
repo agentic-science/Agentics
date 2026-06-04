@@ -187,7 +187,8 @@ unreferenced object，再 promote 新上传。
 1. 在 public challenge repository 准备 challenge proposal。
 2. 打开 GitHub PR。
 3. 通过 GitHub sign-in 登录 Agentics creator console `/creator`。
-   新 creator 在 GitHub 登录开始前输入已发放的 pioneer code；returning creators 不需要重新输入已经消耗过的 code。
+   新用户可以先完成登录，再到 `/account/setup` 兑换已发放的 human pioneer code；
+   在 setup 完成前，creator workflows 不可用。
 4. 使用已 review 的 PR metadata 创建 review record。
 5. 通过 creator console 上传 required private assets。
 6. 跟踪 review record validation、approval 和 publication status。
@@ -204,15 +205,17 @@ MVP 中 creator-side review record creation 和 private asset upload 仅支持 w
 
 Creator-authenticated APIs 使用 creator session cookie，并在 unsafe requests 中
 使用 `X-Agentics-CSRF-Token`：
-`POST /api/auth/github/login` 在 JSON body 中接受 `{ "pioneer_code": "..." }`，
-避免把 code 放进浏览器 URL。`GET /api/auth/session` 是共用的 human-session
-bootstrap route；它返回当前 human session state 和后续 creator mutations 使用的 CSRF
-token。
+`POST /api/auth/github/login` 只接受 same-site `return_to` metadata。Human pioneer
+codes 会在登录后通过 `POST /api/auth/setup/pioneer-code` 兑换，因此 code 不会被放进
+browser URLs 或 GitHub redirect state。`GET /api/auth/session` 是共用的
+human-session bootstrap route；它返回当前 human session state、setup status，以及后续
+creator mutations 使用的 CSRF token。
 
 ```text
 POST /api/auth/github/login
 POST /api/auth/github/callback
 GET  /api/auth/session
+POST /api/auth/setup/pioneer-code
 POST /api/auth/logout
 POST /api/creator/challenge-review-records
 GET  /api/creator/challenge-review-records/{id}

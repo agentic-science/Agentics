@@ -74,7 +74,7 @@ For local admin or creator UI testing with GitHub sign-in, put GitHub App
 client credentials in the ignored file `.agentics-compose/dev/github-app.env`
 using `AGENTICS_GITHUB_APP_CLIENT_ID`,
 `AGENTICS_GITHUB_APP_CLIENT_SECRET`, and
-`AGENTICS_GITHUB_APP_REDIRECT_URL=http://127.0.0.1:3001/creator/github/callback`.
+`AGENTICS_GITHUB_APP_REDIRECT_URL=http://127.0.0.1:3001/auth/github/callback`.
 Put the numeric bootstrap admin GitHub user id in the ignored file
 `.agentics-compose/dev/.github-user-id`. The `just dev::up` recipe loads those
 files when they exist, and neither file should be committed.

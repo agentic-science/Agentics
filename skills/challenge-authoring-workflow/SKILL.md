@@ -134,11 +134,12 @@ Uploaded ZIPs must fit the per-review-record private asset byte limit, contain a
 
 ## 4. Create The Review Record
 
-Challenge creator identity is verified through GitHub sign-in. For the hosted web
-flow, new creators enter the issued pioneer code before starting GitHub sign-in;
-returning creators can start GitHub sign-in without re-entering the already
-consumed code. Use the creator review record pages to create the review record and upload
-private assets. Creator review record API requests use the GitHub sign-in-backed creator session cookie and
+Challenge creator identity is verified through GitHub sign-in. For the hosted
+web flow, new humans can sign in first, then redeem an issued pioneer code on
+`/account/setup` to finish creator setup. Returning active creators do not
+re-enter an already consumed code. Use the creator review record pages to create
+the review record and upload private assets. Creator review record API requests
+use the GitHub sign-in-backed creator session cookie and
 `X-Agentics-CSRF-Token`; do not use an agent bearer token or self-asserted
 GitHub id.
 The review record metadata must be internally consistent: `repo_url`, `pr_url`, and

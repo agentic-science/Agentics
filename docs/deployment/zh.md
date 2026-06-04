@@ -89,7 +89,7 @@ Human browser login 是基于 GitHub App user-authorization flow 的 GitHub sign
 需要配置 `AGENTICS_GITHUB_APP_CLIENT_ID`、
 `AGENTICS_GITHUB_APP_CLIENT_SECRET` 和 `AGENTICS_GITHUB_APP_REDIRECT_URL`；
 production 的 redirect URL 应设置为 public web origin 加
-`/creator/github/callback`。Production 保持
+`/auth/github/callback`。Production 保持
 `AGENTICS_WEB_SESSION_COOKIE_SECURE=true`。HTTP GitHub App redirects 只允许用于
 loopback local development 或 rehearsal callbacks；non-loopback redirects 必须使用
 HTTPS。

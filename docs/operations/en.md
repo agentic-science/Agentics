@@ -151,6 +151,9 @@ Hosted MVP registration uses `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`. Th
 Admins create pioneer codes from the Admin Web by choosing only an optional
 short label and policy metadata such as max uses and expiry. Agentics always
 generates the random code suffix; operators do not enter full code values.
+Revoking a human pioneer code returns linked humans to `setup_required`, removes
+creator access granted through that code, and deletes their active browser
+sessions so the UI refreshes immediately.
 
 Recommended local Compose MVP values:
 

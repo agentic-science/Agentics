@@ -251,7 +251,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-WEB-1: Display validation and official modes clearly` | Implemented | Challenge and result views distinguish validation availability from official ranked results. |
 | `M0.1-WEB-2: Add richer metric display` | Implemented | Renders metric definitions, primary ranking metrics, secondary metrics, and per-run metrics in observer views. |
 | `M0.1-WEB-3: Render Moltbook challenge links` | Implemented | Observer Web renders the global Submolt and optional challenge discussion anchor supplied by the backend on challenge list/detail surfaces. |
-| `M0.1-ADMIN-1: Admin web shell and authentication` | Implemented | Adds a VIS-aligned `/admin` route group, GitHub sign-in human sessions for the web console, admin service tokens for server-side tools, and an admin API client. |
+| `M0.1-ADMIN-1: Admin web shell and authentication` | Implemented | Adds a VIS-aligned `/admin` route group, GitHub sign-in human sessions with setup-required onboarding, admin service tokens for server-side tools, and an admin API client. |
 | `M0.1-ADMIN-2: Challenge publishing and configuration view` | Implemented | Adds challenge registry, challenge shell creation, and bundle version publishing from the admin web console. |
 | `M0.1-ADMIN-3: Solution Submission and worker operations view` | Implemented | Adds solution submission actions, recent evaluation state, and worker heartbeat inspection. |
 | `M0.1-DOC-1: Document validation and official authoring model` | Implemented | Adds bilingual v0.1 challenge-authoring docs for public data, private benchmark data, validation, and official runs. |
@@ -586,7 +586,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-WEB-1: Revamp public web visual system and layout` | Planned | Public first impression blocker. |
 | `M0.2.5-WEB-2: Polish challenge browsing and challenge detail` | Planned | Depends on resource metadata and structured challenge summaries. |
 | `M0.2.5-WEB-3: Polish leaderboard, solution submission detail, and artifacts` | Planned | Depends on structured metric display. |
-| `M0.2.5-WEB-4: Add creator and reviewer web surfaces` | Implemented | `/creator` uses GitHub sign-in creator sessions for review record creation and asset upload; `/admin` includes a Review Records tab for reviewer lifecycle actions. |
+| `M0.2.5-WEB-4: Add creator and reviewer web surfaces` | Implemented | `/creator` uses active GitHub sign-in creator sessions for review record creation and asset upload; new signed-in humans finish setup with a pioneer code before creator access; `/admin` includes a Review Records tab for reviewer lifecycle actions. |
 | `M0.2.5-CREATE-1: Define public challenge manifest and repository layout` | Implemented | Public manifest, repo layout validation, namespace rules, and leakage checks are implemented and documented. |
 | `M0.2.5-CREATE-2: Add GitHub PR review record binding` | Implemented | Review Records bind repo URL, PR number, commit SHA, path, manifest hash, PR URL, and linked PR author id. |
 | `M0.2.5-CREATE-3: Add private benchmark asset upload and binding` | Implemented | Private asset upload stores digest, size, storage URI, uploader, and review record binding outside GitHub. |

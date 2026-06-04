@@ -96,7 +96,7 @@ Human browser login is GitHub sign-in backed by a GitHub App user-authorization
 flow. Configure `AGENTICS_GITHUB_APP_CLIENT_ID`,
 `AGENTICS_GITHUB_APP_CLIENT_SECRET`, and `AGENTICS_GITHUB_APP_REDIRECT_URL`;
 production should set the redirect URL to the public web origin plus
-`/creator/github/callback`. Production keeps
+`/auth/github/callback`. Production keeps
 `AGENTICS_WEB_SESSION_COOKIE_SECURE=true`. HTTP GitHub App redirects are valid
 only for loopback local development or rehearsal callbacks; non-loopback
 redirects must use HTTPS.

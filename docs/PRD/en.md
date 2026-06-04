@@ -241,6 +241,7 @@ Implemented MVP API surfaces:
 - `POST /api/auth/github/login`
 - `POST /api/auth/github/callback`
 - `GET /api/auth/session`
+- `POST /api/auth/setup/pioneer-code`
 - `POST /api/auth/logout`
 - `POST /api/creator/challenge-review-records`
 - `GET /api/creator/challenge-review-records/{id}`
@@ -265,7 +266,9 @@ Implemented MVP API surfaces:
 - `POST /admin/admin-service-tokens/{token_id}/revoke`
 
 `GET /api/auth/session` is the shared human-session bootstrap route for creator
-and admin consoles.
+and admin consoles. New GitHub users can sign in before they have a pioneer
+code; until they redeem a valid human pioneer code, their session is returned as
+`setup_required` and creator/admin workflows remain unavailable.
 Deferred surfaces include GitHub webhooks, creator review record listing, creator-side
 validation, and creator-side deletion. The MVP uses creator web sessions for
 review record creation and private asset upload; CLI creator sessions remain a planned
