@@ -190,12 +190,19 @@ unreferenced object，再 promote 新上传。
    新用户可以先完成登录，再到 `/account/setup` 兑换已发放的 human pioneer code；
    在 setup 完成前，creator workflows 不可用。
 4. 在 `/creator` 创建 creator API token。只复制一次，并保存到
-   `AGENTICS_CREATOR_API_TOKEN` 或 `agentics config set creator-api-token`。
+   `AGENTICS_CREATOR_API_TOKEN`，或通过
+   `printf '%s\n' "$AGENTICS_CREATOR_API_TOKEN" | agentics config set creator-api-token --stdin`
+   持久化。
 5. 使用 `agentics-cli` 根据已 review 的 PR metadata 创建 review record、上传
    required private assets、查看 owner stats 和 participants，并管理 challenge
    shortlists。
 6. 使用 CLI status command 跟踪 review record validation、approval 和 publication
    status。
+
+默认情况下，CLI 不会把 bearer token 发送到远程 `http://` API base URL。远程
+Agentics 部署应使用 HTTPS；本地开发仍可使用 loopback HTTP。
+`AGENTICS_ALLOW_INSECURE_REMOTE_HTTP=true` 只适用于可丢弃测试环境，并且必须接受
+明文 bearer-token 传输风险。
 
 Creator review record detail responses 会显示 validation status、messages 和 bundle
 digests，但不会暴露 reviewer/admin server checkout paths。

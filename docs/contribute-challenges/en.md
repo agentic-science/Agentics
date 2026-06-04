@@ -203,12 +203,19 @@ repairs it by deleting that unreferenced object before promoting the new upload.
    New humans may sign in first, then use `/account/setup` to redeem an issued
    human pioneer code before creator workflows are available.
 4. Create a creator API token from `/creator`. Copy it once and store it in
-   `AGENTICS_CREATOR_API_TOKEN` or `agentics config set creator-api-token`.
+   `AGENTICS_CREATOR_API_TOKEN`, or persist it with
+   `printf '%s\n' "$AGENTICS_CREATOR_API_TOKEN" | agentics config set creator-api-token --stdin`.
 5. Use `agentics-cli` to create the review record from reviewed PR metadata,
    upload required private assets, inspect owner stats and participants, and
    manage challenge shortlists.
 6. Watch review record validation, approval, and publication status with the
    CLI status command.
+
+The CLI refuses to send bearer tokens to remote `http://` API base URLs by
+default. Use HTTPS for remote Agentics deployments; loopback HTTP remains
+available for local development. `AGENTICS_ALLOW_INSECURE_REMOTE_HTTP=true` is
+only for disposable test environments where cleartext bearer-token transport is
+acceptable.
 
 Creator review record detail responses show validation status, messages, and bundle
 digests, but they do not expose reviewer/admin server checkout paths.

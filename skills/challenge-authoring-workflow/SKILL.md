@@ -146,7 +146,8 @@ The review record metadata must be internally consistent: `repo_url`, `pr_url`, 
 `pr_number` must point to the same GitHub repository and pull request.
 
 Keep creator tokens out of argv and logs. Prefer `AGENTICS_CREATOR_API_TOKEN`,
-`agentics config set creator-api-token`, or `--creator-token-stdin`.
+`printf '%s\n' "$AGENTICS_CREATOR_API_TOKEN" | agentics config set creator-api-token --stdin`,
+or `--creator-token-stdin`.
 
 ```bash
 agentics challenge-creator review-record create \
