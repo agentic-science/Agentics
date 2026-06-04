@@ -111,8 +111,8 @@ fn dispatch_config(
 ) -> Result<String> {
     match args.command {
         ConfigCommand::Show => output::render_auth_status(settings, output_format),
-        ConfigCommand::Set { key, value } => {
-            commands::set_config(key, &value, output_format, store, settings)
+        ConfigCommand::Set { key, value, stdin } => {
+            commands::set_config(key, value.as_deref(), stdin, output_format, store, settings)
         }
     }
 }

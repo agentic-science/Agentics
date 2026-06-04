@@ -123,7 +123,11 @@ pub(crate) enum ConfigCommand {
     Set {
         #[arg(value_enum)]
         key: ConfigKey,
-        value: String,
+        #[arg(value_name = "VALUE")]
+        value: Option<String>,
+        /// Read a secret value from stdin instead of argv.
+        #[arg(long)]
+        stdin: bool,
     },
 }
 
@@ -244,53 +248,6 @@ pub(crate) enum ChallengeReviewRecordCommand {
         file: PathBuf,
         #[arg(long)]
         required: bool,
-    },
-    /// Admin validation against a checked-out repository path.
-    Validate {
-        review_record_id: ChallengeReviewRecordId,
-        #[arg(long, value_name = "PATH")]
-        repository_path: PathBuf,
-        #[command(flatten)]
-        admin: AdminAuthArgs,
-    },
-    /// Admin approval after validation passes.
-    Approve {
-        review_record_id: ChallengeReviewRecordId,
-        #[arg(long)]
-        expected_validation_bundle_sha256: Sha256Digest,
-        #[arg(long, default_value = "")]
-        message: String,
-        #[command(flatten)]
-        admin: AdminAuthArgs,
-    },
-    /// Admin rejection with optional feedback.
-    Reject {
-        review_record_id: ChallengeReviewRecordId,
-        #[arg(long, default_value = "")]
-        message: String,
-        #[command(flatten)]
-        admin: AdminAuthArgs,
-    },
-    /// Admin publish of an approved review record.
-    Publish {
-        review_record_id: ChallengeReviewRecordId,
-        #[arg(long, value_name = "PATH")]
-        repository_path: PathBuf,
-        #[command(flatten)]
-        admin: AdminAuthArgs,
-    },
-    /// Admin abandon for a closed or withdrawn review record.
-    Abandon {
-        review_record_id: ChallengeReviewRecordId,
-        #[arg(long, default_value = "")]
-        message: String,
-        #[command(flatten)]
-        admin: AdminAuthArgs,
-    },
-    /// Admin cleanup of stale review records and expired unpublished assets.
-    Cleanup {
-        #[command(flatten)]
-        admin: AdminAuthArgs,
     },
 }
 

@@ -1110,7 +1110,7 @@ fn invalid_submission_id_fails_during_cli_parse() {
 fn invalid_challenge_review_record_id_fails_during_cli_parse() {
     let result = Cli::try_parse_from([
         "agentics",
-        "challenge-creator",
+        "admin",
         "review-record",
         "validate",
         "review-record-1",
@@ -1127,7 +1127,7 @@ fn invalid_challenge_review_record_id_fails_during_cli_parse() {
 fn admin_service_token_argv_flag_is_removed() {
     let result = Cli::try_parse_from([
         "agentics",
-        "challenge-creator",
+        "admin",
         "review-record",
         "cleanup",
         "--admin-service-token",
@@ -1135,6 +1135,28 @@ fn admin_service_token_argv_flag_is_removed() {
     ]);
 
     assert!(result.is_err());
+}
+
+/// Verifies long-lived tokens are not accepted as config-set argv values.
+#[tokio::test]
+async fn config_set_rejects_secret_values_in_argv() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "config",
+        "set",
+        "creator-api-token",
+        "agentics_creator_secret",
+    ]);
+
+    let error = execute(cli, Environment::default())
+        .await
+        .expect_err("secret positional config value should fail");
+
+    assert!(error.to_string().contains("pass it with --stdin"));
 }
 
 /// Verifies that validate remote posts validation run and polls status.

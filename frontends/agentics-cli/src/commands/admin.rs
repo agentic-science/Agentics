@@ -108,103 +108,6 @@ pub(crate) async fn challenge_review_record(
                 .await?;
             output::render_challenge_private_asset(&response, output_format)
         }
-        ChallengeReviewRecordCommand::Validate {
-            review_record_id,
-            repository_path,
-            admin,
-        } => {
-            let admin_service_token = resolve_admin_service_token(&admin, settings)?;
-            let repository_path = admin_repository_path_to_wire(&repository_path)?;
-            let response = client
-                .validate_challenge_review_record_admin(
-                    &review_record_id,
-                    &ValidateChallengeReviewRecordRequest { repository_path },
-                    &admin_service_token,
-                )
-                .await?;
-            output::render_challenge_review_record(&response, output_format)
-        }
-        ChallengeReviewRecordCommand::Approve {
-            review_record_id,
-            expected_validation_bundle_sha256,
-            message,
-            admin,
-        } => {
-            review_record_decision(
-                &client,
-                output_format,
-                ReviewRecordDecisionRequest {
-                    admin,
-                    review_record_id,
-                    message,
-                    expected_validation_bundle_sha256: Some(expected_validation_bundle_sha256),
-                    action: ReviewRecordDecisionAction::Approve,
-                },
-                settings,
-            )
-            .await
-        }
-        ChallengeReviewRecordCommand::Reject {
-            review_record_id,
-            message,
-            admin,
-        } => {
-            review_record_decision(
-                &client,
-                output_format,
-                ReviewRecordDecisionRequest {
-                    admin,
-                    review_record_id,
-                    message,
-                    expected_validation_bundle_sha256: None,
-                    action: ReviewRecordDecisionAction::Reject,
-                },
-                settings,
-            )
-            .await
-        }
-        ChallengeReviewRecordCommand::Publish {
-            review_record_id,
-            repository_path,
-            admin,
-        } => {
-            let admin_service_token = resolve_admin_service_token(&admin, settings)?;
-            let repository_path = admin_repository_path_to_wire(&repository_path)?;
-            let response = client
-                .publish_challenge_review_record_admin(
-                    &review_record_id,
-                    &ValidateChallengeReviewRecordRequest { repository_path },
-                    &admin_service_token,
-                )
-                .await?;
-            output::render_challenge_review_record(&response, output_format)
-        }
-        ChallengeReviewRecordCommand::Abandon {
-            review_record_id,
-            message,
-            admin,
-        } => {
-            review_record_decision(
-                &client,
-                output_format,
-                ReviewRecordDecisionRequest {
-                    admin,
-                    review_record_id,
-                    message,
-                    expected_validation_bundle_sha256: None,
-                    action: ReviewRecordDecisionAction::Abandon,
-                },
-                settings,
-            )
-            .await
-        }
-        ChallengeReviewRecordCommand::Cleanup { admin } => {
-            let admin_service_token = resolve_admin_service_token(&admin, settings)?;
-            let response = client
-                .cleanup_challenge_review_records_admin(&admin_service_token)
-                .await?;
-            output::render_challenge_review_record_cleanup(&response, output_format)
-        }
     }
 }
 
@@ -223,7 +126,7 @@ pub(crate) fn resolve_creator_api_token(
     };
     if token.expose_secret().is_empty() {
         bail!(
-            "set AGENTICS_CREATOR_API_TOKEN, configure creator-api-token, or pass --creator-token-stdin for creator commands"
+            "set AGENTICS_CREATOR_API_TOKEN, persist creator-api-token with `agentics config set creator-api-token --stdin`, or pass --creator-token-stdin for creator commands"
         );
     }
     Ok(token)
@@ -265,59 +168,6 @@ enum ReviewRecordDecisionAction {
     Approve,
     Reject,
     Abandon,
-}
-
-/// Carries review record decision inputs through the command handler.
-struct ReviewRecordDecisionRequest {
-    admin: AdminAuthArgs,
-    review_record_id: ChallengeReviewRecordId,
-    message: String,
-    expected_validation_bundle_sha256: Option<Sha256Digest>,
-    action: ReviewRecordDecisionAction,
-}
-
-/// Handles a review record decision.
-async fn review_record_decision(
-    client: &ApiClient,
-    output_format: cli::OutputFormat,
-    review: ReviewRecordDecisionRequest,
-    settings: &ResolvedSettings,
-) -> Result<String> {
-    let request = ChallengeReviewDecisionRequest {
-        message: review.message,
-        expected_validation_bundle_sha256: review.expected_validation_bundle_sha256,
-    };
-    let admin_service_token = resolve_admin_service_token(&review.admin, settings)?;
-    let response = match review.action {
-        ReviewRecordDecisionAction::Approve => {
-            client
-                .approve_challenge_review_record_admin(
-                    &review.review_record_id,
-                    &request,
-                    &admin_service_token,
-                )
-                .await?
-        }
-        ReviewRecordDecisionAction::Reject => {
-            client
-                .reject_challenge_review_record_admin(
-                    &review.review_record_id,
-                    &request,
-                    &admin_service_token,
-                )
-                .await?
-        }
-        ReviewRecordDecisionAction::Abandon => {
-            client
-                .abandon_challenge_review_record_admin(
-                    &review.review_record_id,
-                    &request,
-                    &admin_service_token,
-                )
-                .await?
-        }
-    };
-    output::render_challenge_review_record(&response, output_format)
 }
 
 impl From<ChallengePrivateAssetKindArg> for ChallengePrivateAssetKind {

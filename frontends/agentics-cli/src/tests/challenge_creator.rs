@@ -165,9 +165,9 @@ async fn challenge_creator_uploads_private_asset_file() {
     assert!(output.contains("official-cases"));
 }
 
-/// Verifies that challenge creator validates a review record with admin auth.
+/// Verifies that admin validates a review record with admin auth.
 #[tokio::test]
-async fn challenge_creator_validates_review_record_with_admin_auth() {
+async fn admin_validates_review_record_with_admin_auth() {
     let server = MockServer::start().await;
     let admin_token = "agentics_admin_secret";
     let admin_auth = format!("Bearer {admin_token}");
@@ -191,7 +191,7 @@ async fn challenge_creator_validates_review_record_with_admin_auth() {
         config_path.to_str().expect("utf8 path"),
         "--api-base-url",
         &server.uri(),
-        "challenge-creator",
+        "admin",
         "review-record",
         "validate",
         "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
@@ -210,12 +210,15 @@ async fn challenge_creator_validates_review_record_with_admin_auth() {
     .expect("admin validation should succeed");
 
     assert!(output.contains("status: validated"));
+    assert!(output.contains(
+        "validation_bundle_sha256: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    ));
 }
 
 /// Verifies admin review record validation rejects non-UTF-8 repository paths before the API request.
 #[cfg(unix)]
 #[tokio::test]
-async fn challenge_creator_rejects_non_utf8_admin_repository_path() {
+async fn admin_rejects_non_utf8_repository_path() {
     use std::ffi::OsString;
     use std::os::unix::ffi::OsStringExt;
 
@@ -228,7 +231,7 @@ async fn challenge_creator_rejects_non_utf8_admin_repository_path() {
         config_path.as_os_str().to_owned(),
         OsString::from("--api-base-url"),
         OsString::from(server.uri()),
-        OsString::from("challenge-creator"),
+        OsString::from("admin"),
         OsString::from("review-record"),
         OsString::from("validate"),
         OsString::from("dddddddd-dddd-4ddd-8ddd-dddddddddddd"),

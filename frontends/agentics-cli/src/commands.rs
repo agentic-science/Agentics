@@ -63,7 +63,8 @@ pub(crate) async fn register(
 /// Sets config after applying domain validation.
 pub(crate) fn set_config(
     key: ConfigKey,
-    value: &str,
+    value: Option<&str>,
+    read_stdin: bool,
     output_format: cli::OutputFormat,
     store: &ConfigStore,
     settings: &ResolvedSettings,
@@ -71,11 +72,19 @@ pub(crate) fn set_config(
     let mut config = store.load()?;
     let updated_key = match key {
         ConfigKey::ApiBaseUrl => {
-            config.api_base_url = Some(ApiBaseUrl::try_new(value)?.to_string());
+            if read_stdin {
+                bail!("api-base-url is not a secret; pass it as a positional value");
+            }
+            let value = value.context("api-base-url requires a value")?;
+            config.api_base_url = Some(
+                ApiBaseUrl::try_new_with_policy(value, settings.allow_insecure_remote_http)?
+                    .to_string(),
+            );
             "api_base_url"
         }
         ConfigKey::Token => {
-            let token = value.trim();
+            let token = read_secret_config_value(value, read_stdin, "token")?;
+            let token = token.trim();
             if token.is_empty() {
                 bail!("token must not be empty");
             }
@@ -83,7 +92,8 @@ pub(crate) fn set_config(
             "token"
         }
         ConfigKey::CreatorApiToken => {
-            let token = value.trim();
+            let token = read_secret_config_value(value, read_stdin, "creator_api_token")?;
+            let token = token.trim();
             if token.is_empty() {
                 bail!("creator_api_token must not be empty");
             }
@@ -93,6 +103,23 @@ pub(crate) fn set_config(
     };
     store.save(&config)?;
     output::render_config_set(updated_key, settings, output_format)
+}
+
+fn read_secret_config_value(
+    value: Option<&str>,
+    read_stdin: bool,
+    key_name: &str,
+) -> Result<String> {
+    if value.is_some() {
+        bail!("{key_name} is secret; pass it with --stdin instead of argv");
+    }
+    if !read_stdin {
+        bail!("{key_name} is secret; pass --stdin and pipe the value on stdin");
+    }
+    let mut input = String::new();
+    std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
+        .with_context(|| format!("failed to read {key_name} from stdin"))?;
+    Ok(input.trim_end_matches(['\r', '\n']).to_string())
 }
 
 /// Handles challenge shortlist for this module.

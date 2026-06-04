@@ -265,7 +265,7 @@ pub(super) fn challenge_manifest_json() -> serde_json::Value {
 
 /// Handles challenge review record json for this module.
 pub(super) fn challenge_review_record_json(status: &str) -> serde_json::Value {
-    json!({
+    let mut value = json!({
         "id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
         "challenge_name": "sample-sum",
         "request": "new_challenge",
@@ -284,5 +284,23 @@ pub(super) fn challenge_review_record_json(status: &str) -> serde_json::Value {
         "validation_records": [],
         "created_at": "2026-05-01T00:00:00Z",
         "updated_at": "2026-05-01T00:00:00Z"
-    })
+    });
+    if status == "validated" {
+        value["validation_bundle_sha256"] =
+            json!("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+        value["validation_message"] = json!("validation completed");
+        value["validation_records"] = json!([
+            {
+                "id": "ffffffff-ffff-4fff-8fff-ffffffffffff",
+                "review_record_id": "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+                "status": "passed",
+                "message": "validation completed",
+                "repository_path": "/tmp/challenges",
+                "manifest_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "bundle_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                "created_at": "2026-05-01T00:00:00Z"
+            }
+        ]);
+    }
+    value
 }

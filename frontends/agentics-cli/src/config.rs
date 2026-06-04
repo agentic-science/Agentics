@@ -1,6 +1,7 @@
 use std::fmt;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
+use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -44,6 +45,7 @@ struct RawCliEnv {
     pioneer_code: Option<String>,
     admin_service_token: Option<String>,
     creator_api_token: Option<String>,
+    allow_insecure_remote_http: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -55,6 +57,7 @@ pub(crate) struct Environment {
     pub pioneer_code: Option<SecretString>,
     pub admin_service_token: Option<SecretString>,
     pub creator_api_token: Option<SecretString>,
+    pub allow_insecure_remote_http: bool,
 }
 
 impl Environment {
@@ -70,6 +73,7 @@ impl Environment {
             pioneer_code: non_empty_owned(raw.pioneer_code).map(SecretString::from),
             admin_service_token: non_empty_owned(raw.admin_service_token).map(SecretString::from),
             creator_api_token: non_empty_owned(raw.creator_api_token).map(SecretString::from),
+            allow_insecure_remote_http: raw.allow_insecure_remote_http.unwrap_or(false),
         })
     }
 }
@@ -109,6 +113,7 @@ pub(crate) struct ResolvedSettings {
     pub admin_service_token: Option<SecretString>,
     pub creator_api_token: Option<SecretString>,
     pub creator_api_token_source: SettingSource,
+    pub allow_insecure_remote_http: bool,
     pub config_path: PathBuf,
 }
 
@@ -142,7 +147,10 @@ impl ResolvedSettings {
         );
 
         Ok(Self {
-            api_base_url: ApiBaseUrl::try_new(api_base_url)?,
+            api_base_url: ApiBaseUrl::try_new_with_policy(
+                api_base_url,
+                env.allow_insecure_remote_http,
+            )?,
             api_base_url_source,
             token: token.map(|value| SecretString::from(value.to_string())),
             token_source,
@@ -150,6 +158,7 @@ impl ResolvedSettings {
             admin_service_token: env.admin_service_token.clone(),
             creator_api_token: creator_api_token.map(|value| SecretString::from(value.to_string())),
             creator_api_token_source,
+            allow_insecure_remote_http: env.allow_insecure_remote_http,
             config_path,
         })
     }
@@ -171,7 +180,16 @@ pub(crate) struct ApiBaseUrl(Url);
 
 impl ApiBaseUrl {
     /// Handles try new for this module.
+    #[cfg(test)]
     pub(crate) fn try_new(value: &str) -> Result<Self> {
+        Self::try_new_with_policy(value, false)
+    }
+
+    /// Parse and validate an API base URL with an explicit insecure-HTTP override.
+    pub(crate) fn try_new_with_policy(
+        value: &str,
+        allow_insecure_remote_http: bool,
+    ) -> Result<Self> {
         let trimmed = value.trim();
         if trimmed.is_empty() {
             bail!("API base URL must not be empty");
@@ -182,6 +200,12 @@ impl ApiBaseUrl {
         match url.scheme() {
             "http" | "https" => {}
             scheme => bail!("API base URL must use http or https, got `{scheme}`"),
+        }
+        if url.scheme() == "http" && !allow_insecure_remote_http && !is_loopback_or_localhost(&url)
+        {
+            bail!(
+                "HTTP API base URLs are allowed only for localhost/loopback; use HTTPS or set AGENTICS_ALLOW_INSECURE_REMOTE_HTTP=true"
+            );
         }
         if url.query().is_some() || url.fragment().is_some() {
             bail!("API base URL must not include a query string or fragment");
@@ -199,6 +223,16 @@ impl ApiBaseUrl {
     pub(crate) fn as_url(&self) -> &Url {
         &self.0
     }
+}
+
+fn is_loopback_or_localhost(url: &Url) -> bool {
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    host.parse::<IpAddr>().is_ok_and(|addr| addr.is_loopback())
 }
 
 impl fmt::Display for ApiBaseUrl {
@@ -389,21 +423,22 @@ mod tests {
     #[test]
     fn resolves_config_precedence() {
         let file = CliConfig {
-            api_base_url: Some("http://file.example".to_string()),
+            api_base_url: Some("https://file.example".to_string()),
             token: Some("file-token".to_string()),
             ..CliConfig::default()
         };
         let env = Environment {
-            api_base_url: Some("http://env.example".to_string()),
+            api_base_url: Some("https://env.example".to_string()),
             api_port: None,
             token: Some(SecretString::from("env-token")),
             pioneer_code: None,
             admin_service_token: None,
             creator_api_token: None,
+            allow_insecure_remote_http: false,
         };
 
         let settings = ResolvedSettings::resolve(
-            Some("http://flag.example"),
+            Some("https://flag.example"),
             None,
             &env,
             &file,
@@ -411,7 +446,7 @@ mod tests {
         )
         .expect("settings should resolve");
 
-        assert_eq!(settings.api_base_url.to_string(), "http://flag.example");
+        assert_eq!(settings.api_base_url.to_string(), "https://flag.example");
         assert_eq!(settings.api_base_url_source, SettingSource::Flag);
         assert_eq!(
             settings.token.as_ref().map(ExposeSecret::expose_secret),
@@ -496,6 +531,17 @@ mod tests {
     fn rejects_invalid_api_base_url() {
         let error = ApiBaseUrl::try_new("file:///tmp/api").expect_err("must reject file URL");
         assert!(error.to_string().contains("http or https"));
+    }
+
+    /// Verifies remote HTTP requires an explicit unsafe override while loopback remains usable.
+    #[test]
+    fn rejects_remote_http_without_insecure_override() {
+        let error = ApiBaseUrl::try_new("http://agentics.example")
+            .expect_err("remote HTTP should require explicit opt-in");
+        assert!(error.to_string().contains("localhost/loopback"));
+        ApiBaseUrl::try_new("http://127.0.0.1:3100").expect("loopback HTTP should be allowed");
+        ApiBaseUrl::try_new_with_policy("http://agentics.example", true)
+            .expect("explicit insecure override should allow remote HTTP");
     }
 
     /// Verifies malformed API port env fails instead of falling back.
