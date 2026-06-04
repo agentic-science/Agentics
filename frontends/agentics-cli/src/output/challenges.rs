@@ -4,7 +4,9 @@ use agentics_domain::models::challenge::{
 };
 use agentics_domain::models::names::{ChallengeKeyword, MetricName};
 use agentics_domain::models::request::{
-    LeaderboardResponse, PublicSolutionSubmissionListResponse, ScoreDistributionResponse,
+    ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
+    CreatorChallengeParticipantsResponse, CreatorChallengeStatsResponse, LeaderboardResponse,
+    PublicSolutionSubmissionListResponse, ScoreDistributionResponse,
 };
 use anyhow::Result;
 
@@ -291,6 +293,156 @@ pub(crate) fn render_challenge_stats(
                 )
             ))
         }
+    }
+}
+
+/// Renders owner-visible challenge statistics.
+pub(crate) fn render_creator_challenge_stats(
+    response: &CreatorChallengeStatsResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => Ok(format!(
+            "challenge: {}\ntarget: {}\nagents: {}\nsolution_submissions: {}\ncompleted: {}\nfailed: {}\nqueued_or_running: {}\nvisible_submissions: {}\nvalidation_runs: {}\nofficial_runs: {}\nlatest_solution_submission_at: {}\nlatest_completed_evaluation_at: {}\nbest_rank_score_min: {}\nbest_rank_score_max: {}\nbest_rank_score_mean: {}",
+            response.challenge_name,
+            response
+                .target
+                .as_ref()
+                .map(ToString::to_string)
+                .unwrap_or_else(|| "all".to_string()),
+            response.agent_count,
+            response.solution_submission_count,
+            response.completed_solution_submission_count,
+            response.failed_solution_submission_count,
+            response.queued_or_running_solution_submission_count,
+            response.visible_solution_submission_count,
+            response.validation_run_count,
+            response.official_run_count,
+            response
+                .latest_solution_submission_at
+                .as_deref()
+                .unwrap_or("none"),
+            response
+                .latest_completed_evaluation_at
+                .as_deref()
+                .unwrap_or("none"),
+            response
+                .best_rank_score_min
+                .map(format_score)
+                .unwrap_or_else(|| "none".to_string()),
+            response
+                .best_rank_score_max
+                .map(format_score)
+                .unwrap_or_else(|| "none".to_string()),
+            response
+                .best_rank_score_mean
+                .map(format_score)
+                .unwrap_or_else(|| "none".to_string())
+        )),
+    }
+}
+
+/// Renders owner-visible challenge participants.
+pub(crate) fn render_creator_challenge_participants(
+    response: &CreatorChallengeParticipantsResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => {
+            let rows = response
+                .items
+                .iter()
+                .map(|item| {
+                    vec![
+                        item.agent_id.to_string(),
+                        item.agent_display_name.clone(),
+                        item.solution_submission_count.to_string(),
+                        item.best_solution_submission_id
+                            .as_ref()
+                            .map(ToString::to_string)
+                            .unwrap_or_else(|| "none".to_string()),
+                        item.best_rank_score
+                            .map(format_score)
+                            .unwrap_or_else(|| "none".to_string()),
+                        item.latest_status
+                            .as_ref()
+                            .map(status_label)
+                            .unwrap_or_else(|| "none".to_string()),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            Ok(format!(
+                "challenge: {}\ntarget: {}\n{}",
+                response.challenge_name,
+                response
+                    .target
+                    .as_ref()
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| "all".to_string()),
+                render_table(
+                    &[
+                        "AGENT_ID",
+                        "AGENT",
+                        "SUBMISSIONS",
+                        "BEST",
+                        "SCORE",
+                        "STATUS"
+                    ],
+                    &rows
+                )
+            ))
+        }
+    }
+}
+
+/// Renders owner-managed challenge shortlist rows.
+pub(crate) fn render_challenge_shortlist(
+    response: &ChallengeShortlistResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => {
+            let rows = response
+                .items
+                .iter()
+                .map(|item| {
+                    vec![
+                        item.agent_id.to_string(),
+                        item.agent_display_name.clone(),
+                        item.added_by_human_id.to_string(),
+                        item.created_at.clone(),
+                    ]
+                })
+                .collect::<Vec<_>>();
+            Ok(format!(
+                "challenge: {}\n{}",
+                response.challenge_name,
+                render_table(&["AGENT_ID", "AGENT", "ADDED_BY", "CREATED"], &rows)
+            ))
+        }
+    }
+}
+
+/// Renders one shortlist revision upload response.
+pub(crate) fn render_challenge_shortlist_revision(
+    response: &ChallengeShortlistRevisionResponse,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => pretty_json(response),
+        OutputFormat::Table => Ok(format!(
+            "shortlist_revision: {}\nchallenge: {}\nrequested_count: {}\nadded_count: {}\nsha256: {}\nstorage_key: {}\ncreated_at: {}",
+            response.id,
+            response.challenge_name,
+            response.requested_count,
+            response.added_count,
+            response.sha256,
+            response.storage_key,
+            response.created_at
+        )),
     }
 }
 

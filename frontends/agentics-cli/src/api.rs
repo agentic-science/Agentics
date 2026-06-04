@@ -1,15 +1,28 @@
 use agentics_domain::models::ErrorResponse;
-use agentics_domain::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
-use agentics_domain::models::challenge_creation::{
-    ChallengeReviewDecisionRequest, ChallengeReviewRecordCleanupResponse,
-    ChallengeReviewRecordResponse, ValidateChallengeReviewRecordRequest,
+use agentics_domain::models::challenge::{
+    AdminChallengeListResponse, ChallengeDetailResponse, ChallengeListResponse,
 };
-use agentics_domain::models::ids::{ChallengeReviewRecordId, SolutionSubmissionId};
+use agentics_domain::models::challenge_creation::{
+    AdminChallengePrivateAssetListResponse, ChallengePrivateAssetResponse,
+    ChallengeReviewDecisionRequest, ChallengeReviewRecordCleanupResponse,
+    ChallengeReviewRecordListResponse, ChallengeReviewRecordResponse,
+    CreateChallengeReviewRecordRequest, CreatorChallengeReviewRecordResponse,
+    UploadChallengePrivateAssetRequest, ValidateChallengeReviewRecordRequest,
+};
+use agentics_domain::models::ids::{
+    AgentId, ChallengeReviewRecordId, PioneerCodeId, SolutionSubmissionId,
+};
 use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
 use agentics_domain::models::request::{
-    CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse, LeaderboardResponse,
+    AdminCapacityResponse, AdminServiceHeartbeatListResponse, AdminSolutionSubmissionListResponse,
+    ChallengeMoltbookDiscussionResponse, ChallengeShortlistResponse,
+    ChallengeShortlistRevisionResponse, CreateChallengeShortlistRevisionRequest,
+    CreatePioneerCodeRequest, CreateSolutionSubmissionRequest, CreateSolutionSubmissionResponse,
+    CreatorChallengeParticipantsResponse, CreatorChallengeStatsResponse, DisableAgentResponse,
+    EvaluationJobResponse, LeaderboardResponse, PioneerCodeDetailResponse, PioneerCodeListResponse,
     PublicSolutionSubmissionListResponse, RankingContextResponse, RegisterAgentRequest,
-    RegisterAgentResponse, ScoreDistributionResponse, SolutionSubmissionLogsResponse,
+    RegisterAgentResponse, RevokePioneerCodeResponse, ScoreDistributionResponse,
+    SetChallengeMoltbookDiscussionRequest, SolutionSubmissionLogsResponse,
     SolutionSubmissionResponse, SolutionSubmissionResultReportResponse,
 };
 use anyhow::{Context, Result};
@@ -244,6 +257,247 @@ impl ApiClient {
     }
 
     /// Validates challenge review record admin invariants for this contract.
+    pub(crate) async fn create_challenge_review_record_creator(
+        &self,
+        request: &CreateChallengeReviewRecordRequest,
+        creator_api_token: &SecretString,
+    ) -> Result<CreatorChallengeReviewRecordResponse> {
+        self.post_json_creator(
+            "/api/creator/challenge-review-records",
+            request,
+            creator_api_token,
+        )
+        .await
+    }
+
+    /// Fetches one challenge review record owned by the creator.
+    pub(crate) async fn get_challenge_review_record_creator(
+        &self,
+        review_record_id: &ChallengeReviewRecordId,
+        creator_api_token: &SecretString,
+    ) -> Result<CreatorChallengeReviewRecordResponse> {
+        let path = format!("/api/creator/challenge-review-records/{review_record_id}");
+        self.get_json_creator(&path, creator_api_token).await
+    }
+
+    /// Uploads one private asset for a creator-owned challenge review record.
+    pub(crate) async fn upload_challenge_private_asset_creator(
+        &self,
+        review_record_id: &ChallengeReviewRecordId,
+        request: &UploadChallengePrivateAssetRequest,
+        creator_api_token: &SecretString,
+    ) -> Result<ChallengePrivateAssetResponse> {
+        let path =
+            format!("/api/creator/challenge-review-records/{review_record_id}/private-assets");
+        self.post_json_creator(&path, request, creator_api_token)
+            .await
+    }
+
+    /// Fetches owner-visible challenge statistics.
+    pub(crate) async fn get_creator_challenge_stats(
+        &self,
+        challenge_name: &ChallengeName,
+        target: Option<&TargetName>,
+        creator_api_token: &SecretString,
+    ) -> Result<CreatorChallengeStatsResponse> {
+        let path = match target {
+            Some(target) => {
+                format!("/api/creator/challenges/{challenge_name}/stats?target={target}")
+            }
+            None => format!("/api/creator/challenges/{challenge_name}/stats"),
+        };
+        self.get_json_creator(&path, creator_api_token).await
+    }
+
+    /// Fetches owner-visible challenge participants.
+    pub(crate) async fn list_creator_challenge_participants(
+        &self,
+        challenge_name: &ChallengeName,
+        target: Option<&TargetName>,
+        creator_api_token: &SecretString,
+    ) -> Result<CreatorChallengeParticipantsResponse> {
+        let path = match target {
+            Some(target) => {
+                format!("/api/creator/challenges/{challenge_name}/participants?target={target}")
+            }
+            None => format!("/api/creator/challenges/{challenge_name}/participants"),
+        };
+        self.get_json_creator(&path, creator_api_token).await
+    }
+
+    /// Fetches the effective owner-managed shortlist union.
+    pub(crate) async fn get_challenge_shortlist_creator(
+        &self,
+        challenge_name: &ChallengeName,
+        creator_api_token: &SecretString,
+    ) -> Result<ChallengeShortlistResponse> {
+        let path = format!("/api/creator/challenges/{challenge_name}/shortlist");
+        self.get_json_creator(&path, creator_api_token).await
+    }
+
+    /// Uploads a shortlist delta for one creator-owned challenge.
+    pub(crate) async fn create_challenge_shortlist_revision_creator(
+        &self,
+        challenge_name: &ChallengeName,
+        request: &CreateChallengeShortlistRevisionRequest,
+        creator_api_token: &SecretString,
+    ) -> Result<ChallengeShortlistRevisionResponse> {
+        let path = format!("/api/creator/challenges/{challenge_name}/shortlist-revisions");
+        self.post_json_creator(&path, request, creator_api_token)
+            .await
+    }
+
+    /// Validates challenge review record admin invariants for this contract.
+    pub(crate) async fn list_admin_challenges(
+        &self,
+        admin_service_token: &SecretString,
+    ) -> Result<AdminChallengeListResponse> {
+        self.get_json_admin("/admin/challenges", admin_service_token)
+            .await
+    }
+
+    /// Lists pioneer codes.
+    pub(crate) async fn list_pioneer_codes_admin(
+        &self,
+        admin_service_token: &SecretString,
+    ) -> Result<PioneerCodeListResponse> {
+        self.get_json_admin("/admin/pioneer-codes", admin_service_token)
+            .await
+    }
+
+    /// Creates a pioneer code.
+    pub(crate) async fn create_pioneer_code_admin(
+        &self,
+        request: &CreatePioneerCodeRequest,
+        admin_service_token: &SecretString,
+    ) -> Result<PioneerCodeDetailResponse> {
+        self.post_json_admin("/admin/pioneer-codes", request, admin_service_token)
+            .await
+    }
+
+    /// Fetches one pioneer code.
+    pub(crate) async fn get_pioneer_code_admin(
+        &self,
+        id: &PioneerCodeId,
+        admin_service_token: &SecretString,
+    ) -> Result<PioneerCodeDetailResponse> {
+        let path = format!("/admin/pioneer-codes/{id}");
+        self.get_json_admin(&path, admin_service_token).await
+    }
+
+    /// Revokes one pioneer code.
+    pub(crate) async fn revoke_pioneer_code_admin(
+        &self,
+        id: &PioneerCodeId,
+        admin_service_token: &SecretString,
+    ) -> Result<RevokePioneerCodeResponse> {
+        let path = format!("/admin/pioneer-codes/{id}/revoke");
+        self.post_json_admin(&path, &serde_json::json!({}), admin_service_token)
+            .await
+    }
+
+    /// Sets a challenge Moltbook discussion anchor.
+    pub(crate) async fn set_challenge_moltbook_discussion_admin(
+        &self,
+        challenge_name: &ChallengeName,
+        request: &SetChallengeMoltbookDiscussionRequest,
+        admin_service_token: &SecretString,
+    ) -> Result<ChallengeMoltbookDiscussionResponse> {
+        let path = format!("/admin/challenges/{challenge_name}/moltbook-discussion");
+        self.post_json_admin(&path, request, admin_service_token)
+            .await
+    }
+
+    /// Clears a challenge Moltbook discussion anchor.
+    pub(crate) async fn clear_challenge_moltbook_discussion_admin(
+        &self,
+        challenge_name: &ChallengeName,
+        admin_service_token: &SecretString,
+    ) -> Result<ChallengeMoltbookDiscussionResponse> {
+        let path = format!("/admin/challenges/{challenge_name}/moltbook-discussion");
+        self.delete_json_admin(&path, admin_service_token).await
+    }
+
+    /// Lists admin solution submissions.
+    pub(crate) async fn list_admin_solution_submissions(
+        &self,
+        admin_service_token: &SecretString,
+    ) -> Result<AdminSolutionSubmissionListResponse> {
+        self.get_json_admin("/admin/solution-submissions", admin_service_token)
+            .await
+    }
+
+    /// Lists service heartbeats.
+    pub(crate) async fn list_admin_service_heartbeats(
+        &self,
+        admin_service_token: &SecretString,
+    ) -> Result<AdminServiceHeartbeatListResponse> {
+        self.get_json_admin("/admin/service-heartbeats", admin_service_token)
+            .await
+    }
+
+    /// Shows admin capacity.
+    pub(crate) async fn get_admin_capacity(
+        &self,
+        admin_service_token: &SecretString,
+    ) -> Result<AdminCapacityResponse> {
+        self.get_json_admin("/admin/capacity", admin_service_token)
+            .await
+    }
+
+    /// Queues a rejudge job.
+    pub(crate) async fn rejudge_admin(
+        &self,
+        submission_id: &SolutionSubmissionId,
+        admin_service_token: &SecretString,
+    ) -> Result<EvaluationJobResponse> {
+        let path = format!("/admin/solution-submissions/{submission_id}/rejudge");
+        self.post_json_admin(&path, &serde_json::json!({}), admin_service_token)
+            .await
+    }
+
+    /// Queues an official run job.
+    pub(crate) async fn official_run_admin(
+        &self,
+        submission_id: &SolutionSubmissionId,
+        admin_service_token: &SecretString,
+    ) -> Result<EvaluationJobResponse> {
+        let path = format!("/admin/solution-submissions/{submission_id}/official-run");
+        self.post_json_admin(&path, &serde_json::json!({}), admin_service_token)
+            .await
+    }
+
+    /// Disables an agent.
+    pub(crate) async fn disable_agent_admin(
+        &self,
+        agent_id: &AgentId,
+        admin_service_token: &SecretString,
+    ) -> Result<DisableAgentResponse> {
+        let path = format!("/admin/agents/{agent_id}/disable");
+        self.post_json_admin(&path, &serde_json::json!({}), admin_service_token)
+            .await
+    }
+
+    /// Validates challenge review record admin invariants for this contract.
+    pub(crate) async fn list_challenge_review_records_admin(
+        &self,
+        admin_service_token: &SecretString,
+    ) -> Result<ChallengeReviewRecordListResponse> {
+        self.get_json_admin("/admin/challenge-review-records", admin_service_token)
+            .await
+    }
+
+    /// Lists private asset lifecycle rows for one challenge review record.
+    pub(crate) async fn list_challenge_review_record_private_assets_admin(
+        &self,
+        review_record_id: &ChallengeReviewRecordId,
+        admin_service_token: &SecretString,
+    ) -> Result<AdminChallengePrivateAssetListResponse> {
+        let path = format!("/admin/challenge-review-records/{review_record_id}/private-assets");
+        self.get_json_admin(&path, admin_service_token).await
+    }
+
+    /// Validates challenge review record admin invariants for this contract.
     pub(crate) async fn validate_challenge_review_record_admin(
         &self,
         review_record_id: &ChallengeReviewRecordId,
@@ -349,6 +603,61 @@ impl ApiClient {
         let request = self
             .request(Method::POST, path, false)?
             .bearer_auth(admin_service_token.expose_secret())
+            .json(body);
+        parse_response(request.send().await?).await
+    }
+
+    /// Handles get json admin for this module.
+    async fn get_json_admin<T>(&self, path: &str, admin_service_token: &SecretString) -> Result<T>
+    where
+        T: DeserializeOwned,
+    {
+        let request = self
+            .request(Method::GET, path, false)?
+            .bearer_auth(admin_service_token.expose_secret());
+        parse_response(request.send().await?).await
+    }
+
+    /// Handles delete json admin for this module.
+    async fn delete_json_admin<T>(
+        &self,
+        path: &str,
+        admin_service_token: &SecretString,
+    ) -> Result<T>
+    where
+        T: DeserializeOwned,
+    {
+        let request = self
+            .request(Method::DELETE, path, false)?
+            .bearer_auth(admin_service_token.expose_secret());
+        parse_response(request.send().await?).await
+    }
+
+    /// Handles get json for creator API-token authenticated routes.
+    async fn get_json_creator<T>(&self, path: &str, creator_api_token: &SecretString) -> Result<T>
+    where
+        T: DeserializeOwned,
+    {
+        let request = self
+            .request(Method::GET, path, false)?
+            .bearer_auth(creator_api_token.expose_secret());
+        parse_response(request.send().await?).await
+    }
+
+    /// Handles post json for creator API-token authenticated routes.
+    async fn post_json_creator<B, T>(
+        &self,
+        path: &str,
+        body: &B,
+        creator_api_token: &SecretString,
+    ) -> Result<T>
+    where
+        B: Serialize + Sync + ?Sized,
+        T: DeserializeOwned,
+    {
+        let request = self
+            .request(Method::POST, path, false)?
+            .bearer_auth(creator_api_token.expose_secret())
             .json(body);
         parse_response(request.send().await?).await
     }

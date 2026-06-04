@@ -30,8 +30,6 @@ async fn challenge_creator_creates_review_record_from_repo_manifest() {
         config_path.to_str().expect("utf8 path"),
         "--api-base-url",
         &server.uri(),
-        "--token",
-        "test-token",
         "challenge-creator",
         "review-record",
         "create",
@@ -51,20 +49,22 @@ async fn challenge_creator_creates_review_record_from_repo_manifest() {
         "1001",
     ]);
 
-    let error = execute(cli, Environment::default())
-        .await
-        .expect_err("creator review record creation requires web-session auth");
+    let output = execute(
+        cli,
+        Environment {
+            creator_api_token: Some(SecretString::from("test-token")),
+            ..Environment::default()
+        },
+    )
+    .await
+    .expect("creator review record creation should succeed with creator token");
     let requests = server
         .received_requests()
         .await
         .expect("requests should be recorded");
 
-    assert!(requests.is_empty());
-    assert!(
-        error
-            .to_string()
-            .contains("creator review record creation requires")
-    );
+    assert_eq!(requests.len(), 1);
+    assert!(output.contains("status: pending_review"));
 }
 
 /// Verifies that challenge creator rejects invalid commit sha during cli parse.
@@ -134,8 +134,6 @@ async fn challenge_creator_uploads_private_asset_file() {
         config_path.to_str().expect("utf8 path"),
         "--api-base-url",
         &server.uri(),
-        "--token",
-        "test-token",
         "challenge-creator",
         "review-record",
         "upload-private-asset",
@@ -149,20 +147,22 @@ async fn challenge_creator_uploads_private_asset_file() {
         "--required",
     ]);
 
-    let error = execute(cli, Environment::default())
-        .await
-        .expect_err("creator private asset upload requires web-session auth");
+    let output = execute(
+        cli,
+        Environment {
+            creator_api_token: Some(SecretString::from("test-token")),
+            ..Environment::default()
+        },
+    )
+    .await
+    .expect("creator private asset upload should succeed with creator token");
     let requests = server
         .received_requests()
         .await
         .expect("requests should be recorded");
 
-    assert!(requests.is_empty());
-    assert!(
-        error
-            .to_string()
-            .contains("creator private asset upload requires")
-    );
+    assert_eq!(requests.len(), 1);
+    assert!(output.contains("official-cases"));
 }
 
 /// Verifies that challenge creator validates a review record with admin auth.
@@ -253,4 +253,44 @@ async fn challenge_creator_rejects_non_utf8_admin_repository_path() {
 
     assert!(requests.is_empty());
     assert!(error.to_string().contains("not valid UTF-8"));
+}
+
+/// Verifies top-level admin review-record list uses admin service-token auth.
+#[tokio::test]
+async fn admin_review_record_list_uses_admin_service_token() {
+    let server = MockServer::start().await;
+    let admin_token = "agentics_admin_secret";
+    Mock::given(method("GET"))
+        .and(path("/admin/challenge-review-records"))
+        .and(header("authorization", format!("Bearer {admin_token}")))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "items": []
+        })))
+        .mount(&server)
+        .await;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--api-base-url",
+        &server.uri(),
+        "admin",
+        "review-record",
+        "list",
+    ]);
+
+    let output = execute(
+        cli,
+        Environment {
+            admin_service_token: Some(SecretString::from(admin_token)),
+            ..Environment::default()
+        },
+    )
+    .await
+    .expect("admin review-record list should succeed");
+
+    assert!(output.contains("review_records: 0"));
 }

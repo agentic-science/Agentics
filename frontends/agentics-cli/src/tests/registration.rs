@@ -59,6 +59,7 @@ async fn register_persists_returned_token() {
         CliConfig {
             api_base_url: Some(server.uri()),
             token: Some("agentics_token".to_string()),
+            ..CliConfig::default()
         }
     );
 }
@@ -189,6 +190,7 @@ async fn register_uses_pioneer_code_from_environment() {
         CliConfig {
             api_base_url: None,
             token: None,
+            ..CliConfig::default()
         }
     );
 }

@@ -57,10 +57,12 @@ pub(crate) fn render_auth_status(
             "api_base_url_source": settings.api_base_url_source.to_string(),
             "token_configured": settings.token_configured(),
             "token_source": settings.token_source.to_string(),
+            "creator_api_token_configured": settings.creator_api_token_configured(),
+            "creator_api_token_source": settings.creator_api_token_source.to_string(),
             "config_path": settings.config_path,
         })),
         OutputFormat::Table => Ok(format!(
-            "api_base_url: {} ({})\ntoken: {}\ntoken_source: {}\nconfig: {}",
+            "api_base_url: {} ({})\ntoken: {}\ntoken_source: {}\ncreator_api_token: {}\ncreator_api_token_source: {}\nconfig: {}",
             settings.api_base_url,
             settings.api_base_url_source,
             if settings.token_configured() {
@@ -69,6 +71,12 @@ pub(crate) fn render_auth_status(
                 "missing"
             },
             settings.token_source,
+            if settings.creator_api_token_configured() {
+                "configured"
+            } else {
+                "missing"
+            },
+            settings.creator_api_token_source,
             settings.config_path.display()
         )),
     }

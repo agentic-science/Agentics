@@ -17,6 +17,8 @@ pub(crate) struct CliConfig {
     pub api_base_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub token: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creator_api_token: Option<String>,
 }
 
 impl fmt::Debug for CliConfig {
@@ -25,6 +27,10 @@ impl fmt::Debug for CliConfig {
         f.debug_struct("CliConfig")
             .field("api_base_url", &self.api_base_url)
             .field("token", &self.token.as_ref().map(|_| "<redacted>"))
+            .field(
+                "creator_api_token",
+                &self.creator_api_token.as_ref().map(|_| "<redacted>"),
+            )
             .finish()
     }
 }
@@ -37,6 +43,7 @@ struct RawCliEnv {
     token: Option<String>,
     pioneer_code: Option<String>,
     admin_service_token: Option<String>,
+    creator_api_token: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -47,6 +54,7 @@ pub(crate) struct Environment {
     pub token: Option<SecretString>,
     pub pioneer_code: Option<SecretString>,
     pub admin_service_token: Option<SecretString>,
+    pub creator_api_token: Option<SecretString>,
 }
 
 impl Environment {
@@ -61,6 +69,7 @@ impl Environment {
             token: non_empty_owned(raw.token).map(SecretString::from),
             pioneer_code: non_empty_owned(raw.pioneer_code).map(SecretString::from),
             admin_service_token: non_empty_owned(raw.admin_service_token).map(SecretString::from),
+            creator_api_token: non_empty_owned(raw.creator_api_token).map(SecretString::from),
         })
     }
 }
@@ -98,6 +107,8 @@ pub(crate) struct ResolvedSettings {
     pub token_source: SettingSource,
     pub pioneer_code: Option<SecretString>,
     pub admin_service_token: Option<SecretString>,
+    pub creator_api_token: Option<SecretString>,
+    pub creator_api_token_source: SettingSource,
     pub config_path: PathBuf,
 }
 
@@ -122,6 +133,13 @@ impl ResolvedSettings {
             env.token.as_ref().map(ExposeSecret::expose_secret),
             file.token.as_deref(),
         );
+        let (creator_api_token, creator_api_token_source) = first_optional_value(
+            None,
+            env.creator_api_token
+                .as_ref()
+                .map(ExposeSecret::expose_secret),
+            file.creator_api_token.as_deref(),
+        );
 
         Ok(Self {
             api_base_url: ApiBaseUrl::try_new(api_base_url)?,
@@ -130,6 +148,8 @@ impl ResolvedSettings {
             token_source,
             pioneer_code: env.pioneer_code.clone(),
             admin_service_token: env.admin_service_token.clone(),
+            creator_api_token: creator_api_token.map(|value| SecretString::from(value.to_string())),
+            creator_api_token_source,
             config_path,
         })
     }
@@ -137,6 +157,11 @@ impl ResolvedSettings {
     /// Handles token configured for this module.
     pub(crate) fn token_configured(&self) -> bool {
         self.token.is_some()
+    }
+
+    /// Returns whether a creator API token is available for creator commands.
+    pub(crate) fn creator_api_token_configured(&self) -> bool {
+        self.creator_api_token.is_some()
     }
 }
 
@@ -366,6 +391,7 @@ mod tests {
         let file = CliConfig {
             api_base_url: Some("http://file.example".to_string()),
             token: Some("file-token".to_string()),
+            ..CliConfig::default()
         };
         let env = Environment {
             api_base_url: Some("http://env.example".to_string()),
@@ -373,6 +399,7 @@ mod tests {
             token: Some(SecretString::from("env-token")),
             pioneer_code: None,
             admin_service_token: None,
+            creator_api_token: None,
         };
 
         let settings = ResolvedSettings::resolve(
@@ -404,6 +431,7 @@ mod tests {
             .save(&CliConfig {
                 api_base_url: Some("http://127.0.0.1:3100".to_string()),
                 token: None,
+                ..CliConfig::default()
             })
             .expect("config should save");
 
@@ -414,6 +442,7 @@ mod tests {
             CliConfig {
                 api_base_url: Some("http://127.0.0.1:3100".to_string()),
                 token: None,
+                ..CliConfig::default()
             }
         );
     }
@@ -424,6 +453,7 @@ mod tests {
         let config = CliConfig {
             api_base_url: Some("http://127.0.0.1:3100".to_string()),
             token: Some("secret-agent-token".to_string()),
+            creator_api_token: Some("secret-creator-token".to_string()),
         };
 
         let debug = format!("{config:?}");
@@ -449,6 +479,7 @@ mod tests {
             .save(&CliConfig {
                 api_base_url: None,
                 token: Some("secret-token".to_string()),
+                ..CliConfig::default()
             })
             .expect("config should save");
 

@@ -2,7 +2,9 @@ use std::path::PathBuf;
 
 use agentics_domain::models::github::GithubPullRequestNumber;
 use agentics_domain::models::hashes::{GitCommitSha, Sha256Digest};
-use agentics_domain::models::ids::{ChallengeReviewRecordId, SolutionSubmissionId};
+use agentics_domain::models::ids::{
+    AgentId, ChallengeReviewRecordId, PioneerCodeId, SolutionSubmissionId,
+};
 use agentics_domain::models::names::{AssetName, ChallengeName, MetricName, TargetName};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
@@ -51,6 +53,8 @@ pub(crate) enum Commands {
     Challenges(ChallengesArgs),
     /// Create and review GitHub-backed challenge review records.
     ChallengeCreator(ChallengeCreatorArgs),
+    /// Run service-token authenticated admin operations.
+    Admin(AdminArgs),
     /// Initialize a local solution workspace for a challenge.
     InitSolution(InitSolutionArgs),
     /// Package and submit a solution workspace.
@@ -129,6 +133,7 @@ pub(crate) enum ConfigCommand {
 pub(crate) enum ConfigKey {
     ApiBaseUrl,
     Token,
+    CreatorApiToken,
 }
 
 #[derive(Debug, Clone, Args)]
@@ -158,6 +163,8 @@ pub(crate) enum ChallengesCommand {
 #[derive(Debug, Clone, Args)]
 /// Carries challenge creator args data across this module boundary.
 pub(crate) struct ChallengeCreatorArgs {
+    #[command(flatten)]
+    pub creator: CreatorAuthArgs,
     #[command(subcommand)]
     pub command: ChallengeCreatorCommand,
 }
@@ -292,6 +299,170 @@ pub(crate) enum ChallengeReviewRecordCommand {
 pub(crate) struct AdminAuthArgs {
     #[arg(long)]
     pub admin_service_token_stdin: bool,
+}
+
+#[derive(Debug, Clone, Args)]
+/// Carries admin args data across this module boundary.
+pub(crate) struct AdminArgs {
+    #[command(flatten)]
+    pub admin: AdminAuthArgs,
+    #[command(subcommand)]
+    pub command: AdminCommand,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+/// Enumerates admin command variants supported by this module.
+pub(crate) enum AdminCommand {
+    /// Manage pioneer codes.
+    PioneerCode {
+        #[command(subcommand)]
+        command: AdminPioneerCodeCommand,
+    },
+    /// List published challenges for operators.
+    Challenges {
+        #[command(subcommand)]
+        command: AdminChallengesCommand,
+    },
+    /// Attach or clear Moltbook discussion anchors.
+    Moltbook {
+        #[command(subcommand)]
+        command: AdminMoltbookCommand,
+    },
+    /// Inspect and requeue solution submissions.
+    Submissions {
+        #[command(subcommand)]
+        command: AdminSubmissionsCommand,
+    },
+    /// Review, validate, and publish challenge review records.
+    ReviewRecord {
+        #[command(subcommand)]
+        command: AdminReviewRecordCommand,
+    },
+    /// Inspect service heartbeats.
+    ServiceHeartbeats {
+        #[command(subcommand)]
+        command: AdminServiceHeartbeatsCommand,
+    },
+    /// Show configured capacity and active usage.
+    Capacity,
+    /// Disable agent accounts.
+    Agents {
+        #[command(subcommand)]
+        command: AdminAgentsCommand,
+    },
+}
+
+#[derive(Debug, Clone, Subcommand)]
+/// Enumerates admin pioneer-code command variants supported by this module.
+pub(crate) enum AdminPioneerCodeCommand {
+    List,
+    Show {
+        id: PioneerCodeId,
+    },
+    Create {
+        #[arg(long)]
+        label: Option<String>,
+        #[arg(long, default_value = "")]
+        note: String,
+        #[arg(long)]
+        max_uses: i64,
+        #[arg(long)]
+        expires_at: Option<String>,
+    },
+    Revoke {
+        id: PioneerCodeId,
+    },
+}
+
+#[derive(Debug, Clone, Subcommand)]
+/// Enumerates admin challenge command variants supported by this module.
+pub(crate) enum AdminChallengesCommand {
+    List,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+/// Enumerates admin Moltbook command variants supported by this module.
+pub(crate) enum AdminMoltbookCommand {
+    Set {
+        challenge_name: ChallengeName,
+        #[arg(long)]
+        discussion_url: String,
+    },
+    Clear {
+        challenge_name: ChallengeName,
+    },
+}
+
+#[derive(Debug, Clone, Subcommand)]
+/// Enumerates admin submissions command variants supported by this module.
+pub(crate) enum AdminSubmissionsCommand {
+    List,
+    Rejudge { submission_id: SolutionSubmissionId },
+    OfficialRun { submission_id: SolutionSubmissionId },
+}
+
+#[derive(Debug, Clone, Subcommand)]
+/// Enumerates admin challenge-review-record command variants supported by this module.
+pub(crate) enum AdminReviewRecordCommand {
+    /// List challenge review records for reviewer operations.
+    List,
+    /// List private asset lifecycle rows for a review record.
+    PrivateAssets {
+        review_record_id: ChallengeReviewRecordId,
+    },
+    /// Validate a review record against a checked-out repository path.
+    Validate {
+        review_record_id: ChallengeReviewRecordId,
+        #[arg(long, value_name = "PATH")]
+        repository_path: PathBuf,
+    },
+    /// Approve a validated review record.
+    Approve {
+        review_record_id: ChallengeReviewRecordId,
+        #[arg(long)]
+        expected_validation_bundle_sha256: Sha256Digest,
+        #[arg(long, default_value = "")]
+        message: String,
+    },
+    /// Reject a review record with optional feedback.
+    Reject {
+        review_record_id: ChallengeReviewRecordId,
+        #[arg(long, default_value = "")]
+        message: String,
+    },
+    /// Abandon a closed or withdrawn review record.
+    Abandon {
+        review_record_id: ChallengeReviewRecordId,
+        #[arg(long, default_value = "")]
+        message: String,
+    },
+    /// Publish an approved review record.
+    Publish {
+        review_record_id: ChallengeReviewRecordId,
+        #[arg(long, value_name = "PATH")]
+        repository_path: PathBuf,
+    },
+    /// Cleanup stale review records and expired unpublished assets.
+    Cleanup,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+/// Enumerates admin service-heartbeat command variants supported by this module.
+pub(crate) enum AdminServiceHeartbeatsCommand {
+    List,
+}
+
+#[derive(Debug, Clone, Subcommand)]
+/// Enumerates admin agent command variants supported by this module.
+pub(crate) enum AdminAgentsCommand {
+    Disable { agent_id: AgentId },
+}
+
+#[derive(Debug, Clone, Args)]
+/// Carries creator auth args data across this module boundary.
+pub(crate) struct CreatorAuthArgs {
+    #[arg(long)]
+    pub creator_token_stdin: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]

@@ -83,6 +83,7 @@ async fn dispatch_command(
         Commands::ChallengeCreator(args) => {
             dispatch_challenge_creator(args, output_format, settings).await
         }
+        Commands::Admin(args) => commands::admin_command(args, output_format, settings).await,
         Commands::InitSolution(args) => dispatch_init_solution(args, output_format, settings).await,
         Commands::Submit(args) => commands::submit(args, output_format, settings).await,
         Commands::Validate(args) => commands::validate(args, output_format, settings).await,
@@ -146,28 +147,32 @@ async fn dispatch_challenge_creator(
     output_format: crate::cli::OutputFormat,
     settings: &ResolvedSettings,
 ) -> Result<String> {
+    let creator = args.creator;
     match args.command {
         ChallengeCreatorCommand::ReviewRecord { command } => {
-            commands::challenge_review_record(command, output_format, settings).await
+            commands::challenge_review_record(command, &creator, output_format, settings).await
         }
         ChallengeCreatorCommand::Stats {
-            challenge_name: _,
-            target: _,
+            challenge_name,
+            target,
         } => {
-            anyhow::bail!(
-                "creator stats require GitHub sign-in web-session support; use the creator web UI"
-            )
+            commands::creator_stats(challenge_name, target, &creator, output_format, settings).await
         }
         ChallengeCreatorCommand::Participants {
-            challenge_name: _,
-            target: _,
+            challenge_name,
+            target,
         } => {
-            anyhow::bail!(
-                "creator participants require GitHub sign-in web-session support; use the creator web UI"
+            commands::creator_participants(
+                challenge_name,
+                target,
+                &creator,
+                output_format,
+                settings,
             )
+            .await
         }
         ChallengeCreatorCommand::Shortlist { command } => {
-            commands::challenge_shortlist(command, output_format, settings)
+            commands::challenge_shortlist(command, &creator, output_format, settings).await
         }
     }
 }

@@ -8,11 +8,14 @@ mod workspace;
 
 pub(crate) use auth::{render_auth_status, render_config_set, render_register_agent};
 pub(crate) use challenges::{
-    render_challenge_detail, render_challenge_list, render_challenge_stats, render_leaderboard,
+    render_challenge_detail, render_challenge_list, render_challenge_shortlist,
+    render_challenge_shortlist_revision, render_challenge_stats,
+    render_creator_challenge_participants, render_creator_challenge_stats, render_leaderboard,
     render_score_distribution,
 };
 pub(crate) use review_records::{
-    render_challenge_review_record, render_challenge_review_record_cleanup,
+    render_challenge_private_asset, render_challenge_review_record,
+    render_challenge_review_record_cleanup, render_creator_challenge_review_record,
 };
 pub(crate) use submissions::{
     render_create_solution_submission_batch, render_create_validation_run_batch,
@@ -27,6 +30,20 @@ pub(crate) use validation::{
 pub(crate) use workspace::render_init_solution;
 
 pub(crate) use crate::cli::OutputFormat;
+use anyhow::Result;
+use serde::Serialize;
+
+/// Render a typed response as JSON or a caller-supplied text summary.
+pub(crate) fn render_json_or_text<T: Serialize>(
+    value: &T,
+    text: String,
+    format: OutputFormat,
+) -> Result<String> {
+    match format {
+        OutputFormat::Json => format::pretty_json(value),
+        OutputFormat::Table => Ok(text),
+    }
+}
 
 #[cfg(test)]
 mod tests;
