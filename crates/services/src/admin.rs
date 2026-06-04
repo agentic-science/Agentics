@@ -138,6 +138,7 @@ pub async fn revoke_pioneer_code(
         revoked_human_count: outcome.revoked_human_count,
         revoked_human_session_count: outcome.revoked_human_session_count,
         revoked_admin_service_token_count: outcome.revoked_admin_service_token_count,
+        revoked_creator_api_token_count: outcome.revoked_creator_api_token_count,
         revoked_agent_count: outcome.revoked_agent_count,
         revoked_token_count: outcome.revoked_token_count,
     })

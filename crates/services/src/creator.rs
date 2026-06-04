@@ -45,6 +45,7 @@ pub async fn create_creator_api_token(
             }],
         ));
     }
+    let expires_at = parse_optional_future_rfc3339(body.expires_at.as_deref(), "expires_at")?;
     let token = crate::auth::create_creator_api_token();
     let record = Repositories::new(pool)
         .sessions()
@@ -53,7 +54,7 @@ pub async fn create_creator_api_token(
             token_hash: crate::auth::hash_opaque_token(&token),
             label: label.to_string(),
             created_by_human_id: human_id.clone(),
-            expires_at: parse_optional_rfc3339(body.expires_at.as_deref(), "expires_at")?,
+            expires_at,
         })
         .await?;
 
@@ -362,14 +363,28 @@ async fn cleanup_storage_key(storage: &dyn Storage, storage_key: &StorageKey) {
     }
 }
 
-fn parse_optional_rfc3339(
+fn parse_optional_future_rfc3339(
     raw: Option<&str>,
     field: &str,
 ) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
-    raw.map(|value| {
-        chrono::DateTime::parse_from_rfc3339(value)
-            .map(|value| value.with_timezone(&chrono::Utc))
-            .map_err(|error| ServiceError::BadRequest(format!("{field} must be RFC3339: {error}")))
-    })
-    .transpose()
+    let Some(value) = raw else {
+        return Ok(None);
+    };
+    let parsed = chrono::DateTime::parse_from_rfc3339(value)
+        .map(|value| value.with_timezone(&chrono::Utc))
+        .map_err(|error| validation_error(field, format!("must be RFC3339: {error}")))?;
+    if parsed <= chrono::Utc::now() {
+        return Err(validation_error(field, "must be in the future"));
+    }
+    Ok(Some(parsed))
+}
+
+fn validation_error(field: &str, message: impl Into<String>) -> ServiceError {
+    ServiceError::validation_failed(
+        "creator API token request is invalid",
+        [ErrorDetail {
+            field: Some(field.to_string()),
+            message: message.into(),
+        }],
+    )
 }

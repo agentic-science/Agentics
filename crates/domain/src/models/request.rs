@@ -153,6 +153,7 @@ pub struct RevokePioneerCodeResponse {
     pub revoked_human_count: i64,
     pub revoked_human_session_count: i64,
     pub revoked_admin_service_token_count: i64,
+    pub revoked_creator_api_token_count: i64,
     pub revoked_agent_count: i64,
     pub revoked_token_count: i64,
 }

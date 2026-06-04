@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use agentics_config::AgentRegistrationMode;
 use agentics_domain::models::auth::GithubUserId;
-use agentics_domain::models::ids::{HumanId, PioneerCodeId};
+use agentics_domain::models::ids::{CreatorApiTokenId, HumanId, PioneerCodeId};
 use agentics_error::Result;
 use agentics_services::auth::{GithubSignInClient, GithubSignInUser};
 use async_trait::async_trait;
@@ -226,6 +226,7 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
         .expect("failed to decode revoke response");
     assert_eq!(revoked["status"], "revoked");
     assert_eq!(revoked["revoked_admin_service_token_count"], 0);
+    assert_eq!(revoked["revoked_creator_api_token_count"], 0);
     assert_eq!(revoked["revoked_agent_count"], 1);
     assert_eq!(revoked["revoked_token_count"], 1);
 
@@ -839,9 +840,9 @@ async fn human_setup_consumes_pioneer_code_once(pool: sqlx::PgPool) {
     );
 }
 
-/// Verifies revoking a pioneer code also revokes admin service tokens created by derived humans.
+/// Verifies revoking a pioneer code also revokes service/API tokens created by derived humans.
 #[sqlx::test(migrations = "../migrations")]
-async fn pioneer_code_revoke_revokes_derived_human_admin_service_tokens(pool: sqlx::PgPool) {
+async fn pioneer_code_revoke_revokes_derived_human_tokens(pool: sqlx::PgPool) {
     let code = "team-deadbeef";
     let code_hash = agentics_services::auth::hash_opaque_token(code);
     let code_id = PioneerCodeId::generate();
@@ -900,6 +901,19 @@ async fn pioneer_code_revoke_revokes_derived_human_admin_service_tokens(pool: sq
         })
         .await
         .expect("admin service token should insert");
+    let creator_token = agentics_services::auth::create_creator_api_token();
+    let creator_token_hash = agentics_services::auth::hash_opaque_token(&creator_token);
+    repos
+        .sessions()
+        .create_creator_api_token(&agentics_persistence::CreateCreatorApiTokenInput {
+            id: CreatorApiTokenId::generate(),
+            token_hash: creator_token_hash.clone(),
+            label: "derived-creator-token".to_string(),
+            created_by_human_id: invited_human.human_id.clone(),
+            expires_at: None,
+        })
+        .await
+        .expect("creator API token should insert");
     let session_token = agentics_services::auth::create_web_session_token();
     repos
         .sessions()
@@ -922,6 +936,7 @@ async fn pioneer_code_revoke_revokes_derived_human_admin_service_tokens(pool: sq
     assert_eq!(outcome.revoked_human_count, 1);
     assert_eq!(outcome.revoked_human_session_count, 1);
     assert_eq!(outcome.revoked_admin_service_token_count, 1);
+    assert_eq!(outcome.revoked_creator_api_token_count, 1);
     let refreshed_human = repos
         .sessions()
         .get_human_by_id(&invited_human.human_id)
@@ -948,5 +963,46 @@ async fn pioneer_code_revoke_revokes_derived_human_admin_service_tokens(pool: sq
             .await
             .expect("token auth lookup should not fail")
             .is_none()
+    );
+    assert!(
+        repos
+            .sessions()
+            .authenticate_creator_api_token(&creator_token_hash)
+            .await
+            .expect("creator token auth lookup should not fail")
+            .is_none()
+    );
+
+    let second_code = "team-cafebabe";
+    let second_code_hash = agentics_services::auth::hash_opaque_token(second_code);
+    repos
+        .pioneer_codes()
+        .create(&agentics_persistence::CreatePioneerCodeInput {
+            id: PioneerCodeId::generate(),
+            code_display: second_code.to_string(),
+            code_hash: second_code_hash.clone(),
+            label: Some("team second".to_string()),
+            note: "human github sign-in second setup".to_string(),
+            max_uses: 1,
+            expires_at: None,
+            created_by_human_id: Some(admin_human.human_id.clone()),
+            created_by_admin_service_token_id: None,
+            created_by_display: "integration-admin".to_string(),
+        })
+        .await
+        .expect("second pioneer code should insert");
+    repos
+        .sessions()
+        .complete_human_setup(&invited_human.human_id, &second_code_hash)
+        .await
+        .expect("second setup should grant creator again");
+    assert!(
+        repos
+            .sessions()
+            .authenticate_creator_api_token(&creator_token_hash)
+            .await
+            .expect("old creator token auth lookup should not fail")
+            .is_none(),
+        "old creator token must stay revoked after the human regains creator access"
     );
 }

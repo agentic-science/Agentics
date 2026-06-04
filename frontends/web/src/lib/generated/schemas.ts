@@ -3558,6 +3558,7 @@ export const revokePioneerCodeResponseSchema = z
     revoked_human_count: z.number().int(),
     revoked_human_session_count: z.number().int(),
     revoked_admin_service_token_count: z.number().int(),
+    revoked_creator_api_token_count: z.number().int(),
     revoked_agent_count: z.number().int(),
     revoked_token_count: z.number().int(),
   })

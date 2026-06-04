@@ -262,10 +262,20 @@ pub struct AdminServiceTokenDto {
 }
 
 /// Response returned after creating an admin service token.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct AdminServiceTokenCreatedResponse {
     pub token: String,
     pub token_record: AdminServiceTokenDto,
+}
+
+impl fmt::Debug for AdminServiceTokenCreatedResponse {
+    /// Redacts the one-time raw admin service token from debug output.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AdminServiceTokenCreatedResponse")
+            .field("token", &"<redacted>")
+            .field("token_record", &self.token_record)
+            .finish()
+    }
 }
 
 /// Admin list response for admin service tokens.
@@ -308,10 +318,20 @@ pub struct CreatorApiTokenDto {
 }
 
 /// Response returned after creating a creator API token.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CreatorApiTokenCreatedResponse {
     pub token: String,
     pub token_record: CreatorApiTokenDto,
+}
+
+impl fmt::Debug for CreatorApiTokenCreatedResponse {
+    /// Redacts the one-time raw creator API token from debug output.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CreatorApiTokenCreatedResponse")
+            .field("token", &"<redacted>")
+            .field("token_record", &self.token_record)
+            .finish()
+    }
 }
 
 /// Creator list response for API tokens.
@@ -328,7 +348,11 @@ pub struct RevokeCreatorApiTokenResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::GithubUserId;
+    use super::{
+        AdminServiceTokenCreatedResponse, AdminServiceTokenDto, CreatorApiTokenCreatedResponse,
+        CreatorApiTokenDto, GithubUserId,
+    };
+    use crate::models::ids::{AdminServiceTokenId, CreatorApiTokenId, HumanId};
 
     /// Verifies GitHub user ids keep the integer wire contract while rejecting invalid ids.
     #[test]
@@ -341,5 +365,46 @@ mod tests {
         );
         assert!(GithubUserId::try_new(0).is_err());
         assert!(serde_json::from_value::<GithubUserId>(serde_json::json!(-1)).is_err());
+    }
+
+    /// Verifies one-time bearer tokens cannot leak through accidental debug output.
+    #[test]
+    fn token_creation_debug_output_redacts_raw_tokens() {
+        let human_id = HumanId::generate();
+        let admin = AdminServiceTokenCreatedResponse {
+            token: "agentics_admin_secret".to_string(),
+            token_record: AdminServiceTokenDto {
+                id: AdminServiceTokenId::generate(),
+                label: "admin".to_string(),
+                status: "active".to_string(),
+                created_by_human_id: human_id.clone(),
+                created_at: "2026-06-01T00:00:00Z".to_string(),
+                last_used_at: None,
+                expires_at: None,
+                revoked_by_human_id: None,
+                revoked_at: None,
+            },
+        };
+        let creator = CreatorApiTokenCreatedResponse {
+            token: "agentics_creator_secret".to_string(),
+            token_record: CreatorApiTokenDto {
+                id: CreatorApiTokenId::generate(),
+                label: "creator".to_string(),
+                status: "active".to_string(),
+                created_by_human_id: human_id,
+                created_at: "2026-06-01T00:00:00Z".to_string(),
+                last_used_at: None,
+                expires_at: None,
+                revoked_at: None,
+            },
+        };
+
+        let admin_debug = format!("{admin:?}");
+        let creator_debug = format!("{creator:?}");
+
+        assert!(!admin_debug.contains("agentics_admin_secret"));
+        assert!(!creator_debug.contains("agentics_creator_secret"));
+        assert!(admin_debug.contains("<redacted>"));
+        assert!(creator_debug.contains("<redacted>"));
     }
 }
