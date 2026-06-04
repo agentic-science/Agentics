@@ -42,6 +42,7 @@ const adminFetchJsonMock = adminFetchJson as Mock;
 const getHumanSessionMock = getHumanSession as Mock;
 const logoutHumanMock = logoutHuman as Mock;
 const startGithubLoginMock = startGithubLogin as Mock;
+const originalClipboard = globalThis.navigator.clipboard;
 
 describe("AdminConsole", () => {
   beforeEach(() => {
@@ -53,124 +54,152 @@ describe("AdminConsole", () => {
     getHumanSessionMock.mockRejectedValue(
       Object.assign(new Error("Unauthorized"), { status: 401 }),
     );
-    adminFetchJsonMock.mockImplementation(async (path: string) => {
-      switch (path) {
-        case "/admin/challenges":
-          return adminChallengeListResponseSchema.parse({
-            items: [
-              {
-                challenge_name: "matrix-multiplication",
-                title: "Matrix Multiplication",
-                summary: {
-                  en: "Benchmark matrix multiplication.",
-                  zh: "评测矩阵乘法。",
+    adminFetchJsonMock.mockImplementation(
+      async (
+        path: string,
+        _schema: unknown,
+        _csrfToken: string,
+        init?: { method?: string },
+      ) => {
+        if (path === "/admin/pioneer-codes" && init?.method === "POST") {
+          return {
+            code: {
+              id: "88888888-8888-4888-8888-888888888888",
+              code_display: "jack-cafebabe",
+              label: "jack",
+              note: "test cohort",
+              max_uses: 1,
+              use_count: 0,
+              status: "active",
+              created_by_display: "@root",
+              created_at: "2026-05-15T00:00:00Z",
+            },
+            uses: [],
+          };
+        }
+
+        switch (path) {
+          case "/admin/challenges":
+            return adminChallengeListResponseSchema.parse({
+              items: [
+                {
+                  challenge_name: "matrix-multiplication",
+                  title: "Matrix Multiplication",
+                  summary: {
+                    en: "Benchmark matrix multiplication.",
+                    zh: "评测矩阵乘法。",
+                  },
+                  status: "active",
+                  targets: [],
+                  eligibility: { type: "open" },
+                  private_benchmark_enabled: true,
+                  created_at: "2026-05-15T00:00:00Z",
+                  updated_at: "2026-05-15T00:00:00Z",
                 },
-                status: "active",
-                targets: [],
-                eligibility: { type: "open" },
-                private_benchmark_enabled: true,
-                created_at: "2026-05-15T00:00:00Z",
-                updated_at: "2026-05-15T00:00:00Z",
+              ],
+            });
+          case "/admin/challenge-review-records":
+            return { items: [] };
+          case "/admin/solution-submissions":
+            return {
+              items: [
+                {
+                  id: "11111111-1111-4111-8111-111111111111",
+                  challenge_name: "matrix-multiplication",
+                  challenge_title: "Matrix Multiplication",
+                  target: "linux-arm64-cpu",
+                  agent_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                  agent_display_name: "Agent One",
+                  status: "queued",
+                  note: "operator-visible note",
+                  visible_after_eval: false,
+                  created_at: "2026-05-15T00:00:00Z",
+                  updated_at: "2026-05-15T00:00:00Z",
+                },
+                {
+                  id: "22222222-2222-4222-8222-222222222222",
+                  challenge_name: "matrix-multiplication",
+                  challenge_title: "Matrix Multiplication",
+                  target: "linux-arm64-cpu",
+                  agent_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                  agent_display_name: "Agent Two",
+                  status: "running",
+                  note: "",
+                  visible_after_eval: false,
+                  created_at: "2026-05-15T00:00:00Z",
+                  updated_at: "2026-05-15T00:00:00Z",
+                },
+              ],
+            };
+          case "/admin/service-heartbeats":
+            return {
+              items: [
+                {
+                  service_name: "worker",
+                  last_seen_at: "2026-05-15T00:00:00Z",
+                  payload: { worker_id: "agentics-worker-test" },
+                },
+              ],
+            };
+          case "/admin/pioneer-codes":
+            return {
+              items: [
+                {
+                  id: "99999999-9999-4999-8999-999999999999",
+                  code_display: "jack-deadbeef",
+                  label: "jack",
+                  note: "test cohort",
+                  max_uses: 5,
+                  use_count: 1,
+                  status: "active",
+                  created_by_display: "@root",
+                  created_at: "2026-05-15T00:00:00Z",
+                },
+              ],
+            };
+          case "/admin/humans":
+            return {
+              items: [
+                {
+                  human_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                  status: "active",
+                  github_user_id: 123,
+                  github_login: "root",
+                  roles: ["creator", "admin"],
+                  created_at: "2026-05-15T00:00:00Z",
+                },
+              ],
+            };
+          case "/admin/admin-service-tokens":
+            return { items: [] };
+          case "/admin/capacity":
+            return {
+              quota_window_seconds: 86_400,
+              quotas: {
+                validation_runs_per_agent_challenge_day: 20,
+                official_runs_per_agent_challenge_day: 5,
+                max_active_official_jobs: 20,
+                max_active_agents: 1000,
               },
-            ],
-          });
-        case "/admin/challenge-review-records":
-          return { items: [] };
-        case "/admin/solution-submissions":
-          return {
-            items: [
-              {
-                id: "11111111-1111-4111-8111-111111111111",
-                challenge_name: "matrix-multiplication",
-                challenge_title: "Matrix Multiplication",
-                target: "linux-arm64-cpu",
-                agent_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-                agent_display_name: "Agent One",
-                status: "queued",
-                note: "operator-visible note",
-                visible_after_eval: false,
-                created_at: "2026-05-15T00:00:00Z",
-                updated_at: "2026-05-15T00:00:00Z",
+              usage: {
+                active_agents: 2,
+                active_validation_jobs: 0,
+                active_official_jobs: 1,
               },
-              {
-                id: "22222222-2222-4222-8222-222222222222",
-                challenge_name: "matrix-multiplication",
-                challenge_title: "Matrix Multiplication",
-                target: "linux-arm64-cpu",
-                agent_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-                agent_display_name: "Agent Two",
-                status: "running",
-                note: "",
-                visible_after_eval: false,
-                created_at: "2026-05-15T00:00:00Z",
-                updated_at: "2026-05-15T00:00:00Z",
-              },
-            ],
-          };
-        case "/admin/service-heartbeats":
-          return {
-            items: [
-              {
-                service_name: "worker",
-                last_seen_at: "2026-05-15T00:00:00Z",
-                payload: { worker_id: "agentics-worker-test" },
-              },
-            ],
-          };
-        case "/admin/pioneer-codes":
-          return {
-            items: [
-              {
-                id: "99999999-9999-4999-8999-999999999999",
-                code_display: "jack-deadbeef",
-                label: "jack",
-                note: "test cohort",
-                max_uses: 5,
-                use_count: 1,
-                status: "active",
-                created_by_display: "@root",
-                created_at: "2026-05-15T00:00:00Z",
-              },
-            ],
-          };
-        case "/admin/humans":
-          return {
-            items: [
-              {
-                human_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-                status: "active",
-                github_user_id: 123,
-                github_login: "root",
-                roles: ["creator", "admin"],
-                created_at: "2026-05-15T00:00:00Z",
-              },
-            ],
-          };
-        case "/admin/admin-service-tokens":
-          return { items: [] };
-        case "/admin/capacity":
-          return {
-            quota_window_seconds: 86_400,
-            quotas: {
-              validation_runs_per_agent_challenge_day: 20,
-              official_runs_per_agent_challenge_day: 5,
-              max_active_official_jobs: 20,
-              max_active_agents: 1000,
-            },
-            usage: {
-              active_agents: 2,
-              active_validation_jobs: 0,
-              active_official_jobs: 1,
-            },
-          };
-        default:
-          throw new Error(`Unexpected admin endpoint ${path}`);
-      }
-    });
+            };
+          default:
+            throw new Error(`Unexpected admin endpoint ${path}`);
+        }
+      },
+    );
   });
 
   afterEach(() => {
     cleanup();
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: originalClipboard,
+      configurable: true,
+    });
     vi.clearAllMocks();
   });
 
@@ -251,6 +280,59 @@ describe("AdminConsole", () => {
 
     expect(await view.findByText("jack-deadbeef")).toBeTruthy();
     expect(view.getByText("test cohort")).toBeTruthy();
+  });
+
+  it("creates pioneer codes from a label and UTC expiry only", async () => {
+    const writeText = vi.fn(async () => undefined);
+    Object.defineProperty(globalThis.navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+    });
+    getHumanSessionMock.mockResolvedValueOnce(humanAdminSession());
+    const view = renderAdminConsole();
+
+    await view.findByText("Signed in as root");
+    fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
+
+    fireEvent.change(await view.findByLabelText("Label"), {
+      target: { value: "jack" },
+    });
+    expect(view.queryByText("Generated code")).toBeNull();
+    expect(view.queryByText("jack-auto-generated")).toBeNull();
+    fireEvent.change(view.getByLabelText("Expires at (UTC)"), {
+      target: { value: "2026-06-01T00:00" },
+    });
+    expect(await view.findByText(/Local time:/)).toBeTruthy();
+
+    fireEvent.click(view.getByRole("button", { name: "Create code" }));
+
+    await waitFor(() => {
+      const createCall = adminFetchJsonMock.mock.calls.find(
+        ([path, _schema, _csrfToken, init]) =>
+          path === "/admin/pioneer-codes" && init?.method === "POST",
+      );
+      expect(createCall?.[3]).toMatchObject({
+        method: "POST",
+      });
+      expect(JSON.parse(String(createCall?.[3]?.body))).toEqual({
+        max_uses: 1,
+        label: "jack",
+        expires_at: "2026-06-01T00:00:00.000Z",
+      });
+    });
+    expect(
+      await view.findByText("Created pioneer code jack-cafebabe."),
+    ).toBeTruthy();
+
+    fireEvent.click(
+      view.getAllByRole("button", { name: "Copy jack-cafebabe" })[0],
+    );
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("jack-cafebabe");
+    });
+    expect(
+      view.getAllByRole("button", { name: "Copied jack-cafebabe" })[0],
+    ).toBeTruthy();
   });
 
   it("validates pioneer-code create input before posting", async () => {

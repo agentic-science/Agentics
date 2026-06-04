@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound } from "lucide-react";
+import { Check, Copy, KeyRound } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type FormEvent, useState } from "react";
 import { adminErrorMessage } from "@/components/admin/errors";
@@ -19,9 +19,8 @@ import {
 type RefreshOptions = { quiet?: boolean };
 type AdminRefresh = (options?: RefreshOptions) => Promise<void>;
 const PIONEER_LABEL_PATTERN = /^[a-z0-9_]{1,6}$/;
-const PIONEER_CODE_PATTERN = /^([a-z0-9_]{1,6}-)?[0-9a-f]{8}$/;
-const RFC3339_PATTERN =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+const UTC_DATE_TIME_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
 
 export function PioneerCodePanel({
   csrfToken,
@@ -40,12 +39,29 @@ export function PioneerCodePanel({
   const common = useTranslations("common");
   const [form, setForm] = useState({
     label: "",
-    code: "",
     note: "",
     maxUses: "1",
     expiresAt: "",
   });
   const [detail, setDetail] = useState<PioneerCodeDetailResponse | null>(null);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const expiresAtUtc = utcDateTimeLocalToRfc3339(form.expiresAt);
+  const localExpiresAtPreview = expiresAtUtc
+    ? formatLocalDateTime(expiresAtUtc)
+    : null;
+
+  /** Copies one generated pioneer code to the operator clipboard. */
+  const copyCode = async (code: string) => {
+    try {
+      await writeClipboardText(code);
+      setCopiedCode(code);
+      window.setTimeout(() => {
+        setCopiedCode((current) => (current === code ? null : current));
+      }, 1500);
+    } catch {
+      onError(t("copyFailed"));
+    }
+  };
 
   /** Creates a pioneer code using the current form state. */
   const submit = async (event: FormEvent) => {
@@ -69,16 +85,9 @@ export function PioneerCodePanel({
       onError(t("labelInvalid"));
       return;
     }
-    const code = form.code.trim();
-    if (code && !PIONEER_CODE_PATTERN.test(code)) {
-      onError(t("codeInvalid"));
-      return;
-    }
     const expiresAt = form.expiresAt.trim();
-    if (
-      expiresAt &&
-      (!RFC3339_PATTERN.test(expiresAt) || Number.isNaN(Date.parse(expiresAt)))
-    ) {
+    const expiresAtRfc3339 = utcDateTimeLocalToRfc3339(expiresAt);
+    if (expiresAtRfc3339 === null) {
       onError(t("expiresInvalid"));
       return;
     }
@@ -86,9 +95,8 @@ export function PioneerCodePanel({
     const parsedRequest = createPioneerCodeRequestSchema.safeParse({
       max_uses: maxUses,
       ...(label ? { label } : {}),
-      ...(code ? { code } : {}),
       ...(form.note ? { note: form.note } : {}),
-      ...(expiresAt ? { expires_at: expiresAt } : {}),
+      ...(expiresAtRfc3339 ? { expires_at: expiresAtRfc3339 } : {}),
     });
     if (!parsedRequest.success) {
       onError(parsedRequest.error.issues[0]?.message ?? t("invalidRequest"));
@@ -104,7 +112,7 @@ export function PioneerCodePanel({
         { method: "POST", body: JSON.stringify(request) },
       );
       setDetail(created);
-      setForm({ label: "", code: "", note: "", maxUses: "1", expiresAt: "" });
+      setForm({ label: "", note: "", maxUses: "1", expiresAt: "" });
       onMessage(t("createdMessage", { code: created.code.code_display }));
       await onRefresh({ quiet: true });
     } catch (e) {
@@ -208,19 +216,6 @@ export function PioneerCodePanel({
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-caption uppercase tracking-wide text-fg-muted">
-            {t("code")}
-          </span>
-          <input
-            className="rounded-control border border-line bg-surface-2 px-3 py-2 font-mono text-body-sm outline-none focus:border-action"
-            value={form.code}
-            placeholder={t("codePlaceholder")}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, code: event.target.value }))
-            }
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-caption uppercase tracking-wide text-fg-muted">
             {t("maxUses")}
           </span>
           <input
@@ -240,8 +235,9 @@ export function PioneerCodePanel({
           </span>
           <input
             className="rounded-control border border-line bg-surface-2 px-3 py-2 text-body-sm outline-none focus:border-action"
+            type="datetime-local"
+            step={60}
             value={form.expiresAt}
-            placeholder="2026-06-01T00:00:00Z"
             onChange={(event) =>
               setForm((current) => ({
                 ...current,
@@ -249,6 +245,11 @@ export function PioneerCodePanel({
               }))
             }
           />
+          {localExpiresAtPreview ? (
+            <span className="text-caption text-fg-muted">
+              {t("expiresLocalPreview", { value: localExpiresAtPreview })}
+            </span>
+          ) : null}
         </label>
         <label className="flex flex-col gap-1">
           <span className="text-caption uppercase tracking-wide text-fg-muted">
@@ -292,7 +293,22 @@ export function PioneerCodePanel({
               <tbody>
                 {pioneerCodes.items.map((code) => (
                   <tr key={code.id}>
-                    <td className="font-mono">{code.code_display}</td>
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono">{code.code_display}</span>
+                        <CopyPioneerCodeButton
+                          code={code.code_display}
+                          copied={copiedCode === code.code_display}
+                          copyLabel={t("copyCode", {
+                            code: code.code_display,
+                          })}
+                          copiedLabel={t("copiedCode", {
+                            code: code.code_display,
+                          })}
+                          onCopy={copyCode}
+                        />
+                      </div>
+                    </td>
                     <td>
                       {code.use_count}/
                       {code.max_uses === -1
@@ -332,9 +348,22 @@ export function PioneerCodePanel({
         {detail ? (
           <div className="card">
             <div className="flex items-center justify-between gap-4 mb-4">
-              <h2 className="text-h3 font-semibold">
-                {detail.code.code_display}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-h3 font-semibold">
+                  {detail.code.code_display}
+                </h2>
+                <CopyPioneerCodeButton
+                  code={detail.code.code_display}
+                  copied={copiedCode === detail.code.code_display}
+                  copyLabel={t("copyCode", {
+                    code: detail.code.code_display,
+                  })}
+                  copiedLabel={t("copiedCode", {
+                    code: detail.code.code_display,
+                  })}
+                  onCopy={copyCode}
+                />
+              </div>
               <span className="badge badge-default">
                 {t("createdSubjects", { count: detail.uses.length })}
               </span>
@@ -401,6 +430,109 @@ export function PioneerCodePanel({
     </section>
   );
 }
+
+function CopyPioneerCodeButton({
+  code,
+  copied,
+  copyLabel,
+  copiedLabel,
+  onCopy,
+}: {
+  code: string;
+  copied: boolean;
+  copyLabel: string;
+  copiedLabel: string;
+  onCopy: (code: string) => Promise<void>;
+}) {
+  return (
+    <button
+      type="button"
+      className="btn btn-ghost btn-sm px-2"
+      aria-label={copied ? copiedLabel : copyLabel}
+      title={copied ? copiedLabel : copyLabel}
+      onClick={() => void onCopy(code)}
+    >
+      {copied ? (
+        <Check className="w-3.5 h-3.5" aria-hidden="true" />
+      ) : (
+        <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+      )}
+    </button>
+  );
+}
+
+/** Convert the UTC datetime-local field into the RFC3339 value expected by the API. */
+function utcDateTimeLocalToRfc3339(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  const match = UTC_DATE_TIME_PATTERN.exec(trimmed);
+  if (!match) {
+    return null;
+  }
+
+  const [, yearRaw, monthRaw, dayRaw, hourRaw, minuteRaw, secondRaw = "00"] =
+    match;
+  const year = Number(yearRaw);
+  const month = Number(monthRaw);
+  const day = Number(dayRaw);
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+  const second = Number(secondRaw);
+  const timestamp = Date.UTC(year, month - 1, day, hour, minute, second);
+  const date = new Date(timestamp);
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day ||
+    date.getUTCHours() !== hour ||
+    date.getUTCMinutes() !== minute ||
+    date.getUTCSeconds() !== second
+  ) {
+    return null;
+  }
+  return date.toISOString();
+}
+
+/** Format the selected UTC expiry in the browser's detected local time zone. */
+function formatLocalDateTime(value: string): string {
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const formatted = new Intl.DateTimeFormat(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(new Date(value));
+  return timeZone ? `${formatted} (${timeZone})` : formatted;
+}
+
+async function writeClipboardText(text: string) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall back for local HTTP pages or browsers that block Clipboard API writes.
+    }
+  }
+
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.setAttribute("readonly", "true");
+  textArea.style.position = "fixed";
+  textArea.style.opacity = "0";
+  document.body.append(textArea);
+  textArea.select();
+  const copied = document.execCommand("copy");
+  textArea.remove();
+  if (!copied) {
+    throw new Error("clipboard copy failed");
+  }
+}
+
 /** Renders a localized status badge for known pioneer-code statuses. */
 function LocalizedStatusBadge({ status }: { status: string }) {
   const t = useTranslations("common.statuses");

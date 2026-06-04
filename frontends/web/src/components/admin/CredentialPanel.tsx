@@ -1,6 +1,6 @@
 "use client";
 
-import { GitPullRequest, KeyRound, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 type RefreshOptions = { quiet?: boolean };
@@ -23,43 +23,43 @@ export function CredentialPanel({
   const t = useTranslations("admin.auth");
 
   return (
-    <div className="card min-w-full lg:min-w-[360px] lg:max-w-[420px]">
-      <div className="flex items-center gap-2 mb-4">
-        <KeyRound className="w-4 h-4 text-action-fg" />
-        <h2 className="text-h3 font-semibold">{t("title")}</h2>
-      </div>
-      <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <span className="text-caption text-fg-muted">
-          {sessionLogin
-            ? t(hasAdminRole ? "signedInAs" : "signedInNoAdmin", {
+    <div className="card min-w-full px-4 py-3 lg:min-w-[280px] lg:max-w-[340px]">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        {sessionLogin ? (
+          <>
+            <span className="text-caption text-fg-muted">
+              {t(hasAdminRole ? "signedInAs" : "signedInNoAdmin", {
                 username: sessionLogin,
-              })
-            : t("cookieNote")}
-        </span>
-        <div className="flex gap-2">
-          {sessionLogin ? (
+              })}
+            </span>
             <button
               type="button"
-              className="btn btn-secondary"
+              className="btn btn-secondary btn-sm"
               onClick={() => void onLogout()}
               disabled={loading}
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-3.5 h-3.5" />
               {t("signOut")}
             </button>
-          ) : null}
-          {sessionLogin ? null : (
+          </>
+        ) : (
+          <>
+            <span className="text-caption text-fg-muted">{t("title")}</span>
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn btn-primary btn-sm"
+              aria-label={t("signIn")}
               onClick={() => void onLogin()}
               disabled={loading}
             >
-              <GitPullRequest className="w-4 h-4" />
-              {loading ? t("loading") : t("signIn")}
+              <span>{loading ? t("loading") : t("signInCompact")}</span>
+              <span
+                className="github-repo-mark opacity-100"
+                aria-hidden="true"
+              />
             </button>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </div>
   );
