@@ -4,8 +4,14 @@ use tracing::warn;
 
 use agentics_config::Config;
 use agentics_contracts::challenge_creation;
+use agentics_domain::models::auth::{
+    CreateCreatorApiTokenRequest, CreatorApiTokenCreatedResponse, CreatorApiTokenDto,
+    CreatorApiTokenListResponse, RevokeCreatorApiTokenResponse,
+};
 use agentics_domain::models::challenge::ChallengeBundleSpec;
-use agentics_domain::models::ids::{AgentId, ChallengeShortlistRevisionId, HumanId};
+use agentics_domain::models::ids::{
+    AgentId, ChallengeShortlistRevisionId, CreatorApiTokenId, HumanId,
+};
 use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse, ChallengeShortlistedAgentDto,
@@ -13,15 +19,79 @@ use agentics_domain::models::request::{
     CreatorChallengeParticipantsResponse, CreatorChallengeStatsResponse,
 };
 use agentics_domain::storage::StorageKey;
-use agentics_error::{Result, ServiceError};
+use agentics_error::{ErrorDetail, Result, ServiceError};
 use agentics_persistence::{
     ChallengeShortlistRecord, ChallengeShortlistRevisionRecord,
-    CreateChallengeShortlistRevisionInput, CreatorChallengeParticipantsRecord,
-    CreatorChallengeStatsRecord, Repositories,
+    CreateChallengeShortlistRevisionInput, CreateCreatorApiTokenInput, CreatorApiTokenRecord,
+    CreatorChallengeParticipantsRecord, CreatorChallengeStatsRecord, Repositories,
 };
 use agentics_storage::{Storage, StorageWriteIntent};
 
 use crate::storage_errors::storage_error_to_service_error;
+
+/// Create a creator API token for CLI-owned challenge workflows.
+pub async fn create_creator_api_token(
+    pool: &sqlx::PgPool,
+    human_id: &HumanId,
+    body: CreateCreatorApiTokenRequest,
+) -> Result<CreatorApiTokenCreatedResponse> {
+    let label = body.label.trim();
+    if label.is_empty() {
+        return Err(ServiceError::validation_failed(
+            "creator API token request is invalid",
+            [ErrorDetail {
+                field: Some("label".to_string()),
+                message: "must not be empty".to_string(),
+            }],
+        ));
+    }
+    let token = crate::auth::create_creator_api_token();
+    let record = Repositories::new(pool)
+        .sessions()
+        .create_creator_api_token(&CreateCreatorApiTokenInput {
+            id: CreatorApiTokenId::generate(),
+            token_hash: crate::auth::hash_opaque_token(&token),
+            label: label.to_string(),
+            created_by_human_id: human_id.clone(),
+            expires_at: parse_optional_rfc3339(body.expires_at.as_deref(), "expires_at")?,
+        })
+        .await?;
+
+    Ok(CreatorApiTokenCreatedResponse {
+        token,
+        token_record: creator_api_token_from_record(record),
+    })
+}
+
+/// List creator API tokens owned by one creator.
+pub async fn list_creator_api_tokens(
+    pool: &sqlx::PgPool,
+    human_id: &HumanId,
+) -> Result<CreatorApiTokenListResponse> {
+    let items = Repositories::new(pool)
+        .sessions()
+        .list_creator_api_tokens(human_id)
+        .await?
+        .into_iter()
+        .map(creator_api_token_from_record)
+        .collect();
+    Ok(CreatorApiTokenListResponse { items })
+}
+
+/// Revoke one creator API token owned by the current creator.
+pub async fn revoke_creator_api_token(
+    pool: &sqlx::PgPool,
+    human_id: &HumanId,
+    id: &CreatorApiTokenId,
+) -> Result<RevokeCreatorApiTokenResponse> {
+    let token = Repositories::new(pool)
+        .sessions()
+        .revoke_creator_api_token(human_id, id)
+        .await?;
+    Ok(RevokeCreatorApiTokenResponse {
+        token_record: creator_api_token_from_record(token),
+    })
+}
 
 /// Fetch owner-visible aggregate challenge statistics for shortlist decisions.
 pub async fn get_creator_challenge_stats(
@@ -153,6 +223,19 @@ fn creator_challenge_stats_from_record(
     }
 }
 
+fn creator_api_token_from_record(record: CreatorApiTokenRecord) -> CreatorApiTokenDto {
+    CreatorApiTokenDto {
+        id: record.id,
+        label: record.label,
+        status: record.status,
+        created_by_human_id: record.created_by_human_id,
+        created_at: record.created_at.to_rfc3339(),
+        last_used_at: record.last_used_at.map(|value| value.to_rfc3339()),
+        expires_at: record.expires_at.map(|value| value.to_rfc3339()),
+        revoked_at: record.revoked_at.map(|value| value.to_rfc3339()),
+    }
+}
+
 fn creator_challenge_participants_from_record(
     record: CreatorChallengeParticipantsRecord,
 ) -> CreatorChallengeParticipantsResponse {
@@ -277,4 +360,16 @@ async fn cleanup_storage_key(storage: &dyn Storage, storage_key: &StorageKey) {
             "failed to clean up staged shortlist storage object"
         );
     }
+}
+
+fn parse_optional_rfc3339(
+    raw: Option<&str>,
+    field: &str,
+) -> Result<Option<chrono::DateTime<chrono::Utc>>> {
+    raw.map(|value| {
+        chrono::DateTime::parse_from_rfc3339(value)
+            .map(|value| value.with_timezone(&chrono::Utc))
+            .map_err(|error| ServiceError::BadRequest(format!("{field} must be RFC3339: {error}")))
+    })
+    .transpose()
 }

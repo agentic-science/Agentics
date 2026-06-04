@@ -5,8 +5,9 @@ mod creator;
 
 pub use admin::*;
 pub use creator::{
-    create_challenge_shortlist_revision, get_challenge_shortlist, get_creator_challenge_stats,
-    list_creator_challenge_participants,
+    create_challenge_shortlist_revision, create_creator_api_token, get_challenge_shortlist,
+    get_creator_challenge_stats, list_creator_api_tokens, list_creator_challenge_participants,
+    revoke_creator_api_token,
 };
 
 use axum::{

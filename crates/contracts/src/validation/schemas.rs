@@ -9,9 +9,10 @@ use agentics_domain::models::ErrorResponse;
 use agentics_domain::models::auth::{
     AdminHumanListResponse, AdminHumanRoleResponse, AdminServiceTokenCreatedResponse,
     AdminServiceTokenListResponse, CompleteHumanSetupRequest, CompleteHumanSetupResponse,
-    CreateAdminServiceTokenRequest, GithubSignInCallbackRequest, GithubSignInCallbackResponse,
+    CreateAdminServiceTokenRequest, CreateCreatorApiTokenRequest, CreatorApiTokenCreatedResponse,
+    CreatorApiTokenListResponse, GithubSignInCallbackRequest, GithubSignInCallbackResponse,
     GithubSignInLoginRequest, GithubSignInLoginResponse, HumanSessionResponse,
-    RevokeAdminServiceTokenResponse,
+    RevokeAdminServiceTokenResponse, RevokeCreatorApiTokenResponse,
 };
 use agentics_domain::models::challenge::{
     AdminChallengeListResponse, ChallengeAdminResponse, ChallengeDetailResponse,
@@ -134,6 +135,18 @@ web_schema_exports! {
         "createAdminServiceTokenRequestSchema",
     ),
     (
+        CreateCreatorApiTokenRequest,
+        "createCreatorApiTokenRequestSchema",
+    ),
+    (
+        CreatorApiTokenCreatedResponse,
+        "creatorApiTokenCreatedResponseSchema",
+    ),
+    (
+        CreatorApiTokenListResponse,
+        "creatorApiTokenListResponseSchema",
+    ),
+    (
         ChallengeReviewDecisionRequest,
         "challengeReviewDecisionRequestSchema",
     ),
@@ -182,6 +195,10 @@ web_schema_exports! {
     (
         RevokeAdminServiceTokenResponse,
         "revokeAdminServiceTokenResponseSchema",
+    ),
+    (
+        RevokeCreatorApiTokenResponse,
+        "revokeCreatorApiTokenResponseSchema",
     ),
     (ScoreDistributionResponse, "scoreDistributionResponseSchema"),
     (

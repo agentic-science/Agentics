@@ -8,6 +8,11 @@ use axum::{
 use serde::Deserialize;
 
 use crate::error::ApiResult as Result;
+use agentics_domain::models::auth::{
+    CreateCreatorApiTokenRequest, CreatorApiTokenCreatedResponse, CreatorApiTokenListResponse,
+    RevokeCreatorApiTokenResponse,
+};
+use agentics_domain::models::ids::CreatorApiTokenId;
 use agentics_domain::models::names::ChallengeName;
 use agentics_domain::models::request::{
     ChallengeShortlistResponse, ChallengeShortlistRevisionResponse,
@@ -16,7 +21,7 @@ use agentics_domain::models::request::{
 };
 use agentics_services::creator as creator_service;
 
-use crate::extractors::{CreatorAuth, ValidatedJson};
+use crate::extractors::{CreatorAuth, CreatorWebAuth, ValidatedJson};
 use crate::state::AppState;
 
 use super::parse_request_value;
@@ -25,6 +30,41 @@ use super::parse_request_value;
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreatorChallengeQuery {
     target: Option<String>,
+}
+
+/// List API tokens owned by the signed-in creator.
+pub async fn list_creator_api_tokens(
+    State(state): State<AppState>,
+    CreatorWebAuth(creator): CreatorWebAuth,
+) -> Result<Json<CreatorApiTokenListResponse>> {
+    Ok(Json(
+        creator_service::list_creator_api_tokens(&state.db, &creator.human_id).await?,
+    ))
+}
+
+/// Create a creator API token for CLI workflows.
+pub async fn create_creator_api_token(
+    State(state): State<AppState>,
+    CreatorWebAuth(creator): CreatorWebAuth,
+    ValidatedJson(body): ValidatedJson<CreateCreatorApiTokenRequest>,
+) -> Result<(StatusCode, Json<CreatorApiTokenCreatedResponse>)> {
+    Ok((
+        StatusCode::CREATED,
+        Json(creator_service::create_creator_api_token(&state.db, &creator.human_id, body).await?),
+    ))
+}
+
+/// Revoke one API token owned by the signed-in creator.
+pub async fn revoke_creator_api_token(
+    State(state): State<AppState>,
+    CreatorWebAuth(creator): CreatorWebAuth,
+    Path(id): Path<String>,
+) -> Result<Json<RevokeCreatorApiTokenResponse>> {
+    let id = CreatorApiTokenId::try_new(id)
+        .map_err(|error| agentics_error::ServiceError::BadRequest(error.to_string()))?;
+    Ok(Json(
+        creator_service::revoke_creator_api_token(&state.db, &creator.human_id, &id).await?,
+    ))
 }
 
 /// Fetch owner-visible aggregate challenge statistics for shortlist decisions.

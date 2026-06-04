@@ -143,7 +143,7 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
         .send()
         .await
         .expect("failed to send manual pioneer code create request");
-    assert_eq!(manual_code_create.status(), 400);
+    assert_eq!(manual_code_create.status(), 422);
 
     let created: serde_json::Value = client
         .post(api_url(&app, "/admin/pioneer-codes"))
@@ -367,7 +367,7 @@ async fn github_sign_in_login_start_uses_post_body(pool: sqlx::PgPool) {
         .send()
         .await
         .expect("failed to send old GitHub sign-in shape");
-    assert_eq!(old_shape.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(old_shape.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 /// Verifies GitHub sign-in callback state cannot be consumed without the initiating browser nonce.

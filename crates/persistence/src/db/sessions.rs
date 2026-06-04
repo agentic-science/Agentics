@@ -5,10 +5,14 @@ use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::db::pioneer_codes::consume_pioneer_code_for_human_tx;
 use agentics_domain::models::auth::{GithubUserId, HumanRole, HumanStatus};
-use agentics_domain::models::ids::{AdminServiceTokenId, HumanId, HumanSessionId};
+use agentics_domain::models::ids::{
+    AdminServiceTokenId, CreatorApiTokenId, HumanId, HumanSessionId,
+};
 use agentics_error::{Result, ServiceError};
 
-use super::ids::{admin_service_token_id_from_row, human_id_from_row};
+use super::ids::{
+    admin_service_token_id_from_row, creator_api_token_id_from_row, human_id_from_row,
+};
 
 /// Persisted human identity row returned to services and admin UI.
 #[derive(Debug, Clone)]
@@ -44,6 +48,19 @@ pub struct AuthenticatedAdminServiceToken {
     pub expires_at: Option<DateTime<Utc>>,
 }
 
+/// Persisted creator API token resolved from a bearer token.
+#[derive(Debug, Clone)]
+pub struct AuthenticatedCreatorApiToken {
+    pub token_id: CreatorApiTokenId,
+    pub human_id: HumanId,
+    pub status: HumanStatus,
+    pub github_user_id: GithubUserId,
+    pub github_login: String,
+    pub roles: Vec<HumanRole>,
+    pub label: String,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
 /// Persisted admin service-token metadata returned to admins.
 #[derive(Debug, Clone)]
 pub struct AdminServiceTokenRecord {
@@ -55,6 +72,19 @@ pub struct AdminServiceTokenRecord {
     pub last_used_at: Option<DateTime<Utc>>,
     pub expires_at: Option<DateTime<Utc>>,
     pub revoked_by_human_id: Option<HumanId>,
+    pub revoked_at: Option<DateTime<Utc>>,
+}
+
+/// Persisted creator API-token metadata returned to the owning creator.
+#[derive(Debug, Clone)]
+pub struct CreatorApiTokenRecord {
+    pub id: CreatorApiTokenId,
+    pub label: String,
+    pub status: String,
+    pub created_by_human_id: HumanId,
+    pub created_at: DateTime<Utc>,
+    pub last_used_at: Option<DateTime<Utc>>,
+    pub expires_at: Option<DateTime<Utc>>,
     pub revoked_at: Option<DateTime<Utc>>,
 }
 
@@ -96,6 +126,16 @@ pub struct ConsumedGithubSignInState {
 #[derive(Debug, Clone)]
 pub struct CreateAdminServiceTokenInput {
     pub id: AdminServiceTokenId,
+    pub token_hash: String,
+    pub label: String,
+    pub created_by_human_id: HumanId,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+/// Input for creating a creator API token.
+#[derive(Debug, Clone)]
+pub struct CreateCreatorApiTokenInput {
+    pub id: CreatorApiTokenId,
     pub token_hash: String,
     pub label: String,
     pub created_by_human_id: HumanId,
@@ -604,6 +644,161 @@ pub async fn authenticate_admin_service_token(
     }))
 }
 
+/// Create a creator API token.
+pub async fn create_creator_api_token(
+    pool: &PgPool,
+    input: &CreateCreatorApiTokenInput,
+) -> Result<CreatorApiTokenRecord> {
+    let row = sqlx::query(
+        r#"
+        INSERT INTO creator_api_tokens (
+            id,
+            token_hash,
+            label,
+            created_by_human_id,
+            expires_at
+        )
+        VALUES ($1::uuid, $2, $3, $4::uuid, $5)
+        RETURNING
+            id::text AS id,
+            label,
+            status,
+            created_by_human_id::text AS created_by_human_id,
+            created_at,
+            last_used_at,
+            expires_at,
+            revoked_at
+        "#,
+    )
+    .bind(input.id.as_str())
+    .bind(&input.token_hash)
+    .bind(input.label.trim())
+    .bind(input.created_by_human_id.as_str())
+    .bind(input.expires_at)
+    .fetch_one(pool)
+    .await?;
+
+    creator_api_token_record_from_row(&row)
+}
+
+/// List creator API tokens owned by one human.
+pub async fn list_creator_api_tokens(
+    pool: &PgPool,
+    human_id: &HumanId,
+) -> Result<Vec<CreatorApiTokenRecord>> {
+    let rows = sqlx::query(
+        r#"
+        SELECT
+            id::text AS id,
+            label,
+            status,
+            created_by_human_id::text AS created_by_human_id,
+            created_at,
+            last_used_at,
+            expires_at,
+            revoked_at
+        FROM creator_api_tokens
+        WHERE created_by_human_id = $1::uuid
+        ORDER BY created_at DESC
+        "#,
+    )
+    .bind(human_id.as_str())
+    .fetch_all(pool)
+    .await?;
+
+    rows.iter().map(creator_api_token_record_from_row).collect()
+}
+
+/// Revoke one creator API token owned by one human.
+pub async fn revoke_creator_api_token(
+    pool: &PgPool,
+    human_id: &HumanId,
+    id: &CreatorApiTokenId,
+) -> Result<CreatorApiTokenRecord> {
+    let row = sqlx::query(
+        r#"
+        UPDATE creator_api_tokens
+        SET status = 'revoked',
+            revoked_at = COALESCE(revoked_at, NOW())
+        WHERE id = $1::uuid
+          AND created_by_human_id = $2::uuid
+        RETURNING
+            id::text AS id,
+            label,
+            status,
+            created_by_human_id::text AS created_by_human_id,
+            created_at,
+            last_used_at,
+            expires_at,
+            revoked_at
+        "#,
+    )
+    .bind(id.as_str())
+    .bind(human_id.as_str())
+    .fetch_optional(pool)
+    .await?
+    .ok_or(ServiceError::NotFound)?;
+
+    creator_api_token_record_from_row(&row)
+}
+
+/// Authenticate a creator API token by hashed bearer token.
+pub async fn authenticate_creator_api_token(
+    pool: &PgPool,
+    token_hash: &str,
+) -> Result<Option<AuthenticatedCreatorApiToken>> {
+    let row = sqlx::query(
+        r#"
+        SELECT
+            t.id::text AS id,
+            t.label,
+            t.created_by_human_id::text AS human_id,
+            t.expires_at,
+            h.status,
+            e.provider_user_id AS github_user_id,
+            e.provider_login AS github_login,
+            COALESCE(
+              array_agg(r.role ORDER BY r.role)
+                FILTER (WHERE r.role IS NOT NULL AND r.revoked_at IS NULL),
+              ARRAY[]::TEXT[]
+            ) AS roles
+        FROM creator_api_tokens t
+        JOIN humans h ON h.id = t.created_by_human_id
+        JOIN human_external_identities e ON e.human_id = h.id AND e.provider = 'github'
+        LEFT JOIN human_roles r ON r.human_id = h.id
+        WHERE t.token_hash = $1
+          AND t.status = 'active'
+          AND (t.expires_at IS NULL OR t.expires_at > NOW())
+        GROUP BY t.id, t.label, t.created_by_human_id, t.expires_at, h.status, e.provider_user_id, e.provider_login
+        LIMIT 1
+        "#,
+    )
+    .bind(token_hash)
+    .fetch_optional(pool)
+    .await?;
+
+    let Some(row) = row else {
+        return Ok(None);
+    };
+
+    let token_id = creator_api_token_id_from_row(&row, "id")?;
+    sqlx::query("UPDATE creator_api_tokens SET last_used_at = NOW() WHERE id = $1::uuid")
+        .bind(token_id.as_str())
+        .execute(pool)
+        .await?;
+
+    Ok(Some(AuthenticatedCreatorApiToken {
+        token_id,
+        label: row.try_get("label")?,
+        human_id: human_id_from_row(&row, "human_id")?,
+        status: human_status_from_row(&row, "status")?,
+        github_user_id: github_user_id_from_row(&row, "github_user_id")?,
+        github_login: row.try_get("github_login")?,
+        roles: roles_from_row(&row)?,
+        expires_at: row.try_get("expires_at")?,
+    }))
+}
+
 /// Delete expired transient auth rows.
 pub async fn delete_expired_web_auth_rows(pool: &PgPool) -> Result<()> {
     sqlx::query("DELETE FROM github_sign_in_states WHERE expires_at <= NOW()")
@@ -927,6 +1122,19 @@ fn admin_service_token_record_from_row(
             .map_err(|e| {
                 ServiceError::Internal(format!("stored invalid token revoker human id: {e}"))
             })?,
+        revoked_at: row.try_get("revoked_at")?,
+    })
+}
+
+fn creator_api_token_record_from_row(row: &sqlx::postgres::PgRow) -> Result<CreatorApiTokenRecord> {
+    Ok(CreatorApiTokenRecord {
+        id: creator_api_token_id_from_row(row, "id")?,
+        label: row.try_get("label")?,
+        status: row.try_get("status")?,
+        created_by_human_id: human_id_from_row(row, "created_by_human_id")?,
+        created_at: row.try_get("created_at")?,
+        last_used_at: row.try_get("last_used_at")?,
+        expires_at: row.try_get("expires_at")?,
         revoked_at: row.try_get("revoked_at")?,
     })
 }

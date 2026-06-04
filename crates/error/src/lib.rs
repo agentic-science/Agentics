@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 #[serde(rename_all = "snake_case")]
 pub enum ServiceErrorCode {
     BadRequest,
+    ValidationFailed,
     Unauthorized,
     Forbidden,
     NotFound,
@@ -73,6 +74,7 @@ impl ServiceErrorCode {
     pub const fn as_str(self) -> &'static str {
         match self {
             ServiceErrorCode::BadRequest => "bad_request",
+            ServiceErrorCode::ValidationFailed => "validation_failed",
             ServiceErrorCode::Unauthorized => "unauthorized",
             ServiceErrorCode::Forbidden => "forbidden",
             ServiceErrorCode::NotFound => "not_found",
@@ -135,11 +137,12 @@ impl ServiceError {
     /// Returns the stable public error code.
     pub fn code(&self) -> ServiceErrorCode {
         match self {
-            ServiceError::BadRequest(_)
-            | ServiceError::Validation(_)
-            | ServiceError::ValidationDetails { .. }
-            | ServiceError::Base64
-            | ServiceError::Zip(_) => ServiceErrorCode::BadRequest,
+            ServiceError::BadRequest(_) | ServiceError::Base64 | ServiceError::Zip(_) => {
+                ServiceErrorCode::BadRequest
+            }
+            ServiceError::Validation(_) | ServiceError::ValidationDetails { .. } => {
+                ServiceErrorCode::ValidationFailed
+            }
             ServiceError::Unauthorized | ServiceError::UnauthorizedMessage(_) => {
                 ServiceErrorCode::Unauthorized
             }
@@ -223,7 +226,7 @@ mod tests {
             }],
         );
 
-        assert_eq!(error.code(), ServiceErrorCode::BadRequest);
+        assert_eq!(error.code(), ServiceErrorCode::ValidationFailed);
         assert_eq!(error.public_message(), "request validation failed");
         assert_eq!(error.details().len(), 1);
     }

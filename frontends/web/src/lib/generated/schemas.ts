@@ -2507,6 +2507,11 @@ export const createChallengeShortlistRevisionRequestSchema = z
   .strict()
   .describe("Delta-only shortlist upload request.");
 
+export const createCreatorApiTokenRequestSchema = z
+  .object({ label: z.string(), expires_at: z.string().optional() })
+  .strict()
+  .describe("Browser-submitted request to create a creator API token.");
+
 export const createPioneerCodeRequestSchema = z
   .object({
     label: z.string().optional(),
@@ -2516,6 +2521,67 @@ export const createPioneerCodeRequestSchema = z
   })
   .strict()
   .describe("Admin payload for creating a pioneer code.");
+
+export const creatorApiTokenCreatedResponseSchema = z
+  .object({
+    token: z.string(),
+    token_record: z
+      .object({
+        id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
+        label: z.string(),
+        status: z.string(),
+        created_by_human_id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
+        created_at: z.string(),
+        last_used_at: z.string().optional(),
+        expires_at: z.string().optional(),
+        revoked_at: z.string().optional(),
+      })
+      .strict()
+      .describe("Creator API-token metadata visible to the owning creator."),
+  })
+  .strict()
+  .describe("Response returned after creating a creator API token.");
+
+export const creatorApiTokenListResponseSchema = z
+  .object({
+    items: z.array(
+      z
+        .object({
+          id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
+          label: z.string(),
+          status: z.string(),
+          created_by_human_id: z
+            .string()
+            .uuid()
+            .regex(
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+            ),
+          created_at: z.string(),
+          last_used_at: z.string().optional(),
+          expires_at: z.string().optional(),
+          revoked_at: z.string().optional(),
+        })
+        .strict()
+        .describe("Creator API-token metadata visible to the owning creator."),
+    ),
+  })
+  .strict()
+  .describe("Creator list response for API tokens.");
 
 export const creatorChallengeParticipantsResponseSchema = z
   .object({
@@ -2868,6 +2934,7 @@ export const errorResponseSchema = z
         code: z
           .enum([
             "bad_request",
+            "validation_failed",
             "unauthorized",
             "forbidden",
             "not_found",
@@ -3449,6 +3516,35 @@ export const revokeAdminServiceTokenResponseSchema = z
   })
   .strict()
   .describe("Response returned after revoking an admin service token.");
+
+export const revokeCreatorApiTokenResponseSchema = z
+  .object({
+    token_record: z
+      .object({
+        id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
+        label: z.string(),
+        status: z.string(),
+        created_by_human_id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
+        created_at: z.string(),
+        last_used_at: z.string().optional(),
+        expires_at: z.string().optional(),
+        revoked_at: z.string().optional(),
+      })
+      .strict()
+      .describe("Creator API-token metadata visible to the owning creator."),
+  })
+  .strict()
+  .describe("Response returned after revoking a creator API token.");
 
 export const revokePioneerCodeResponseSchema = z
   .object({
@@ -5010,8 +5106,17 @@ export type CreateChallengeReviewRecordRequest = z.infer<
 export type CreateChallengeShortlistRevisionRequest = z.infer<
   typeof createChallengeShortlistRevisionRequestSchema
 >;
+export type CreateCreatorApiTokenRequest = z.infer<
+  typeof createCreatorApiTokenRequestSchema
+>;
 export type CreatePioneerCodeRequest = z.infer<
   typeof createPioneerCodeRequestSchema
+>;
+export type CreatorApiTokenCreatedResponse = z.infer<
+  typeof creatorApiTokenCreatedResponseSchema
+>;
+export type CreatorApiTokenListResponse = z.infer<
+  typeof creatorApiTokenListResponseSchema
 >;
 export type CreatorChallengeParticipantsResponse = z.infer<
   typeof creatorChallengeParticipantsResponseSchema
@@ -5058,6 +5163,9 @@ export type RankingContextResponse = z.infer<
 export type RegisterAgentRequest = z.infer<typeof registerAgentRequestSchema>;
 export type RevokeAdminServiceTokenResponse = z.infer<
   typeof revokeAdminServiceTokenResponseSchema
+>;
+export type RevokeCreatorApiTokenResponse = z.infer<
+  typeof revokeCreatorApiTokenResponseSchema
 >;
 export type RevokePioneerCodeResponse = z.infer<
   typeof revokePioneerCodeResponseSchema

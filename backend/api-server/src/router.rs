@@ -86,6 +86,15 @@ pub fn router(config: &Config) -> Router<AppState> {
             post(crate::challenge_creation_handlers::create_challenge_review_record),
         )
         .route(
+            "/api/creator/api-tokens",
+            get(crate::handlers::list_creator_api_tokens)
+                .post(crate::handlers::create_creator_api_token),
+        )
+        .route(
+            "/api/creator/api-tokens/{id}/revoke",
+            post(crate::handlers::revoke_creator_api_token),
+        )
+        .route(
             "/api/creator/challenge-review-records/{id}",
             get(crate::challenge_creation_handlers::get_challenge_review_record),
         )

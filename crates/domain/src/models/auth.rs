@@ -6,7 +6,7 @@ use std::fmt;
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-use super::ids::{AdminServiceTokenId, HumanId};
+use super::ids::{AdminServiceTokenId, CreatorApiTokenId, HumanId};
 use super::pioneer_codes::PioneerCodeInput;
 use super::urls::GithubSignInAuthorizationUrl;
 
@@ -278,6 +278,52 @@ pub struct AdminServiceTokenListResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RevokeAdminServiceTokenResponse {
     pub token_record: AdminServiceTokenDto,
+}
+
+/// Browser-submitted request to create a creator API token.
+#[derive(Debug, Clone, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
+#[serde(deny_unknown_fields)]
+pub struct CreateCreatorApiTokenRequest {
+    #[garde(custom(crate::validation::trimmed_non_empty))]
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+}
+
+/// Creator API-token metadata visible to the owning creator.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct CreatorApiTokenDto {
+    pub id: CreatorApiTokenId,
+    pub label: String,
+    pub status: String,
+    pub created_by_human_id: HumanId,
+    pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_used_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub revoked_at: Option<String>,
+}
+
+/// Response returned after creating a creator API token.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct CreatorApiTokenCreatedResponse {
+    pub token: String,
+    pub token_record: CreatorApiTokenDto,
+}
+
+/// Creator list response for API tokens.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct CreatorApiTokenListResponse {
+    pub items: Vec<CreatorApiTokenDto>,
+}
+
+/// Response returned after revoking a creator API token.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct RevokeCreatorApiTokenResponse {
+    pub token_record: CreatorApiTokenDto,
 }
 
 #[cfg(test)]

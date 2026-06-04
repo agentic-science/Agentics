@@ -155,6 +155,11 @@ define_uuid_id_type!(
     "admin_service_token_id must be a canonical UUID string"
 );
 define_uuid_id_type!(
+    CreatorApiTokenId,
+    "CreatorApiTokenId",
+    "creator_api_token_id must be a canonical UUID string"
+);
+define_uuid_id_type!(
     PioneerCodeId,
     "PioneerCodeId",
     "pioneer_code_id must be a canonical UUID string"

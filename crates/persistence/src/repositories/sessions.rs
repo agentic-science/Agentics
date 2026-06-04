@@ -2,11 +2,12 @@ use sqlx::PgPool;
 
 use crate::db;
 use crate::repositories::{
-    AdminServiceTokenRecord, AuthenticatedAdminServiceToken, AuthenticatedHumanSession,
-    ConsumedGithubSignInState, CreateAdminServiceTokenInput, CreateGithubSignInStateInput,
-    CreateHumanSessionInput, HumanRecord, ResolveGithubHumanInput,
+    AdminServiceTokenRecord, AuthenticatedAdminServiceToken, AuthenticatedCreatorApiToken,
+    AuthenticatedHumanSession, ConsumedGithubSignInState, CreateAdminServiceTokenInput,
+    CreateCreatorApiTokenInput, CreateGithubSignInStateInput, CreateHumanSessionInput,
+    CreatorApiTokenRecord, HumanRecord, ResolveGithubHumanInput,
 };
-use agentics_domain::models::ids::{AdminServiceTokenId, HumanId};
+use agentics_domain::models::ids::{AdminServiceTokenId, CreatorApiTokenId, HumanId};
 use agentics_error::Result;
 
 #[derive(Debug, Clone, Copy)]
@@ -108,6 +109,35 @@ impl SessionsRepository<'_> {
         token_hash: &str,
     ) -> Result<Option<AuthenticatedAdminServiceToken>> {
         db::sessions::authenticate_admin_service_token(self.pool, token_hash).await
+    }
+
+    pub async fn create_creator_api_token(
+        &self,
+        input: &CreateCreatorApiTokenInput,
+    ) -> Result<CreatorApiTokenRecord> {
+        db::sessions::create_creator_api_token(self.pool, input).await
+    }
+
+    pub async fn list_creator_api_tokens(
+        &self,
+        human_id: &HumanId,
+    ) -> Result<Vec<CreatorApiTokenRecord>> {
+        db::sessions::list_creator_api_tokens(self.pool, human_id).await
+    }
+
+    pub async fn revoke_creator_api_token(
+        &self,
+        human_id: &HumanId,
+        id: &CreatorApiTokenId,
+    ) -> Result<CreatorApiTokenRecord> {
+        db::sessions::revoke_creator_api_token(self.pool, human_id, id).await
+    }
+
+    pub async fn authenticate_creator_api_token(
+        &self,
+        token_hash: &str,
+    ) -> Result<Option<AuthenticatedCreatorApiToken>> {
+        db::sessions::authenticate_creator_api_token(self.pool, token_hash).await
     }
 
     pub async fn delete_expired_web_auth_rows(&self) -> Result<()> {

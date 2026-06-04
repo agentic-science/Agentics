@@ -10,8 +10,8 @@ use serde::de::DeserializeOwned;
 use agentics_domain::models::ErrorDetail;
 use agentics_domain::models::auth::{GithubUserId, HumanRole, HumanStatus};
 use agentics_domain::models::ids::{
-    AdminServiceTokenId, AgentId, AgentTokenId, ChallengeReviewRecordId, HumanId, HumanSessionId,
-    SolutionSubmissionId,
+    AdminServiceTokenId, AgentId, AgentTokenId, ChallengeReviewRecordId, CreatorApiTokenId,
+    HumanId, HumanSessionId, SolutionSubmissionId,
 };
 use agentics_error::ServiceError;
 use agentics_persistence::{AuthenticatedHumanSession, Repositories};
@@ -250,14 +250,15 @@ impl FromRequestParts<AppState> for HumanAuth {
 /// Human-authenticated challenge creator context from a web session.
 #[derive(Debug, Clone)]
 pub struct CreatorAuth {
-    pub session_id: HumanSessionId,
+    pub session_id: Option<HumanSessionId>,
+    pub token_id: Option<CreatorApiTokenId>,
     pub human_id: HumanId,
     pub status: HumanStatus,
     pub github_user_id: GithubUserId,
     pub github_login: String,
     pub roles: Vec<HumanRole>,
     pub csrf_token: Option<String>,
-    pub expires_at: chrono::DateTime<chrono::Utc>,
+    pub expires_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl FromRequestParts<AppState> for CreatorAuth {
@@ -268,24 +269,77 @@ impl FromRequestParts<AppState> for CreatorAuth {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let human = HumanAuth::from_request_parts(parts, state).await?;
-        if human.status != HumanStatus::Active
-            || !(human.roles.contains(&HumanRole::Creator)
-                || human.roles.contains(&HumanRole::Admin))
-        {
-            return Err(forbidden("需要 creator 权限"));
+        let auth_header = parts
+            .headers
+            .get(header::AUTHORIZATION)
+            .and_then(|h| h.to_str().ok());
+
+        if let Some(parsed) = auth::parse_bearer_token(auth_header) {
+            let token_hash = auth::hash_opaque_token(parsed.token.expose_secret());
+            let token = Repositories::new(&state.db)
+                .sessions()
+                .authenticate_creator_api_token(&token_hash)
+                .await
+                .map_err(|_| unauthorized("creator API token 无效或已被撤销"))?
+                .ok_or_else(|| unauthorized("creator API token 无效或已被撤销"))?;
+            if token.status != HumanStatus::Active
+                || !(token.roles.contains(&HumanRole::Creator)
+                    || token.roles.contains(&HumanRole::Admin))
+            {
+                return Err(forbidden("需要 creator 权限"));
+            }
+            return Ok(Self {
+                session_id: None,
+                token_id: Some(token.token_id),
+                human_id: token.human_id,
+                status: token.status,
+                github_user_id: token.github_user_id,
+                github_login: token.github_login,
+                roles: token.roles,
+                csrf_token: None,
+                expires_at: token.expires_at,
+            });
         }
-        Ok(Self {
-            session_id: human.session_id,
-            human_id: human.human_id,
-            status: human.status,
-            github_user_id: human.github_user_id,
-            github_login: human.github_login,
-            roles: human.roles,
-            csrf_token: human.csrf_token,
-            expires_at: human.expires_at,
-        })
+
+        creator_auth_from_human(HumanAuth::from_request_parts(parts, state).await?)
     }
+}
+
+/// Human web-session-only challenge creator context for token-management routes.
+#[derive(Debug, Clone)]
+pub struct CreatorWebAuth(pub CreatorAuth);
+
+impl FromRequestParts<AppState> for CreatorWebAuth {
+    type Rejection = ApiError;
+
+    /// Authenticates a creator through a CSRF-protected human web session only.
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(Self(creator_auth_from_human(
+            HumanAuth::from_request_parts(parts, state).await?,
+        )?))
+    }
+}
+
+fn creator_auth_from_human(human: HumanAuth) -> Result<CreatorAuth, ApiError> {
+    if human.status != HumanStatus::Active
+        || !(human.roles.contains(&HumanRole::Creator) || human.roles.contains(&HumanRole::Admin))
+    {
+        return Err(forbidden("需要 creator 权限"));
+    }
+    Ok(CreatorAuth {
+        session_id: Some(human.session_id),
+        token_id: None,
+        human_id: human.human_id,
+        status: human.status,
+        github_user_id: human.github_user_id,
+        github_login: human.github_login,
+        roles: human.roles,
+        csrf_token: human.csrf_token,
+        expires_at: Some(human.expires_at),
+    })
 }
 
 /// Shared interface for database session records that carry CSRF token hashes.
@@ -393,7 +447,7 @@ where
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
         let Json(value) = Json::<T>::from_request(req, state)
             .await
-            .map_err(|rejection| bad_request(&rejection.body_text()))?;
+            .map_err(|rejection| ServiceError::Validation(rejection.body_text()))?;
 
         value.validate()?;
 

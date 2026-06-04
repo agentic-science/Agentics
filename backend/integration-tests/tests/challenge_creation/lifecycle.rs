@@ -41,7 +41,7 @@ async fn challenge_review_record_rejects_new_version_manifest(pool: sqlx::PgPool
     .expect("new_version review_record request");
     assert_eq!(
         response.status(),
-        reqwest::StatusCode::BAD_REQUEST,
+        reqwest::StatusCode::UNPROCESSABLE_ENTITY,
         "new_version manifests are no longer accepted"
     )
 }
@@ -402,6 +402,244 @@ async fn challenge_creator_routes_require_github_sign_in_session_and_csrf(pool: 
         .await
         .expect("old identity link request");
     assert_eq!(old_self_link_route.status(), reqwest::StatusCode::NOT_FOUND);
+}
+
+/// Verifies creator API tokens can drive CLI-style creator workflows and revocation.
+#[sqlx::test(migrations = "../migrations")]
+async fn creator_api_token_drives_creator_workflows_and_revokes(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+
+    let created_token: serde_json::Value = creator_auth(
+        client.post(api_url(&app, "/api/creator/api-tokens")),
+        &creator,
+    )
+    .json(&json!({ "label": "cli smoke" }))
+    .send()
+    .await
+    .expect("creator token create request")
+    .error_for_status()
+    .expect("creator token should create")
+    .json()
+    .await
+    .expect("creator token create json");
+    let raw_token = created_token["token"]
+        .as_str()
+        .expect("raw token should be returned once");
+    let token_id = created_token["token_record"]["id"]
+        .as_str()
+        .expect("token id should be returned");
+    assert!(
+        raw_token.starts_with("agentics_creator_"),
+        "creator token prefix should distinguish token kind"
+    );
+
+    let review_record: serde_json::Value = client
+        .post(api_url(&app, "/api/creator/challenge-review-records"))
+        .header("Authorization", format!("Bearer {raw_token}"))
+        .json(&json!({
+            "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
+            "pr_number": 52,
+            "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/52",
+            "commit_sha": "0123456789abcde520123456789abcde52012345",
+            "challenge_path": "challenges/sample-sum",
+            "pr_author_github_user_id": 1001,
+            "manifest": manifest_json()
+        }))
+        .send()
+        .await
+        .expect("bearer review_record create request")
+        .error_for_status()
+        .expect("bearer token should create review_record")
+        .json()
+        .await
+        .expect("bearer review_record create json");
+    let review_record_id = review_record["id"]
+        .as_str()
+        .expect("review_record id should be returned");
+
+    client
+        .post(api_url(
+            &app,
+            &format!("/api/creator/challenge-review-records/{review_record_id}/private-assets"),
+        ))
+        .header("Authorization", format!("Bearer {raw_token}"))
+        .json(&json!({
+            "asset_name": "official-cases",
+            "kind": "private_benchmark_data",
+            "required": false,
+            "asset_base64": private_benchmark_asset_zip_base64()
+        }))
+        .send()
+        .await
+        .expect("bearer private asset upload request")
+        .error_for_status()
+        .expect("bearer token should upload private asset");
+
+    let loaded: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/creator/challenge-review-records/{review_record_id}"),
+        ))
+        .header("Authorization", format!("Bearer {raw_token}"))
+        .send()
+        .await
+        .expect("bearer review_record status request")
+        .error_for_status()
+        .expect("bearer token should read own review_record")
+        .json()
+        .await
+        .expect("bearer review_record status json");
+    assert_eq!(loaded["id"], review_record_id);
+
+    creator_auth(
+        client.post(api_url(
+            &app,
+            &format!("/api/creator/api-tokens/{token_id}/revoke"),
+        )),
+        &creator,
+    )
+    .send()
+    .await
+    .expect("creator token revoke request")
+    .error_for_status()
+    .expect("creator token should revoke");
+
+    let revoked_response = client
+        .get(api_url(
+            &app,
+            &format!("/api/creator/challenge-review-records/{review_record_id}"),
+        ))
+        .header("Authorization", format!("Bearer {raw_token}"))
+        .send()
+        .await
+        .expect("revoked bearer request");
+    assert_eq!(revoked_response.status(), reqwest::StatusCode::UNAUTHORIZED);
+}
+
+/// Verifies creator token management stays web-session only and setup-gated.
+#[sqlx::test(migrations = "../migrations")]
+async fn creator_api_token_management_requires_active_creator_web_session(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+
+    let created_token: serde_json::Value = creator_auth(
+        client.post(api_url(&app, "/api/creator/api-tokens")),
+        &creator,
+    )
+    .json(&json!({ "label": "cli smoke" }))
+    .send()
+    .await
+    .expect("creator token create request")
+    .error_for_status()
+    .expect("creator token should create")
+    .json()
+    .await
+    .expect("creator token create json");
+    let raw_token = created_token["token"].as_str().expect("raw token");
+
+    let bearer_list = client
+        .get(api_url(&app, "/api/creator/api-tokens"))
+        .header("Authorization", format!("Bearer {raw_token}"))
+        .send()
+        .await
+        .expect("creator token self-management request");
+    assert_eq!(bearer_list.status(), reqwest::StatusCode::UNAUTHORIZED);
+
+    let admin_route = client
+        .get(api_url(&app, "/admin/challenges"))
+        .header("Authorization", format!("Bearer {raw_token}"))
+        .send()
+        .await
+        .expect("creator token admin request");
+    assert_eq!(admin_route.status(), reqwest::StatusCode::UNAUTHORIZED);
+
+    let admin_auth = admin_service_token_header(&app);
+    let admin_token_as_creator = client
+        .post(api_url(&app, "/api/creator/challenge-review-records"))
+        .header("Authorization", admin_auth)
+        .json(&json!({
+            "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
+            "pr_number": 54,
+            "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/54",
+            "commit_sha": "0123456789abcde540123456789abcde54012345",
+            "challenge_path": "challenges/sample-sum",
+            "pr_author_github_user_id": 1001,
+            "manifest": manifest_json()
+        }))
+        .send()
+        .await
+        .expect("admin token as creator request");
+    assert_eq!(
+        admin_token_as_creator.status(),
+        reqwest::StatusCode::UNAUTHORIZED
+    );
+
+    sqlx::query(
+        r#"
+        UPDATE humans
+        SET status = 'setup_required'
+        WHERE id = $1::uuid
+        "#,
+    )
+    .bind(&creator.human_id)
+    .execute(&pool)
+    .await
+    .expect("creator human status should update");
+    sqlx::query(
+        r#"
+        UPDATE human_roles
+        SET revoked_at = NOW()
+        WHERE human_id = $1::uuid
+          AND role = 'creator'
+          AND revoked_at IS NULL
+        "#,
+    )
+    .bind(&creator.human_id)
+    .execute(&pool)
+    .await
+    .expect("creator role should revoke");
+
+    let setup_required_create = creator_auth(
+        client.post(api_url(&app, "/api/creator/api-tokens")),
+        &creator,
+    )
+    .json(&json!({ "label": "blocked" }))
+    .send()
+    .await
+    .expect("setup-required token create request");
+    assert_eq!(
+        setup_required_create.status(),
+        reqwest::StatusCode::FORBIDDEN
+    );
+
+    let setup_required_bearer = client
+        .post(api_url(&app, "/api/creator/challenge-review-records"))
+        .header("Authorization", format!("Bearer {raw_token}"))
+        .json(&json!({
+            "repo_url": "https://github.com/agentics-reifying/agentics-challenges",
+            "pr_number": 53,
+            "pr_url": "https://github.com/agentics-reifying/agentics-challenges/pull/53",
+            "commit_sha": "0123456789abcde530123456789abcde53012345",
+            "challenge_path": "challenges/sample-sum",
+            "pr_author_github_user_id": 1001,
+            "manifest": manifest_json()
+        }))
+        .send()
+        .await
+        .expect("setup-required bearer request");
+    assert_eq!(
+        setup_required_bearer.status(),
+        reqwest::StatusCode::FORBIDDEN
+    );
 }
 
 /// Verifies that challenge creation quotas reject excess work.

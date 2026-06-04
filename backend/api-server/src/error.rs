@@ -23,6 +23,7 @@ impl ApiError {
     pub fn status(&self) -> StatusCode {
         match self.0.code() {
             ServiceErrorCode::BadRequest => StatusCode::BAD_REQUEST,
+            ServiceErrorCode::ValidationFailed => StatusCode::UNPROCESSABLE_ENTITY,
             ServiceErrorCode::Unauthorized => StatusCode::UNAUTHORIZED,
             ServiceErrorCode::Forbidden => StatusCode::FORBIDDEN,
             ServiceErrorCode::NotFound => StatusCode::NOT_FOUND,
@@ -188,6 +189,9 @@ mod tests {
         for (code, expected) in cases {
             let error = match code {
                 ServiceErrorCode::BadRequest => ServiceError::bad_request("bad input"),
+                ServiceErrorCode::ValidationFailed => {
+                    ServiceError::validation_failed("request validation failed", [])
+                }
                 ServiceErrorCode::Unauthorized => ServiceError::Unauthorized,
                 ServiceErrorCode::Forbidden => ServiceError::Forbidden("forbidden".to_string()),
                 ServiceErrorCode::NotFound => ServiceError::not_found(),

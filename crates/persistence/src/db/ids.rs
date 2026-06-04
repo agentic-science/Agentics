@@ -3,8 +3,8 @@ use uuid::Uuid;
 
 use agentics_domain::models::ids::{
     AdminServiceTokenId, AgentId, AgentTokenId, ChallengePrivateAssetId, ChallengeReviewRecordId,
-    ChallengeReviewValidationRecordId, ChallengeShortlistRevisionId, EvaluationJobId, HumanId,
-    PioneerCodeId, SolutionSubmissionId,
+    ChallengeReviewValidationRecordId, ChallengeShortlistRevisionId, CreatorApiTokenId,
+    EvaluationJobId, HumanId, PioneerCodeId, SolutionSubmissionId,
 };
 use agentics_domain::models::names::{AssetName, ChallengeName, TargetName};
 use agentics_error::{Result, ServiceError};
@@ -95,6 +95,19 @@ pub(in crate::db) fn admin_service_token_id_from_row(
         column,
         AdminServiceTokenId::try_new,
         "admin service-token id",
+    )
+}
+
+/// Reads creator API-token id from a database row and validates its domain shape.
+pub(in crate::db) fn creator_api_token_id_from_row(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+) -> Result<CreatorApiTokenId> {
+    parse_uuid_id_from_row(
+        row,
+        column,
+        CreatorApiTokenId::try_new,
+        "creator API-token id",
     )
 }
 

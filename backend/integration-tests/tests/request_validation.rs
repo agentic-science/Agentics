@@ -32,12 +32,18 @@ async fn request_validation_returns_contract_error_shape(pool: sqlx::PgPool) {
         .send()
         .await
         .expect("failed to send empty-display-name request");
-    assert_eq!(empty_display_name.status(), 400);
+    assert_eq!(
+        empty_display_name.status(),
+        reqwest::StatusCode::UNPROCESSABLE_ENTITY
+    );
     let empty_display_name_body: serde_json::Value = empty_display_name
         .json()
         .await
         .expect("failed to decode empty-display-name response");
-    assert_eq!(empty_display_name_body["error"]["code"], "bad_request");
+    assert_eq!(
+        empty_display_name_body["error"]["code"],
+        "validation_failed"
+    );
     assert!(
         empty_display_name_body["error"]["message"]
             .as_str()
@@ -62,12 +68,15 @@ async fn request_validation_returns_contract_error_shape(pool: sqlx::PgPool) {
         .send()
         .await
         .expect("failed to send unknown-field request");
-    assert_eq!(unknown_field.status(), 400);
+    assert_eq!(
+        unknown_field.status(),
+        reqwest::StatusCode::UNPROCESSABLE_ENTITY
+    );
     let unknown_field_body: serde_json::Value = unknown_field
         .json()
         .await
         .expect("failed to decode unknown-field response");
-    assert_eq!(unknown_field_body["error"]["code"], "bad_request");
+    assert_eq!(unknown_field_body["error"]["code"], "validation_failed");
 
     let invalid_challenge_name = client
         .get(api_url(&app, "/api/public/challenges/bad%20id"))
@@ -190,13 +199,13 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
         .send()
         .await
         .expect("failed to send malformed-target submission");
-    assert_eq!(malformed_response.status(), 400);
+    assert_eq!(malformed_response.status(), 422);
 
     let malformed_error: serde_json::Value = malformed_response
         .json()
         .await
         .expect("failed to decode malformed-target error");
-    assert_eq!(malformed_error["error"]["code"], "bad_request");
+    assert_eq!(malformed_error["error"]["code"], "validation_failed");
     assert!(
         malformed_error["error"]["message"]
             .as_str()
@@ -285,7 +294,7 @@ async fn solution_submission_rejects_oversized_manifest_note_before_storage(pool
         .send()
         .await
         .expect("failed to send oversized-note submission");
-    assert_eq!(response.status(), 400);
+    assert_eq!(response.status(), 422);
     let body: serde_json::Value = response.json().await.expect("failed to decode error");
     assert!(
         body["error"]["message"]
@@ -375,7 +384,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
         .send()
         .await
         .expect("failed to send submission with legacy round_id");
-    assert_eq!(unknown_round_field.status(), 400);
+    assert_eq!(unknown_round_field.status(), 422);
     let unknown_error: serde_json::Value = unknown_round_field
         .json()
         .await
@@ -399,7 +408,7 @@ async fn solution_submission_rejects_legacy_round_field_before_artifact_decode(p
         .send()
         .await
         .expect("failed to send malformed legacy round_id");
-    assert_eq!(malformed_round_field.status(), 400);
+    assert_eq!(malformed_round_field.status(), 422);
     let malformed_error: serde_json::Value = malformed_round_field
         .json()
         .await
@@ -559,7 +568,7 @@ async fn private_shortlist_challenge_requires_owner_delta_before_artifact_decode
     .expect("failed to upload unknown shortlist agent");
     assert_eq!(
         unknown_agent_upload.status(),
-        reqwest::StatusCode::BAD_REQUEST
+        reqwest::StatusCode::UNPROCESSABLE_ENTITY
     );
 
     let revision: serde_json::Value = creator_auth(

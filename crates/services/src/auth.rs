@@ -194,6 +194,11 @@ pub fn create_admin_service_token() -> String {
     format!("agentics_admin_{}", random_url_token(32))
 }
 
+/// Create an opaque bearer token for creator CLI automation.
+pub fn create_creator_api_token() -> String {
+    format!("agentics_creator_{}", random_url_token(32))
+}
+
 /// Create an opaque browser session token.
 pub fn create_web_session_token() -> String {
     format!("agentics_session_{}", random_url_token(32))

@@ -49,7 +49,7 @@ async fn challenge_review_record_rejects_short_commit_sha(pool: sqlx::PgPool) {
     .await
     .expect("review_record request");
 
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
     let body: serde_json::Value = response.json().await.expect("error json");
     assert!(
         body["error"]["message"]
@@ -118,7 +118,10 @@ async fn private_asset_upload_rejects_non_zip_payload(pool: sqlx::PgPool) {
     .send()
     .await
     .expect("missing-required private asset request");
-    assert_eq!(missing_required_response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        missing_required_response.status(),
+        StatusCode::UNPROCESSABLE_ENTITY
+    );
     let missing_required_error = missing_required_response
         .text()
         .await
@@ -677,7 +680,10 @@ async fn approved_draft_publish_rejects_changed_review_content(pool: sqlx::PgPoo
         .send()
         .await
         .expect("publish request");
-    assert_eq!(publish_response.status(), reqwest::StatusCode::BAD_REQUEST);
+    assert_eq!(
+        publish_response.status(),
+        reqwest::StatusCode::UNPROCESSABLE_ENTITY
+    );
 
     let published_count: i64 = sqlx::query_scalar(
         "SELECT COUNT(*)::BIGINT FROM challenges WHERE challenge_name = $1 AND spec_json IS NOT NULL",

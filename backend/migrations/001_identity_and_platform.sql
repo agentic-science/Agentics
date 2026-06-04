@@ -73,6 +73,18 @@ CREATE TABLE IF NOT EXISTS admin_service_tokens (
   revoked_at TIMESTAMPTZ
 );
 
+CREATE TABLE IF NOT EXISTS creator_api_tokens (
+  id UUID PRIMARY KEY,
+  token_hash TEXT NOT NULL UNIQUE,
+  label TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'revoked')),
+  created_by_human_id UUID NOT NULL REFERENCES humans(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ,
+  revoked_at TIMESTAMPTZ
+);
+
 CREATE TABLE IF NOT EXISTS github_sign_in_states (
   state_hash TEXT PRIMARY KEY,
   browser_nonce_hash TEXT NOT NULL,
@@ -131,6 +143,8 @@ CREATE INDEX IF NOT EXISTS idx_human_sessions_expires_at ON human_sessions (expi
 CREATE INDEX IF NOT EXISTS idx_human_sessions_human_id ON human_sessions (human_id);
 CREATE INDEX IF NOT EXISTS idx_admin_service_tokens_status_created
   ON admin_service_tokens (status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_creator_api_tokens_human_status_created
+  ON creator_api_tokens (created_by_human_id, status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_github_sign_in_states_expires_at ON github_sign_in_states (expires_at);
 CREATE INDEX IF NOT EXISTS idx_pioneer_codes_status_created
   ON pioneer_codes (status, created_at DESC);
