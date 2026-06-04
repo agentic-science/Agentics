@@ -1,9 +1,9 @@
 "use client";
 
 import { Copy, KeyRound, Plus, RefreshCw, Trash2 } from "lucide-react";
-import { useTranslations } from "next-intl";
-import { type FormEvent, useState } from "react";
-import { CreatorIdentityPanel } from "@/components/creator/CreatorPanels";
+import { useLocale, useTranslations } from "next-intl";
+import { type FormEvent, useEffect, useState } from "react";
+import { CreatorIdentityPanel } from "@/components/creator/CreatorIdentityPanel";
 import {
   CreatorApiError,
   createCreatorApiToken,
@@ -22,6 +22,7 @@ type CreatorApiTokenItem = CreatorApiTokenListResponse["items"][number];
 /** Renders the reduced creator console for identity and API-token management. */
 export function CreatorConsole() {
   const t = useTranslations("creator");
+  const locale = useLocale();
   const [label, setLabel] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [createdToken, setCreatedToken] = useState<string | null>(null);
@@ -36,7 +37,15 @@ export function CreatorConsole() {
     creator?.status === "active" &&
     (creator.roles.includes("creator") || creator.roles.includes("admin"));
   const csrfToken = hasCreatorAccess ? (creator?.csrf_token ?? "") : "";
-  const tokenResource = useCreatorApiTokens(hasCreatorAccess);
+  const creatorHumanId = creator?.human_id;
+  const tokenResource = useCreatorApiTokens(hasCreatorAccess, creatorHumanId);
+
+  useEffect(() => {
+    const accessScope = `${creatorHumanId ?? "anonymous"}:${hasCreatorAccess ? "creator" : "blocked"}`;
+    if (accessScope) {
+      setCreatedToken(null);
+    }
+  }, [creatorHumanId, hasCreatorAccess]);
 
   const refreshIdentity = async () => {
     setPendingAction("refreshIdentity");
@@ -74,7 +83,7 @@ export function CreatorConsole() {
       setCreatedToken(response.token);
       setLabel("");
       setExpiresAt("");
-      await mutateCreatorApiTokens();
+      await mutateCreatorApiTokens(creatorHumanId);
       setMessage(t("apiTokens.created"));
     } catch (caught) {
       setError(creatorErrorMessage(caught, t("messages.unknown")));
@@ -92,7 +101,7 @@ export function CreatorConsole() {
     setError(null);
     try {
       await revokeCreatorApiToken(token.id, csrfToken);
-      await mutateCreatorApiTokens();
+      await mutateCreatorApiTokens(creatorHumanId);
       setMessage(t("apiTokens.revoked"));
     } catch (caught) {
       setError(creatorErrorMessage(caught, t("messages.unknown")));
@@ -105,8 +114,13 @@ export function CreatorConsole() {
     if (!createdToken) {
       return;
     }
-    await navigator.clipboard.writeText(createdToken);
-    setMessage(t("apiTokens.copied"));
+    try {
+      await navigator.clipboard.writeText(createdToken);
+      setCreatedToken(null);
+      setMessage(t("apiTokens.copied"));
+    } catch {
+      setError(t("apiTokens.copyFailed"));
+    }
   };
 
   return (
@@ -176,10 +190,19 @@ export function CreatorConsole() {
             <Plus className="w-4 h-4" />
             {t("apiTokens.createButton")}
           </button>
-          {createdToken ? (
+          {createdToken && hasCreatorAccess ? (
             <div className="rounded-md border border-success/30 p-3 bg-success/5">
-              <div className="text-caption uppercase tracking-wide text-fg-muted">
-                {t("apiTokens.createdToken")}
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-caption uppercase tracking-wide text-fg-muted">
+                  {t("apiTokens.createdToken")}
+                </div>
+                <button
+                  type="button"
+                  className="text-caption text-fg-muted hover:text-fg"
+                  onClick={() => setCreatedToken(null)}
+                >
+                  {t("apiTokens.dismiss")}
+                </button>
               </div>
               <div className="mt-2 flex items-center gap-2">
                 <code className="min-w-0 flex-1 break-all text-body-sm">
@@ -238,9 +261,9 @@ export function CreatorConsole() {
                         {token.id}
                       </div>
                     </td>
-                    <td>{token.status}</td>
-                    <td>{token.last_used_at ?? "—"}</td>
-                    <td>{token.expires_at ?? "—"}</td>
+                    <td>{creatorTokenStatusLabel(token.status, t)}</td>
+                    <td>{formatOptionalDate(token.last_used_at, locale)}</td>
+                    <td>{formatOptionalDate(token.expires_at, locale)}</td>
                     <td>
                       <button
                         type="button"
@@ -266,6 +289,36 @@ export function CreatorConsole() {
       </section>
     </div>
   );
+}
+
+function creatorTokenStatusLabel(
+  status: string,
+  t: ReturnType<typeof useTranslations>,
+): string {
+  if (status === "active") {
+    return t("apiTokens.statusActive");
+  }
+  if (status === "revoked") {
+    return t("apiTokens.statusRevoked");
+  }
+  return status;
+}
+
+function formatOptionalDate(
+  value: string | null | undefined,
+  locale: string,
+): string {
+  if (!value) {
+    return "—";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
 function expiresAtToRfc3339(value: string): string | undefined {

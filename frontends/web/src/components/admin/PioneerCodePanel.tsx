@@ -177,6 +177,7 @@ export function PioneerCodePanel({
           humans: response.revoked_human_count,
           sessions: response.revoked_human_session_count,
           adminTokens: response.revoked_admin_service_token_count,
+          creatorTokens: response.revoked_creator_api_token_count,
           agents: response.revoked_agent_count,
           tokens: response.revoked_token_count,
         }),

@@ -171,6 +171,35 @@ describe("CreatorConsole", () => {
         "agentics_creator_created-secret",
       ),
     );
+    await waitFor(() =>
+      expect(view.queryByText("agentics_creator_created-secret")).toBeNull(),
+    );
+  });
+
+  it("keeps the raw token visible when clipboard copy fails", async () => {
+    getHumanSessionMock.mockResolvedValue(activeCreatorSession);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
+    });
+
+    const view = renderCreatorConsole();
+
+    await view.findByText(/octocat/);
+    fireEvent.input(view.getByLabelText("Label"), {
+      target: { value: "laptop" },
+    });
+    fireEvent.click(view.getByRole("button", { name: "Create token" }));
+    expect(
+      await view.findByText("agentics_creator_created-secret"),
+    ).toBeTruthy();
+
+    fireEvent.click(view.getByRole("button", { name: "Copy token" }));
+
+    expect(
+      await view.findByText("Token copy failed. Select and copy it manually."),
+    ).toBeTruthy();
+    expect(view.getByText("agentics_creator_created-secret")).toBeTruthy();
   });
 
   it("revokes creator API tokens and refreshes the list", async () => {

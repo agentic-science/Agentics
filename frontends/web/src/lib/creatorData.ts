@@ -2,34 +2,11 @@
 
 import useSWR, { mutate } from "swr";
 import { getHumanSession, HUMAN_SESSION_CACHE_KEY } from "@/lib/authApi";
-import {
-  getChallengeReviewRecord,
-  getChallengeShortlist,
-  getCreatorChallengeParticipants,
-  getCreatorChallengeStats,
-  listCreatorApiTokens,
-} from "@/lib/creatorApi";
+import { listCreatorApiTokens } from "@/lib/creatorApi";
 import type {
-  ChallengeShortlistResponse,
   CreatorApiTokenListResponse,
-  CreatorChallengeParticipantsResponse,
-  CreatorChallengeReviewRecordResponse,
-  CreatorChallengeStatsResponse,
   HumanSessionResponse,
 } from "@/lib/schemas";
-
-/** Creator owner surfaces fetched together for one challenge and optional target. */
-export interface CreatorOwnerBundle {
-  stats: CreatorChallengeStatsResponse;
-  participants: CreatorChallengeParticipantsResponse;
-  shortlist: ChallengeShortlistResponse;
-}
-
-/** Published challenge owner scope used by creator data hooks. */
-export interface CreatorOwnerScope {
-  challengeName: string;
-  target?: string;
-}
 
 /** Restores the cookie-backed creator session through SWR. */
 export function useCreatorSession() {
@@ -51,10 +28,10 @@ export function useCreatorSession() {
 const CREATOR_API_TOKENS_CACHE_KEY = "creator-api-tokens";
 
 /** Loads creator API-token metadata for the signed-in creator. */
-export function useCreatorApiTokens(enabled: boolean) {
+export function useCreatorApiTokens(enabled: boolean, humanId?: string) {
   const swr = useSWR<CreatorApiTokenListResponse>(
-    enabled ? CREATOR_API_TOKENS_CACHE_KEY : null,
-    listCreatorApiTokens,
+    enabled && humanId ? creatorApiTokensKey(humanId) : null,
+    fetchCreatorApiTokensByKey,
     { shouldRetryOnError: false },
   );
   return {
@@ -66,98 +43,30 @@ export function useCreatorApiTokens(enabled: boolean) {
 }
 
 /** Refreshes cached creator API tokens after create or revoke. */
-export function mutateCreatorApiTokens() {
-  return mutate(CREATOR_API_TOKENS_CACHE_KEY);
-}
-
-/** Loads one creator-owned review record when an id is available. */
-export function useCreatorReviewRecord(reviewRecordId: string) {
-  const normalized = reviewRecordId.trim();
-  const swr = useSWR<CreatorChallengeReviewRecordResponse>(
-    normalized ? creatorReviewRecordKey(normalized) : null,
-    fetchCreatorReviewRecordByKey,
-    { shouldRetryOnError: false },
-  );
-  return {
-    reviewRecord: swr.data,
-    error: swr.error,
-    isLoading: swr.isLoading,
-    mutate: swr.mutate,
-  };
-}
-
-/** Loads creator-owned stats, participants, and shortlist for one challenge. */
-export function useCreatorOwnerBundle(scope: CreatorOwnerScope | null) {
-  const swr = useSWR<CreatorOwnerBundle>(
-    scope ? creatorOwnerBundleKey(scope) : null,
-    fetchCreatorOwnerBundleByKey,
-    { shouldRetryOnError: false },
-  );
-  return {
-    bundle: swr.data,
-    error: swr.error,
-    isLoading: swr.isLoading,
-    mutate: swr.mutate,
-  };
-}
-
-/** Refreshes one cached creator review record after asset upload or review record creation. */
-export function mutateCreatorReviewRecord(
-  reviewRecordId: string,
-  data?: CreatorChallengeReviewRecordResponse,
-) {
-  if (data) {
-    return mutate(creatorReviewRecordKey(reviewRecordId), data, {
-      revalidate: false,
-    });
+export function mutateCreatorApiTokens(humanId?: string) {
+  if (!humanId) {
+    return Promise.resolve(undefined);
   }
-  return mutate(creatorReviewRecordKey(reviewRecordId));
+  return mutate(creatorApiTokensKey(humanId));
 }
 
-/** Refreshes owner surfaces after shortlist mutation. */
-export function mutateCreatorOwnerBundle(scope: CreatorOwnerScope) {
-  return mutate(creatorOwnerBundleKey(scope));
+/** Clears all cached creator-token metadata, usually after sign-out. */
+export function clearCreatorApiTokenCaches() {
+  return mutate(
+    (key) => Array.isArray(key) && key[0] === CREATOR_API_TOKENS_CACHE_KEY,
+    undefined,
+    { revalidate: false },
+  );
 }
 
-/** Fetches owner surfaces as one bundle. */
-export async function fetchCreatorOwnerBundle(
-  scope: CreatorOwnerScope,
-): Promise<CreatorOwnerBundle> {
-  const [stats, participants, shortlist] = await Promise.all([
-    getCreatorChallengeStats(scope.challengeName, scope.target),
-    getCreatorChallengeParticipants(scope.challengeName, scope.target),
-    getChallengeShortlist(scope.challengeName),
-  ]);
-  return { stats, participants, shortlist };
+function creatorApiTokensKey(
+  humanId: string,
+): readonly ["creator-api-tokens", string] {
+  return [CREATOR_API_TOKENS_CACHE_KEY, humanId] as const;
 }
 
-function creatorReviewRecordKey(
-  reviewRecordId: string,
-): readonly ["creator-review-record", string] {
-  return ["creator-review-record", reviewRecordId] as const;
-}
-
-function creatorOwnerBundleKey(
-  scope: CreatorOwnerScope,
-): readonly ["creator-owner-bundle", string, string] {
-  return [
-    "creator-owner-bundle",
-    scope.challengeName,
-    scope.target ?? "",
-  ] as const;
-}
-
-function fetchCreatorReviewRecordByKey(
-  key: readonly ["creator-review-record", string],
+function fetchCreatorApiTokensByKey(
+  _key: readonly ["creator-api-tokens", string],
 ) {
-  return getChallengeReviewRecord(key[1]);
-}
-
-function fetchCreatorOwnerBundleByKey(
-  key: readonly ["creator-owner-bundle", string, string],
-) {
-  return fetchCreatorOwnerBundle({
-    challengeName: key[1],
-    target: key[2] || undefined,
-  });
+  return listCreatorApiTokens();
 }

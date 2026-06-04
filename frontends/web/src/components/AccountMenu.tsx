@@ -11,6 +11,7 @@ import {
   HUMAN_SESSION_CACHE_KEY,
   logoutHuman,
 } from "@/lib/authApi";
+import { clearCreatorApiTokenCaches } from "@/lib/creatorData";
 import type { HumanSessionResponse } from "@/lib/schemas";
 
 /** Renders the shared account controls in the site header. */
@@ -71,6 +72,7 @@ export function AccountMenu() {
     try {
       await logoutHuman(session.csrf_token);
       await mutate(HUMAN_SESSION_CACHE_KEY, undefined, { revalidate: false });
+      await clearCreatorApiTokenCaches();
       setOpen(false);
     } finally {
       setSigningOut(false);
