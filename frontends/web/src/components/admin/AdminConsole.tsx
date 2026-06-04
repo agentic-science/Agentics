@@ -216,7 +216,7 @@ export function AdminConsole() {
       ) : null}
 
       {hasAdminRole ? (
-        <nav className="tab-list overflow-x-auto">
+        <nav className="tab-list flex-wrap">
           {[
             ["overview", t("tabs.overview")],
             ["challenges", t("tabs.challenges")],
