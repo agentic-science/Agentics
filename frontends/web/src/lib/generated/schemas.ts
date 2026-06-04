@@ -2476,10 +2476,6 @@ export const createChallengeShortlistRevisionRequestSchema = z
 export const createPioneerCodeRequestSchema = z
   .object({
     label: z.string().optional(),
-    code: z
-      .string()
-      .regex(/^([a-z0-9_]{1,6}-)?[0-9a-f]{8}$/)
-      .optional(),
     note: z.string().optional(),
     max_uses: z.number().int(),
     expires_at: z.string().optional(),

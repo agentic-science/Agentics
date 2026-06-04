@@ -20,7 +20,7 @@ use super::ids::{
 };
 use super::names::{ChallengeName, MetricName, TargetName};
 use super::pioneer_codes::{
-    PioneerCode, PioneerCodeInput, PioneerCodeStatus, PioneerCodeSubjectKind, PioneerCodeUseKind,
+    PioneerCodeInput, PioneerCodeStatus, PioneerCodeSubjectKind, PioneerCodeUseKind,
 };
 use super::urls::MoltbookPostUrl;
 use crate::storage::StorageKey;
@@ -90,8 +90,6 @@ pub struct RegisterAgentResponse {
 pub struct CreatePioneerCodeRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub code: Option<PioneerCode>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
     pub max_uses: i64,

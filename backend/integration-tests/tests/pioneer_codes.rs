@@ -112,11 +112,24 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
         .expect("failed to register with malformed code");
     assert_eq!(malformed_code.status(), 403);
 
-    let created: serde_json::Value = client
+    let manual_code_create = client
         .post(api_url(&app, "/admin/pioneer-codes"))
         .header("Authorization", auth.clone())
         .json(&serde_json::json!({
             "code": "jack-deadbeef",
+            "label": "jack",
+            "max_uses": 1
+        }))
+        .send()
+        .await
+        .expect("failed to send manual pioneer code create request");
+    assert_eq!(manual_code_create.status(), 400);
+
+    let created: serde_json::Value = client
+        .post(api_url(&app, "/admin/pioneer-codes"))
+        .header("Authorization", auth.clone())
+        .json(&serde_json::json!({
+            "label": "jack",
             "note": "early private beta",
             "max_uses": 1
         }))
@@ -126,7 +139,14 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
         .json()
         .await
         .expect("failed to decode pioneer code");
-    assert_eq!(created["code"]["code_display"], "jack-deadbeef");
+    let code_display = created["code"]["code_display"]
+        .as_str()
+        .expect("generated code should exist")
+        .to_string();
+    assert!(
+        code_display.starts_with("jack-"),
+        "generated code should preserve the selected label"
+    );
     assert_eq!(created["code"]["label"], "jack");
     assert_eq!(created["code"]["note"], "early private beta");
     assert_eq!(created["code"]["use_count"], 0);
@@ -135,7 +155,7 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/agents/register"))
         .json(&serde_json::json!({
             "display_name": "pioneer-agent",
-            "pioneer_code": "jack-deadbeef"
+            "pioneer_code": code_display
         }))
         .send()
         .await
@@ -152,7 +172,7 @@ async fn pioneer_code_mode_gates_agent_registration(pool: sqlx::PgPool) {
         .post(api_url(&app, "/api/agents/register"))
         .json(&serde_json::json!({
             "display_name": "second-agent",
-            "pioneer_code": "jack-deadbeef"
+            "pioneer_code": code_display
         }))
         .send()
         .await
@@ -208,23 +228,32 @@ async fn finite_pioneer_code_consumption_is_atomic(pool: sqlx::PgPool) {
     let client = reqwest::Client::new();
     let auth = admin_service_token_header(&app);
 
-    client
+    let created: serde_json::Value = client
         .post(api_url(&app, "/admin/pioneer-codes"))
         .header("Authorization", auth)
-        .json(&serde_json::json!({ "code": "deadbeef", "max_uses": 1 }))
+        .json(&serde_json::json!({ "max_uses": 1 }))
         .send()
         .await
-        .expect("failed to create pioneer code");
+        .expect("failed to create pioneer code")
+        .json()
+        .await
+        .expect("failed to decode pioneer code");
+    let code_display = created["code"]["code_display"]
+        .as_str()
+        .expect("generated code should exist")
+        .to_string();
 
     let first_client = client.clone();
     let first_url = api_url(&app, "/api/agents/register");
     let second_url = first_url.clone();
+    let first_code = code_display.clone();
+    let second_code = code_display.clone();
     let first = async move {
         first_client
             .post(first_url)
             .json(&serde_json::json!({
                 "display_name": "racer-one",
-                "pioneer_code": "deadbeef"
+                "pioneer_code": first_code
             }))
             .send()
             .await
@@ -236,7 +265,7 @@ async fn finite_pioneer_code_consumption_is_atomic(pool: sqlx::PgPool) {
             .post(second_url)
             .json(&serde_json::json!({
                 "display_name": "racer-two",
-                "pioneer_code": "deadbeef"
+                "pioneer_code": second_code
             }))
             .send()
             .await
@@ -248,12 +277,12 @@ async fn finite_pioneer_code_consumption_is_atomic(pool: sqlx::PgPool) {
     let statuses = [first_status, second_status];
     assert!(statuses.contains(&StatusCode::CREATED));
     assert!(statuses.contains(&StatusCode::FORBIDDEN));
-    let use_count = sqlx::query_scalar::<_, i64>(
-        "SELECT use_count FROM pioneer_codes WHERE code_display = 'deadbeef'",
-    )
-    .fetch_one(&pool)
-    .await
-    .expect("pioneer code row should exist");
+    let use_count =
+        sqlx::query_scalar::<_, i64>("SELECT use_count FROM pioneer_codes WHERE code_display = $1")
+            .bind(code_display)
+            .fetch_one(&pool)
+            .await
+            .expect("pioneer code row should exist");
     assert_eq!(use_count, 1);
 }
 
@@ -267,18 +296,25 @@ async fn github_sign_in_login_start_uses_post_body(pool: sqlx::PgPool) {
     let client = reqwest::Client::new();
     let auth = admin_service_token_header(&app);
 
-    client
+    let created: serde_json::Value = client
         .post(api_url(&app, "/admin/pioneer-codes"))
         .header("Authorization", auth)
-        .json(&serde_json::json!({ "code": "deadbeef", "max_uses": 1 }))
+        .json(&serde_json::json!({ "max_uses": 1 }))
         .send()
         .await
-        .expect("failed to create pioneer code");
+        .expect("failed to create pioneer code")
+        .json()
+        .await
+        .expect("failed to decode pioneer code");
+    let code_display = created["code"]["code_display"]
+        .as_str()
+        .expect("generated code should exist")
+        .to_string();
 
     let get_response = client
         .get(api_url(
             &app,
-            "/api/auth/github/login?pioneer_code=deadbeef",
+            &format!("/api/auth/github/login?pioneer_code={code_display}"),
         ))
         .send()
         .await
@@ -287,7 +323,7 @@ async fn github_sign_in_login_start_uses_post_body(pool: sqlx::PgPool) {
 
     let post_response = client
         .post(api_url(&app, "/api/auth/github/login"))
-        .json(&serde_json::json!({ "pioneer_code": "deadbeef" }))
+        .json(&serde_json::json!({ "pioneer_code": code_display }))
         .send()
         .await
         .expect("failed to start GitHub sign-in");

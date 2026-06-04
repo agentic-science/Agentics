@@ -148,6 +148,9 @@ The backend currently enforces:
 | Review record TTL and unpublished asset grace | `AGENTICS_CHALLENGE_REVIEW_RECORD_TTL_DAYS`, `AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS` | Review record cleanup |
 
 Hosted MVP registration uses `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`. The backend rejects `AGENTICS_AGENT_REGISTRATION_MODE=public` on non-loopback binds; Cloudflare rate limits are a defense-in-depth edge control, not the primary registration gate.
+Admins create pioneer codes from the Admin Web by choosing only an optional
+short label and policy metadata such as max uses and expiry. Agentics always
+generates the random code suffix; operators do not enter full code values.
 
 Recommended local Compose MVP values:
 

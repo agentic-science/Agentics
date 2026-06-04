@@ -74,7 +74,6 @@ pub async fn create_pioneer_code(
 ) -> Result<PioneerCodeDetailResponse> {
     let CreatePioneerCodeRequest {
         label,
-        code,
         note,
         max_uses,
         expires_at,
@@ -91,7 +90,7 @@ pub async fn create_pioneer_code(
         ));
     }
 
-    let code = resolve_pioneer_code_request(code, label.as_deref())?;
+    let code = generate_pioneer_code(label.as_deref())?;
     let record = Repositories::new(pool)
         .pioneer_codes()
         .create(&CreatePioneerCodeInput {
@@ -391,22 +390,8 @@ pub async fn get_admin_capacity(
     })
 }
 
-/// Resolve admin-supplied or generated pioneer code text.
-fn resolve_pioneer_code_request(
-    code: Option<PioneerCode>,
-    label: Option<&str>,
-) -> Result<PioneerCode> {
-    if let Some(code) = code {
-        if let Some(label) = label
-            && code.label() != Some(label)
-        {
-            return Err(ServiceError::BadRequest(
-                "label must match the pioneer code prefix when code is supplied".to_string(),
-            ));
-        }
-        return Ok(code);
-    }
-
+/// Generate pioneer code text from the optional admin-selected label.
+fn generate_pioneer_code(label: Option<&str>) -> Result<PioneerCode> {
     PioneerCode::generate(label).map_err(|error| ServiceError::BadRequest(error.to_string()))
 }
 

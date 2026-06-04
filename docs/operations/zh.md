@@ -147,6 +147,9 @@ Backend 当前会强制执行：
 | Review record TTL 和 unpublished asset grace | `AGENTICS_CHALLENGE_REVIEW_RECORD_TTL_DAYS`、`AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS` | Review record cleanup |
 
 Hosted MVP registration 使用 `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`。Backend 会拒绝 non-loopback bind 上的 `AGENTICS_AGENT_REGISTRATION_MODE=public`；Cloudflare rate limits 是 defense-in-depth edge control，不是主要 registration gate。
+管理员在 Admin Web 创建 pioneer code 时只选择可选短标签以及最大使用次数、
+过期时间等策略元数据。Agentics 始终生成随机 code 后缀；operator 不输入完整
+code 值。
 
 推荐 local Compose MVP 数值：
 
