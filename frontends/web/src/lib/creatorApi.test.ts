@@ -5,6 +5,8 @@ import {
   completeHumanSetup,
   createChallengeReviewRecord,
   createChallengeShortlistRevision,
+  createCreatorApiToken,
+  revokeCreatorApiToken,
   startGithubLogin,
   uploadPrivateAsset,
 } from "./creatorApi";
@@ -150,6 +152,78 @@ describe("creatorApi", () => {
     await expect(
       createChallengeShortlistRevision("sample-sum", {} as never, "csrf"),
     ).rejects.toThrow();
+    await expect(createCreatorApiToken({} as never, "csrf")).rejects.toThrow();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("manages creator API tokens with CSRF-protected browser requests", async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) => {
+        return new Response(
+          JSON.stringify({
+            token: "agentics_creator_created-secret",
+            token_record: {
+              id: "22222222-2222-4222-8222-222222222222",
+              label: "laptop",
+              status: "active",
+              created_by_human_id: "11111111-1111-4111-8111-111111111111",
+              created_at: "2026-06-05T00:00:00Z",
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      },
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await createCreatorApiToken({ label: "laptop" }, "csrf-token");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/creator/api-tokens",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ label: "laptop" }),
+        headers: expect.objectContaining({
+          "x-agentics-csrf-token": "csrf-token",
+        }),
+      }),
+    );
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          token_record: {
+            id: "22222222-2222-4222-8222-222222222222",
+            label: "laptop",
+            status: "revoked",
+            created_by_human_id: "11111111-1111-4111-8111-111111111111",
+            created_at: "2026-06-05T00:00:00Z",
+            revoked_at: "2026-06-05T01:00:00Z",
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+
+    await revokeCreatorApiToken(
+      "22222222-2222-4222-8222-222222222222",
+      "csrf-token",
+    );
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      "/api/creator/api-tokens/22222222-2222-4222-8222-222222222222/revoke",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({
+          "x-agentics-csrf-token": "csrf-token",
+        }),
+      }),
+    );
   });
 });

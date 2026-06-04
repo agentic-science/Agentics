@@ -1,123 +1,43 @@
 "use client";
 
-import { GitPullRequest } from "lucide-react";
+import { Copy, KeyRound, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useState } from "react";
+import { CreatorIdentityPanel } from "@/components/creator/CreatorPanels";
 import {
-  type CreatorOwnerFormState,
-  type CreatorPrivateAssetFormState,
-  type CreatorReviewRecordFormState,
-  defaultCreatorManifest,
-  OwnerStatsForm,
-  PrivateAssetUploadForm,
-  ReviewRecordCreateForm,
-  ReviewRecordInspectForm,
-  ShortlistUploadForm,
-} from "@/components/creator/CreatorForms";
-import {
-  CreatorIdentityPanel,
-  OwnerSurfaces,
-  ReviewRecordDetail,
-} from "@/components/creator/CreatorPanels";
-import {
-  type ChallengeCreationManifest,
-  type CreateChallengeReviewRecordRequest,
   CreatorApiError,
-  createChallengeReviewRecord,
-  createChallengeReviewRecordRequestSchema,
-  createChallengeShortlistRevision,
-  createChallengeShortlistRevisionRequestSchema,
-  uploadChallengePrivateAssetRequestSchema,
-  uploadPrivateAsset,
+  createCreatorApiToken,
+  revokeCreatorApiToken,
 } from "@/lib/creatorApi";
 import {
-  type CreatorOwnerScope,
-  mutateCreatorOwnerBundle,
-  mutateCreatorReviewRecord,
-  useCreatorOwnerBundle,
-  useCreatorReviewRecord,
+  mutateCreatorApiTokens,
+  useCreatorApiTokens,
   useCreatorSession,
 } from "@/lib/creatorData";
-import type { ChallengeShortlistRevisionResponse } from "@/lib/schemas";
+import type { CreatorApiTokenListResponse } from "@/lib/schemas";
 
-const LAST_REVIEW_RECORD_STORAGE_KEY = "agentics.creator.last_review_record_id";
-type CreatorPendingAction =
-  | "createReviewRecord"
-  | "inspectReviewRecord"
-  | "loadOwner"
-  | "refreshIdentity"
-  | "uploadAsset"
-  | "uploadShortlist";
+type PendingAction = "createToken" | "refreshIdentity" | "revokeToken";
+type CreatorApiTokenItem = CreatorApiTokenListResponse["items"][number];
 
-/** Renders the creator console component. */
+/** Renders the reduced creator console for identity and API-token management. */
 export function CreatorConsole() {
   const t = useTranslations("creator");
-  const [reviewRecordLookupId, setReviewRecordLookupId] = useState("");
-  const [reviewRecordForm, setReviewRecordForm] =
-    useState<CreatorReviewRecordFormState>({
-      repoUrl: "https://github.com/agentics-reifying/agentics-challenges",
-      prNumber: "",
-      prUrl: "",
-      commitSha: "",
-      challengePath: "challenges/frontier-cs-example-challenge",
-      manifestText: defaultCreatorManifest,
-    });
-  const [assetForm, setAssetForm] = useState<CreatorPrivateAssetFormState>({
-    reviewRecordId: "",
-    assetName: "official-seed-config",
-    kind: "private_seeds",
-    required: true,
-    file: null,
-  });
-  const [ownerForm, setOwnerForm] = useState<CreatorOwnerFormState>({
-    challengeName: "",
-    target: "linux-arm64-cpu",
-    shortlistText: JSON.stringify(
-      { agent_ids_to_add: ["11111111-1111-4111-8111-111111111111"] },
-      null,
-      2,
-    ),
-  });
-  const [shortlistRevision, setShortlistRevision] =
-    useState<ChallengeShortlistRevisionResponse | null>(null);
-  const [ownerScope, setOwnerScope] = useState<CreatorOwnerScope | null>(null);
-  const [pendingAction, setPendingAction] =
-    useState<CreatorPendingAction | null>(null);
+  const [label, setLabel] = useState("");
+  const [expiresAt, setExpiresAt] = useState("");
+  const [createdToken, setCreatedToken] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(
+    null,
+  );
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const displayCreatorError = (error: unknown) =>
-    creatorErrorMessage(error, {
-      signIn: t("messages.signInBeforeContinue"),
-      invalidJson: t("messages.invalidManifestJson"),
-      unknown: t("messages.unknown"),
-    });
   const creatorSession = useCreatorSession();
-  const reviewRecordResource = useCreatorReviewRecord(reviewRecordLookupId);
-  const ownerBundle = useCreatorOwnerBundle(ownerScope);
   const creator = creatorSession.session ?? null;
   const hasCreatorAccess =
     creator?.status === "active" &&
     (creator.roles.includes("creator") || creator.roles.includes("admin"));
   const csrfToken = hasCreatorAccess ? (creator?.csrf_token ?? "") : "";
-  const reviewRecord = reviewRecordResource.reviewRecord ?? null;
-  const stats = ownerBundle.bundle?.stats ?? null;
-  const participants = ownerBundle.bundle?.participants ?? null;
-  const shortlist = ownerBundle.bundle?.shortlist ?? null;
+  const tokenResource = useCreatorApiTokens(hasCreatorAccess);
 
-  useEffect(() => {
-    const lastReviewRecordId = window.localStorage.getItem(
-      LAST_REVIEW_RECORD_STORAGE_KEY,
-    );
-    if (lastReviewRecordId) {
-      setReviewRecordLookupId(lastReviewRecordId);
-      setAssetForm((current) => ({
-        ...current,
-        reviewRecordId: lastReviewRecordId,
-      }));
-    }
-  }, []);
-
-  /** Refreshes identity from the backend. */
   const refreshIdentity = async () => {
     setPendingAction("refreshIdentity");
     setError(null);
@@ -127,255 +47,66 @@ export function CreatorConsole() {
         throw new Error(t("messages.signInBeforeContinue"));
       }
       setMessage(t("messages.identityRefreshed"));
-    } catch (e) {
-      setError(displayCreatorError(e));
+    } catch (caught) {
+      setError(creatorErrorMessage(caught, t("messages.signInBeforeContinue")));
     } finally {
       setPendingAction(null);
     }
   };
 
-  /** Handles submit review record behavior for this component. */
-  const submitReviewRecord = async (event: FormEvent) => {
+  const submitToken = async (event: FormEvent) => {
     event.preventDefault();
-    if (!hasCreatorAccess) {
-      setError(
-        creatorAccessMessage(creator, {
-          accessDenied: t("messages.accessDenied"),
-          finishSetup: t("messages.finishSetupBeforeCreator"),
-          signIn: t("messages.signInBeforeReviewRecord"),
-        }),
-      );
+    if (!hasCreatorAccess || !csrfToken) {
+      setError(creatorAccessMessage(creator, creatorAccessMessages(t)));
       return;
     }
+    setPendingAction("createToken");
+    setError(null);
+    setCreatedToken(null);
+    try {
+      const response = await createCreatorApiToken(
+        {
+          label: label.trim(),
+          expires_at: expiresAtToRfc3339(expiresAt),
+        },
+        csrfToken,
+      );
+      setCreatedToken(response.token);
+      setLabel("");
+      setExpiresAt("");
+      await mutateCreatorApiTokens();
+      setMessage(t("apiTokens.created"));
+    } catch (caught) {
+      setError(creatorErrorMessage(caught, t("messages.unknown")));
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const revokeToken = async (token: CreatorApiTokenItem) => {
     if (!csrfToken) {
-      setError(t("messages.refreshBeforeReviewRecord"));
+      setError(creatorAccessMessage(creator, creatorAccessMessages(t)));
       return;
     }
-
-    const prNumberText = reviewRecordForm.prNumber.trim();
-    if (!/^[1-9]\d*$/.test(prNumberText)) {
-      setError(t("messages.prNumberInvalid"));
-      return;
-    }
-    const prNumber = Number(prNumberText);
-    if (!Number.isSafeInteger(prNumber) || prNumber > 2147483647) {
-      setError(t("messages.prNumberTooLarge"));
-      return;
-    }
-
-    let manifest: ChallengeCreationManifest;
-    try {
-      manifest = JSON.parse(
-        reviewRecordForm.manifestText,
-      ) as ChallengeCreationManifest;
-    } catch (e) {
-      setError(displayCreatorError(e));
-      return;
-    }
-
-    const request = {
-      repo_url: reviewRecordForm.repoUrl.trim(),
-      pr_number: prNumber,
-      pr_url: reviewRecordForm.prUrl.trim(),
-      commit_sha: reviewRecordForm.commitSha,
-      challenge_path: reviewRecordForm.challengePath.trim(),
-      pr_author_github_user_id: creator.github_user_id,
-      manifest,
-    };
-    const parsedRequest =
-      createChallengeReviewRecordRequestSchema.safeParse(request);
-    if (!parsedRequest.success) {
-      setError(
-        parsedRequest.error.issues[0]?.message ??
-          t("messages.invalidReviewRecord"),
-      );
-      return;
-    }
-
-    setPendingAction("createReviewRecord");
+    setPendingAction("revokeToken");
     setError(null);
     try {
-      const response = await createChallengeReviewRecord(
-        parsedRequest.data as CreateChallengeReviewRecordRequest,
-        csrfToken,
-      );
-      rememberReviewRecord(response.id);
-      await mutateCreatorReviewRecord(response.id, response);
-      setMessage(t("messages.reviewRecordCreated", { id: response.id }));
-    } catch (e) {
-      setError(displayCreatorError(e));
+      await revokeCreatorApiToken(token.id, csrfToken);
+      await mutateCreatorApiTokens();
+      setMessage(t("apiTokens.revoked"));
+    } catch (caught) {
+      setError(creatorErrorMessage(caught, t("messages.unknown")));
     } finally {
       setPendingAction(null);
     }
   };
 
-  /** Handles inspect review record behavior for this component. */
-  const inspectReviewRecord = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!reviewRecordLookupId.trim()) {
-      setError(t("messages.enterReviewRecord"));
+  const copyCreatedToken = async () => {
+    if (!createdToken) {
       return;
     }
-
-    setPendingAction("inspectReviewRecord");
-    setError(null);
-    try {
-      const response = await mutateCreatorReviewRecord(
-        reviewRecordLookupId.trim(),
-      );
-      if (!response) {
-        throw new Error(t("messages.enterReviewRecord"));
-      }
-      rememberReviewRecord(response.id);
-      setMessage(t("messages.reviewRecordLoaded", { id: response.id }));
-    } catch (e) {
-      setError(displayCreatorError(e));
-    } finally {
-      setPendingAction(null);
-    }
-  };
-
-  /** Uploads asset selected by the user. */
-  const uploadAsset = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!hasCreatorAccess || !csrfToken) {
-      setError(
-        creatorAccessMessage(creator, {
-          accessDenied: t("messages.accessDenied"),
-          finishSetup: t("messages.finishSetupBeforeCreator"),
-          signIn: t("messages.signInBeforeReviewRecord"),
-        }),
-      );
-      return;
-    }
-    if (!assetForm.file) {
-      setError(t("messages.chooseZip"));
-      return;
-    }
-
-    setPendingAction("uploadAsset");
-    setError(null);
-    try {
-      const request = {
-        asset_name: assetForm.assetName.trim(),
-        kind: assetForm.kind,
-        required: assetForm.required,
-        asset_base64: await fileToBase64(assetForm.file),
-      };
-      const parsedRequest =
-        uploadChallengePrivateAssetRequestSchema.safeParse(request);
-      if (!parsedRequest.success) {
-        setError(
-          parsedRequest.error.issues[0]?.message ?? t("messages.invalidAsset"),
-        );
-        return;
-      }
-      await uploadPrivateAsset(
-        assetForm.reviewRecordId.trim(),
-        parsedRequest.data,
-        csrfToken,
-      );
-      const refreshed = await mutateCreatorReviewRecord(
-        assetForm.reviewRecordId.trim(),
-      );
-      if (refreshed) {
-        rememberReviewRecord(refreshed.id);
-      }
-      setMessage(t("messages.assetUploaded", { name: assetForm.assetName }));
-    } catch (e) {
-      setError(displayCreatorError(e));
-    } finally {
-      setPendingAction(null);
-    }
-  };
-
-  /** Loads owner surfaces for the selected challenge. */
-  const loadOwnerSurfaces = async () => {
-    if (!ownerForm.challengeName.trim()) {
-      setError(t("messages.enterChallenge"));
-      return;
-    }
-
-    setPendingAction("loadOwner");
-    setError(null);
-    try {
-      const challengeName = ownerForm.challengeName.trim();
-      const target = ownerForm.target.trim() || undefined;
-      const scope = { challengeName, target };
-      setOwnerScope(scope);
-      await mutateCreatorOwnerBundle(scope);
-      setMessage(t("messages.ownerLoaded", { id: challengeName }));
-    } catch (e) {
-      setError(displayCreatorError(e));
-    } finally {
-      setPendingAction(null);
-    }
-  };
-
-  /** Uploads shortlist selected by the user. */
-  const uploadShortlist = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!hasCreatorAccess || !csrfToken) {
-      setError(
-        creatorAccessMessage(creator, {
-          accessDenied: t("messages.accessDenied"),
-          finishSetup: t("messages.finishSetupBeforeCreator"),
-          signIn: t("messages.signInBeforeReviewRecord"),
-        }),
-      );
-      return;
-    }
-    if (!ownerForm.challengeName.trim()) {
-      setError(t("messages.enterChallenge"));
-      return;
-    }
-
-    let payload: unknown;
-    try {
-      payload = JSON.parse(ownerForm.shortlistText);
-    } catch (e) {
-      setError(displayCreatorError(e));
-      return;
-    }
-    const parsedPayload =
-      createChallengeShortlistRevisionRequestSchema.safeParse(payload);
-    if (!parsedPayload.success) {
-      setError(
-        parsedPayload.error.issues[0]?.message ??
-          t("messages.invalidShortlist"),
-      );
-      return;
-    }
-
-    setPendingAction("uploadShortlist");
-    setError(null);
-    try {
-      const challengeName = ownerForm.challengeName.trim();
-      const response = await createChallengeShortlistRevision(
-        challengeName,
-        parsedPayload.data,
-        csrfToken,
-      );
-      setShortlistRevision(response);
-      const scope = {
-        challengeName,
-        target: ownerForm.target.trim() || undefined,
-      };
-      setOwnerScope(scope);
-      await mutateCreatorOwnerBundle(scope);
-      setMessage(t("messages.shortlistUploaded", { id: response.id }));
-    } catch (e) {
-      setError(displayCreatorError(e));
-    } finally {
-      setPendingAction(null);
-    }
-  };
-
-  /** Persists review record in local browser state. */
-  const rememberReviewRecord = (id: string) => {
-    window.localStorage.setItem(LAST_REVIEW_RECORD_STORAGE_KEY, id);
-    setReviewRecordLookupId(id);
-    setAssetForm((current) => ({ ...current, reviewRecordId: id }));
+    await navigator.clipboard.writeText(createdToken);
+    setMessage(t("apiTokens.copied"));
   };
 
   return (
@@ -384,7 +115,7 @@ export function CreatorConsole() {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
             <span className="badge badge-validation mb-4">
-              <GitPullRequest className="w-3 h-3" />
+              <KeyRound className="w-3 h-3" />
               {t("hero.badge")}
             </span>
             <h1
@@ -413,96 +144,171 @@ export function CreatorConsole() {
       ) : null}
 
       <section className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-6">
-        <div className="flex flex-col gap-5">
-          <ReviewRecordCreateForm
-            reviewRecordForm={reviewRecordForm}
-            setReviewRecordForm={setReviewRecordForm}
-            loading={pendingAction === "createReviewRecord"}
-            onSubmit={submitReviewRecord}
-          />
+        <form className="card space-y-4" onSubmit={submitToken}>
+          <div className="flex items-center gap-2">
+            <KeyRound className="w-4 h-4 text-action-fg" />
+            <h2 className="text-h3 font-semibold">{t("apiTokens.create")}</h2>
+          </div>
+          <label className="form-field">
+            <span>{t("apiTokens.label")}</span>
+            <input
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+              placeholder={t("apiTokens.labelPlaceholder")}
+              disabled={!hasCreatorAccess}
+              required
+            />
+          </label>
+          <label className="form-field">
+            <span>{t("apiTokens.expiresAt")}</span>
+            <input
+              type="datetime-local"
+              value={expiresAt}
+              onChange={(event) => setExpiresAt(event.target.value)}
+              disabled={!hasCreatorAccess}
+            />
+          </label>
+          <button
+            type="submit"
+            className="btn btn-primary w-full"
+            disabled={!hasCreatorAccess || pendingAction === "createToken"}
+          >
+            <Plus className="w-4 h-4" />
+            {t("apiTokens.createButton")}
+          </button>
+          {createdToken ? (
+            <div className="rounded-md border border-success/30 p-3 bg-success/5">
+              <div className="text-caption uppercase tracking-wide text-fg-muted">
+                {t("apiTokens.createdToken")}
+              </div>
+              <div className="mt-2 flex items-center gap-2">
+                <code className="min-w-0 flex-1 break-all text-body-sm">
+                  {createdToken}
+                </code>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={() => void copyCreatedToken()}
+                  aria-label={t("apiTokens.copy")}
+                >
+                  <Copy className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </form>
 
-          <ReviewRecordInspectForm
-            reviewRecordLookupId={reviewRecordLookupId}
-            setReviewRecordLookupId={setReviewRecordLookupId}
-            loading={pendingAction === "inspectReviewRecord"}
-            onSubmit={inspectReviewRecord}
-          />
-
-          <PrivateAssetUploadForm
-            assetForm={assetForm}
-            setAssetForm={setAssetForm}
-            loading={pendingAction === "uploadAsset"}
-            onSubmit={uploadAsset}
-          />
+        <div className="card overflow-x-auto">
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <div className="flex items-center gap-2">
+              <KeyRound className="w-4 h-4 text-action-fg" />
+              <h2 className="text-h3 font-semibold">{t("apiTokens.title")}</h2>
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => void tokenResource.mutate()}
+              disabled={!hasCreatorAccess || tokenResource.isLoading}
+            >
+              <RefreshCw className="w-4 h-4" />
+              {t("identity.refresh")}
+            </button>
+          </div>
+          {!hasCreatorAccess ? (
+            <div className="empty-state">
+              {creatorAccessMessage(creator, creatorAccessMessages(t))}
+            </div>
+          ) : tokenResource.tokens?.items.length ? (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>{t("apiTokens.label")}</th>
+                  <th>{t("apiTokens.status")}</th>
+                  <th>{t("apiTokens.lastUsed")}</th>
+                  <th>{t("apiTokens.expiresAt")}</th>
+                  <th>{t("apiTokens.actions")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tokenResource.tokens.items.map((token) => (
+                  <tr key={token.id}>
+                    <td>
+                      <div className="font-medium">{token.label}</div>
+                      <div className="font-mono text-caption text-fg-muted">
+                        {token.id}
+                      </div>
+                    </td>
+                    <td>{token.status}</td>
+                    <td>{token.last_used_at ?? "—"}</td>
+                    <td>{token.expires_at ?? "—"}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => void revokeToken(token)}
+                        disabled={
+                          token.status !== "active" ||
+                          pendingAction === "revokeToken"
+                        }
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        {t("apiTokens.revoke")}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="empty-state">{t("apiTokens.empty")}</div>
+          )}
         </div>
-
-        <ReviewRecordDetail reviewRecord={reviewRecord} />
-      </section>
-
-      <section className="grid grid-cols-1 xl:grid-cols-[420px_1fr] gap-6">
-        <div className="flex flex-col gap-5">
-          <OwnerStatsForm
-            ownerForm={ownerForm}
-            setOwnerForm={setOwnerForm}
-            loading={pendingAction === "loadOwner"}
-            onLoad={loadOwnerSurfaces}
-          />
-
-          <ShortlistUploadForm
-            ownerForm={ownerForm}
-            setOwnerForm={setOwnerForm}
-            loading={pendingAction === "uploadShortlist"}
-            onSubmit={uploadShortlist}
-          />
-        </div>
-
-        <OwnerSurfaces
-          stats={stats}
-          participants={participants}
-          shortlist={shortlist}
-          shortlistRevision={shortlistRevision}
-        />
       </section>
     </div>
   );
 }
 
-/** Handles file to base64 behavior for this module. */
-async function fileToBase64(file: File): Promise<string> {
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  const chunks: string[] = [];
-  const chunkSize = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    chunks.push(
-      String.fromCharCode(...bytes.subarray(index, index + chunkSize)),
-    );
+function expiresAtToRfc3339(value: string): string | undefined {
+  if (!value.trim()) {
+    return undefined;
   }
-  return btoa(chunks.join(""));
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toISOString();
 }
 
 /** Normalizes unknown errors into a displayable message. */
-function creatorErrorMessage(
-  error: unknown,
-  fallback: { signIn: string; invalidJson: string; unknown: string },
-): string {
+function creatorErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof CreatorApiError) {
-    if (error.status === 401) {
-      return fallback.signIn;
-    }
     return error.message;
-  }
-  if (error instanceof SyntaxError) {
-    return fallback.invalidJson;
   }
   if (error instanceof Error) {
     return error.message;
   }
-  return fallback.unknown;
+  return fallback;
+}
+
+type CreatorAccessMessages = {
+  signIn: string;
+  finishSetup: string;
+  accessDenied: string;
+};
+
+function creatorAccessMessages(
+  t: ReturnType<typeof useTranslations>,
+): CreatorAccessMessages {
+  return {
+    signIn: t("messages.signInBeforeContinue"),
+    finishSetup: t("messages.finishSetupBeforeCreator"),
+    accessDenied: t("messages.accessDenied"),
+  };
 }
 
 function creatorAccessMessage(
   creator: { status: string } | null,
-  messages: { accessDenied: string; finishSetup: string; signIn: string },
+  messages: CreatorAccessMessages,
 ): string {
   if (!creator) {
     return messages.signIn;

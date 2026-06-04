@@ -7,9 +7,11 @@ import {
   getChallengeShortlist,
   getCreatorChallengeParticipants,
   getCreatorChallengeStats,
+  listCreatorApiTokens,
 } from "@/lib/creatorApi";
 import type {
   ChallengeShortlistResponse,
+  CreatorApiTokenListResponse,
   CreatorChallengeParticipantsResponse,
   CreatorChallengeReviewRecordResponse,
   CreatorChallengeStatsResponse,
@@ -44,6 +46,28 @@ export function useCreatorSession() {
     isLoading: swr.isLoading,
     mutate: swr.mutate,
   };
+}
+
+const CREATOR_API_TOKENS_CACHE_KEY = "creator-api-tokens";
+
+/** Loads creator API-token metadata for the signed-in creator. */
+export function useCreatorApiTokens(enabled: boolean) {
+  const swr = useSWR<CreatorApiTokenListResponse>(
+    enabled ? CREATOR_API_TOKENS_CACHE_KEY : null,
+    listCreatorApiTokens,
+    { shouldRetryOnError: false },
+  );
+  return {
+    tokens: swr.data,
+    error: swr.error,
+    isLoading: swr.isLoading,
+    mutate: swr.mutate,
+  };
+}
+
+/** Refreshes cached creator API tokens after create or revoke. */
+export function mutateCreatorApiTokens() {
+  return mutate(CREATOR_API_TOKENS_CACHE_KEY);
 }
 
 /** Loads one creator-owned review record when an id is available. */

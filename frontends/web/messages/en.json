@@ -623,9 +623,9 @@
       "failed": "GitHub sign-in failed."
     },
     "hero": {
-      "badge": "Creator Observatory",
-      "title": "Challenge review record console",
-      "description": "Create GitHub-backed challenge review records and upload private benchmark assets without using the admin identity model."
+      "badge": "Creator Console",
+      "title": "Creator API tokens",
+      "description": "Create a creator API token here, then use agentics-cli for challenge review records, private assets, owner stats, participants, and shortlist workflows."
     },
     "messages": {
       "identityRefreshed": "Creator identity refreshed.",
@@ -697,10 +697,28 @@
       "humanId": "Human ID",
       "status": "Status",
       "refresh": "Refresh",
-      "githubSignInRequired": "GitHub sign-in is required before creating review records or uploading private assets.",
+      "githubSignInRequired": "GitHub sign-in is required before creating creator API tokens.",
       "signIn": "Sign in with GitHub",
       "finishSetup": "Finish Setup",
-      "accessDenied": "This account cannot access creator workflows."
+      "accessDenied": "This account cannot create creator API tokens."
+    },
+    "apiTokens": {
+      "title": "Creator API tokens",
+      "create": "Create creator API token",
+      "label": "Label",
+      "labelPlaceholder": "Laptop, CI, or collaborator name",
+      "expiresAt": "Expires at",
+      "createButton": "Create token",
+      "created": "Creator API token created. Copy it now.",
+      "createdToken": "New token",
+      "copy": "Copy token",
+      "copied": "Token copied.",
+      "revoked": "Creator API token revoked.",
+      "empty": "No creator API tokens yet.",
+      "status": "Status",
+      "lastUsed": "Last used",
+      "actions": "Actions",
+      "revoke": "Revoke"
     },
     "owner": {
       "statisticsForm": "Owner statistics",

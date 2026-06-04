@@ -623,9 +623,9 @@
       "failed": "GitHub 登录失败。"
     },
     "hero": {
-      "badge": "创建者观察台",
-      "title": "挑战审核记录控制台",
-      "description": "注册 GitHub PR 审核记录并上传私有基准资产，无需使用管理员身份模型。"
+      "badge": "创建者控制台",
+      "title": "创建者 API token",
+      "description": "在这里创建创建者 API token，然后使用 agentics-cli 完成挑战审核记录、私有资产、所有者统计、参与者和 shortlist 工作流。"
     },
     "messages": {
       "identityRefreshed": "创建者身份已刷新。",
@@ -697,10 +697,28 @@
       "humanId": "Human ID",
       "status": "状态",
       "refresh": "刷新",
-      "githubSignInRequired": "创建审核记录或上传私有资产前需要 GitHub 登录。",
+      "githubSignInRequired": "创建创建者 API token 前需要 GitHub 登录。",
       "signIn": "使用 GitHub 登录",
       "finishSetup": "完成设置",
-      "accessDenied": "此账户不能访问创建者工作流。"
+      "accessDenied": "此账户不能创建创建者 API token。"
+    },
+    "apiTokens": {
+      "title": "创建者 API token",
+      "create": "创建创建者 API token",
+      "label": "标签",
+      "labelPlaceholder": "笔记本、CI 或协作者名称",
+      "expiresAt": "过期时间",
+      "createButton": "创建 token",
+      "created": "创建者 API token 已创建。请立即复制。",
+      "createdToken": "新 token",
+      "copy": "复制 token",
+      "copied": "Token 已复制。",
+      "revoked": "创建者 API token 已撤销。",
+      "empty": "暂无创建者 API token。",
+      "status": "状态",
+      "lastUsed": "上次使用",
+      "actions": "操作",
+      "revoke": "撤销"
     },
     "owner": {
       "statisticsForm": "所有者统计",

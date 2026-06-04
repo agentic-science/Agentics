@@ -12,6 +12,9 @@ import {
   type ChallengeShortlistRevisionResponse,
   type CreateChallengeReviewRecordRequest,
   type CreateChallengeShortlistRevisionRequest,
+  type CreateCreatorApiTokenRequest,
+  type CreatorApiTokenCreatedResponse,
+  type CreatorApiTokenListResponse,
   type CreatorChallengeParticipantsResponse,
   type CreatorChallengeReviewRecordResponse,
   type CreatorChallengeStatsResponse,
@@ -20,9 +23,14 @@ import {
   challengeShortlistRevisionResponseSchema,
   createChallengeReviewRecordRequestSchema,
   createChallengeShortlistRevisionRequestSchema,
+  createCreatorApiTokenRequestSchema,
+  creatorApiTokenCreatedResponseSchema,
+  creatorApiTokenListResponseSchema,
   creatorChallengeParticipantsResponseSchema,
   creatorChallengeReviewRecordResponseSchema,
   creatorChallengeStatsResponseSchema,
+  type RevokeCreatorApiTokenResponse,
+  revokeCreatorApiTokenResponseSchema,
   type UploadChallengePrivateAssetRequest,
   uploadChallengePrivateAssetRequestSchema,
 } from "@/lib/schemas";
@@ -37,6 +45,7 @@ export type ChallengePrivateAssetKind =
 export type {
   CreateChallengeReviewRecordRequest,
   CreateChallengeShortlistRevisionRequest,
+  CreateCreatorApiTokenRequest,
   UploadChallengePrivateAssetRequest,
 };
 export {
@@ -45,10 +54,49 @@ export {
   completeHumanSetup,
   createChallengeReviewRecordRequestSchema,
   createChallengeShortlistRevisionRequestSchema,
+  createCreatorApiTokenRequestSchema,
   getCreatorSession,
   startGithubLogin,
   uploadChallengePrivateAssetRequestSchema,
 };
+
+/** Lists API tokens owned by the current creator. */
+export async function listCreatorApiTokens(): Promise<CreatorApiTokenListResponse> {
+  return creatorFetchJson(
+    "/api/creator/api-tokens",
+    creatorApiTokenListResponseSchema,
+  );
+}
+
+/** Creates a creator API token and returns the one-time raw token. */
+export async function createCreatorApiToken(
+  request: CreateCreatorApiTokenRequest,
+  csrfToken: string,
+): Promise<CreatorApiTokenCreatedResponse> {
+  const body = createCreatorApiTokenRequestSchema.parse(request);
+  return creatorFetchJson(
+    "/api/creator/api-tokens",
+    creatorApiTokenCreatedResponseSchema,
+    csrfToken,
+    {
+      method: "POST",
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+/** Revokes a creator API token owned by the current creator. */
+export async function revokeCreatorApiToken(
+  tokenId: string,
+  csrfToken: string,
+): Promise<RevokeCreatorApiTokenResponse> {
+  return creatorFetchJson(
+    `/api/creator/api-tokens/${encodeURIComponent(tokenId)}/revoke`,
+    revokeCreatorApiTokenResponseSchema,
+    csrfToken,
+    { method: "POST" },
+  );
+}
 
 /** Creates challenge review record through the API. */
 export async function createChallengeReviewRecord(
