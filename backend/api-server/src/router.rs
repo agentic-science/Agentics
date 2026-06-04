@@ -75,6 +75,10 @@ pub fn router(config: &Config) -> Router<AppState> {
             "/api/auth/github/callback",
             post(crate::auth_handlers::github_sign_in_callback),
         )
+        .route(
+            "/api/auth/setup/pioneer-code",
+            post(crate::auth_handlers::complete_human_setup),
+        )
         .route("/api/auth/logout", post(crate::auth_handlers::human_logout))
         .route("/api/auth/session", get(crate::auth_handlers::human_session))
         .route(

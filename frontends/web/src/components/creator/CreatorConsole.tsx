@@ -27,7 +27,6 @@ import {
   createChallengeReviewRecordRequestSchema,
   createChallengeShortlistRevision,
   createChallengeShortlistRevisionRequestSchema,
-  startGithubLogin,
   uploadChallengePrivateAssetRequestSchema,
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
@@ -47,7 +46,6 @@ type CreatorPendingAction =
   | "inspectReviewRecord"
   | "loadOwner"
   | "refreshIdentity"
-  | "signIn"
   | "uploadAsset"
   | "uploadShortlist";
 
@@ -83,7 +81,6 @@ export function CreatorConsole() {
   const [shortlistRevision, setShortlistRevision] =
     useState<ChallengeShortlistRevisionResponse | null>(null);
   const [ownerScope, setOwnerScope] = useState<CreatorOwnerScope | null>(null);
-  const [pioneerCode, setPioneerCode] = useState("");
   const [pendingAction, setPendingAction] =
     useState<CreatorPendingAction | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -98,7 +95,10 @@ export function CreatorConsole() {
   const reviewRecordResource = useCreatorReviewRecord(reviewRecordLookupId);
   const ownerBundle = useCreatorOwnerBundle(ownerScope);
   const creator = creatorSession.session ?? null;
-  const csrfToken = creator?.csrf_token ?? "";
+  const hasCreatorAccess =
+    creator?.status === "active" &&
+    (creator.roles.includes("creator") || creator.roles.includes("admin"));
+  const csrfToken = hasCreatorAccess ? (creator?.csrf_token ?? "") : "";
   const reviewRecord = reviewRecordResource.reviewRecord ?? null;
   const stats = ownerBundle.bundle?.stats ?? null;
   const participants = ownerBundle.bundle?.participants ?? null;
@@ -116,19 +116,6 @@ export function CreatorConsole() {
       }));
     }
   }, []);
-
-  /** Handles sign in for the current session. */
-  const signIn = async () => {
-    setPendingAction("signIn");
-    setError(null);
-    try {
-      const response = await startGithubLogin(pioneerCode.trim(), "/creator");
-      window.location.href = response.authorization_url;
-    } catch (e) {
-      setError(displayCreatorError(e));
-      setPendingAction(null);
-    }
-  };
 
   /** Refreshes identity from the backend. */
   const refreshIdentity = async () => {
@@ -150,8 +137,14 @@ export function CreatorConsole() {
   /** Handles submit review record behavior for this component. */
   const submitReviewRecord = async (event: FormEvent) => {
     event.preventDefault();
-    if (!creator) {
-      setError(t("messages.signInBeforeReviewRecord"));
+    if (!hasCreatorAccess) {
+      setError(
+        creatorAccessMessage(creator, {
+          accessDenied: t("messages.accessDenied"),
+          finishSetup: t("messages.finishSetupBeforeCreator"),
+          signIn: t("messages.signInBeforeReviewRecord"),
+        }),
+      );
       return;
     }
     if (!csrfToken) {
@@ -245,8 +238,14 @@ export function CreatorConsole() {
   /** Uploads asset selected by the user. */
   const uploadAsset = async (event: FormEvent) => {
     event.preventDefault();
-    if (!csrfToken) {
-      setError(t("messages.refreshBeforeAsset"));
+    if (!hasCreatorAccess || !csrfToken) {
+      setError(
+        creatorAccessMessage(creator, {
+          accessDenied: t("messages.accessDenied"),
+          finishSetup: t("messages.finishSetupBeforeCreator"),
+          signIn: t("messages.signInBeforeReviewRecord"),
+        }),
+      );
       return;
     }
     if (!assetForm.file) {
@@ -316,8 +315,14 @@ export function CreatorConsole() {
   /** Uploads shortlist selected by the user. */
   const uploadShortlist = async (event: FormEvent) => {
     event.preventDefault();
-    if (!csrfToken) {
-      setError(t("messages.refreshBeforeShortlist"));
+    if (!hasCreatorAccess || !csrfToken) {
+      setError(
+        creatorAccessMessage(creator, {
+          accessDenied: t("messages.accessDenied"),
+          finishSetup: t("messages.finishSetupBeforeCreator"),
+          signIn: t("messages.signInBeforeReviewRecord"),
+        }),
+      );
       return;
     }
     if (!ownerForm.challengeName.trim()) {
@@ -394,12 +399,7 @@ export function CreatorConsole() {
           </div>
           <CreatorIdentityPanel
             creator={creator}
-            loading={
-              pendingAction === "signIn" || pendingAction === "refreshIdentity"
-            }
-            pioneerCode={pioneerCode}
-            onPioneerCodeChange={setPioneerCode}
-            onSignIn={signIn}
+            loading={pendingAction === "refreshIdentity"}
             onRefresh={refreshIdentity}
           />
         </div>
@@ -498,4 +498,17 @@ function creatorErrorMessage(
     return error.message;
   }
   return fallback.unknown;
+}
+
+function creatorAccessMessage(
+  creator: { status: string } | null,
+  messages: { accessDenied: string; finishSetup: string; signIn: string },
+): string {
+  if (!creator) {
+    return messages.signIn;
+  }
+  if (creator.status === "setup_required") {
+    return messages.finishSetup;
+  }
+  return messages.accessDenied;
 }

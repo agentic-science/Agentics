@@ -8,9 +8,10 @@ use serde_json::{Map, Value};
 use agentics_domain::models::ErrorResponse;
 use agentics_domain::models::auth::{
     AdminHumanListResponse, AdminHumanRoleResponse, AdminServiceTokenCreatedResponse,
-    AdminServiceTokenListResponse, CreateAdminServiceTokenRequest, GithubSignInCallbackRequest,
-    GithubSignInCallbackResponse, GithubSignInLoginRequest, GithubSignInLoginResponse,
-    HumanSessionResponse, RevokeAdminServiceTokenResponse,
+    AdminServiceTokenListResponse, CompleteHumanSetupRequest, CompleteHumanSetupResponse,
+    CreateAdminServiceTokenRequest, GithubSignInCallbackRequest, GithubSignInCallbackResponse,
+    GithubSignInLoginRequest, GithubSignInLoginResponse, HumanSessionResponse,
+    RevokeAdminServiceTokenResponse,
 };
 use agentics_domain::models::challenge::{
     AdminChallengeListResponse, ChallengeAdminResponse, ChallengeDetailResponse,
@@ -101,6 +102,14 @@ web_schema_exports! {
     (
         ChallengePrivateAssetResponse,
         "challengePrivateAssetResponseSchema",
+    ),
+    (
+        CompleteHumanSetupRequest,
+        "completeHumanSetupRequestSchema",
+    ),
+    (
+        CompleteHumanSetupResponse,
+        "completeHumanSetupResponseSchema",
     ),
     (ChallengeShortlistResponse, "challengeShortlistResponseSchema"),
     (

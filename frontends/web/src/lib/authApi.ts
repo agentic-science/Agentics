@@ -1,5 +1,9 @@
 import { browserApiBaseUrl, fetchJson, fetchNoContent } from "@/lib/http";
 import {
+  type CompleteHumanSetupRequest,
+  type CompleteHumanSetupResponse,
+  completeHumanSetupRequestSchema,
+  completeHumanSetupResponseSchema,
   type GithubSignInCallbackRequest,
   type GithubSignInCallbackResponse,
   type GithubSignInLoginRequest,
@@ -25,11 +29,9 @@ export async function getHumanSession(): Promise<HumanSessionResponse> {
 
 /** Starts GitHub sign-in and returns the GitHub authorization URL. */
 export async function startGithubLogin(
-  pioneerCode: string,
   returnTo: string,
 ): Promise<GithubSignInLoginResponse> {
   const request = githubSignInLoginRequestSchema.parse({
-    ...(pioneerCode ? { pioneer_code: pioneerCode } : {}),
     ...(returnTo ? { return_to: returnTo } : {}),
   } satisfies GithubSignInLoginRequest);
   return fetchJson("/api/auth/github/login", githubSignInLoginResponseSchema, {
@@ -40,6 +42,29 @@ export async function startGithubLogin(
     credentials: "include",
     baseUrl: browserApiBaseUrl(),
   });
+}
+
+/** Completes setup for the current signed-in human using a pioneer code. */
+export async function completeHumanSetup(
+  pioneerCode: string,
+  csrfToken: string,
+): Promise<CompleteHumanSetupResponse> {
+  const request = completeHumanSetupRequestSchema.parse({
+    pioneer_code: pioneerCode,
+  } satisfies CompleteHumanSetupRequest);
+  return fetchJson(
+    "/api/auth/setup/pioneer-code",
+    completeHumanSetupResponseSchema,
+    {
+      init: {
+        method: "POST",
+        body: JSON.stringify(request),
+      },
+      credentials: "include",
+      csrfToken,
+      baseUrl: browserApiBaseUrl(),
+    },
+  );
 }
 
 /** Completes GitHub sign-in and returns the issued human session. */

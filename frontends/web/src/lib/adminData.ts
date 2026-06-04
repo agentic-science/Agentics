@@ -90,13 +90,6 @@ export function mutateAdminDashboard(csrfToken: string) {
   });
 }
 
-/** Clears the admin dashboard cache after logout. */
-export function clearAdminDashboard(_csrfToken: string) {
-  return mutate(ADMIN_DASHBOARD_CACHE_KEY, emptyAdminData, {
-    revalidate: false,
-  });
-}
-
 /** Fetches the full admin dashboard bundle. */
 export async function fetchAdminDashboardData(
   csrfToken: string,

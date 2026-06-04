@@ -9,8 +9,9 @@ use axum::{
 
 use crate::error::ApiResult as Result;
 use agentics_domain::models::auth::{
-    GithubSignInCallbackRequest, GithubSignInCallbackResponse, GithubSignInLoginRequest,
-    GithubSignInLoginResponse, HumanSessionResponse,
+    CompleteHumanSetupRequest, CompleteHumanSetupResponse, GithubSignInCallbackRequest,
+    GithubSignInCallbackResponse, GithubSignInLoginRequest, GithubSignInLoginResponse,
+    HumanSessionResponse,
 };
 use agentics_error::ServiceError;
 use agentics_services::auth;
@@ -55,7 +56,7 @@ pub async fn human_session(
     ))
 }
 
-/// Start a GitHub sign-in login for challenge creators.
+/// Start a GitHub sign-in login for a browser human account.
 pub async fn github_sign_in_login(
     State(state): State<AppState>,
     ValidatedJson(request): ValidatedJson<GithubSignInLoginRequest>,
@@ -73,7 +74,7 @@ pub async fn github_sign_in_login(
     ))
 }
 
-/// Complete GitHub sign-in and issue a creator web session.
+/// Complete GitHub sign-in and issue a human web session.
 pub async fn github_sign_in_callback(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -109,6 +110,28 @@ pub async fn github_sign_in_callback(
             expired_github_sign_in_nonce_cookie(&state),
         ]),
         Json(issued_session.response),
+    ))
+}
+
+/// Complete setup for a signed-in human using a pioneer code.
+pub async fn complete_human_setup(
+    human: HumanAuth,
+    State(state): State<AppState>,
+    ValidatedJson(request): ValidatedJson<CompleteHumanSetupRequest>,
+) -> Result<Json<CompleteHumanSetupResponse>> {
+    let csrf_token = human
+        .csrf_token
+        .as_deref()
+        .ok_or(ServiceError::Unauthorized)?;
+    Ok(Json(
+        auth::complete_human_setup(
+            &state.db,
+            &human.human_id,
+            csrf_token,
+            human.expires_at,
+            request,
+        )
+        .await?,
     ))
 }
 

@@ -8,7 +8,7 @@ use secrecy::ExposeSecret;
 use serde::de::DeserializeOwned;
 
 use agentics_domain::models::ErrorDetail;
-use agentics_domain::models::auth::{GithubUserId, HumanRole};
+use agentics_domain::models::auth::{GithubUserId, HumanRole, HumanStatus};
 use agentics_domain::models::ids::{
     AdminServiceTokenId, AgentId, AgentTokenId, ChallengeReviewRecordId, HumanId, HumanSessionId,
     SolutionSubmissionId,
@@ -188,7 +188,7 @@ impl FromRequestParts<AppState> for AdminAuth {
         let session =
             authenticate_human_session_parts(parts, state, "admin session 无效或已过期").await?;
         require_session_csrf(parts, &session)?;
-        if !session.roles.contains(&HumanRole::Admin) {
+        if session.status != HumanStatus::Active || !session.roles.contains(&HumanRole::Admin) {
             return Err(forbidden("需要 admin 权限"));
         }
 
@@ -207,6 +207,7 @@ impl FromRequestParts<AppState> for AdminAuth {
 pub struct HumanAuth {
     pub session_id: HumanSessionId,
     pub human_id: HumanId,
+    pub status: HumanStatus,
     pub github_user_id: GithubUserId,
     pub github_login: String,
     pub roles: Vec<HumanRole>,
@@ -236,6 +237,7 @@ impl FromRequestParts<AppState> for HumanAuth {
         Ok(HumanAuth {
             session_id: session.session_id,
             human_id: session.human_id,
+            status: session.status,
             github_user_id: session.github_user_id,
             github_login: session.github_login,
             roles: session.roles,
@@ -250,6 +252,7 @@ impl FromRequestParts<AppState> for HumanAuth {
 pub struct CreatorAuth {
     pub session_id: HumanSessionId,
     pub human_id: HumanId,
+    pub status: HumanStatus,
     pub github_user_id: GithubUserId,
     pub github_login: String,
     pub roles: Vec<HumanRole>,
@@ -266,12 +269,16 @@ impl FromRequestParts<AppState> for CreatorAuth {
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
         let human = HumanAuth::from_request_parts(parts, state).await?;
-        if !human.roles.contains(&HumanRole::Creator) {
+        if human.status != HumanStatus::Active
+            || !(human.roles.contains(&HumanRole::Creator)
+                || human.roles.contains(&HumanRole::Admin))
+        {
             return Err(forbidden("需要 creator 权限"));
         }
         Ok(Self {
             session_id: human.session_id,
             human_id: human.human_id,
+            status: human.status,
             github_user_id: human.github_user_id,
             github_login: human.github_login,
             roles: human.roles,

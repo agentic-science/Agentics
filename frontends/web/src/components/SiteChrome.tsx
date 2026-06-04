@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
+import { AccountMenu } from "@/components/AccountMenu";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { NavConsoleDropdown } from "@/components/NavConsoleDropdown";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 /** Renders the shared public site shell, header, and footer. */
@@ -28,13 +28,6 @@ export async function SiteChrome({ children }: { children: ReactNode }) {
               >
                 {t("nav.challenges")}
               </Link>
-              <NavConsoleDropdown
-                copy={{
-                  adminPanel: t("nav.adminPanel"),
-                  consoles: t("nav.consoles"),
-                  creatorConsole: t("nav.creatorConsole"),
-                }}
-              />
               <Link
                 href="/manifesto"
                 className="hover:text-fg transition-colors"
@@ -55,9 +48,10 @@ export async function SiteChrome({ children }: { children: ReactNode }) {
                 <span className="github-repo-mark" aria-hidden="true" />
                 <span className="sr-only">{t("common.githubRepository")}</span>
               </a>
+              <ThemeSwitcher />
               <LanguageSwitcher />
               <div className="w-px h-4 bg-line mx-1" />
-              <ThemeSwitcher />
+              <AccountMenu />
             </div>
           </nav>
         </div>

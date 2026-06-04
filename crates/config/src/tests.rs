@@ -112,7 +112,7 @@ fn raw_app_env_deserializes_github_app_sign_in_values() {
         ),
         (
             "AGENTICS_GITHUB_APP_REDIRECT_URL".to_string(),
-            "http://127.0.0.1:3001/creator/github/callback".to_string(),
+            "http://127.0.0.1:3001/auth/github/callback".to_string(),
         ),
     ])
     .expect("GitHub App env should deserialize");
@@ -136,7 +136,7 @@ fn raw_app_env_deserializes_github_app_sign_in_values() {
             .redirect_url
             .as_ref()
             .map(|url| url.as_str()),
-        Some("http://127.0.0.1:3001/creator/github/callback")
+        Some("http://127.0.0.1:3001/auth/github/callback")
     );
 }
 
@@ -343,7 +343,7 @@ fn loopback_github_callback_allows_insecure_dev_cookies() {
     config.auth.agent_registration_mode = super::AgentRegistrationMode::PioneerCode;
     configure_test_github_sign_in(&mut config);
     config.github_app.redirect_url = Some(
-        GithubAppRedirectUrl::try_new("http://127.0.0.1:3001/creator/github/callback")
+        GithubAppRedirectUrl::try_new("http://127.0.0.1:3001/auth/github/callback")
             .expect("loopback HTTP redirect URL should parse"),
     );
 
@@ -396,7 +396,7 @@ fn github_app_redirect_http_is_loopback_only() {
     let mut loopback = test_config();
     configure_test_github_sign_in(&mut loopback);
     loopback.github_app.redirect_url = Some(
-        GithubAppRedirectUrl::try_new("http://127.0.0.1:3001/creator/github/callback")
+        GithubAppRedirectUrl::try_new("http://127.0.0.1:3001/auth/github/callback")
             .expect("loopback HTTP redirect URL should parse"),
     );
     assert!(loopback.validate_api_security().is_ok());
@@ -404,7 +404,7 @@ fn github_app_redirect_http_is_loopback_only() {
     let mut non_loopback = test_config();
     configure_test_github_sign_in(&mut non_loopback);
     non_loopback.github_app.redirect_url = Some(
-        GithubAppRedirectUrl::try_new("http://agentics.example/creator/github/callback")
+        GithubAppRedirectUrl::try_new("http://agentics.example/auth/github/callback")
             .expect("non-loopback HTTP redirect URL should parse before config policy"),
     );
     let error = non_loopback

@@ -48,6 +48,14 @@ impl SessionsRepository<'_> {
         db::sessions::authenticate_human_session(self.pool, session_token).await
     }
 
+    pub async fn complete_human_setup(
+        &self,
+        human_id: &HumanId,
+        code_hash: &str,
+    ) -> Result<HumanRecord> {
+        db::sessions::complete_human_setup(self.pool, human_id, code_hash).await
+    }
+
     pub async fn delete_human_session_by_token(&self, session_token: &str) -> Result<()> {
         db::sessions::delete_human_session_by_token(self.pool, session_token).await
     }

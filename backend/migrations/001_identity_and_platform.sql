@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS agent_tokens (
 
 CREATE TABLE IF NOT EXISTS humans (
   id UUID PRIMARY KEY,
-  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'setup_required', 'disabled')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   disabled_at TIMESTAMPTZ
 );
@@ -76,7 +76,6 @@ CREATE TABLE IF NOT EXISTS admin_service_tokens (
 CREATE TABLE IF NOT EXISTS github_sign_in_states (
   state_hash TEXT PRIMARY KEY,
   browser_nonce_hash TEXT NOT NULL,
-  pioneer_code_hash TEXT,
   return_to TEXT,
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

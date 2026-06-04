@@ -122,6 +122,7 @@ impl HumanRole {
 #[serde(rename_all = "snake_case")]
 pub enum HumanStatus {
     Active,
+    SetupRequired,
     Disabled,
 }
 
@@ -130,6 +131,7 @@ impl HumanStatus {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Active => "active",
+            Self::SetupRequired => "setup_required",
             Self::Disabled => "disabled",
         }
     }
@@ -138,6 +140,7 @@ impl HumanStatus {
     pub fn from_storage_value(value: &str) -> Option<Self> {
         match value {
             "active" => Some(Self::Active),
+            "setup_required" => Some(Self::SetupRequired),
             "disabled" => Some(Self::Disabled),
             _ => None,
         }
@@ -150,9 +153,15 @@ impl HumanStatus {
 #[serde(deny_unknown_fields)]
 pub struct GithubSignInLoginRequest {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pioneer_code: Option<PioneerCodeInput>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub return_to: Option<String>,
+}
+
+/// Browser-submitted request to finish setup for a signed-in human.
+#[derive(Debug, Clone, Deserialize, garde::Validate, schemars::JsonSchema)]
+#[garde(allow_unvalidated)]
+#[serde(deny_unknown_fields)]
+pub struct CompleteHumanSetupRequest {
+    pub pioneer_code: PioneerCodeInput,
 }
 
 /// URL returned to a browser or CLI so it can start GitHub sign-in.
@@ -176,11 +185,18 @@ pub struct GithubSignInCallbackRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct HumanSessionResponse {
     pub human_id: HumanId,
+    pub status: HumanStatus,
     pub github_user_id: GithubUserId,
     pub github_login: String,
     pub roles: Vec<HumanRole>,
     pub csrf_token: String,
     pub expires_at: String,
+}
+
+/// Response returned after finishing human account setup.
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct CompleteHumanSetupResponse {
+    pub session: HumanSessionResponse,
 }
 
 /// Response returned after completing GitHub sign-in.

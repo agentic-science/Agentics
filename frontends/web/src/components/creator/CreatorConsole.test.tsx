@@ -11,7 +11,6 @@ import {
   getChallengeShortlist,
   getCreatorChallengeParticipants,
   getCreatorChallengeStats,
-  startGithubLogin,
   uploadPrivateAsset,
 } from "@/lib/creatorApi";
 import type {
@@ -47,7 +46,6 @@ vi.mock("@/lib/creatorApi", () => {
     getChallengeShortlist: vi.fn(),
     getCreatorChallengeParticipants: vi.fn(),
     getCreatorChallengeStats: vi.fn(),
-    startGithubLogin: vi.fn(),
     uploadChallengePrivateAssetRequestSchema: passthroughSchema,
     uploadPrivateAsset: vi.fn(),
   };
@@ -72,16 +70,12 @@ const getCreatorChallengeParticipantsMock =
   getCreatorChallengeParticipants as Mock;
 const getCreatorChallengeStatsMock = getCreatorChallengeStats as Mock;
 const getHumanSessionMock = getHumanSession as Mock;
-const startGithubLoginMock = startGithubLogin as Mock;
 const uploadPrivateAssetMock = uploadPrivateAsset as Mock;
 
 describe("CreatorConsole", () => {
   beforeEach(() => {
     window.localStorage.clear();
     getHumanSessionMock.mockRejectedValue(new Error("not signed in"));
-    startGithubLoginMock.mockResolvedValue({
-      authorization_url: "https://github.com/login/oauth/authorize",
-    });
     getChallengeReviewRecordMock.mockRejectedValue(new Error("not configured"));
     getChallengeShortlistMock.mockResolvedValue({
       challenge_name: "frontier-cs-example-challenge",
@@ -140,35 +134,43 @@ describe("CreatorConsole", () => {
     expect(createChallengeReviewRecordMock).not.toHaveBeenCalled();
   });
 
-  it("starts GitHub sign-in without a pioneer code for returning creators", async () => {
+  it("renders shared sign-in link when no creator session exists", async () => {
     const view = renderCreatorConsole();
 
-    fireEvent.click(view.getByRole("button", { name: "Sign in with GitHub" }));
-
-    await waitFor(() =>
-      expect(startGithubLoginMock).toHaveBeenCalledWith("", "/creator"),
-    );
+    const link = await view.findByRole("link", { name: "Sign in with GitHub" });
+    expect(link.getAttribute("href")).toBe("/sign-in?return_to=/creator");
   });
 
-  it("starts GitHub sign-in with a pioneer code", async () => {
+  it("prompts setup-required humans to finish setup", async () => {
+    getHumanSessionMock.mockResolvedValue({
+      human_id: "11111111-1111-4111-8111-111111111111",
+      status: "setup_required",
+      github_user_id: 123,
+      github_login: "octocat",
+      roles: [],
+      csrf_token: "csrf-token",
+      expires_at: "2026-05-16T00:00:00Z",
+    });
     const view = renderCreatorConsole();
 
-    fireEvent.input(view.getByLabelText("Pioneer code for new creators"), {
-      target: { value: " jack-deadbeef " },
-    });
-    fireEvent.click(view.getByRole("button", { name: "Sign in with GitHub" }));
-
-    await waitFor(() =>
-      expect(startGithubLoginMock).toHaveBeenCalledWith(
-        "jack-deadbeef",
-        "/creator",
-      ),
+    const link = await view.findByRole("link", { name: "Finish Setup" });
+    expect(link.getAttribute("href")).toBe("/account/setup?return_to=/creator");
+    fillReviewRecordRequiredFields(view);
+    fireEvent.click(
+      view.getByRole("button", { name: "Register PR for review" }),
     );
+
+    expect(
+      await view.findByText(
+        "Finish account setup with a pioneer code before using creator workflows.",
+      ),
+    ).toBeTruthy();
   });
 
   it("creates a review record with the loaded creator identity and CSRF token", async () => {
     getHumanSessionMock.mockResolvedValue({
       human_id: "11111111-1111-4111-8111-111111111111",
+      status: "active",
       github_user_id: 123,
       github_login: "octocat",
       roles: ["creator"],
@@ -214,6 +216,7 @@ describe("CreatorConsole", () => {
   it("rejects malformed PR numbers before creating a review record", async () => {
     getHumanSessionMock.mockResolvedValue({
       human_id: "11111111-1111-4111-8111-111111111111",
+      status: "active",
       github_user_id: 123,
       github_login: "octocat",
       roles: ["creator"],
@@ -384,6 +387,7 @@ const challengeReviewRecordResponse = {
 
 const creatorSessionResponse = {
   human_id: "11111111-1111-4111-8111-111111111111",
+  status: "active",
   github_user_id: 123,
   github_login: "octocat",
   roles: ["creator"],

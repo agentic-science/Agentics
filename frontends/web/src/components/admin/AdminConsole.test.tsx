@@ -3,7 +3,7 @@ import { SWRConfig } from "swr";
 import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { adminFetchJson } from "@/lib/adminApi";
-import { getHumanSession, logoutHuman, startGithubLogin } from "@/lib/authApi";
+import { getHumanSession } from "@/lib/authApi";
 import { adminChallengeListResponseSchema } from "@/lib/schemas";
 import messages from "../../../messages/en.json";
 import { ensureDomEnvironment } from "../../test/dom";
@@ -29,8 +29,6 @@ vi.mock("@/lib/adminApi", () => {
 vi.mock("@/lib/authApi", () => ({
   HUMAN_SESSION_CACHE_KEY: "human-session",
   getHumanSession: vi.fn(),
-  logoutHuman: vi.fn(),
-  startGithubLogin: vi.fn(),
 }));
 
 ensureDomEnvironment();
@@ -40,17 +38,10 @@ const { cleanup, fireEvent, render, waitFor } = await import(
 
 const adminFetchJsonMock = adminFetchJson as Mock;
 const getHumanSessionMock = getHumanSession as Mock;
-const logoutHumanMock = logoutHuman as Mock;
-const startGithubLoginMock = startGithubLogin as Mock;
 const originalClipboard = globalThis.navigator.clipboard;
 
 describe("AdminConsole", () => {
   beforeEach(() => {
-    startGithubLoginMock.mockResolvedValue({
-      authorization_url:
-        "https://github.com/login/oauth/authorize?client_id=test",
-    });
-    logoutHumanMock.mockResolvedValue(undefined);
     getHumanSessionMock.mockRejectedValue(
       Object.assign(new Error("Unauthorized"), { status: 401 }),
     );
@@ -207,23 +198,12 @@ describe("AdminConsole", () => {
     const view = renderAdminConsole();
 
     expect(
-      await view.findByRole("button", { name: "Sign in with GitHub" }),
+      await view.findByText(
+        "Use the account menu in the header to sign in as an admin.",
+      ),
     ).toBeTruthy();
 
     expect(adminFetchJsonMock).not.toHaveBeenCalled();
-  });
-
-  it("starts GitHub sign-in when signing in", async () => {
-    const view = renderAdminConsole();
-
-    fireEvent.click(
-      await view.findByRole("button", { name: "Sign in with GitHub" }),
-    );
-
-    await waitFor(() =>
-      expect(startGithubLoginMock).toHaveBeenCalledWith("", "/admin"),
-    );
-    expect(await view.findByText("Redirecting to GitHub.")).toBeTruthy();
   });
 
   it("restores an existing admin session and loads operator data", async () => {
@@ -231,7 +211,6 @@ describe("AdminConsole", () => {
 
     const view = renderAdminConsole();
 
-    expect(await view.findByText("Signed in as root")).toBeTruthy();
     await waitFor(() =>
       expect(adminFetchJsonMock).toHaveBeenCalledWith(
         "/admin/challenges",
@@ -274,7 +253,7 @@ describe("AdminConsole", () => {
     getHumanSessionMock.mockResolvedValueOnce(humanAdminSession());
     const view = renderAdminConsole();
 
-    await view.findByText("Signed in as root");
+    await view.findByText("1 / 1");
 
     fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
 
@@ -291,7 +270,7 @@ describe("AdminConsole", () => {
     getHumanSessionMock.mockResolvedValueOnce(humanAdminSession());
     const view = renderAdminConsole();
 
-    await view.findByText("Signed in as root");
+    await view.findByText("1 / 1");
     fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
 
     fireEvent.change(await view.findByLabelText("Label"), {
@@ -339,7 +318,7 @@ describe("AdminConsole", () => {
     getHumanSessionMock.mockResolvedValueOnce(humanAdminSession());
     const view = renderAdminConsole();
 
-    await view.findByText("Signed in as root");
+    await view.findByText("1 / 1");
     fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
 
     fireEvent.input(await view.findByLabelText("Max uses"), {
@@ -363,13 +342,13 @@ describe("AdminConsole", () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     const view = renderAdminConsole();
 
-    await view.findByText("Signed in as root");
+    await view.findByText("1 / 1");
     fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
 
     fireEvent.click(await view.findByRole("button", { name: "Revoke" }));
 
     expect(confirm).toHaveBeenCalledWith(
-      "Revoke jack-deadbeef and disable 1 created accounts?",
+      "Revoke jack-deadbeef and return 1 created accounts to setup-required state?",
     );
     expect(adminFetchJsonMock).not.toHaveBeenCalledWith(
       "/admin/pioneer-codes/99999999-9999-4999-8999-999999999999/revoke",
@@ -395,6 +374,7 @@ function renderAdminConsole() {
 function humanAdminSession() {
   return {
     human_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    status: "active",
     github_user_id: 123,
     github_login: "root",
     roles: ["creator", "admin"],

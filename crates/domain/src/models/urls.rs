@@ -906,7 +906,7 @@ mod tests {
         assert!(GithubAppTokenUrl::try_new("https://github.com/login/oauth/access_token").is_ok());
         assert!(GithubApiUserUrl::try_new("https://api.github.com/user").is_ok());
         assert!(
-            GithubAppRedirectUrl::try_new("http://127.0.0.1:3001/creator/github/callback").is_ok()
+            GithubAppRedirectUrl::try_new("http://127.0.0.1:3001/auth/github/callback").is_ok()
         );
 
         assert!(
@@ -919,10 +919,8 @@ mod tests {
         );
         assert!(GithubApiUserUrl::try_new("https://user:pass@api.github.com/user").is_err());
         assert!(
-            GithubAppRedirectUrl::try_new(
-                "http://user:pass@127.0.0.1:3001/creator/github/callback"
-            )
-            .is_err()
+            GithubAppRedirectUrl::try_new("http://user:pass@127.0.0.1:3001/auth/github/callback")
+                .is_err()
         );
     }
 

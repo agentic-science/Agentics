@@ -5,11 +5,13 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
-import { CreatorApiError, completeGithubLogin } from "@/lib/creatorApi";
+import { mutate } from "swr";
+import { completeGithubLogin, HUMAN_SESSION_CACHE_KEY } from "@/lib/authApi";
+import { ApiClientError } from "@/lib/http";
 
-/** Renders the creator GitHub sign-in callback component. */
-export function CreatorGithubSignInCallback() {
-  const t = useTranslations("creator.githubSignIn");
+/** Renders the GitHub sign-in callback component. */
+export function GithubSignInCallback() {
+  const t = useTranslations("auth.githubSignIn");
   const searchParams = useSearchParams();
   const started = useRef(false);
   const [status, setStatus] = useState<"loading" | "success" | "error">(
@@ -33,9 +35,18 @@ export function CreatorGithubSignInCallback() {
     }
 
     void completeGithubLogin(code, state)
-      .then((response) => {
+      .then(async (response) => {
+        await mutate(HUMAN_SESSION_CACHE_KEY, response.session, {
+          revalidate: false,
+        });
         setStatus("success");
-        setReturnTo(response.return_to ?? "/creator");
+        const next =
+          response.session.status === "setup_required"
+            ? `/account/setup?return_to=${encodeURIComponent(
+                response.return_to ?? "/creator",
+              )}`
+            : (response.return_to ?? "/creator");
+        setReturnTo(next);
         setMessage(t("signedIn", { login: response.session.github_login }));
       })
       .catch((error) => {
@@ -73,7 +84,7 @@ export function CreatorGithubSignInCallback() {
 
 /** Normalizes unknown errors into a displayable message. */
 function githubSignInErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof CreatorApiError) {
+  if (error instanceof ApiClientError) {
     return error.message;
   }
   if (error instanceof Error) {

@@ -13,6 +13,57 @@
     "about": "关于",
     "brandSubtitle": "AI 智能体协作科学发现的开放平台"
   },
+  "account": {
+    "account": "账户",
+    "signIn": "登录",
+    "signOut": "退出登录",
+    "finishSetup": "完成设置",
+    "creatorConsole": "创建者控制台",
+    "adminPanel": "管理面板"
+  },
+  "auth": {
+    "signIn": {
+      "title": "Agentics 登录",
+      "bodyBeforeEmail": "请使用 GitHub 登录 Agentics。由于算力资源有限，新用户目前需要先锋码才能完成注册。如果你正在用智能体做科学研究，请给我们发一封",
+      "email": "邮件",
+      "bodyAfterEmail": "介绍你正在做的事情，我们很乐意给你早期访问权限！",
+      "button": "使用",
+      "buttonAria": "使用 GitHub 登录",
+      "cancel": "取消",
+      "redirecting": "正在跳转到 GitHub...",
+      "signedIn": "已登录为 {login}。",
+      "finishSetup": "完成设置",
+      "creatorConsole": "创建者控制台",
+      "adminPanel": "管理面板",
+      "failed": "GitHub 登录失败。"
+    },
+    "githubSignIn": {
+      "fallback": "正在完成 GitHub 登录。",
+      "badge": "GitHub 登录",
+      "title": "GitHub 登录",
+      "missingCodeState": "GitHub 未返回必需的 code 和 state。",
+      "signedIn": "已登录为 {login}。",
+      "return": "继续",
+      "failed": "GitHub 登录失败。"
+    },
+    "setup": {
+      "title": "完成设置",
+      "loading": "正在加载你的会话...",
+      "body": "已登录为 {login}。请输入先锋码以解锁创建者工作流。",
+      "earlyAccessBeforeEmail": "由于算力资源有限，新用户目前需要先锋码才能完成注册。如果你正在用智能体做科学研究，请给我们发一封",
+      "email": "邮件",
+      "earlyAccessAfterEmail": "介绍你正在做的事情，我们很乐意给你早期访问权限！",
+      "pioneerCode": "先锋码",
+      "submit": "完成设置",
+      "saving": "正在完成设置...",
+      "skip": "暂时跳过",
+      "signInRequired": "请先使用 GitHub 登录再完成设置。",
+      "signIn": "登录",
+      "complete": "{login} 的设置已完成。",
+      "creatorConsole": "创建者控制台",
+      "failed": "设置失败。"
+    }
+  },
   "theme": {
     "light": "浅色",
     "dark": "深色",
@@ -353,6 +404,8 @@
       "redirectingToGithub": "正在跳转到 GitHub。",
       "sessionEnded": "管理员会话已结束。",
       "signInBeforeRefresh": "请先登录再刷新运维数据。",
+      "signInFromHeader": "请使用页面顶部账户菜单以管理员身份登录。",
+      "finishSetup": "请先完成账户设置再使用管理员工作流。",
       "dataRefreshed": "运维数据已刷新。",
       "accessDenied": "访问被拒绝。你的 GitHub 账号没有管理员权限。",
       "unknown": "未知管理员控制台错误。"
@@ -520,8 +573,8 @@
       "copyFailed": "无法复制先锋码。",
       "invalidRequest": "先锋码请求无效。",
       "createdMessage": "已创建先锋码 {code}。",
-      "revokeConfirm": "撤销 {code} 并禁用 {count} 个已创建账号？",
-      "revokedMessage": "已撤销 {humans} 个人类账号、{sessions} 个人类会话、{adminTokens} 个 admin service token、{agents} 个智能体和 {tokens} 个智能体令牌。",
+      "revokeConfirm": "撤销 {code} 并将 {count} 个已创建账号退回到需要设置状态？",
+      "revokedMessage": "已将 {humans} 个人类账号退回到需要设置状态，删除 {sessions} 个人类会话，撤销 {adminTokens} 个 admin service token，禁用 {agents} 个智能体，并撤销 {tokens} 个智能体令牌。",
       "accessDenied": "访问被拒绝。你的 GitHub 账号没有管理员权限。",
       "unknown": "未知管理员控制台错误。"
     },
@@ -594,6 +647,8 @@
       "invalidShortlist": "shortlist JSON 无效。",
       "shortlistUploaded": "已上传 shortlist 修订 {id}。",
       "signInBeforeContinue": "请先使用 GitHub 登录再继续。",
+      "finishSetupBeforeCreator": "请先使用先锋码完成账户设置，再使用创建者工作流。",
+      "accessDenied": "当前登录账户没有创建者访问权限。",
       "invalidManifestJson": "Manifest JSON 不是有效 JSON。",
       "unknown": "未知创建者控制台错误。"
     },
@@ -640,10 +695,12 @@
       "title": "创建者身份",
       "githubAccount": "GitHub 账户",
       "humanId": "Human ID",
+      "status": "状态",
       "refresh": "刷新",
       "githubSignInRequired": "创建审核记录或上传私有资产前需要 GitHub 登录。",
-      "pioneerCode": "新创建者先锋码",
-      "signIn": "使用 GitHub 登录"
+      "signIn": "使用 GitHub 登录",
+      "finishSetup": "完成设置",
+      "accessDenied": "此账户不能访问创建者工作流。"
     },
     "owner": {
       "statisticsForm": "所有者统计",

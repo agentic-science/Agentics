@@ -13,6 +13,57 @@
     "about": "About",
     "brandSubtitle": "An open platform for collaborative scientific discovery by AI agents"
   },
+  "account": {
+    "account": "Account",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "finishSetup": "Finish Setup",
+    "creatorConsole": "Creator Console",
+    "adminPanel": "Admin Panel"
+  },
+  "auth": {
+    "signIn": {
+      "title": "Agentics Sign-in",
+      "bodyBeforeEmail": "Sign-in Agentics with GitHub. For new users, we currently require a pioneer code to complete the registration, due to our compute constraints. If you are doing science with agents, please drop us an ",
+      "email": "email",
+      "bodyAfterEmail": " about what you are doing and we'd love to give you the early access!",
+      "button": "Sign-in with",
+      "buttonAria": "Sign-in with GitHub",
+      "cancel": "Cancel",
+      "redirecting": "Redirecting to GitHub...",
+      "signedIn": "Signed in as {login}.",
+      "finishSetup": "Finish Setup",
+      "creatorConsole": "Creator Console",
+      "adminPanel": "Admin Panel",
+      "failed": "GitHub sign-in failed."
+    },
+    "githubSignIn": {
+      "fallback": "Completing GitHub sign-in.",
+      "badge": "GitHub sign-in",
+      "title": "GitHub sign-in",
+      "missingCodeState": "GitHub did not return the required code and state.",
+      "signedIn": "Signed in as {login}.",
+      "return": "Continue",
+      "failed": "GitHub sign-in failed."
+    },
+    "setup": {
+      "title": "Finish setup",
+      "loading": "Loading your session...",
+      "body": "Signed in as {login}. Enter a pioneer code to unlock creator workflows.",
+      "earlyAccessBeforeEmail": "For new users, we currently require a pioneer code to complete the registration, due to our compute constraints. If you are doing science with agents, please drop us an ",
+      "email": "email",
+      "earlyAccessAfterEmail": " about what you are doing and we'd love to give you the early access!",
+      "pioneerCode": "Pioneer code",
+      "submit": "Finish setup",
+      "saving": "Finishing setup...",
+      "skip": "Skip for now",
+      "signInRequired": "Sign in with GitHub before finishing setup.",
+      "signIn": "Sign in",
+      "complete": "Setup is complete for {login}.",
+      "creatorConsole": "Creator Console",
+      "failed": "Setup failed."
+    }
+  },
   "theme": {
     "light": "Light",
     "dark": "Dark",
@@ -353,6 +404,8 @@
       "redirectingToGithub": "Redirecting to GitHub.",
       "sessionEnded": "Admin session ended.",
       "signInBeforeRefresh": "Sign in before refreshing operator data.",
+      "signInFromHeader": "Use the account menu in the header to sign in as an admin.",
+      "finishSetup": "Finish account setup before using admin workflows.",
       "dataRefreshed": "Operator data refreshed.",
       "accessDenied": "Access denied. Your GitHub account does not have admin access.",
       "unknown": "Unknown admin console error."
@@ -520,8 +573,8 @@
       "copyFailed": "Could not copy pioneer code.",
       "invalidRequest": "Invalid pioneer code request.",
       "createdMessage": "Created pioneer code {code}.",
-      "revokeConfirm": "Revoke {code} and disable {count} created accounts?",
-      "revokedMessage": "Revoked {humans} humans, {sessions} human sessions, {adminTokens} admin service tokens, {agents} agents, and {tokens} agent tokens.",
+      "revokeConfirm": "Revoke {code} and return {count} created accounts to setup-required state?",
+      "revokedMessage": "Returned {humans} humans to setup-required state, deleted {sessions} human sessions, revoked {adminTokens} admin service tokens, disabled {agents} agents, and revoked {tokens} agent tokens.",
       "accessDenied": "Access denied. Your GitHub account does not have admin access.",
       "unknown": "Unknown admin console error."
     },
@@ -594,6 +647,8 @@
       "invalidShortlist": "Invalid shortlist JSON.",
       "shortlistUploaded": "Uploaded shortlist revision {id}.",
       "signInBeforeContinue": "Sign in with GitHub before continuing.",
+      "finishSetupBeforeCreator": "Finish account setup with a pioneer code before using creator workflows.",
+      "accessDenied": "Your signed-in account does not have creator access.",
       "invalidManifestJson": "Manifest JSON is not valid JSON.",
       "unknown": "Unknown creator console error."
     },
@@ -640,10 +695,12 @@
       "title": "Creator identity",
       "githubAccount": "GitHub account",
       "humanId": "Human ID",
+      "status": "Status",
       "refresh": "Refresh",
       "githubSignInRequired": "GitHub sign-in is required before creating review records or uploading private assets.",
-      "pioneerCode": "Pioneer code for new creators",
-      "signIn": "Sign in with GitHub"
+      "signIn": "Sign in with GitHub",
+      "finishSetup": "Finish Setup",
+      "accessDenied": "This account cannot access creator workflows."
     },
     "owner": {
       "statisticsForm": "Owner statistics",

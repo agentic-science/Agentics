@@ -521,7 +521,7 @@ export const adminHumanListResponseSchema = z
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
           status: z
-            .enum(["active", "disabled"])
+            .enum(["active", "setup_required", "disabled"])
             .describe("Persistent lifecycle state for a human account."),
           github_user_id: z.number().int().gte(1),
           github_login: z.string(),
@@ -551,7 +551,7 @@ export const adminHumanRoleResponseSchema = z
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
           ),
         status: z
-          .enum(["active", "disabled"])
+          .enum(["active", "setup_required", "disabled"])
           .describe("Persistent lifecycle state for a human account."),
         github_user_id: z.number().int().gte(1),
         github_login: z.string(),
@@ -2329,6 +2329,40 @@ export const challengeShortlistRevisionResponseSchema = z
   .strict()
   .describe("Persisted shortlist revision response.");
 
+export const completeHumanSetupRequestSchema = z
+  .object({ pioneer_code: z.string() })
+  .strict()
+  .describe("Browser-submitted request to finish setup for a signed-in human.");
+
+export const completeHumanSetupResponseSchema = z
+  .object({
+    session: z
+      .object({
+        human_id: z
+          .string()
+          .uuid()
+          .regex(
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+          ),
+        status: z
+          .enum(["active", "setup_required", "disabled"])
+          .describe("Persistent lifecycle state for a human account."),
+        github_user_id: z.number().int().gte(1),
+        github_login: z.string(),
+        roles: z.array(
+          z
+            .enum(["creator", "admin"])
+            .describe("Role granted to a human account."),
+        ),
+        csrf_token: z.string(),
+        expires_at: z.string(),
+      })
+      .strict()
+      .describe("Current human browser session identity."),
+  })
+  .strict()
+  .describe("Response returned after finishing human account setup.");
+
 export const createAdminServiceTokenRequestSchema = z
   .object({ label: z.string(), expires_at: z.string().optional() })
   .strict()
@@ -2956,6 +2990,9 @@ export const githubSignInCallbackResponseSchema = z
           .regex(
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
           ),
+        status: z
+          .enum(["active", "setup_required", "disabled"])
+          .describe("Persistent lifecycle state for a human account."),
         github_user_id: z.number().int().gte(1),
         github_login: z.string(),
         roles: z.array(
@@ -2974,10 +3011,7 @@ export const githubSignInCallbackResponseSchema = z
   .describe("Response returned after completing GitHub sign-in.");
 
 export const githubSignInLoginRequestSchema = z
-  .object({
-    pioneer_code: z.string().optional(),
-    return_to: z.string().optional(),
-  })
+  .object({ return_to: z.string().optional() })
   .strict()
   .describe("Browser-submitted request to start GitHub sign-in.");
 
@@ -2997,6 +3031,9 @@ export const humanSessionResponseSchema = z
       .string()
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
+    status: z
+      .enum(["active", "setup_required", "disabled"])
+      .describe("Persistent lifecycle state for a human account."),
     github_user_id: z.number().int().gte(1),
     github_login: z.string(),
     roles: z.array(
@@ -4957,6 +4994,12 @@ export type ChallengeShortlistResponse = z.infer<
 >;
 export type ChallengeShortlistRevisionResponse = z.infer<
   typeof challengeShortlistRevisionResponseSchema
+>;
+export type CompleteHumanSetupRequest = z.infer<
+  typeof completeHumanSetupRequestSchema
+>;
+export type CompleteHumanSetupResponse = z.infer<
+  typeof completeHumanSetupResponseSchema
 >;
 export type CreateAdminServiceTokenRequest = z.infer<
   typeof createAdminServiceTokenRequestSchema

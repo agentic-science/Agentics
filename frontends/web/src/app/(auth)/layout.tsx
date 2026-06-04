@@ -1,7 +1,7 @@
 import { SiteChrome } from "@/components/SiteChrome";
 
-/** Renders the creator layout component. */
-export default async function CreatorLayout({
+/** Renders the shared auth layout component. */
+export default async function AuthLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;

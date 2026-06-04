@@ -417,8 +417,6 @@ async fn create_test_admin_service_token(pool: &PgPool) -> String {
             github_user_id: agentics_domain::models::auth::GithubUserId::try_new(9_001)
                 .expect("valid test GitHub user id"),
             github_login: "integration-admin".to_string(),
-            pioneer_code_hash: None,
-            pioneer_code_required_for_new_human: false,
             bootstrap_admin_candidate: true,
         })
         .await
@@ -453,12 +451,34 @@ pub async fn create_creator_session(
             fallback_human_id: agentics_domain::models::ids::HumanId::generate(),
             github_user_id,
             github_login: github_login.to_string(),
-            pioneer_code_hash: None,
-            pioneer_code_required_for_new_human: false,
             bootstrap_admin_candidate: false,
         })
         .await
         .expect("creator human should resolve");
+    sqlx::query(
+        r#"
+        UPDATE humans
+        SET status = 'active',
+            disabled_at = NULL
+        WHERE id = $1::uuid
+        "#,
+    )
+    .bind(human.human_id.as_str())
+    .execute(pool)
+    .await
+    .expect("creator human should activate");
+    sqlx::query(
+        r#"
+        INSERT INTO human_roles (id, human_id, role)
+        VALUES ($1::uuid, $2::uuid, 'creator')
+        ON CONFLICT (human_id, role) WHERE revoked_at IS NULL DO NOTHING
+        "#,
+    )
+    .bind(uuid::Uuid::new_v4().to_string())
+    .bind(human.human_id.as_str())
+    .execute(pool)
+    .await
+    .expect("creator role should insert");
     let session_token = agentics_services::auth::create_web_session_token();
     let csrf_token = agentics_services::auth::create_csrf_token();
     repos

@@ -1,6 +1,7 @@
 import type { ZodType } from "zod";
 import {
   completeGithubLogin,
+  completeHumanSetup,
   getHumanSession as getCreatorSession,
   startGithubLogin,
 } from "@/lib/authApi";
@@ -41,6 +42,7 @@ export type {
 export {
   ApiClientError as CreatorApiError,
   completeGithubLogin,
+  completeHumanSetup,
   createChallengeReviewRecordRequestSchema,
   createChallengeShortlistRevisionRequestSchema,
   getCreatorSession,

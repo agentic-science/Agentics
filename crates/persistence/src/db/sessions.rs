@@ -4,9 +4,8 @@ use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use crate::db::pioneer_codes::consume_pioneer_code_for_human_tx;
-use agentics_domain::models::auth::{GithubUserId, HumanRole};
+use agentics_domain::models::auth::{GithubUserId, HumanRole, HumanStatus};
 use agentics_domain::models::ids::{AdminServiceTokenId, HumanId, HumanSessionId};
-use agentics_domain::models::pioneer_codes::INVALID_OR_UNAVAILABLE_PIONEER_CODE;
 use agentics_error::{Result, ServiceError};
 
 use super::ids::{admin_service_token_id_from_row, human_id_from_row};
@@ -28,6 +27,7 @@ pub struct HumanRecord {
 pub struct AuthenticatedHumanSession {
     pub session_id: HumanSessionId,
     pub human_id: HumanId,
+    pub status: HumanStatus,
     pub github_user_id: GithubUserId,
     pub github_login: String,
     pub roles: Vec<HumanRole>,
@@ -64,8 +64,6 @@ pub struct ResolveGithubHumanInput {
     pub fallback_human_id: HumanId,
     pub github_user_id: GithubUserId,
     pub github_login: String,
-    pub pioneer_code_hash: Option<String>,
-    pub pioneer_code_required_for_new_human: bool,
     pub bootstrap_admin_candidate: bool,
 }
 
@@ -84,7 +82,6 @@ pub struct CreateHumanSessionInput {
 pub struct CreateGithubSignInStateInput {
     pub state_hash: String,
     pub browser_nonce_hash: String,
-    pub pioneer_code_hash: Option<String>,
     pub return_to: Option<String>,
     pub expires_at: DateTime<Utc>,
 }
@@ -92,7 +89,6 @@ pub struct CreateGithubSignInStateInput {
 /// Stored GitHub sign-in state consumed by a callback after browser redirect.
 #[derive(Debug, Clone)]
 pub struct ConsumedGithubSignInState {
-    pub pioneer_code_hash: Option<String>,
     pub return_to: Option<String>,
 }
 
@@ -114,7 +110,7 @@ pub async fn resolve_github_human(
     let mut tx = pool.begin().await?;
 
     if let Some(existing) = find_github_human_for_update_tx(&mut tx, input.github_user_id).await? {
-        if existing.status != "active" {
+        if existing.status == HumanStatus::Disabled.as_str() {
             return Err(ServiceError::Forbidden(
                 "linked human account is disabled".to_string(),
             ));
@@ -122,6 +118,8 @@ pub async fn resolve_github_human(
         if input.bootstrap_admin_candidate {
             lock_bootstrap_admin_scope_tx(&mut tx).await?;
             if !active_admin_exists_tx(&mut tx).await? {
+                activate_human_tx(&mut tx, &existing.human_id).await?;
+                grant_role_tx(&mut tx, &existing.human_id, HumanRole::Creator, None).await?;
                 grant_role_tx(&mut tx, &existing.human_id, HumanRole::Admin, None).await?;
             }
         }
@@ -149,16 +147,12 @@ pub async fn resolve_github_human(
         false
     };
 
-    if !bootstrap_admin
-        && input.pioneer_code_required_for_new_human
-        && input.pioneer_code_hash.is_none()
-    {
-        return Err(ServiceError::Forbidden(
-            INVALID_OR_UNAVAILABLE_PIONEER_CODE.to_string(),
-        ));
-    }
-
-    insert_human_tx(&mut tx, &input.fallback_human_id).await?;
+    let initial_status = if bootstrap_admin {
+        HumanStatus::Active
+    } else {
+        HumanStatus::SetupRequired
+    };
+    insert_human_tx(&mut tx, &input.fallback_human_id, initial_status).await?;
     insert_github_identity_tx(
         &mut tx,
         &input.fallback_human_id,
@@ -166,16 +160,10 @@ pub async fn resolve_github_human(
         &input.github_login,
     )
     .await?;
-    grant_role_tx(&mut tx, &input.fallback_human_id, HumanRole::Creator, None).await?;
 
     if bootstrap_admin {
+        grant_role_tx(&mut tx, &input.fallback_human_id, HumanRole::Creator, None).await?;
         grant_role_tx(&mut tx, &input.fallback_human_id, HumanRole::Admin, None).await?;
-    } else if input.pioneer_code_required_for_new_human {
-        let code_hash = input.pioneer_code_hash.as_deref().ok_or_else(|| {
-            ServiceError::Forbidden(INVALID_OR_UNAVAILABLE_PIONEER_CODE.to_string())
-        })?;
-        consume_pioneer_code_for_human_tx(&mut tx, code_hash, input.fallback_human_id.as_str())
-            .await?;
     }
 
     tx.commit().await?;
@@ -193,16 +181,14 @@ pub async fn create_github_sign_in_state(
         INSERT INTO github_sign_in_states (
             state_hash,
             browser_nonce_hash,
-            pioneer_code_hash,
             return_to,
             expires_at
         )
-        VALUES ($1, $2, $3, $4, $5)
+        VALUES ($1, $2, $3, $4)
         "#,
     )
     .bind(&input.state_hash)
     .bind(&input.browser_nonce_hash)
-    .bind(&input.pioneer_code_hash)
     .bind(&input.return_to)
     .bind(input.expires_at)
     .execute(pool)
@@ -223,7 +209,7 @@ pub async fn consume_github_sign_in_state(
         WHERE state_hash = $1
           AND browser_nonce_hash = $2
           AND expires_at > NOW()
-        RETURNING pioneer_code_hash, return_to
+        RETURNING return_to
         "#,
     )
     .bind(state_hash)
@@ -236,9 +222,48 @@ pub async fn consume_github_sign_in_state(
     };
 
     Ok(Some(ConsumedGithubSignInState {
-        pioneer_code_hash: row.try_get("pioneer_code_hash")?,
         return_to: row.try_get("return_to")?,
     }))
+}
+
+/// Finish setup for one signed-in human by consuming a human pioneer code.
+pub async fn complete_human_setup(
+    pool: &PgPool,
+    human_id: &HumanId,
+    code_hash: &str,
+) -> Result<HumanRecord> {
+    let mut tx = pool.begin().await?;
+    let row = sqlx::query(
+        r#"
+        SELECT status
+        FROM humans
+        WHERE id = $1::uuid
+        FOR UPDATE
+        "#,
+    )
+    .bind(human_id.as_str())
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(ServiceError::NotFound)?;
+    let status: String = row.try_get("status")?;
+    if status == HumanStatus::Disabled.as_str() {
+        return Err(ServiceError::Forbidden(
+            "human account is disabled".to_string(),
+        ));
+    }
+    if status == HumanStatus::Active.as_str()
+        && active_role_exists_tx(&mut tx, human_id, HumanRole::Creator).await?
+    {
+        tx.commit().await?;
+        return get_human_by_id(pool, human_id).await;
+    }
+
+    consume_pioneer_code_for_human_tx(&mut tx, code_hash, human_id.as_str()).await?;
+    activate_human_tx(&mut tx, human_id).await?;
+    grant_role_tx(&mut tx, human_id, HumanRole::Creator, None).await?;
+    tx.commit().await?;
+
+    get_human_by_id(pool, human_id).await
 }
 
 /// Create a browser session for a verified human.
@@ -277,13 +302,14 @@ pub async fn authenticate_human_session(
         SELECT
             s.id::text AS session_id,
             h.id::text AS human_id,
+            h.status,
             e.provider_user_id AS github_user_id,
             e.provider_login AS github_login,
             s.csrf_token_hash,
             s.expires_at,
             COALESCE(
               array_agg(r.role ORDER BY r.role)
-                FILTER (WHERE r.revoked_at IS NULL),
+                FILTER (WHERE r.role IS NOT NULL AND r.revoked_at IS NULL),
               ARRAY[]::TEXT[]
             ) AS roles
         FROM human_sessions s
@@ -292,8 +318,8 @@ pub async fn authenticate_human_session(
         LEFT JOIN human_roles r ON r.human_id = h.id
         WHERE s.session_token_hash = $1
           AND s.expires_at > NOW()
-          AND h.status = 'active'
-        GROUP BY s.id, h.id, e.provider_user_id, e.provider_login, s.csrf_token_hash, s.expires_at
+          AND h.status IN ('active', 'setup_required')
+        GROUP BY s.id, h.id, h.status, e.provider_user_id, e.provider_login, s.csrf_token_hash, s.expires_at
         LIMIT 1
         "#,
     )
@@ -315,6 +341,7 @@ pub async fn authenticate_human_session(
     Ok(Some(AuthenticatedHumanSession {
         session_id,
         human_id: human_id_from_row(&row, "human_id")?,
+        status: human_status_from_row(&row, "status")?,
         github_user_id: github_user_id_from_row(&row, "github_user_id")?,
         github_login: row.try_get("github_login")?,
         roles: roles_from_row(&row)?,
@@ -352,7 +379,7 @@ pub async fn get_human_by_id(pool: &PgPool, human_id: &HumanId) -> Result<HumanR
             e.provider_login AS github_login,
             COALESCE(
               array_agg(r.role ORDER BY r.role)
-                FILTER (WHERE r.revoked_at IS NULL),
+                FILTER (WHERE r.role IS NOT NULL AND r.revoked_at IS NULL),
               ARRAY[]::TEXT[]
             ) AS roles
         FROM humans h
@@ -630,7 +657,7 @@ async fn find_github_human_for_update_tx(
             locked_human.provider_login AS github_login,
             COALESCE(
               array_agg(r.role ORDER BY r.role)
-                FILTER (WHERE r.revoked_at IS NULL),
+                FILTER (WHERE r.role IS NOT NULL AND r.revoked_at IS NULL),
               ARRAY[]::TEXT[]
             ) AS roles
         FROM locked_human
@@ -651,11 +678,32 @@ async fn find_github_human_for_update_tx(
     row.as_ref().map(human_record_from_row).transpose()
 }
 
-async fn insert_human_tx(tx: &mut Transaction<'_, Postgres>, human_id: &HumanId) -> Result<()> {
+async fn insert_human_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    human_id: &HumanId,
+    status: HumanStatus,
+) -> Result<()> {
     sqlx::query(
         r#"
         INSERT INTO humans (id, status)
-        VALUES ($1::uuid, 'active')
+        VALUES ($1::uuid, $2)
+        "#,
+    )
+    .bind(human_id.as_str())
+    .bind(status.as_str())
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn activate_human_tx(tx: &mut Transaction<'_, Postgres>, human_id: &HumanId) -> Result<()> {
+    sqlx::query(
+        r#"
+        UPDATE humans
+        SET status = 'active',
+            disabled_at = NULL
+        WHERE id = $1::uuid
+          AND status <> 'disabled'
         "#,
     )
     .bind(human_id.as_str())
@@ -709,6 +757,28 @@ async fn grant_role_tx(
     .execute(&mut **tx)
     .await?;
     Ok(())
+}
+
+async fn active_role_exists_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    human_id: &HumanId,
+    role: HumanRole,
+) -> Result<bool> {
+    let row = sqlx::query(
+        r#"
+        SELECT id
+        FROM human_roles
+        WHERE human_id = $1::uuid
+          AND role = $2
+          AND revoked_at IS NULL
+        LIMIT 1
+        "#,
+    )
+    .bind(human_id.as_str())
+    .bind(role.as_str())
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row.is_some())
 }
 
 async fn ensure_active_human_tx(
@@ -792,7 +862,7 @@ fn human_list_sql() -> &'static str {
         e.provider_login AS github_login,
         COALESCE(
           array_agg(r.role ORDER BY r.role)
-            FILTER (WHERE r.revoked_at IS NULL),
+            FILTER (WHERE r.role IS NOT NULL AND r.revoked_at IS NULL),
           ARRAY[]::TEXT[]
         ) AS roles
     FROM humans h
@@ -819,6 +889,12 @@ fn github_user_id_from_row(row: &sqlx::postgres::PgRow, field: &str) -> Result<G
     let value = row.try_get::<i64, _>(field)?;
     GithubUserId::try_new(value)
         .map_err(|e| ServiceError::Internal(format!("stored invalid GitHub user id: {e}")))
+}
+
+fn human_status_from_row(row: &sqlx::postgres::PgRow, field: &str) -> Result<HumanStatus> {
+    let value = row.try_get::<String, _>(field)?;
+    HumanStatus::from_storage_value(&value)
+        .ok_or_else(|| ServiceError::Internal(format!("stored invalid human status `{value}`")))
 }
 
 fn roles_from_row(row: &sqlx::postgres::PgRow) -> Result<Vec<HumanRole>> {

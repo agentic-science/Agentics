@@ -4,8 +4,9 @@ use std::time::Duration as StdDuration;
 
 use agentics_config::{AgentRegistrationMode, Config};
 use agentics_domain::models::auth::{
-    GithubSignInCallbackRequest, GithubSignInCallbackResponse, GithubSignInLoginRequest,
-    GithubSignInLoginResponse, GithubUserId, HumanSessionResponse,
+    CompleteHumanSetupRequest, CompleteHumanSetupResponse, GithubSignInCallbackRequest,
+    GithubSignInCallbackResponse, GithubSignInLoginRequest, GithubSignInLoginResponse,
+    GithubUserId, HumanSessionResponse, HumanStatus,
 };
 use agentics_domain::models::ids::{AgentId, AgentTokenId, HumanId, HumanSessionId};
 use agentics_domain::models::pioneer_codes::{INVALID_OR_UNAVAILABLE_PIONEER_CODE, PioneerCode};
@@ -323,6 +324,7 @@ pub async fn authenticate_human_session(
 
     Ok(HumanSessionResponse {
         human_id: session.human_id,
+        status: session.status,
         github_user_id: session.github_user_id,
         github_login: session.github_login,
         roles: session.roles,
@@ -331,7 +333,7 @@ pub async fn authenticate_human_session(
     })
 }
 
-/// Start a GitHub sign-in login for challenge creators.
+/// Start a GitHub sign-in login for a browser human account.
 pub async fn start_github_sign_in_login(
     pool: &PgPool,
     config: &Config,
@@ -353,18 +355,6 @@ pub async fn start_github_sign_in_login(
     let state_hash = hash_opaque_token(&state_token);
     let browser_nonce = create_github_sign_in_browser_nonce();
     let browser_nonce_hash = hash_opaque_token(&browser_nonce);
-    let pioneer_code_hash = match config.agent_registration_mode() {
-        AgentRegistrationMode::PioneerCode => match request.pioneer_code.as_ref() {
-            Some(code) => {
-                let Ok(code) = PioneerCode::try_new(code.expose_secret().to_string()) else {
-                    return Err(reject_failed_pioneer_code().await);
-                };
-                Some(hash_opaque_token(code.expose_secret()))
-            }
-            None => None,
-        },
-        AgentRegistrationMode::Public => None,
-    };
     let return_to = normalize_return_to(request.return_to)?;
     let expires_at = Utc::now()
         .checked_add_signed(Duration::minutes(GITHUB_SIGN_IN_STATE_TTL_MINUTES))
@@ -376,7 +366,6 @@ pub async fn start_github_sign_in_login(
         .create_github_sign_in_state(&CreateGithubSignInStateInput {
             state_hash,
             browser_nonce_hash,
-            pioneer_code_hash,
             return_to,
             expires_at,
         })
@@ -397,6 +386,42 @@ pub async fn start_github_sign_in_login(
     Ok(GithubSignInLoginIssue {
         browser_nonce,
         response: GithubSignInLoginResponse { authorization_url },
+    })
+}
+
+/// Complete setup for a signed-in human using a valid human pioneer code.
+pub async fn complete_human_setup(
+    pool: &PgPool,
+    human_id: &HumanId,
+    csrf_token: &str,
+    expires_at: chrono::DateTime<Utc>,
+    request: CompleteHumanSetupRequest,
+) -> Result<CompleteHumanSetupResponse> {
+    let Ok(code) = PioneerCode::try_new(request.pioneer_code.expose_secret().to_string()) else {
+        return Err(reject_failed_pioneer_code().await);
+    };
+    let human = match Repositories::new(pool)
+        .sessions()
+        .complete_human_setup(human_id, &hash_opaque_token(code.expose_secret()))
+        .await
+    {
+        Ok(human) => human,
+        Err(error) if is_invalid_pioneer_code(&error) => {
+            return Err(reject_failed_pioneer_code().await);
+        }
+        Err(error) => return Err(error),
+    };
+
+    Ok(CompleteHumanSetupResponse {
+        session: HumanSessionResponse {
+            human_id: human.human_id,
+            status: parse_human_status(&human.status)?,
+            github_user_id: human.github_user_id,
+            github_login: human.github_login,
+            roles: human.roles,
+            csrf_token: csrf_token.to_string(),
+            expires_at: expires_at.to_rfc3339(),
+        },
     })
 }
 
@@ -561,12 +586,10 @@ fn validate_github_user(user: GithubUserResponse) -> Result<GithubSignInUser> {
 async fn resolve_callback_human(
     pool: &PgPool,
     config: &Config,
-    sign_in_state: &ConsumedGithubSignInState,
+    _sign_in_state: &ConsumedGithubSignInState,
     github_user: &GithubSignInUser,
 ) -> Result<HumanRecord> {
     let fallback_human_id = HumanId::generate();
-    let require_pioneer_code =
-        config.agent_registration_mode() == AgentRegistrationMode::PioneerCode;
     let bootstrap_admin_candidate = config
         .auth
         .bootstrap_admin_github_user_ids
@@ -577,8 +600,6 @@ async fn resolve_callback_human(
             fallback_human_id,
             github_user_id: github_user.id,
             github_login: github_user.login.clone(),
-            pioneer_code_hash: sign_in_state.pioneer_code_hash.clone(),
-            pioneer_code_required_for_new_human: require_pioneer_code,
             bootstrap_admin_candidate,
         })
         .await
@@ -616,6 +637,7 @@ async fn issue_human_session(
         ttl_seconds,
         response: HumanSessionResponse {
             human_id: human.human_id,
+            status: parse_human_status(&human.status)?,
             github_user_id: human.github_user_id,
             github_login: human.github_login,
             roles: human.roles,
@@ -623,6 +645,11 @@ async fn issue_human_session(
             expires_at: expires_at.to_rfc3339(),
         },
     })
+}
+
+fn parse_human_status(status: &str) -> Result<HumanStatus> {
+    HumanStatus::from_storage_value(status)
+        .ok_or_else(|| ServiceError::Internal(format!("stored invalid human status `{status}`")))
 }
 
 #[cfg(test)]

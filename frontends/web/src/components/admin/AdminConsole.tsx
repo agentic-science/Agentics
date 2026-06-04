@@ -12,17 +12,14 @@ import {
   OverviewPanel,
 } from "@/components/admin/AdminPanels";
 import { ChallengeReviewRecordPanel } from "@/components/admin/ChallengeReviewRecordPanel";
-import { CredentialPanel } from "@/components/admin/CredentialPanel";
 import { adminErrorMessage } from "@/components/admin/errors";
 import { PioneerCodePanel } from "@/components/admin/PioneerCodePanel";
 import { AdminApiError } from "@/lib/adminApi";
 import {
-  clearAdminDashboard,
   mutateAdminDashboard,
   useAdminDashboard,
   useAdminSession,
 } from "@/lib/adminData";
-import { logoutHuman, startGithubLogin } from "@/lib/authApi";
 
 /** Describes the admin tab shape used by this module. */
 type AdminTab =
@@ -40,35 +37,14 @@ export function AdminConsole() {
   const t = useTranslations("admin");
   const [csrfToken, setCsrfToken] = useState("");
   const [activeTab, setActiveTab] = useState<AdminTab>("overview");
-  const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const restoredSession = useAdminSession();
   const hasAdminRole =
-    restoredSession.session?.roles.includes("admin") ?? false;
+    restoredSession.session?.status === "active" &&
+    restoredSession.session.roles.includes("admin");
   const dashboard = useAdminDashboard(hasAdminRole ? csrfToken : "");
   const data = dashboard.data;
-
-  const loginAndRefresh: AdminRefresh = async (options = {}) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await startGithubLogin("", "/admin");
-      window.location.href = response.authorization_url;
-      if (!options.quiet) {
-        setMessage(t("messages.redirectingToGithub"));
-      }
-    } catch (e) {
-      setError(
-        adminErrorMessage(e, {
-          accessDenied: t("messages.accessDenied"),
-          unknown: t("messages.unknown"),
-        }),
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
     if (
@@ -108,32 +84,6 @@ export function AdminConsole() {
     }
   }, [dashboard.error, t]);
 
-  /** Handles sign out for the current session. */
-  const signOut = async () => {
-    if (!csrfToken) {
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-    try {
-      await logoutHuman(csrfToken);
-      await clearAdminDashboard(csrfToken);
-      await restoredSession.mutate(undefined, { revalidate: false });
-      setCsrfToken("");
-      setMessage(t("messages.sessionEnded"));
-    } catch (e) {
-      setError(
-        adminErrorMessage(e, {
-          accessDenied: t("messages.accessDenied"),
-          unknown: t("messages.unknown"),
-        }),
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const refresh: AdminRefresh = async (options = {}) => {
     if (!csrfToken) {
       setError(t("messages.signInBeforeRefresh"));
@@ -144,7 +94,6 @@ export function AdminConsole() {
       return;
     }
 
-    setLoading(true);
     setError(null);
     try {
       await mutateAdminDashboard(csrfToken);
@@ -158,8 +107,6 @@ export function AdminConsole() {
           unknown: t("messages.unknown"),
         }),
       );
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -193,13 +140,6 @@ export function AdminConsole() {
               {t("hero.description")}
             </p>
           </div>
-          <CredentialPanel
-            sessionLogin={restoredSession.session?.github_login ?? null}
-            hasAdminRole={hasAdminRole}
-            onLogin={loginAndRefresh}
-            onLogout={signOut}
-            loading={loading || restoredSession.isLoading}
-          />
         </div>
       </section>
 
@@ -209,9 +149,16 @@ export function AdminConsole() {
       {message ? (
         <div className="card border-success/30 text-success">{message}</div>
       ) : null}
+      {!restoredSession.isLoading && !restoredSession.session ? (
+        <div className="card border-warning/40 text-warning">
+          {t("messages.signInFromHeader")}
+        </div>
+      ) : null}
       {restoredSession.session && !hasAdminRole ? (
         <div className="card border-warning/40 text-warning">
-          {t("messages.accessDenied")}
+          {restoredSession.session.status === "setup_required"
+            ? t("messages.finishSetup")
+            : t("messages.accessDenied")}
         </div>
       ) : null}
 

@@ -373,7 +373,7 @@ pub async fn consume_pioneer_code_for_human_tx(
     Ok(())
 }
 
-/// Revoke a pioneer code and disable every account created through it.
+/// Revoke a pioneer code, rescind human setup, and disable agents created through it.
 pub async fn revoke_pioneer_code(
     pool: &PgPool,
     id: &PioneerCodeId,
@@ -434,10 +434,10 @@ pub async fn revoke_pioneer_code(
         let result = sqlx::query(
             r#"
             UPDATE humans
-            SET status = 'disabled',
-                disabled_at = COALESCE(disabled_at, NOW())
+            SET status = 'setup_required',
+                disabled_at = NULL
             WHERE id = ANY($1::uuid[])
-              AND status = 'active'
+              AND status <> 'disabled'
             "#,
         )
         .bind(&human_ids)
@@ -446,6 +446,21 @@ pub async fn revoke_pioneer_code(
         i64::try_from(result.rows_affected())
             .map_err(|_| ServiceError::Internal("revoked human count overflow".to_string()))?
     };
+
+    if !human_ids.is_empty() {
+        sqlx::query(
+            r#"
+            UPDATE human_roles
+            SET revoked_at = COALESCE(revoked_at, NOW())
+            WHERE human_id = ANY($1::uuid[])
+              AND role = 'creator'
+              AND revoked_at IS NULL
+            "#,
+        )
+        .bind(&human_ids)
+        .execute(&mut *tx)
+        .await?;
+    }
 
     let revoked_human_session_count = if human_ids.is_empty() {
         0

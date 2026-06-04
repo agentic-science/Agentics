@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Users,
 } from "lucide-react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ConsoleSectionTitle as SectionTitle } from "@/components/ConsolePrimitives";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -26,19 +27,16 @@ import type {
 export function CreatorIdentityPanel({
   creator,
   loading,
-  pioneerCode,
-  onPioneerCodeChange,
-  onSignIn,
   onRefresh,
 }: {
   creator: HumanSessionResponse | null;
   loading: boolean;
-  pioneerCode: string;
-  onPioneerCodeChange: (value: string) => void;
-  onSignIn: () => Promise<void>;
   onRefresh: () => Promise<void>;
 }) {
   const t = useTranslations("creator.identity");
+  const hasCreatorAccess =
+    creator?.status === "active" &&
+    (creator.roles.includes("creator") || creator.roles.includes("admin"));
 
   return (
     <div className="card min-w-full lg:min-w-[360px] lg:max-w-[420px]">
@@ -58,6 +56,12 @@ export function CreatorIdentityPanel({
           </div>
           <div>
             <div className="text-caption uppercase tracking-wide text-fg-muted">
+              {t("status")}
+            </div>
+            <div className="font-mono text-body-sm">{creator.status}</div>
+          </div>
+          <div>
+            <div className="text-caption uppercase tracking-wide text-fg-muted">
               {t("humanId")}
             </div>
             <div className="font-mono text-caption text-fg-muted break-all">
@@ -73,32 +77,26 @@ export function CreatorIdentityPanel({
             <RefreshCw className="w-4 h-4" />
             {t("refresh")}
           </button>
+          {!hasCreatorAccess && creator.status === "setup_required" ? (
+            <Link
+              className="btn btn-primary"
+              href="/account/setup?return_to=/creator"
+            >
+              {t("finishSetup")}
+            </Link>
+          ) : null}
+          {!hasCreatorAccess && creator.status !== "setup_required" ? (
+            <p className="text-body-sm text-warning">{t("accessDenied")}</p>
+          ) : null}
         </div>
       ) : (
         <div className="space-y-4">
           <p className="text-body-sm text-fg-secondary">
             {t("githubSignInRequired")}
           </p>
-          <label className="flex flex-col gap-1">
-            <span className="text-caption uppercase tracking-wide text-fg-muted">
-              {t("pioneerCode")}
-            </span>
-            <input
-              className="rounded-control border border-line bg-surface-2 px-3 py-2 text-body-sm outline-none focus:border-action"
-              value={pioneerCode}
-              onChange={(event) => onPioneerCodeChange(event.target.value)}
-              autoComplete="off"
-            />
-          </label>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => void onSignIn()}
-            disabled={loading}
-          >
-            <GitPullRequest className="w-4 h-4" />
+          <Link className="btn btn-primary" href="/sign-in?return_to=/creator">
             {t("signIn")}
-          </button>
+          </Link>
         </div>
       )}
     </div>

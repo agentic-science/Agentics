@@ -149,7 +149,7 @@ export function PioneerCodePanel({
     }
   };
 
-  /** Revokes one pioneer code and disables accounts created through it. */
+  /** Revokes one pioneer code and rescinds account setup created through it. */
   const revoke = async (id: string) => {
     if (!csrfToken) {
       onError(t("signInRevoke"));
