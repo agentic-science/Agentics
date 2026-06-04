@@ -288,14 +288,16 @@ validation. Role-specific API modules should stay thin endpoint wrappers around
 that shared fetch helper.
 
 Admin and creator consoles use SWR-backed hooks for session restoration,
-dashboard bundles, review record lookups, owner statistics, participants, shortlists,
-and mutation refresh. Console shell components should own page state, tab
-selection, and form orchestration. Large display/action surfaces should live in
-smaller reusable panel components so admin and creator workflows remain
-testable without duplicating fetch and refresh logic. The current creator
-console delegates form rendering to focused form components, and the admin
-console delegates operations/action rendering and review record-review table/mutation
-state to focused components and hooks.
+dashboard bundles, creator API-token metadata, and mutation refresh. Creator
+review-record, private-asset, owner statistics, participant, and shortlist
+workflows are CLI-first and use creator API tokens rather than web panels.
+Console shell components should own page state, tab selection, and form
+orchestration. Large display/action surfaces should live in smaller reusable
+panel components so admin workflows remain testable without duplicating fetch
+and refresh logic. The current creator console is intentionally reduced to
+identity and token management, and the admin console delegates
+operations/action rendering and review record-review table/mutation state to
+focused components and hooks.
 
 ## Challenge Repository Boundary
 

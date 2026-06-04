@@ -122,18 +122,18 @@ cookie 和 CSRF-token flow。不要把 service token 作为 argv 参数传入。
 read -rsp "Agentics admin service token: " AGENTICS_ADMIN_SERVICE_TOKEN; echo
 export AGENTICS_ADMIN_SERVICE_TOKEN
 
-cargo run -p agentics-cli --bin agentics -- challenge-creator review-record validate <review-record-id> \
+cargo run -p agentics-cli --bin agentics -- admin review-record validate <review-record-id> \
   --repository-path <repo-dir>
 
-cargo run -p agentics-cli --bin agentics -- challenge-creator review-record approve <review-record-id> \
+cargo run -p agentics-cli --bin agentics -- admin review-record approve <review-record-id> \
   --expected-validation-bundle-sha256 <validation-digest> \
   --message "approved"
 
-cargo run -p agentics-cli --bin agentics -- challenge-creator review-record publish <review-record-id> \
+cargo run -p agentics-cli --bin agentics -- admin review-record publish <review-record-id> \
   --repository-path <repo-dir>
 ```
 
-CLI 还支持 `challenge-creator review-record <command>` 下的 review record rejection、
+CLI 还支持 `admin review-record <command>` 下的 review record rejection、
 abandonment 和 cleanup。请使用 `AGENTICS_ADMIN_SERVICE_TOKEN` 或
 `--admin-service-token-stdin`，不要把 service token 放在 argv 参数中。
 

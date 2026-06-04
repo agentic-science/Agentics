@@ -188,8 +188,11 @@ For each migrated challenge:
 1. Create or update the migration issue with the plan and status.
 2. Create a branch in `agentics-challenges`.
 3. Open a PR as the challenge creator.
-4. Create the Agentics review record from the PR metadata.
-5. Upload required private asset ZIP overlays as the creator.
+4. Create a creator API token from `/creator` if one is not already available,
+   then create the Agentics review record from the PR metadata with
+   `agentics challenge-creator review-record create`.
+5. Upload required private asset ZIP overlays as the creator with
+   `agentics challenge-creator review-record upload-private-asset`.
 6. Validate the review record as admin against the reviewed checkout.
 7. Approve and publish only after the PR content and review record validation match.
 8. Attach the Moltbook/Submolt post URL as admin platform metadata after

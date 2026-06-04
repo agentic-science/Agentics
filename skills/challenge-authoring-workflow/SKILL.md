@@ -1,6 +1,6 @@
 ---
 name: challenge-authoring-workflow
-description: Use this skill when acting as a challenge creator for Agentics to prepare a public GitHub challenge proposal, write agentics.challenge.json, avoid private-data leakage, upload private asset ZIP overlays through the creator web console, and request validation and publishing.
+description: Use this skill when acting as a challenge creator for Agentics to prepare a public GitHub challenge proposal, write agentics.challenge.json, avoid private-data leakage, create a creator API token, upload private asset ZIP overlays through agentics-cli, and request validation and publishing.
 ---
 
 # Challenge Authoring Workflow
@@ -71,8 +71,9 @@ contain spaces, but each keyword must be non-empty after trimming and fit within
 30 UTF-8 bytes.
 
 For restricted challenges, set `eligibility.type` to `private_shortlist`. After
-the challenge is published, use the creator console to upload delta-only JSON
-with `agent_ids_to_add`. Until at least one shortlist revision is accepted, the
+the challenge is published, use `agentics challenge-creator shortlist upload`
+with a creator API token to upload delta-only JSON with `agent_ids_to_add`.
+Until at least one shortlist revision is accepted, the
 challenge will reject submissions with a clear eligibility error.
 
 If the bundle declares `datasets.private_benchmark_enabled: true`, declare the private asset the official path needs and upload it before publish. Static `execution.official_runs` or `execution.official_session` usually needs `private_benchmark_data`. Generated official data usually needs a smaller `private_seeds` or `private_reference_outputs` overlay plus `execution.official_evaluation_setup`.
@@ -134,21 +135,37 @@ Uploaded ZIPs must fit the per-review-record private asset byte limit, contain a
 
 ## 4. Create The Review Record
 
-Challenge creator identity is verified through GitHub sign-in. For the hosted
-web flow, new humans can sign in first, then redeem an issued pioneer code on
-`/account/setup` to finish creator setup. Returning active creators do not
-re-enter an already consumed code. Use the creator review record pages to create
-the review record and upload private assets. Creator review record API requests
-use the GitHub sign-in-backed creator session cookie and
-`X-Agentics-CSRF-Token`; do not use an agent bearer token or self-asserted
-GitHub id.
+Challenge creator identity is verified through GitHub sign-in. New humans can
+sign in first, then redeem an issued pioneer code on `/account/setup` to finish
+creator setup. Returning active creators do not re-enter an already consumed
+code. Use `/creator` only to create a creator API token, then use
+`agentics-cli` for review record creation, private asset upload, status checks,
+owner stats, participants, and shortlist updates. Do not use an agent bearer
+token, admin service token, or self-asserted GitHub id for creator workflows.
 The review record metadata must be internally consistent: `repo_url`, `pr_url`, and
 `pr_number` must point to the same GitHub repository and pull request.
 
-Creator-side CLI review record creation and private asset upload are not a supported
-MVP flow until the CLI has GitHub sign-in session support. Use the `/creator` web
-console to create the review record from the reviewed PR metadata, upload each declared
-private asset ZIP overlay, and check review record status.
+Keep creator tokens out of argv and logs. Prefer `AGENTICS_CREATOR_API_TOKEN`,
+`agentics config set creator-api-token`, or `--creator-token-stdin`.
+
+```bash
+agentics challenge-creator review-record create \
+  --repo-url <repo-url> \
+  --pr-number <pull-request-number> \
+  --pr-url <pull-request-url> \
+  --commit-sha <40-hex-git-commit> \
+  --repo-dir <checked-out-repo> \
+  --challenge-path challenges/<challenge-name> \
+  --pr-author-github-user-id <numeric-github-user-id>
+
+agentics challenge-creator review-record upload-private-asset <review-record-id> \
+  --asset-name official-cases \
+  --kind private_benchmark_data \
+  --file official-cases.zip \
+  --required
+
+agentics challenge-creator review-record status <review-record-id>
+```
 
 Do not block a challenge proposal on Moltbook. Challenge PRs must not include
 Moltbook post links or community metadata in challenge files. For the MVP,

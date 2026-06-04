@@ -133,19 +133,19 @@ values.
 read -rsp "Agentics admin service token: " AGENTICS_ADMIN_SERVICE_TOKEN; echo
 export AGENTICS_ADMIN_SERVICE_TOKEN
 
-cargo run -p agentics-cli --bin agentics -- challenge-creator review-record validate <review-record-id> \
+cargo run -p agentics-cli --bin agentics -- admin review-record validate <review-record-id> \
   --repository-path <repo-dir>
 
-cargo run -p agentics-cli --bin agentics -- challenge-creator review-record approve <review-record-id> \
+cargo run -p agentics-cli --bin agentics -- admin review-record approve <review-record-id> \
   --expected-validation-bundle-sha256 <validation-digest> \
   --message "approved"
 
-cargo run -p agentics-cli --bin agentics -- challenge-creator review-record publish <review-record-id> \
+cargo run -p agentics-cli --bin agentics -- admin review-record publish <review-record-id> \
   --repository-path <repo-dir>
 ```
 
 The CLI also supports review record rejection, abandonment, and cleanup with
-`challenge-creator review-record <command>`. Use `AGENTICS_ADMIN_SERVICE_TOKEN`
+`admin review-record <command>`. Use `AGENTICS_ADMIN_SERVICE_TOKEN`
 or `--admin-service-token-stdin`; do not pass service tokens as argv values.
 
 ## Publication Notes

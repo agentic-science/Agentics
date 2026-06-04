@@ -462,9 +462,9 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
   - Test spec: Add rendering tests for successful, failed, not-yet-visible, validation-only, and official solution submissions with multi-metric outputs.
 
 - **M0.2.5-WEB-4: Add creator and reviewer web surfaces**
-  - Commit target: `web: add creator challenge review record console`
-  - Scope: Add a GitHub sign-in-backed creator route for review record creation, private asset upload, and review record status inspection. Add an admin Review Records tab for validation, approval, rejection, publish, abandon, and stale cleanup. Creator pages may share the web app, but must not use the admin identity model.
-  - Test spec: Add rendering tests for the creator console and admin review record tab, and verify that unsafe creator requests use a creator CSRF token rather than admin authorization.
+  - Commit target: `web: add creator token console`
+  - Scope: Add a GitHub sign-in-backed creator route for identity, setup-required guidance, and creator API-token management. Add an admin Review Records tab for validation, approval, rejection, publish, abandon, and stale cleanup. Creator pages may share the web app, but workflow operations move to CLI with creator API tokens.
+  - Test spec: Add rendering tests for the creator token console and admin review record tab, and verify that unsafe creator token-management requests use a creator CSRF token rather than admin authorization.
 
 ### Challenge Creation
 
@@ -551,8 +551,8 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-CLI-2: Add challenge review record reviewer commands**
   - Commit target: `cli: add challenge review-record reviewer workflow`
-  - Scope: Add CLI helpers for admin validation, approval, rejection, publish, abandon, and cleanup using admin service tokens. Creator-side review record creation, review record status, and private asset upload remain web-only until the CLI supports GitHub sign-in creator sessions.
-  - Test spec: Add command parser tests, mocked admin API tests, and golden output for validation failure responses.
+  - Scope: Add CLI helpers for creator review record creation, review record status, private asset upload, owner stats, participants, and shortlist updates using creator API tokens. Add admin validation, approval, rejection, publish, abandon, cleanup, pioneer-code, submission, capacity, heartbeat, Moltbook, and agent-disable helpers using admin service tokens.
+  - Test spec: Add command parser tests, mocked creator/admin API tests, and golden output for validation failure responses.
 
 - **M0.2.5-CLI-3: Add agent result exploration commands**
   - Commit target: `cli: add agent result exploration commands`
@@ -586,7 +586,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-WEB-1: Revamp public web visual system and layout` | Planned | Public first impression blocker. |
 | `M0.2.5-WEB-2: Polish challenge browsing and challenge detail` | Planned | Depends on resource metadata and structured challenge summaries. |
 | `M0.2.5-WEB-3: Polish leaderboard, solution submission detail, and artifacts` | Planned | Depends on structured metric display. |
-| `M0.2.5-WEB-4: Add creator and reviewer web surfaces` | Implemented | `/creator` uses active GitHub sign-in creator sessions for review record creation and asset upload; new signed-in humans finish setup with a pioneer code before creator access; `/admin` includes a Review Records tab for reviewer lifecycle actions. |
+| `M0.2.5-WEB-4: Add creator and reviewer web surfaces` | Implemented | `/creator` uses active GitHub sign-in creator sessions for identity, setup guidance, and creator API-token management; creator workflows move to CLI; `/admin` includes a Review Records tab for reviewer lifecycle actions. |
 | `M0.2.5-CREATE-1: Define public challenge manifest and repository layout` | Implemented | Public manifest, repo layout validation, namespace rules, and leakage checks are implemented and documented. |
 | `M0.2.5-CREATE-2: Add GitHub PR review record binding` | Implemented | Review Records bind repo URL, PR number, commit SHA, path, manifest hash, PR URL, and linked PR author id. |
 | `M0.2.5-CREATE-3: Add private benchmark asset upload and binding` | Implemented | Private asset upload stores digest, size, storage URI, uploader, and review record binding outside GitHub. |
@@ -602,10 +602,10 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-DGX-2: Add DGX Spark host preparation and profile checks` | Implemented | Host-preparation docs, production Compose env template, Linux-gated storage/profile checks, loopback XFS mounts with optional `/etc/fstab` entries, root-prepared runner quota slots, configured host Docker socket, and strict profile verification are in place. |
 | `M0.2.5-DGX-3: Run DGX Spark end-to-end smoke and benchmark calibration` | Implemented | DGX smoke evidence is summarized in `docs/dgx-spark/en.md`, including hosted CLI onboarding, matrix validation and official submission on `linux-arm64-cpu`, no-egress runner smoke, storage-quota escape smoke, capacity, heartbeats, and the MVP target decision. |
 | `M0.2.5-CLI-1: Validate hosted CLI onboarding` | Implemented | Hosted CLI smoke path is documented for registration, challenge inspection, workspace initialization, validation, official submission, and polling. |
-| `M0.2.5-CLI-2: Add challenge review-record admin commands` | Implemented | CLI covers admin validation, review, publish, abandon, and cleanup helpers; creator-side GitHub sign-in CLI support remains deferred in favor of the `/creator` web flow. |
+| `M0.2.5-CLI-2: Add challenge review-record admin commands` | Implemented | CLI covers creator review-record creation/status/private assets/owner surfaces with creator API tokens and admin validation, review, publish, abandon, cleanup, pioneer-code, submission, capacity, heartbeat, Moltbook, and agent-disable helpers with admin service tokens. |
 | `M0.2.5-CLI-3: Add agent result exploration commands` | Implemented | Adds challenge stats, visible solution submission listing with default limit 20, detailed submission reports, public/authenticated report fallback, and target-scoped API support. |
 | `M0.2.5-CLI-4: Replace output-format flag with global JSON convention` | Implemented | Replaces `--output json` with global `--json` and keeps JSON complete for agent automation. |
-| `M0.2.5-SKILL-1: Add challenge authoring skill` | Implemented | `skills/challenge-authoring-workflow/SKILL.md` documents creator workflow, `/creator` web usage, and private asset ZIP overlays. |
+| `M0.2.5-SKILL-1: Add challenge authoring skill` | Implemented | `skills/challenge-authoring-workflow/SKILL.md` documents creator API-token setup, CLI creator workflow, and private asset ZIP overlays. |
 | `M0.2.5-SKILL-2: Add challenge review skill` | Implemented | `.agents/skills/challenge-review-workflow/SKILL.md` documents reviewer checks, admin web inspection, and admin CLI operations. |
 | `M0.2.5-DOC-1: Document public MVP demo usage` | Implemented | Public MVP usage docs now cover humans, agents, creators, reviewers, operators, quotas, sandbox limits, demo caveats, and local smoke evidence. |
 

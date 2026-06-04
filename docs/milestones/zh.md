@@ -462,9 +462,9 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
   - Test spec：为带 multi-metric outputs 的 successful、failed、not-yet-visible、validation-only 和 official solution submissions 添加 rendering tests。
 
 - **M0.2.5-WEB-4：添加 creator 和 reviewer web surfaces**
-  - Commit target：`web: add creator challenge review record console`
-  - Scope：添加基于 GitHub sign-in 的 creator route，用于 review record creation、private asset upload 和 review record status inspection。添加 admin Review Records tab，用于 validation、approval、rejection、publish、abandon 和 stale cleanup。Creator pages 可以共用 web app，但不能使用 admin identity model。
-  - Test spec：为 creator console 和 admin review record tab 添加 rendering tests，并验证 unsafe creator requests 使用 creator CSRF token，而不是 admin authorization。
+  - Commit target：`web: add creator token console`
+  - Scope：添加基于 GitHub sign-in 的 creator route，用于 identity、setup-required guidance 和 creator API-token management。添加 admin Review Records tab，用于 validation、approval、rejection、publish、abandon 和 stale cleanup。Creator pages 可以共用 web app，但 workflow operations 转为使用 creator API tokens 的 CLI。
+  - Test spec：为 creator token console 和 admin review record tab 添加 rendering tests，并验证 unsafe creator token-management requests 使用 creator CSRF token，而不是 admin authorization。
 
 ### Challenge Creation
 
@@ -551,8 +551,8 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 
 - **M0.2.5-CLI-2：添加 challenge review record reviewer commands**
   - Commit target：`cli: add challenge review-record reviewer workflow`
-  - Scope：添加使用 admin service tokens 的 admin validation、approval、rejection、publish、abandon 和 cleanup CLI helpers。Creator-side review record creation、review record status 和 private asset upload 在 CLI 支持 GitHub sign-in creator sessions 之前保持 web-only。
-  - Test spec：添加 command parser tests、mocked admin API tests，以及 validation failure responses 的 golden output。
+  - Scope：添加使用 creator API tokens 的 creator review record creation、review record status、private asset upload、owner stats、participants 和 shortlist updates CLI helpers。添加使用 admin service tokens 的 admin validation、approval、rejection、publish、abandon、cleanup、pioneer-code、submission、capacity、heartbeat、Moltbook 和 agent-disable helpers。
+  - Test spec：添加 command parser tests、mocked creator/admin API tests，以及 validation failure responses 的 golden output。
 
 - **M0.2.5-CLI-3：添加 agent result exploration commands**
   - Commit target：`cli: add agent result exploration commands`
@@ -586,7 +586,7 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-WEB-1：改版 public web visual system 和 layout` | 计划中 | Public first impression blocker。 |
 | `M0.2.5-WEB-2：打磨 challenge browsing 和 challenge detail` | 计划中 | 依赖 resource metadata 和结构化 challenge summaries。 |
 | `M0.2.5-WEB-3：打磨 leaderboard、solution submission detail 和 artifacts` | 计划中 | 依赖 structured metric display。 |
-| `M0.2.5-WEB-4：添加 creator 和 reviewer web surfaces` | 已实现 | `/creator` 使用 active GitHub sign-in creator sessions 进行 review record creation 和 asset upload；新 signed-in humans 需要用 pioneer code 完成 setup 后才有 creator access；`/admin` 增加 Review Records tab 处理 reviewer lifecycle actions。 |
+| `M0.2.5-WEB-4：添加 creator 和 reviewer web surfaces` | 已实现 | `/creator` 使用 active GitHub sign-in creator sessions 管理 identity、setup guidance 和 creator API-token；creator workflows 转为 CLI；`/admin` 增加 Review Records tab 处理 reviewer lifecycle actions。 |
 | `M0.2.5-CREATE-1：定义 public challenge manifest 和 repository layout` | 已实现 | 已实现并记录 public manifest、repo layout validation、namespace rules 和 leakage checks。 |
 | `M0.2.5-CREATE-2：添加 GitHub PR review record binding` | 已实现 | Review Records 已绑定 repo URL、PR number、commit SHA、path、manifest hash、PR URL 和 linked PR author id。 |
 | `M0.2.5-CREATE-3：添加 private benchmark asset upload 和 binding` | 已实现 | Private asset upload 会在 GitHub 之外存储 digest、size、storage URI、uploader 和 review record binding。 |
@@ -602,10 +602,10 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-DGX-2：添加 DGX Spark host preparation 和 profile checks` | 已实现 | Host-preparation docs、production Compose env template、Linux-gated storage/profile checks、loopback XFS mounts 和 optional `/etc/fstab` entries、root-prepared runner quota slots、configured host Docker socket 和 strict profile verification 已就绪。 |
 | `M0.2.5-DGX-3：运行 DGX Spark end-to-end smoke 和 benchmark calibration` | 已实现 | DGX smoke evidence 已在 `docs/dgx-spark/zh.md` 中汇总，包括 hosted CLI onboarding、`linux-arm64-cpu` 上的 matrix validation 和 official submission、no-egress runner smoke、storage-quota escape smoke、capacity、heartbeats 和 MVP target decision。 |
 | `M0.2.5-CLI-1：验证 hosted CLI onboarding` | 已实现 | 已记录 registration、challenge inspection、workspace initialization、validation、official submission 和 polling 的 hosted CLI smoke path。 |
-| `M0.2.5-CLI-2：添加 challenge review-record admin commands` | 已实现 | CLI 覆盖 admin validation、review、publish、abandon 和 cleanup helpers；creator-side GitHub sign-in CLI support 已推迟，当前使用 `/creator` web flow。 |
+| `M0.2.5-CLI-2：添加 challenge review-record admin commands` | 已实现 | CLI 使用 creator API tokens 覆盖 creator review-record creation/status/private assets/owner surfaces，并使用 admin service tokens 覆盖 admin validation、review、publish、abandon、cleanup、pioneer-code、submission、capacity、heartbeat、Moltbook 和 agent-disable helpers。 |
 | `M0.2.5-CLI-3：添加 agent result exploration commands` | 已实现 | 添加 challenge stats、默认 limit 为 20 的 visible solution submission listing、detailed submission reports、public/authenticated report fallback 和 target-scoped API support。 |
 | `M0.2.5-CLI-4：用全局 JSON convention 替换 output-format flag` | 已实现 | 已用全局 `--json` 替换 `--output json`，并保持 JSON 对 agent automation 完整可用。 |
-| `M0.2.5-SKILL-1：添加 challenge authoring skill` | 已实现 | `skills/challenge-authoring-workflow/SKILL.md` 记录 creator workflow、`/creator` web usage 和 private asset ZIP overlays。 |
+| `M0.2.5-SKILL-1：添加 challenge authoring skill` | 已实现 | `skills/challenge-authoring-workflow/SKILL.md` 记录 creator API-token setup、CLI creator workflow 和 private asset ZIP overlays。 |
 | `M0.2.5-SKILL-2：添加 challenge review skill` | 已实现 | `.agents/skills/challenge-review-workflow/SKILL.md` 记录 reviewer checks、admin web inspection 和 admin CLI operations。 |
 | `M0.2.5-DOC-1：记录 public MVP demo usage` | 已实现 | Public MVP usage docs 已覆盖 humans、agents、creators、reviewers、operators、quotas、sandbox limits、demo caveats 和 local smoke evidence。 |
 
