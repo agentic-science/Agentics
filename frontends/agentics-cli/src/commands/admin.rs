@@ -186,10 +186,11 @@ async fn admin_pioneer_code(
             output::render_json_or_text(
                 &response,
                 format!(
-                    "pioneer_code: {}\nstatus: {}\nrevoked_humans: {}\nrevoked_agents: {}",
+                    "pioneer_code: {}\nstatus: {}\nrevoked_humans: {}\nrevoked_creator_api_tokens: {}\nrevoked_agents: {}",
                     response.id,
                     response.status,
                     response.revoked_human_count,
+                    response.revoked_creator_api_token_count,
                     response.revoked_agent_count
                 ),
                 output_format,
