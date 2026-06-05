@@ -1,20 +1,23 @@
 use agentics_domain::models::pioneer_codes::{PioneerCode, PioneerCodeInput};
-use agentics_domain::models::request::{
-    CreateChallengeShortlistRevisionRequest, RegisterAgentRequest,
-};
+use agentics_domain::models::request::RegisterAgentRequest;
 use anyhow::{Context, Result, bail};
 use secrecy::{ExposeSecret, SecretString};
 
+use crate::CommandInput;
 use crate::api::ApiClient;
-use crate::cli::{self, ChallengeShortlistCommand, ConfigKey, CreatorAuthArgs, RegisterArgs};
+use crate::cli::{self, ConfigKey, RegisterArgs};
 use crate::config::{ApiBaseUrl, CliConfig, ConfigStore, ResolvedSettings};
 use crate::output;
 
 mod admin;
+mod creator;
 mod local_validation;
 mod submissions;
 
-pub(crate) use admin::{admin_command, challenge_review_record};
+pub(crate) use admin::admin_command;
+pub(crate) use creator::{
+    challenge_review_record, challenge_shortlist, creator_participants, creator_stats,
+};
 pub(crate) use submissions::{
     challenge_stats, list_public_solution_submissions, solution_submission_report, submit,
     validate, wait_for_solution_submission,
@@ -68,6 +71,7 @@ pub(crate) fn set_config(
     output_format: cli::OutputFormat,
     store: &ConfigStore,
     settings: &ResolvedSettings,
+    input: &CommandInput,
 ) -> Result<String> {
     let mut config = store.load()?;
     let updated_key = match key {
@@ -83,7 +87,7 @@ pub(crate) fn set_config(
             "api_base_url"
         }
         ConfigKey::Token => {
-            let token = read_secret_config_value(value, read_stdin, "token")?;
+            let token = read_secret_config_value(value, read_stdin, "token", input)?;
             let token = token.trim();
             if token.is_empty() {
                 bail!("token must not be empty");
@@ -92,7 +96,7 @@ pub(crate) fn set_config(
             "token"
         }
         ConfigKey::CreatorApiToken => {
-            let token = read_secret_config_value(value, read_stdin, "creator_api_token")?;
+            let token = read_secret_config_value(value, read_stdin, "creator_api_token", input)?;
             let token = token.trim();
             if token.is_empty() {
                 bail!("creator_api_token must not be empty");
@@ -109,6 +113,7 @@ fn read_secret_config_value(
     value: Option<&str>,
     read_stdin: bool,
     key_name: &str,
+    input: &CommandInput,
 ) -> Result<String> {
     if value.is_some() {
         bail!("{key_name} is secret; pass it with --stdin instead of argv");
@@ -116,73 +121,10 @@ fn read_secret_config_value(
     if !read_stdin {
         bail!("{key_name} is secret; pass --stdin and pipe the value on stdin");
     }
-    let mut input = String::new();
-    std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
-        .with_context(|| format!("failed to read {key_name} from stdin"))?;
-    Ok(input.trim_end_matches(['\r', '\n']).to_string())
-}
-
-/// Handles challenge shortlist for this module.
-pub(crate) async fn creator_stats(
-    challenge_name: agentics_domain::models::names::ChallengeName,
-    target: Option<agentics_domain::models::names::TargetName>,
-    creator: &CreatorAuthArgs,
-    output_format: cli::OutputFormat,
-    settings: &ResolvedSettings,
-) -> Result<String> {
-    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-    let token = admin::resolve_creator_api_token(creator, settings)?;
-    let response = client
-        .get_creator_challenge_stats(&challenge_name, target.as_ref(), &token)
-        .await?;
-    output::render_creator_challenge_stats(&response, output_format)
-}
-
-pub(crate) async fn creator_participants(
-    challenge_name: agentics_domain::models::names::ChallengeName,
-    target: Option<agentics_domain::models::names::TargetName>,
-    creator: &CreatorAuthArgs,
-    output_format: cli::OutputFormat,
-    settings: &ResolvedSettings,
-) -> Result<String> {
-    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-    let token = admin::resolve_creator_api_token(creator, settings)?;
-    let response = client
-        .list_creator_challenge_participants(&challenge_name, target.as_ref(), &token)
-        .await?;
-    output::render_creator_challenge_participants(&response, output_format)
-}
-
-/// Handles challenge shortlist for this module.
-pub(crate) async fn challenge_shortlist(
-    command: ChallengeShortlistCommand,
-    creator: &CreatorAuthArgs,
-    output_format: cli::OutputFormat,
-    settings: &ResolvedSettings,
-) -> Result<String> {
-    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-    let token = admin::resolve_creator_api_token(creator, settings)?;
-    match command {
-        ChallengeShortlistCommand::Show { challenge_name } => {
-            let response = client
-                .get_challenge_shortlist_creator(&challenge_name, &token)
-                .await?;
-            output::render_challenge_shortlist(&response, output_format)
-        }
-        ChallengeShortlistCommand::Upload {
-            challenge_name,
-            file,
-        } => {
-            let raw = std::fs::read_to_string(&file)
-                .with_context(|| format!("failed to read shortlist JSON {}", file.display()))?;
-            let request: CreateChallengeShortlistRevisionRequest =
-                serde_json::from_str(&raw).context("shortlist file must be valid JSON")?;
-            let response = client
-                .create_challenge_shortlist_revision_creator(&challenge_name, &request, &token)
-                .await?;
-            output::render_challenge_shortlist_revision(&response, output_format)
-        }
-    }
+    Ok(input
+        .read_to_string(key_name)?
+        .trim_end_matches(['\r', '\n'])
+        .to_string())
 }
 
 fn parse_model_info(raw: &str) -> Result<serde_json::Value> {

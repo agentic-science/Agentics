@@ -1,136 +1,26 @@
 use std::path::Path;
 
-use agentics_domain::models::auth::GithubUserId;
 use agentics_domain::models::challenge_creation::{
-    ChallengePrivateAssetKind, ChallengeReviewDecisionRequest, CreateChallengeReviewRecordRequest,
-    UploadChallengePrivateAssetRequest, ValidateChallengeReviewRecordRequest,
+    ChallengeReviewDecisionRequest, ValidateChallengeReviewRecordRequest,
 };
 use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::ids::ChallengeReviewRecordId;
-use agentics_domain::models::paths::RepoRelativePath;
 use agentics_domain::models::request::{
     CreatePioneerCodeRequest, SetChallengeMoltbookDiscussionRequest,
 };
-use agentics_domain::models::urls::{GithubPullRequestUrl, GithubRepoRemote, MoltbookPostUrl};
+use agentics_domain::models::urls::MoltbookPostUrl;
 use anyhow::{Context, Result, bail};
-use base64::{Engine as _, engine::general_purpose::STANDARD};
 use secrecy::{ExposeSecret, SecretString};
 
+use crate::CommandInput;
 use crate::api::ApiClient;
 use crate::cli::{
     self, AdminAgentsCommand, AdminArgs, AdminAuthArgs, AdminChallengesCommand, AdminCommand,
     AdminMoltbookCommand, AdminPioneerCodeCommand, AdminReviewRecordCommand,
-    AdminServiceHeartbeatsCommand, AdminSubmissionsCommand, ChallengePrivateAssetKindArg,
-    ChallengeReviewRecordCommand, CreatorAuthArgs,
+    AdminServiceHeartbeatsCommand, AdminSubmissionsCommand,
 };
 use crate::config::ResolvedSettings;
 use crate::output;
-
-/// Handles challenge review record for this module.
-pub(crate) async fn challenge_review_record(
-    command: ChallengeReviewRecordCommand,
-    creator: &CreatorAuthArgs,
-    output_format: cli::OutputFormat,
-    settings: &ResolvedSettings,
-) -> Result<String> {
-    let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-    match command {
-        ChallengeReviewRecordCommand::Create {
-            repo_url,
-            pr_number,
-            pr_url,
-            commit_sha,
-            repo_dir,
-            challenge_path,
-            pr_author_github_user_id,
-        } => {
-            let creator_api_token = resolve_creator_api_token(creator, settings)?;
-            let challenge_path =
-                RepoRelativePath::try_new(challenge_path).context("invalid challenge_path")?;
-            let challenge_root = repo_dir.join(challenge_path.as_str());
-            let manifest =
-                agentics_contracts::challenge_creation::read_challenge_creation_manifest(
-                    &challenge_root,
-                )
-                .await
-                .with_context(|| {
-                    format!(
-                        "failed to read agentics.challenge.json under {}",
-                        challenge_root.display()
-                    )
-                })?;
-            let response = client
-                .create_challenge_review_record_creator(
-                    &CreateChallengeReviewRecordRequest {
-                        repo_url: GithubRepoRemote::try_new(repo_url)
-                            .context("invalid repo_url")?,
-                        pr_number,
-                        pr_url: GithubPullRequestUrl::try_new(pr_url).context("invalid pr_url")?,
-                        commit_sha,
-                        challenge_path,
-                        pr_author_github_user_id: GithubUserId::try_new(pr_author_github_user_id)
-                            .context("invalid pr_author_github_user_id")?,
-                        manifest,
-                    },
-                    &creator_api_token,
-                )
-                .await?;
-            output::render_creator_challenge_review_record(&response, output_format)
-        }
-        ChallengeReviewRecordCommand::Status { review_record_id } => {
-            let creator_api_token = resolve_creator_api_token(creator, settings)?;
-            let response = client
-                .get_challenge_review_record_creator(&review_record_id, &creator_api_token)
-                .await?;
-            output::render_creator_challenge_review_record(&response, output_format)
-        }
-        ChallengeReviewRecordCommand::UploadPrivateAsset {
-            review_record_id,
-            asset_name,
-            kind,
-            file,
-            required,
-        } => {
-            let creator_api_token = resolve_creator_api_token(creator, settings)?;
-            let bytes = std::fs::read(&file)
-                .with_context(|| format!("failed to read private asset {}", file.display()))?;
-            let response = client
-                .upload_challenge_private_asset_creator(
-                    &review_record_id,
-                    &UploadChallengePrivateAssetRequest {
-                        asset_name,
-                        kind: kind.into(),
-                        required,
-                        asset_base64: STANDARD.encode(bytes),
-                    },
-                    &creator_api_token,
-                )
-                .await?;
-            output::render_challenge_private_asset(&response, output_format)
-        }
-    }
-}
-
-/// Resolve the creator API token from a non-argv source.
-pub(crate) fn resolve_creator_api_token(
-    creator: &CreatorAuthArgs,
-    settings: &ResolvedSettings,
-) -> Result<SecretString> {
-    let token = if creator.creator_token_stdin {
-        let mut input = String::new();
-        std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
-            .context("failed to read creator API token from stdin")?;
-        SecretString::from(input.trim_end_matches(['\r', '\n']).to_string())
-    } else {
-        settings.creator_api_token.clone().unwrap_or_default()
-    };
-    if token.expose_secret().is_empty() {
-        bail!(
-            "set AGENTICS_CREATOR_API_TOKEN, persist creator-api-token with `agentics config set creator-api-token --stdin`, or pass --creator-token-stdin for creator commands"
-        );
-    }
-    Ok(token)
-}
 
 /// Converts an admin repository path into the UTF-8 API wire contract.
 fn admin_repository_path_to_wire(path: &Path) -> Result<String> {
@@ -146,12 +36,15 @@ fn admin_repository_path_to_wire(path: &Path) -> Result<String> {
 fn resolve_admin_service_token(
     admin: &AdminAuthArgs,
     settings: &ResolvedSettings,
+    input: &CommandInput,
 ) -> Result<SecretString> {
     let token = if admin.admin_service_token_stdin {
-        let mut input = String::new();
-        std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
-            .context("failed to read admin service token from stdin")?;
-        SecretString::from(input.trim_end_matches(['\r', '\n']).to_string())
+        SecretString::from(
+            input
+                .read_to_string("admin service token")?
+                .trim_end_matches(['\r', '\n'])
+                .to_string(),
+        )
     } else {
         settings.admin_service_token.clone().unwrap_or_default()
     };
@@ -170,26 +63,15 @@ enum ReviewRecordDecisionAction {
     Abandon,
 }
 
-impl From<ChallengePrivateAssetKindArg> for ChallengePrivateAssetKind {
-    /// Handles from for this module.
-    fn from(value: ChallengePrivateAssetKindArg) -> Self {
-        match value {
-            ChallengePrivateAssetKindArg::BenchmarkData => Self::PrivateBenchmarkData,
-            ChallengePrivateAssetKindArg::EvaluatorPackage => Self::PrivateEvaluatorPackage,
-            ChallengePrivateAssetKindArg::Seeds => Self::PrivateSeeds,
-            ChallengePrivateAssetKindArg::ReferenceOutputs => Self::PrivateReferenceOutputs,
-        }
-    }
-}
-
 /// Handles top-level admin commands authenticated by service token.
 pub(crate) async fn admin_command(
     args: AdminArgs,
     output_format: cli::OutputFormat,
     settings: &ResolvedSettings,
+    input: &CommandInput,
 ) -> Result<String> {
     let client = ApiClient::new(&settings.api_base_url, settings.token.clone())?;
-    let admin_service_token = resolve_admin_service_token(&args.admin, settings)?;
+    let admin_service_token = resolve_admin_service_token(&args.admin, settings, input)?;
     match args.command {
         AdminCommand::PioneerCode { command } => {
             admin_pioneer_code(command, &client, &admin_service_token, output_format).await

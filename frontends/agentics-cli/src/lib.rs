@@ -24,7 +24,9 @@ mod output;
 mod package;
 mod workspace;
 
-use anyhow::Result;
+use std::sync::{Arc, Mutex};
+
+use anyhow::{Context, Result};
 use clap::Parser;
 
 use crate::api::ApiClient;
@@ -46,8 +48,55 @@ pub async fn run_from_env() -> Result<()> {
     Ok(())
 }
 
+#[derive(Clone, Default)]
+/// Provides command input streams while keeping production stdin behavior testable.
+pub(crate) struct CommandInput {
+    stdin: Option<Arc<Mutex<Option<String>>>>,
+}
+
+impl CommandInput {
+    /// Reads from process stdin for normal CLI execution.
+    fn process() -> Self {
+        Self { stdin: None }
+    }
+
+    /// Provides one test stdin payload.
+    #[cfg(test)]
+    pub(crate) fn test_stdin(value: impl Into<String>) -> Self {
+        Self {
+            stdin: Some(Arc::new(Mutex::new(Some(value.into())))),
+        }
+    }
+
+    /// Reads the configured stdin payload or process stdin.
+    pub(crate) fn read_to_string(&self, label: &str) -> Result<String> {
+        if let Some(stdin) = &self.stdin {
+            let mut guard = stdin
+                .lock()
+                .map_err(|_| anyhow::anyhow!("test stdin lock poisoned"))?;
+            return guard
+                .take()
+                .ok_or_else(|| anyhow::anyhow!("{label} stdin was already consumed"));
+        }
+
+        let mut input = String::new();
+        std::io::Read::read_to_string(&mut std::io::stdin(), &mut input)
+            .with_context(|| format!("failed to read {label} from stdin"))?;
+        Ok(input)
+    }
+}
+
 /// Handles execute for this module.
 pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
+    execute_with_input(cli, env, CommandInput::process()).await
+}
+
+/// Handles execute with a caller-provided input source.
+pub(crate) async fn execute_with_input(
+    cli: Cli,
+    env: Environment,
+    input: CommandInput,
+) -> Result<String> {
     let store = ConfigStore::new(config_path(&cli)?);
     let file_config = store.load()?;
     let output_format = if cli.json {
@@ -63,7 +112,15 @@ pub(crate) async fn execute(cli: Cli, env: Environment) -> Result<String> {
         store.path().to_path_buf(),
     )?;
 
-    dispatch_command(cli.command, output_format, &store, file_config, &settings).await
+    dispatch_command(
+        cli.command,
+        output_format,
+        &store,
+        file_config,
+        &settings,
+        &input,
+    )
+    .await
 }
 
 async fn dispatch_command(
@@ -72,18 +129,21 @@ async fn dispatch_command(
     store: &ConfigStore,
     file_config: crate::config::CliConfig,
     settings: &ResolvedSettings,
+    input: &CommandInput,
 ) -> Result<String> {
     match command {
         Commands::Register(args) => {
             commands::register(args, output_format, store, file_config, settings).await
         }
         Commands::Auth(args) => dispatch_auth(args, output_format, settings),
-        Commands::Config(args) => dispatch_config(args, output_format, store, settings),
+        Commands::Config(args) => dispatch_config(args, output_format, store, settings, input),
         Commands::Challenges(args) => dispatch_challenges(args, output_format, settings).await,
         Commands::ChallengeCreator(args) => {
-            dispatch_challenge_creator(args, output_format, settings).await
+            dispatch_challenge_creator(args, output_format, settings, input).await
         }
-        Commands::Admin(args) => commands::admin_command(args, output_format, settings).await,
+        Commands::Admin(args) => {
+            commands::admin_command(args, output_format, settings, input).await
+        }
         Commands::InitSolution(args) => dispatch_init_solution(args, output_format, settings).await,
         Commands::Submit(args) => commands::submit(args, output_format, settings).await,
         Commands::Validate(args) => commands::validate(args, output_format, settings).await,
@@ -108,12 +168,19 @@ fn dispatch_config(
     output_format: crate::cli::OutputFormat,
     store: &ConfigStore,
     settings: &ResolvedSettings,
+    input: &CommandInput,
 ) -> Result<String> {
     match args.command {
         ConfigCommand::Show => output::render_auth_status(settings, output_format),
-        ConfigCommand::Set { key, value, stdin } => {
-            commands::set_config(key, value.as_deref(), stdin, output_format, store, settings)
-        }
+        ConfigCommand::Set { key, value, stdin } => commands::set_config(
+            key,
+            value.as_deref(),
+            stdin,
+            output_format,
+            store,
+            settings,
+            input,
+        ),
     }
 }
 
@@ -146,17 +213,27 @@ async fn dispatch_challenge_creator(
     args: ChallengeCreatorArgs,
     output_format: crate::cli::OutputFormat,
     settings: &ResolvedSettings,
+    input: &CommandInput,
 ) -> Result<String> {
     let creator = args.creator;
     match args.command {
         ChallengeCreatorCommand::ReviewRecord { command } => {
-            commands::challenge_review_record(command, &creator, output_format, settings).await
+            commands::challenge_review_record(command, &creator, output_format, settings, input)
+                .await
         }
         ChallengeCreatorCommand::Stats {
             challenge_name,
             target,
         } => {
-            commands::creator_stats(challenge_name, target, &creator, output_format, settings).await
+            commands::creator_stats(
+                challenge_name,
+                target,
+                &creator,
+                output_format,
+                settings,
+                input,
+            )
+            .await
         }
         ChallengeCreatorCommand::Participants {
             challenge_name,
@@ -168,11 +245,12 @@ async fn dispatch_challenge_creator(
                 &creator,
                 output_format,
                 settings,
+                input,
             )
             .await
         }
         ChallengeCreatorCommand::Shortlist { command } => {
-            commands::challenge_shortlist(command, &creator, output_format, settings).await
+            commands::challenge_shortlist(command, &creator, output_format, settings, input).await
         }
     }
 }
