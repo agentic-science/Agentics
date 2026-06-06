@@ -56,7 +56,9 @@ Server-side admin calls 使用 admin service token，并放在
 `Authorization: Bearer ...` header 中。
 
 先通过配置的 GitHub user id bootstrap 第一个 admin，然后在 admin console 中创建
-admin service tokens 给 non-browser automation 使用。Hosted MVP registration 应使用
+admin service tokens 给 non-browser automation 使用。活跃的 admin service token 标签在
+每个签发它的 human admin 下必须唯一；如需复用同一标签，请先撤销旧 token。
+Hosted MVP registration 应使用
 `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`；backend 会在 non-loopback bind 下拒绝
 public registration mode。
 GitHub sign-in 只使用 GitHub App client credentials：

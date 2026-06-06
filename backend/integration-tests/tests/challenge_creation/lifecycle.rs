@@ -521,6 +521,206 @@ async fn creator_api_token_drives_creator_workflows_and_revokes(pool: sqlx::PgPo
     assert_eq!(revoked_response.status(), reqwest::StatusCode::UNAUTHORIZED);
 }
 
+/// Verifies creator API-token labels are unique only for active tokens owned by one human.
+#[sqlx::test(migrations = "../migrations")]
+async fn creator_api_token_duplicate_labels_conflict_per_human(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+    let other_creator = create_creator_session(&pool, 1002, "other-creator").await;
+
+    let created: serde_json::Value = creator_auth(
+        client.post(api_url(&app, "/api/creator/api-tokens")),
+        &creator,
+    )
+    .json(&json!({ "label": " Laptop " }))
+    .send()
+    .await
+    .expect("creator token create request")
+    .error_for_status()
+    .expect("creator token should create")
+    .json()
+    .await
+    .expect("creator token create json");
+    let token_id = created["token_record"]["id"]
+        .as_str()
+        .expect("token id should be returned");
+
+    let duplicate = creator_auth(
+        client.post(api_url(&app, "/api/creator/api-tokens")),
+        &creator,
+    )
+    .json(&json!({ "label": "laptop" }))
+    .send()
+    .await
+    .expect("duplicate creator token request");
+    assert_eq!(duplicate.status(), StatusCode::CONFLICT);
+    let duplicate_body: serde_json::Value =
+        duplicate.json().await.expect("duplicate response json");
+    assert_eq!(duplicate_body["error"]["code"], "conflict");
+    assert_eq!(duplicate_body["error"]["details"][0]["field"], "label");
+
+    creator_auth(
+        client.post(api_url(&app, "/api/creator/api-tokens")),
+        &other_creator,
+    )
+    .json(&json!({ "label": " laptop " }))
+    .send()
+    .await
+    .expect("other creator duplicate label request")
+    .error_for_status()
+    .expect("different creator may reuse label");
+
+    creator_auth(
+        client.post(api_url(
+            &app,
+            &format!("/api/creator/api-tokens/{token_id}/revoke"),
+        )),
+        &creator,
+    )
+    .send()
+    .await
+    .expect("creator token revoke request")
+    .error_for_status()
+    .expect("creator token should revoke");
+
+    creator_auth(
+        client.post(api_url(&app, "/api/creator/api-tokens")),
+        &creator,
+    )
+    .json(&json!({ "label": "LAPTOP" }))
+    .send()
+    .await
+    .expect("creator token reuse request")
+    .error_for_status()
+    .expect("revoked creator token label should be reusable");
+}
+
+/// Verifies concurrent duplicate creator-token creates collapse to one winner and one conflict.
+#[sqlx::test(migrations = "../migrations")]
+async fn concurrent_creator_api_token_duplicate_labels_conflict(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+
+    let first = creator_auth(
+        client.post(api_url(&app, "/api/creator/api-tokens")),
+        &creator,
+    )
+    .json(&json!({ "label": "race" }))
+    .send();
+    let second = creator_auth(
+        client.post(api_url(&app, "/api/creator/api-tokens")),
+        &creator,
+    )
+    .json(&json!({ "label": " RACE " }))
+    .send();
+
+    let (first, second) = tokio::join!(first, second);
+    let statuses = [
+        first.expect("first race request").status(),
+        second.expect("second race request").status(),
+    ];
+    assert_eq!(
+        statuses
+            .iter()
+            .filter(|status| **status == StatusCode::CREATED)
+            .count(),
+        1
+    );
+    assert_eq!(
+        statuses
+            .iter()
+            .filter(|status| **status == StatusCode::CONFLICT)
+            .count(),
+        1
+    );
+}
+
+/// Verifies admin service-token labels are unique only for active tokens created by one admin.
+#[sqlx::test(migrations = "../migrations")]
+async fn admin_service_token_duplicate_labels_conflict_per_admin(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let admin = create_admin_session(&pool, 1001, "admin").await;
+    let other_admin = create_admin_session(&pool, 1002, "other-admin").await;
+
+    let created: serde_json::Value = creator_auth(
+        client.post(api_url(&app, "/admin/admin-service-tokens")),
+        &admin,
+    )
+    .json(&json!({ "label": " CI " }))
+    .send()
+    .await
+    .expect("admin service token create request")
+    .error_for_status()
+    .expect("admin service token should create")
+    .json()
+    .await
+    .expect("admin service token create json");
+    let token_id = created["token_record"]["id"]
+        .as_str()
+        .expect("token id should be returned");
+
+    let duplicate = creator_auth(
+        client.post(api_url(&app, "/admin/admin-service-tokens")),
+        &admin,
+    )
+    .json(&json!({ "label": "ci" }))
+    .send()
+    .await
+    .expect("duplicate admin service token request");
+    assert_eq!(duplicate.status(), StatusCode::CONFLICT);
+    let duplicate_body: serde_json::Value =
+        duplicate.json().await.expect("duplicate response json");
+    assert_eq!(duplicate_body["error"]["code"], "conflict");
+    assert_eq!(duplicate_body["error"]["details"][0]["field"], "label");
+
+    creator_auth(
+        client.post(api_url(&app, "/admin/admin-service-tokens")),
+        &other_admin,
+    )
+    .json(&json!({ "label": " ci " }))
+    .send()
+    .await
+    .expect("other admin duplicate label request")
+    .error_for_status()
+    .expect("different admin may reuse label");
+
+    creator_auth(
+        client.post(api_url(
+            &app,
+            &format!("/admin/admin-service-tokens/{token_id}/revoke"),
+        )),
+        &admin,
+    )
+    .send()
+    .await
+    .expect("admin service token revoke request")
+    .error_for_status()
+    .expect("admin service token should revoke");
+
+    creator_auth(
+        client.post(api_url(&app, "/admin/admin-service-tokens")),
+        &admin,
+    )
+    .json(&json!({ "label": "CI" }))
+    .send()
+    .await
+    .expect("admin service token reuse request")
+    .error_for_status()
+    .expect("revoked admin service token label should be reusable");
+}
+
 /// Verifies creator token management stays web-session only and setup-gated.
 #[sqlx::test(migrations = "../migrations")]
 async fn creator_api_token_management_requires_active_creator_web_session(pool: sqlx::PgPool) {
@@ -861,4 +1061,25 @@ async fn cleanup_purges_abandoned_draft_private_assets(pool: sqlx::PgPool) {
     assert_eq!(cleanup["purged_private_assets"], 1);
     assert!(cleanup["purged_temporary_storage_objects"].is_i64());
     assert!(!helpers::storage_key_exists(&config, &storage_key).await);
+}
+
+async fn create_admin_session(
+    pool: &sqlx::PgPool,
+    github_user_id: i64,
+    github_login: &str,
+) -> super::helpers::TestCreatorSession {
+    let session = create_creator_session(pool, github_user_id, github_login).await;
+    sqlx::query(
+        r#"
+        INSERT INTO human_roles (id, human_id, role)
+        VALUES ($1::uuid, $2::uuid, 'admin')
+        ON CONFLICT (human_id, role) WHERE revoked_at IS NULL DO NOTHING
+        "#,
+    )
+    .bind(uuid::Uuid::new_v4().to_string())
+    .bind(&session.human_id)
+    .execute(pool)
+    .await
+    .expect("admin role should insert");
+    session
 }

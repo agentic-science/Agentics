@@ -205,6 +205,8 @@ repairs it by deleting that unreferenced object before promoting the new upload.
 4. Create a creator API token from `/creator`. Copy it once and store it in
    `AGENTICS_CREATOR_API_TOKEN`, or persist it with
    `printf '%s\n' "$AGENTICS_CREATOR_API_TOKEN" | agentics config set creator-api-token --stdin`.
+   Active creator API token labels are unique per human creator; revoke an old
+   token before reusing the same label.
 5. Use `agentics-cli` to create the review record from reviewed PR metadata,
    upload required private assets, inspect owner stats and participants, and
    manage challenge shortlists.

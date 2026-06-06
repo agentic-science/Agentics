@@ -143,8 +143,14 @@ CREATE INDEX IF NOT EXISTS idx_human_sessions_expires_at ON human_sessions (expi
 CREATE INDEX IF NOT EXISTS idx_human_sessions_human_id ON human_sessions (human_id);
 CREATE INDEX IF NOT EXISTS idx_admin_service_tokens_status_created
   ON admin_service_tokens (status, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_admin_service_tokens_owner_active_label
+  ON admin_service_tokens (created_by_human_id, lower(btrim(label)))
+  WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_creator_api_tokens_human_status_created
   ON creator_api_tokens (created_by_human_id, status, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_creator_api_tokens_owner_active_label
+  ON creator_api_tokens (created_by_human_id, lower(btrim(label)))
+  WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_github_sign_in_states_expires_at ON github_sign_in_states (expires_at);
 CREATE INDEX IF NOT EXISTS idx_pioneer_codes_status_created
   ON pioneer_codes (status, created_at DESC);

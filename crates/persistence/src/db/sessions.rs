@@ -8,11 +8,14 @@ use agentics_domain::models::auth::{GithubUserId, HumanRole, HumanStatus};
 use agentics_domain::models::ids::{
     AdminServiceTokenId, CreatorApiTokenId, HumanId, HumanSessionId,
 };
-use agentics_error::{Result, ServiceError};
+use agentics_error::{ErrorDetail, Result, ServiceError};
 
 use super::ids::{
     admin_service_token_id_from_row, creator_api_token_id_from_row, human_id_from_row,
 };
+
+const ADMIN_SERVICE_TOKEN_ACTIVE_LABEL_INDEX: &str = "idx_admin_service_tokens_owner_active_label";
+const CREATOR_API_TOKEN_ACTIVE_LABEL_INDEX: &str = "idx_creator_api_tokens_owner_active_label";
 
 /// Persisted human identity row returned to services and admin UI.
 #[derive(Debug, Clone)]
@@ -538,7 +541,8 @@ pub async fn create_admin_service_token(
     .bind(input.created_by_human_id.as_str())
     .bind(input.expires_at)
     .fetch_one(pool)
-    .await?;
+    .await
+    .map_err(map_admin_service_token_create_error)?;
 
     admin_service_token_record_from_row(&row)
 }
@@ -676,7 +680,8 @@ pub async fn create_creator_api_token(
     .bind(input.created_by_human_id.as_str())
     .bind(input.expires_at)
     .fetch_one(pool)
-    .await?;
+    .await
+    .map_err(map_creator_api_token_create_error)?;
 
     creator_api_token_record_from_row(&row)
 }
@@ -1137,4 +1142,48 @@ fn creator_api_token_record_from_row(row: &sqlx::postgres::PgRow) -> Result<Crea
         expires_at: row.try_get("expires_at")?,
         revoked_at: row.try_get("revoked_at")?,
     })
+}
+
+fn map_admin_service_token_create_error(error: sqlx::Error) -> ServiceError {
+    match error {
+        sqlx::Error::Database(db_err)
+            if db_err.is_unique_violation()
+                && db_err
+                    .constraint()
+                    .is_some_and(|name| name == ADMIN_SERVICE_TOKEN_ACTIVE_LABEL_INDEX) =>
+        {
+            duplicate_token_label_conflict(
+                "active admin service token label already exists for this admin",
+                "An active admin service token from this admin already uses this label.",
+            )
+        }
+        error => ServiceError::Database(error),
+    }
+}
+
+fn map_creator_api_token_create_error(error: sqlx::Error) -> ServiceError {
+    match error {
+        sqlx::Error::Database(db_err)
+            if db_err.is_unique_violation()
+                && db_err
+                    .constraint()
+                    .is_some_and(|name| name == CREATOR_API_TOKEN_ACTIVE_LABEL_INDEX) =>
+        {
+            duplicate_token_label_conflict(
+                "active creator API token label already exists for this human",
+                "An active creator API token already uses this label.",
+            )
+        }
+        error => ServiceError::Database(error),
+    }
+}
+
+fn duplicate_token_label_conflict(message: &str, detail_message: &str) -> ServiceError {
+    ServiceError::conflict_with_details(
+        message,
+        [ErrorDetail {
+            field: Some("label".to_string()),
+            message: detail_message.to_string(),
+        }],
+    )
 }

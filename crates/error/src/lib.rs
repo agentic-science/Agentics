@@ -34,6 +34,11 @@ pub enum ServiceError {
     NotFound,
     #[error("conflict")]
     Conflict,
+    #[error("{message}")]
+    ConflictDetails {
+        message: String,
+        details: Vec<ErrorDetail>,
+    },
     #[error("bad request: {0}")]
     BadRequest(String),
     #[error("too many requests: {0}")]
@@ -119,6 +124,17 @@ impl ServiceError {
         Self::Conflict
     }
 
+    /// Builds a conflict error with structured field details.
+    pub fn conflict_with_details(
+        message: impl Into<String>,
+        details: impl Into<Vec<ErrorDetail>>,
+    ) -> Self {
+        Self::ConflictDetails {
+            message: message.into(),
+            details: details.into(),
+        }
+    }
+
     /// Builds a quota/rate-limit error with a public message.
     pub fn too_many_requests(message: impl Into<String>) -> Self {
         Self::TooManyRequests(message.into())
@@ -148,7 +164,9 @@ impl ServiceError {
             }
             ServiceError::Forbidden(_) => ServiceErrorCode::Forbidden,
             ServiceError::NotFound => ServiceErrorCode::NotFound,
-            ServiceError::Conflict => ServiceErrorCode::Conflict,
+            ServiceError::Conflict | ServiceError::ConflictDetails { .. } => {
+                ServiceErrorCode::Conflict
+            }
             ServiceError::TooManyRequests(_) => ServiceErrorCode::TooManyRequests,
             ServiceError::PayloadTooLarge(_) => ServiceErrorCode::PayloadTooLarge,
             ServiceError::Database(_)
@@ -173,6 +191,7 @@ impl ServiceError {
             ServiceError::UnauthorizedMessage(message) => Cow::Borrowed(message),
             ServiceError::NotFound => Cow::Borrowed("not found"),
             ServiceError::Conflict => Cow::Borrowed("conflict"),
+            ServiceError::ConflictDetails { message, .. } => Cow::Borrowed(message),
             ServiceError::Base64 => Cow::Borrowed("invalid_base64"),
             ServiceError::Zip(_) => Cow::Borrowed("invalid_zip"),
             ServiceError::Database(_)
@@ -187,7 +206,8 @@ impl ServiceError {
     /// Returns structured validation details for API clients.
     pub fn details(&self) -> &[ErrorDetail] {
         match self {
-            ServiceError::ValidationDetails { details, .. } => details,
+            ServiceError::ValidationDetails { details, .. }
+            | ServiceError::ConflictDetails { details, .. } => details,
             _ => &[],
         }
     }
@@ -229,6 +249,27 @@ mod tests {
         assert_eq!(error.code(), ServiceErrorCode::ValidationFailed);
         assert_eq!(error.public_message(), "request validation failed");
         assert_eq!(error.details().len(), 1);
+    }
+
+    #[test]
+    fn conflict_details_preserve_conflict_code_and_field_data() {
+        let error = ServiceError::conflict_with_details(
+            "duplicate token label",
+            [ErrorDetail {
+                field: Some("label".to_string()),
+                message: "already used".to_string(),
+            }],
+        );
+
+        assert_eq!(error.code(), ServiceErrorCode::Conflict);
+        assert_eq!(error.public_message(), "duplicate token label");
+        assert_eq!(
+            error.details(),
+            &[ErrorDetail {
+                field: Some("label".to_string()),
+                message: "already used".to_string(),
+            }]
+        );
     }
 
     #[test]

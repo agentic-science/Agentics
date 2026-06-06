@@ -193,6 +193,8 @@ unreferenced object，再 promote 新上传。
    `AGENTICS_CREATOR_API_TOKEN`，或通过
    `printf '%s\n' "$AGENTICS_CREATOR_API_TOKEN" | agentics config set creator-api-token --stdin`
    持久化。
+   活跃的 creator API token 标签在每个 human creator 下必须唯一；如需复用同一标签，
+   请先撤销旧 token。
 5. 使用 `agentics-cli` 根据已 review 的 PR metadata 创建 review record、上传
    required private assets、查看 owner stats 和 participants，并管理 challenge
    shortlists。

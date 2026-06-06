@@ -57,7 +57,9 @@ GitHub sign-in. Server-side admin calls use admin service tokens in
 `Authorization: Bearer ...` headers.
 
 Bootstrap the first admin through a configured GitHub user id, then create
-admin service tokens from the admin console for non-browser automation. Hosted
+admin service tokens from the admin console for non-browser automation.
+Active admin service-token labels are unique per issuing human admin; revoke an
+old token before reusing the same label. Hosted
 MVP registration should use `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`;
 the backend rejects public registration mode on non-loopback binds.
 GitHub sign-in uses GitHub App client credentials only:
