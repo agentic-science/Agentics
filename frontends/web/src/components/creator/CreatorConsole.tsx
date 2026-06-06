@@ -3,7 +3,7 @@
 import { Copy, KeyRound, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { type FormEvent, useEffect, useState } from "react";
-import { CreatorIdentityPanel } from "@/components/creator/CreatorIdentityPanel";
+import { ExpirationDateTimeField } from "@/components/ExpirationDateTimeField";
 import {
   CreatorApiError,
   createCreatorApiToken,
@@ -14,9 +14,11 @@ import {
   useCreatorApiTokens,
   useCreatorSession,
 } from "@/lib/creatorData";
+import { utcDateTimeLocalToRfc3339 } from "@/lib/dateTime";
 import type { CreatorApiTokenListResponse } from "@/lib/schemas";
+import { normalizeTokenLabelForDuplicateCheck } from "@/lib/tokenLabels";
 
-type PendingAction = "createToken" | "refreshIdentity" | "revokeToken";
+type PendingAction = "createToken" | "revokeToken";
 type CreatorApiTokenItem = CreatorApiTokenListResponse["items"][number];
 
 /** Renders the reduced creator console for identity and API-token management. */
@@ -47,36 +49,38 @@ export function CreatorConsole() {
     }
   }, [creatorHumanId, hasCreatorAccess]);
 
-  const refreshIdentity = async () => {
-    setPendingAction("refreshIdentity");
-    setError(null);
-    try {
-      const session = await creatorSession.mutate();
-      if (!session) {
-        throw new Error(t("messages.signInBeforeContinue"));
-      }
-      setMessage(t("messages.identityRefreshed"));
-    } catch (caught) {
-      setError(creatorErrorMessage(caught, t("messages.signInBeforeContinue")));
-    } finally {
-      setPendingAction(null);
-    }
-  };
-
   const submitToken = async (event: FormEvent) => {
     event.preventDefault();
     if (!hasCreatorAccess || !csrfToken) {
       setError(creatorAccessMessage(creator, creatorAccessMessages(t)));
       return;
     }
+    const trimmedLabel = label.trim();
+    if (
+      tokenResource.tokens?.items.some(
+        (token) =>
+          token.status === "active" &&
+          normalizeTokenLabelForDuplicateCheck(token.label) ===
+            normalizeTokenLabelForDuplicateCheck(trimmedLabel),
+      )
+    ) {
+      setError(t("apiTokens.duplicateLabel"));
+      return;
+    }
     setPendingAction("createToken");
     setError(null);
     setCreatedToken(null);
+    const expiresAtRfc3339 = utcDateTimeLocalToRfc3339(expiresAt);
+    if (expiresAtRfc3339 === null) {
+      setPendingAction(null);
+      setError(t("apiTokens.expiresInvalid"));
+      return;
+    }
     try {
       const response = await createCreatorApiToken(
         {
-          label: label.trim(),
-          expires_at: expiresAtToRfc3339(expiresAt),
+          label: trimmedLabel,
+          ...(expiresAtRfc3339 ? { expires_at: expiresAtRfc3339 } : {}),
         },
         csrfToken,
       );
@@ -126,28 +130,19 @@ export function CreatorConsole() {
   return (
     <div className="flex flex-col gap-6">
       <section className="card-elevated">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div>
-            <span className="badge badge-validation mb-4">
-              <KeyRound className="w-3 h-3" />
-              {t("hero.badge")}
-            </span>
-            <h1
-              className="text-h1 font-bold leading-h1"
-              style={{ fontFamily: "var(--font-sans)" }}
-            >
-              {t("hero.title")}
-            </h1>
-            <p className="mt-3 max-w-2xl text-body leading-body text-fg-secondary">
-              {t("hero.description")}
-            </p>
-          </div>
-          <CreatorIdentityPanel
-            creator={creator}
-            loading={pendingAction === "refreshIdentity"}
-            onRefresh={refreshIdentity}
-          />
-        </div>
+        <span className="badge badge-validation mb-4">
+          <KeyRound className="w-3 h-3" />
+          {t("hero.badge")}
+        </span>
+        <h1
+          className="text-h1 font-bold leading-h1"
+          style={{ fontFamily: "var(--font-sans)" }}
+        >
+          {t("hero.title")}
+        </h1>
+        <p className="mt-3 max-w-2xl text-body leading-body text-fg-secondary">
+          {t("hero.description")}
+        </p>
       </section>
 
       {error ? (
@@ -173,15 +168,12 @@ export function CreatorConsole() {
               required
             />
           </label>
-          <label className="form-field">
-            <span>{t("apiTokens.expiresAt")}</span>
-            <input
-              type="datetime-local"
-              value={expiresAt}
-              onChange={(event) => setExpiresAt(event.target.value)}
-              disabled={!hasCreatorAccess}
-            />
-          </label>
+          <ExpirationDateTimeField
+            label={t("apiTokens.expiresAt")}
+            value={expiresAt}
+            onChange={setExpiresAt}
+            disabled={!hasCreatorAccess}
+          />
           <button
             type="submit"
             className="btn btn-primary w-full"
@@ -234,7 +226,7 @@ export function CreatorConsole() {
               disabled={!hasCreatorAccess || tokenResource.isLoading}
             >
               <RefreshCw className="w-4 h-4" />
-              {t("identity.refresh")}
+              {t("apiTokens.refresh")}
             </button>
           </div>
           {!hasCreatorAccess ? (
@@ -319,17 +311,6 @@ function formatOptionalDate(
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
-}
-
-function expiresAtToRfc3339(value: string): string | undefined {
-  if (!value.trim()) {
-    return undefined;
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toISOString();
 }
 
 /** Normalizes unknown errors into a displayable message. */

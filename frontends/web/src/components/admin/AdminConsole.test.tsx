@@ -2,7 +2,13 @@ import { NextIntlClientProvider } from "next-intl";
 import { SWRConfig } from "swr";
 import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { adminFetchJson } from "@/lib/adminApi";
+import {
+  adminFetchJson,
+  createAdminServiceToken,
+  grantHumanAdminRole,
+  revokeAdminServiceToken,
+  revokeHumanAdminRole,
+} from "@/lib/adminApi";
 import { getHumanSession } from "@/lib/authApi";
 import { adminChallengeListResponseSchema } from "@/lib/schemas";
 import messages from "../../../messages/en.json";
@@ -23,6 +29,10 @@ vi.mock("@/lib/adminApi", () => {
   return {
     AdminApiError: MockAdminApiError,
     adminFetchJson: vi.fn(),
+    createAdminServiceToken: vi.fn(),
+    grantHumanAdminRole: vi.fn(),
+    revokeAdminServiceToken: vi.fn(),
+    revokeHumanAdminRole: vi.fn(),
   };
 });
 
@@ -37,11 +47,17 @@ const { cleanup, fireEvent, render, waitFor } = await import(
 );
 
 const adminFetchJsonMock = adminFetchJson as Mock;
+const createAdminServiceTokenMock = createAdminServiceToken as Mock;
+const grantHumanAdminRoleMock = grantHumanAdminRole as Mock;
+const revokeAdminServiceTokenMock = revokeAdminServiceToken as Mock;
+const revokeHumanAdminRoleMock = revokeHumanAdminRole as Mock;
 const getHumanSessionMock = getHumanSession as Mock;
 const originalClipboard = globalThis.navigator.clipboard;
+let adminServiceTokenItems: Array<Record<string, unknown>> = [];
 
 describe("AdminConsole", () => {
   beforeEach(() => {
+    adminServiceTokenItems = [];
     getHumanSessionMock.mockRejectedValue(
       Object.assign(new Error("Unauthorized"), { status: 401 }),
     );
@@ -162,7 +178,7 @@ describe("AdminConsole", () => {
               ],
             };
           case "/admin/admin-service-tokens":
-            return { items: [] };
+            return { items: adminServiceTokenItems };
           case "/admin/capacity":
             return {
               quota_window_seconds: 86_400,
@@ -183,6 +199,22 @@ describe("AdminConsole", () => {
         }
       },
     );
+    createAdminServiceTokenMock.mockResolvedValue({
+      token: "agt_admin_service_test_token",
+      token_record: {
+        id: "77777777-7777-4777-8777-777777777777",
+        label: "ci",
+        status: "active",
+        created_by_human_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        created_at: "2026-05-15T00:00:00Z",
+        expires_at: "2026-06-01T00:00:00Z",
+        last_used_at: null,
+        revoked_at: null,
+      },
+    });
+    grantHumanAdminRoleMock.mockResolvedValue({});
+    revokeAdminServiceTokenMock.mockResolvedValue({});
+    revokeHumanAdminRoleMock.mockResolvedValue({});
   });
 
   afterEach(() => {
@@ -255,7 +287,7 @@ describe("AdminConsole", () => {
 
     await view.findByText("1 / 1");
 
-    fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
+    fireEvent.click(view.getByRole("button", { name: "Pioneer Codes" }));
 
     expect(await view.findByText("jack-deadbeef")).toBeTruthy();
     expect(view.getByText("test cohort")).toBeTruthy();
@@ -271,7 +303,7 @@ describe("AdminConsole", () => {
     const view = renderAdminConsole();
 
     await view.findByText("1 / 1");
-    fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
+    fireEvent.click(view.getByRole("button", { name: "Pioneer Codes" }));
 
     fireEvent.change(await view.findByLabelText("Label"), {
       target: { value: "jack" },
@@ -281,9 +313,11 @@ describe("AdminConsole", () => {
     fireEvent.change(view.getByLabelText("Expires at (UTC)"), {
       target: { value: "2026-06-01T00:00" },
     });
-    expect(await view.findByText(/Local time:/)).toBeTruthy();
+    expect(
+      (view.getByLabelText("Local time") as HTMLInputElement).value,
+    ).toContain("2026");
 
-    fireEvent.click(view.getByRole("button", { name: "Create code" }));
+    fireEvent.click(view.getByRole("button", { name: "Create Code" }));
 
     await waitFor(() => {
       const createCall = adminFetchJsonMock.mock.calls.find(
@@ -314,17 +348,118 @@ describe("AdminConsole", () => {
     ).toBeTruthy();
   });
 
+  it("creates admin service tokens from a label and UTC expiry", async () => {
+    getHumanSessionMock.mockResolvedValueOnce(humanAdminSession());
+    const view = renderAdminConsole();
+
+    await view.findByText("1 / 1");
+    fireEvent.click(view.getByRole("button", { name: "Identity" }));
+
+    fireEvent.change(await view.findByLabelText("Label"), {
+      target: { value: "ci" },
+    });
+    fireEvent.change(view.getByLabelText("Expires at (UTC)"), {
+      target: { value: "2026-06-01T00:00" },
+    });
+    expect(
+      (view.getByLabelText("Local time") as HTMLInputElement).value,
+    ).toContain("2026");
+
+    fireEvent.click(view.getByRole("button", { name: "Create token" }));
+
+    await waitFor(() => {
+      expect(createAdminServiceTokenMock).toHaveBeenCalledWith(
+        {
+          label: "ci",
+          expires_at: "2026-06-01T00:00:00.000Z",
+        },
+        "csrf-token",
+      );
+    });
+    expect(await view.findByText("agt_admin_service_test_token")).toBeTruthy();
+  });
+
+  it("blocks duplicate active admin service-token labels for the current admin", async () => {
+    adminServiceTokenItems = [
+      adminServiceTokenRecord({
+        label: " CI ",
+        created_by_human_id: humanAdminSession().human_id,
+      }),
+    ];
+    getHumanSessionMock.mockResolvedValueOnce(humanAdminSession());
+    const view = renderAdminConsole();
+
+    await view.findByText("1 / 1");
+    fireEvent.click(view.getByRole("button", { name: "Identity" }));
+    await view.findByText("CI");
+
+    fireEvent.change(await view.findByLabelText("Label"), {
+      target: { value: "ci" },
+    });
+    fireEvent.click(view.getByRole("button", { name: "Create token" }));
+
+    expect(
+      await view.findByText(
+        "An active admin service token from this admin already uses this label.",
+      ),
+    ).toBeTruthy();
+    expect(createAdminServiceTokenMock).not.toHaveBeenCalled();
+  });
+
+  it("allows admin service-token labels used by another admin", async () => {
+    adminServiceTokenItems = [
+      adminServiceTokenRecord({
+        label: " CI ",
+        created_by_human_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      }),
+    ];
+    getHumanSessionMock.mockResolvedValueOnce(humanAdminSession());
+    const view = renderAdminConsole();
+
+    await view.findByText("1 / 1");
+    fireEvent.click(view.getByRole("button", { name: "Identity" }));
+    await view.findByText("CI");
+
+    fireEvent.change(await view.findByLabelText("Label"), {
+      target: { value: "ci" },
+    });
+    fireEvent.click(view.getByRole("button", { name: "Create token" }));
+
+    await waitFor(() =>
+      expect(createAdminServiceTokenMock).toHaveBeenCalledWith(
+        { label: "ci" },
+        "csrf-token",
+      ),
+    );
+  });
+
+  it("disables admin revocation when only one active admin remains", async () => {
+    getHumanSessionMock.mockResolvedValueOnce(humanAdminSession());
+    const view = renderAdminConsole();
+
+    await view.findByText("1 / 1");
+    fireEvent.click(view.getByRole("button", { name: "Identity" }));
+
+    const revokeButton = await view.findByRole("button", {
+      name: "Revoke admin",
+    });
+    expect((revokeButton as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(revokeButton);
+    expect(revokeHumanAdminRoleMock).not.toHaveBeenCalled();
+  });
+
   it("validates pioneer-code create input before posting", async () => {
     getHumanSessionMock.mockResolvedValueOnce(humanAdminSession());
     const view = renderAdminConsole();
 
     await view.findByText("1 / 1");
-    fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
+    fireEvent.click(view.getByRole("button", { name: "Pioneer Codes" }));
 
     fireEvent.input(await view.findByLabelText("Max uses"), {
       target: { value: "0" },
     });
-    fireEvent.click(view.getByRole("button", { name: "Create code" }));
+    fireEvent.click(view.getByRole("button", { name: "Create Code" }));
 
     expect(
       await view.findByText("max_uses must be -1 or a positive integer."),
@@ -343,7 +478,7 @@ describe("AdminConsole", () => {
     const view = renderAdminConsole();
 
     await view.findByText("1 / 1");
-    fireEvent.click(view.getByRole("button", { name: "Pioneer codes" }));
+    fireEvent.click(view.getByRole("button", { name: "Pioneer Codes" }));
 
     fireEvent.click(await view.findByRole("button", { name: "Revoke" }));
 
@@ -380,5 +515,22 @@ function humanAdminSession() {
     roles: ["creator", "admin"],
     csrf_token: "csrf-token",
     expires_at: "2026-05-15T00:00:00Z",
+  };
+}
+
+function adminServiceTokenRecord(
+  overrides: Partial<Record<string, unknown>> = {},
+) {
+  return {
+    id: "77777777-7777-4777-8777-777777777777",
+    label: "ci",
+    status: "active",
+    created_by_human_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    created_at: "2026-05-15T00:00:00Z",
+    last_used_at: null,
+    expires_at: null,
+    revoked_by_human_id: null,
+    revoked_at: null,
+    ...overrides,
   };
 }

@@ -257,6 +257,17 @@
     outline-offset: 2px;
   }
 
+  .btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+    transform: none;
+  }
+
+  .btn:disabled:hover {
+    box-shadow: none;
+    transform: none;
+  }
+
   .btn-primary {
     background: var(--accent-primary-500);
     color: var(--text-inverse);
@@ -291,6 +302,82 @@
   .btn-sm {
     padding: 6px 12px;
     font-size: var(--text-caption);
+  }
+
+  /* ===================================================================
+   Forms
+   =================================================================== */
+
+  .form-field {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--spacing-1);
+  }
+
+  .form-field > span {
+    font-size: var(--text-caption);
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .form-field input,
+  .form-field textarea,
+  .form-field select {
+    width: 100%;
+    min-width: 0;
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--surface-secondary);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: var(--text-body-sm);
+    outline: none;
+    transition:
+      border-color var(--duration-fast) var(--ease-default),
+      box-shadow var(--duration-fast) var(--ease-default),
+      background var(--duration-fast) var(--ease-default);
+  }
+
+  .form-field input,
+  .form-field select {
+    height: 2.75rem;
+    padding: 0 0.85rem;
+  }
+
+  .form-field textarea {
+    min-height: 7rem;
+    padding: 0.75rem 0.85rem;
+    resize: vertical;
+  }
+
+  .form-field input::placeholder,
+  .form-field textarea::placeholder {
+    color: var(--text-muted);
+  }
+
+  .form-field input:focus,
+  .form-field textarea:focus,
+  .form-field select:focus {
+    border-color: var(--accent-primary-500);
+    box-shadow: 0 0 0 3px
+      color-mix(in srgb, var(--accent-primary-500), transparent 82%);
+  }
+
+  .form-field input:disabled,
+  .form-field textarea:disabled,
+  .form-field select:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .expiration-datetime-field {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: var(--spacing-2);
   }
 
   /* ===================================================================

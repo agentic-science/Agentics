@@ -349,6 +349,10 @@
     "footerLicense": "以 AGPL v3.0 开源。",
     "githubRepository": "Agentics GitHub 仓库",
     "pagination": "分页",
+    "dateTime": {
+      "localTime": "本地时间",
+      "localTimePlaceholder": "请选择过期时间"
+    },
     "statuses": {
       "active": "活跃",
       "abandoned": "已放弃",
@@ -545,7 +549,6 @@
       "copiedCode": "已复制 {code}",
       "maxUses": "最大使用次数",
       "expiresAt": "过期时间（UTC）",
-      "expiresLocalPreview": "本地时间：{value}",
       "note": "备注",
       "create": "创建代码",
       "title": "先锋码",
@@ -591,7 +594,9 @@
       "tokensTitle": "Admin service token",
       "tokensEmpty": "暂无 admin service token。",
       "label": "标签",
-      "expiresAt": "过期时间",
+      "expiresAt": "过期时间（UTC）",
+      "expiresInvalid": "expires_at 必须是有效的 UTC 日期和时间。",
+      "duplicateTokenLabel": "该管理员已经有一个活跃的 admin service token 使用了这个标签。",
       "createToken": "创建 token",
       "createdToken": "一次性 token",
       "token": "Token",
@@ -628,29 +633,20 @@
       "description": "在这里创建创建者 API token，然后使用 agentics-cli 完成挑战审核记录、私有资产、所有者统计、参与者和 shortlist 工作流。"
     },
     "messages": {
-      "identityRefreshed": "创建者身份已刷新。",
       "signInBeforeContinue": "请先使用 GitHub 登录再继续。",
       "finishSetupBeforeCreator": "请先使用先锋码完成账户设置，再使用创建者工作流。",
       "accessDenied": "当前登录账户没有创建者访问权限。",
       "unknown": "未知创建者控制台错误。"
     },
-    "identity": {
-      "title": "创建者身份",
-      "githubAccount": "GitHub 账户",
-      "humanId": "Human ID",
-      "status": "状态",
-      "refresh": "刷新",
-      "githubSignInRequired": "创建创建者 API token 前需要 GitHub 登录。",
-      "signIn": "使用 GitHub 登录",
-      "finishSetup": "完成设置",
-      "accessDenied": "此账户不能创建创建者 API token。"
-    },
     "apiTokens": {
       "title": "创建者 API token",
       "create": "创建创建者 API token",
+      "refresh": "刷新",
       "label": "标签",
       "labelPlaceholder": "笔记本、CI 或协作者名称",
-      "expiresAt": "过期时间",
+      "expiresAt": "过期时间（UTC）",
+      "expiresInvalid": "expires_at 必须是有效的 UTC 日期和时间。",
+      "duplicateLabel": "已有活跃的创建者 API token 使用了这个标签。",
       "createButton": "创建 token",
       "created": "创建者 API token 已创建。请立即复制。",
       "createdToken": "新 token",

@@ -4,6 +4,7 @@ import type { Mock } from "vitest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getHumanSession } from "@/lib/authApi";
 import {
+  CreatorApiError,
   createCreatorApiToken,
   listCreatorApiTokens,
   revokeCreatorApiToken,
@@ -84,7 +85,7 @@ describe("CreatorConsole", () => {
     vi.clearAllMocks();
   });
 
-  it("renders only identity and creator API-token management", async () => {
+  it("renders only creator API-token management", async () => {
     getHumanSessionMock.mockResolvedValue(activeCreatorSession);
     listCreatorApiTokensMock.mockResolvedValue({ items: [creatorTokenRecord] });
 
@@ -97,6 +98,13 @@ describe("CreatorConsole", () => {
       }),
     ).toBeTruthy();
     expect(view.getByText("Create creator API token")).toBeTruthy();
+    expect(view.queryByText("Creator identity")).toBeNull();
+    expect(view.queryByText("octocat")).toBeNull();
+    expect(
+      view.queryByText(String(activeCreatorSession.github_user_id)),
+    ).toBeNull();
+    expect(view.queryByText("Human ID")).toBeNull();
+    expect(view.queryByText(activeCreatorSession.human_id)).toBeNull();
     expect(await view.findByText("laptop")).toBeTruthy();
     expect(view.queryByText("Register PR for review")).toBeNull();
     expect(view.queryByText("Upload private asset")).toBeNull();
@@ -106,8 +114,6 @@ describe("CreatorConsole", () => {
   it("shows sign-in state without loading creator token data", async () => {
     const view = renderCreatorConsole();
 
-    const link = await view.findByRole("link", { name: "Sign in with GitHub" });
-    expect(link.getAttribute("href")).toBe("/sign-in?return_to=/creator");
     expect(
       await view.findByText("Sign in with GitHub before continuing."),
     ).toBeTruthy();
@@ -123,13 +129,12 @@ describe("CreatorConsole", () => {
 
     const view = renderCreatorConsole();
 
-    const link = await view.findByRole("link", { name: "Finish Setup" });
-    expect(link.getAttribute("href")).toBe("/account/setup?return_to=/creator");
     expect(
       await view.findByText(
         "Finish account setup with a pioneer code before using creator workflows.",
       ),
     ).toBeTruthy();
+    expect(view.queryByRole("link", { name: "Finish Setup" })).toBeNull();
     expect(
       view
         .getByRole("button", { name: "Create token" })
@@ -143,20 +148,29 @@ describe("CreatorConsole", () => {
 
     const view = renderCreatorConsole();
 
-    await view.findByText(/octocat/);
+    await waitFor(() =>
+      expect(
+        view
+          .getByRole("button", { name: "Create token" })
+          .hasAttribute("disabled"),
+      ).toBe(false),
+    );
     fireEvent.input(view.getByLabelText("Label"), {
       target: { value: "laptop" },
     });
-    fireEvent.input(view.getByLabelText("Expires at"), {
+    fireEvent.input(view.getByLabelText("Expires at (UTC)"), {
       target: { value: "2026-06-05T12:30" },
     });
+    expect(
+      (view.getByLabelText("Local time") as HTMLInputElement).value,
+    ).toContain("2026");
     fireEvent.click(view.getByRole("button", { name: "Create token" }));
 
     await waitFor(() =>
       expect(createCreatorApiTokenMock).toHaveBeenCalledWith(
         {
           label: "laptop",
-          expires_at: expect.any(String),
+          expires_at: "2026-06-05T12:30:00.000Z",
         },
         "csrf-token",
       ),
@@ -176,6 +190,80 @@ describe("CreatorConsole", () => {
     );
   });
 
+  it("blocks duplicate active creator API token labels before posting", async () => {
+    getHumanSessionMock.mockResolvedValue(activeCreatorSession);
+    listCreatorApiTokensMock.mockResolvedValue({
+      items: [{ ...creatorTokenRecord, label: " Laptop " }],
+    });
+
+    const view = renderCreatorConsole();
+
+    await view.findByText("Laptop");
+    fireEvent.input(view.getByLabelText("Label"), {
+      target: { value: "laptop" },
+    });
+    fireEvent.click(view.getByRole("button", { name: "Create token" }));
+
+    expect(
+      await view.findByText(
+        "An active creator API token already uses this label.",
+      ),
+    ).toBeTruthy();
+    expect(createCreatorApiTokenMock).not.toHaveBeenCalled();
+  });
+
+  it("allows creator API token labels used only by revoked tokens", async () => {
+    getHumanSessionMock.mockResolvedValue(activeCreatorSession);
+    listCreatorApiTokensMock.mockResolvedValue({
+      items: [{ ...creatorTokenRecord, label: " Laptop ", status: "revoked" }],
+    });
+
+    const view = renderCreatorConsole();
+
+    await view.findByText("Laptop");
+    fireEvent.input(view.getByLabelText("Label"), {
+      target: { value: "laptop" },
+    });
+    fireEvent.click(view.getByRole("button", { name: "Create token" }));
+
+    await waitFor(() =>
+      expect(createCreatorApiTokenMock).toHaveBeenCalledWith(
+        { label: "laptop" },
+        "csrf-token",
+      ),
+    );
+  });
+
+  it("displays backend duplicate-label conflicts when the token list is stale", async () => {
+    getHumanSessionMock.mockResolvedValue(activeCreatorSession);
+    createCreatorApiTokenMock.mockRejectedValue(
+      new CreatorApiError(
+        409,
+        "An active creator API token already uses this label.",
+      ),
+    );
+
+    const view = renderCreatorConsole();
+
+    await waitFor(() =>
+      expect(
+        view
+          .getByRole("button", { name: "Create token" })
+          .hasAttribute("disabled"),
+      ).toBe(false),
+    );
+    fireEvent.input(view.getByLabelText("Label"), {
+      target: { value: "laptop" },
+    });
+    fireEvent.click(view.getByRole("button", { name: "Create token" }));
+
+    expect(
+      await view.findByText(
+        "An active creator API token already uses this label.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("keeps the raw token visible when clipboard copy fails", async () => {
     getHumanSessionMock.mockResolvedValue(activeCreatorSession);
     Object.defineProperty(navigator, "clipboard", {
@@ -185,7 +273,13 @@ describe("CreatorConsole", () => {
 
     const view = renderCreatorConsole();
 
-    await view.findByText(/octocat/);
+    await waitFor(() =>
+      expect(
+        view
+          .getByRole("button", { name: "Create token" })
+          .hasAttribute("disabled"),
+      ).toBe(false),
+    );
     fireEvent.input(view.getByLabelText("Label"), {
       target: { value: "laptop" },
     });

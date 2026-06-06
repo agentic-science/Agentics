@@ -349,6 +349,10 @@
     "footerLicense": "Open source under AGPL v3.0.",
     "githubRepository": "Agentics GitHub repository",
     "pagination": "Pagination",
+    "dateTime": {
+      "localTime": "Local time",
+      "localTimePlaceholder": "Select an expiration time"
+    },
     "statuses": {
       "active": "Active",
       "abandoned": "Abandoned",
@@ -395,7 +399,7 @@
       "overview": "Overview",
       "challenges": "Challenges",
       "reviewRecords": "Review Records",
-      "pioneerCodes": "Pioneer codes",
+      "pioneerCodes": "Pioneer Codes",
       "identity": "Identity",
       "capacity": "Capacity",
       "operations": "Operations"
@@ -545,10 +549,9 @@
       "copiedCode": "Copied {code}",
       "maxUses": "Max uses",
       "expiresAt": "Expires at (UTC)",
-      "expiresLocalPreview": "Local time: {value}",
       "note": "Note",
-      "create": "Create code",
-      "title": "Pioneer codes",
+      "create": "Create Code",
+      "title": "Pioneer Codes",
       "empty": "Create or refresh pioneer codes to review beta access.",
       "uses": "Uses",
       "status": "Status",
@@ -591,7 +594,9 @@
       "tokensTitle": "Admin service tokens",
       "tokensEmpty": "No admin service tokens yet.",
       "label": "Label",
-      "expiresAt": "Expires at",
+      "expiresAt": "Expires at (UTC)",
+      "expiresInvalid": "expires_at must be a valid UTC date and time.",
+      "duplicateTokenLabel": "An active admin service token from this admin already uses this label.",
       "createToken": "Create token",
       "createdToken": "One-time token",
       "token": "Token",
@@ -628,29 +633,20 @@
       "description": "Create a creator API token here, then use agentics-cli for challenge review records, private assets, owner stats, participants, and shortlist workflows."
     },
     "messages": {
-      "identityRefreshed": "Creator identity refreshed.",
       "signInBeforeContinue": "Sign in with GitHub before continuing.",
       "finishSetupBeforeCreator": "Finish account setup with a pioneer code before using creator workflows.",
       "accessDenied": "Your signed-in account does not have creator access.",
       "unknown": "Unknown creator console error."
     },
-    "identity": {
-      "title": "Creator identity",
-      "githubAccount": "GitHub account",
-      "humanId": "Human ID",
-      "status": "Status",
-      "refresh": "Refresh",
-      "githubSignInRequired": "GitHub sign-in is required before creating creator API tokens.",
-      "signIn": "Sign in with GitHub",
-      "finishSetup": "Finish Setup",
-      "accessDenied": "This account cannot create creator API tokens."
-    },
     "apiTokens": {
       "title": "Creator API tokens",
       "create": "Create creator API token",
+      "refresh": "Refresh",
       "label": "Label",
       "labelPlaceholder": "Laptop, CI, or collaborator name",
-      "expiresAt": "Expires at",
+      "expiresAt": "Expires at (UTC)",
+      "expiresInvalid": "expires_at must be a valid UTC date and time.",
+      "duplicateLabel": "An active creator API token already uses this label.",
       "createButton": "Create token",
       "created": "Creator API token created. Copy it now.",
       "createdToken": "New token",

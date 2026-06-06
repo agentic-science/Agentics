@@ -5,17 +5,20 @@ import { useTranslations } from "next-intl";
 import { type FormEvent, useState } from "react";
 import { adminErrorMessage } from "@/components/admin/errors";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { ExpirationDateTimeField } from "@/components/ExpirationDateTimeField";
 import {
   createAdminServiceToken,
   grantHumanAdminRole,
   revokeAdminServiceToken,
   revokeHumanAdminRole,
 } from "@/lib/adminApi";
+import { utcDateTimeLocalToRfc3339 } from "@/lib/dateTime";
 import { formatDate } from "@/lib/format";
 import type {
   AdminHumanListResponse,
   AdminServiceTokenListResponse,
 } from "@/lib/schemas";
+import { normalizeTokenLabelForDuplicateCheck } from "@/lib/tokenLabels";
 
 type RefreshOptions = { quiet?: boolean };
 type AdminRefresh = (options?: RefreshOptions) => Promise<void>;
@@ -53,11 +56,30 @@ export function AdminIdentityPanel({
       onError(t("signIn"));
       return;
     }
+    const trimmedLabel = label.trim();
+    if (
+      currentHumanId &&
+      serviceTokens.items.some(
+        (token) =>
+          token.status === "active" &&
+          token.created_by_human_id === currentHumanId &&
+          normalizeTokenLabelForDuplicateCheck(token.label) ===
+            normalizeTokenLabelForDuplicateCheck(trimmedLabel),
+      )
+    ) {
+      onError(t("duplicateTokenLabel"));
+      return;
+    }
+    const expiresAtRfc3339 = utcDateTimeLocalToRfc3339(expiresAt);
+    if (expiresAtRfc3339 === null) {
+      onError(t("expiresInvalid"));
+      return;
+    }
     try {
       const response = await createAdminServiceToken(
         {
-          label: label.trim(),
-          ...(expiresAt.trim() ? { expires_at: expiresAt.trim() } : {}),
+          label: trimmedLabel,
+          ...(expiresAtRfc3339 ? { expires_at: expiresAtRfc3339 } : {}),
         },
         csrfToken,
       );
@@ -176,8 +198,10 @@ export function AdminIdentityPanel({
                           isAdmin ? "btn btn-secondary" : "btn btn-primary"
                         }
                         disabled={revokeDisabled}
-                        onClick={() =>
-                          void setAdminRole(human.human_id, !isAdmin)
+                        onClick={
+                          revokeDisabled
+                            ? undefined
+                            : () => void setAdminRole(human.human_id, !isAdmin)
                         }
                       >
                         <ShieldCheck className="w-4 h-4" />
@@ -198,27 +222,18 @@ export function AdminIdentityPanel({
           <h2 className="text-h3 font-semibold">{t("tokensTitle")}</h2>
         </div>
         <form className="grid grid-cols-1 gap-3 mb-5" onSubmit={submitToken}>
-          <label className="flex flex-col gap-1">
-            <span className="text-caption uppercase tracking-wide text-fg-muted">
-              {t("label")}
-            </span>
+          <label className="form-field">
+            <span>{t("label")}</span>
             <input
-              className="rounded-control border border-line bg-surface-2 px-3 py-2 text-body-sm outline-none focus:border-action"
               value={label}
               onChange={(event) => setLabel(event.target.value)}
             />
           </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-caption uppercase tracking-wide text-fg-muted">
-              {t("expiresAt")}
-            </span>
-            <input
-              className="rounded-control border border-line bg-surface-2 px-3 py-2 text-body-sm outline-none focus:border-action"
-              value={expiresAt}
-              placeholder="2026-06-01T00:00:00Z"
-              onChange={(event) => setExpiresAt(event.target.value)}
-            />
-          </label>
+          <ExpirationDateTimeField
+            label={t("expiresAt")}
+            value={expiresAt}
+            onChange={setExpiresAt}
+          />
           <button type="submit" className="btn btn-primary justify-self-start">
             {t("createToken")}
           </button>

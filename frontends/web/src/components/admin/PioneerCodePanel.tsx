@@ -5,7 +5,9 @@ import { useTranslations } from "next-intl";
 import { type FormEvent, useState } from "react";
 import { adminErrorMessage } from "@/components/admin/errors";
 import { StatusBadge } from "@/components/admin/StatusBadge";
+import { ExpirationDateTimeField } from "@/components/ExpirationDateTimeField";
 import { adminFetchJson } from "@/lib/adminApi";
+import { utcDateTimeLocalToRfc3339 } from "@/lib/dateTime";
 import { formatDate } from "@/lib/format";
 import {
   type CreatePioneerCodeRequest,
@@ -19,8 +21,6 @@ import {
 type RefreshOptions = { quiet?: boolean };
 type AdminRefresh = (options?: RefreshOptions) => Promise<void>;
 const PIONEER_LABEL_PATTERN = /^[a-z0-9_]{1,6}$/;
-const UTC_DATE_TIME_PATTERN =
-  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
 
 export function PioneerCodePanel({
   csrfToken,
@@ -45,10 +45,6 @@ export function PioneerCodePanel({
   });
   const [detail, setDetail] = useState<PioneerCodeDetailResponse | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const expiresAtUtc = utcDateTimeLocalToRfc3339(form.expiresAt);
-  const localExpiresAtPreview = expiresAtUtc
-    ? formatLocalDateTime(expiresAtUtc)
-    : null;
 
   /** Copies one generated pioneer code to the operator clipboard. */
   const copyCode = async (code: string) => {
@@ -230,28 +226,16 @@ export function PioneerCodePanel({
             }
           />
         </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-caption uppercase tracking-wide text-fg-muted">
-            {t("expiresAt")}
-          </span>
-          <input
-            className="rounded-control border border-line bg-surface-2 px-3 py-2 text-body-sm outline-none focus:border-action"
-            type="datetime-local"
-            step={60}
-            value={form.expiresAt}
-            onChange={(event) =>
-              setForm((current) => ({
-                ...current,
-                expiresAt: event.target.value,
-              }))
-            }
-          />
-          {localExpiresAtPreview ? (
-            <span className="text-caption text-fg-muted">
-              {t("expiresLocalPreview", { value: localExpiresAtPreview })}
-            </span>
-          ) : null}
-        </label>
+        <ExpirationDateTimeField
+          label={t("expiresAt")}
+          value={form.expiresAt}
+          onChange={(expiresAt) =>
+            setForm((current) => ({
+              ...current,
+              expiresAt,
+            }))
+          }
+        />
         <label className="flex flex-col gap-1">
           <span className="text-caption uppercase tracking-wide text-fg-muted">
             {t("note")}
@@ -460,54 +444,6 @@ function CopyPioneerCodeButton({
       )}
     </button>
   );
-}
-
-/** Convert the UTC datetime-local field into the RFC3339 value expected by the API. */
-function utcDateTimeLocalToRfc3339(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return "";
-  }
-  const match = UTC_DATE_TIME_PATTERN.exec(trimmed);
-  if (!match) {
-    return null;
-  }
-
-  const [, yearRaw, monthRaw, dayRaw, hourRaw, minuteRaw, secondRaw = "00"] =
-    match;
-  const year = Number(yearRaw);
-  const month = Number(monthRaw);
-  const day = Number(dayRaw);
-  const hour = Number(hourRaw);
-  const minute = Number(minuteRaw);
-  const second = Number(secondRaw);
-  const timestamp = Date.UTC(year, month - 1, day, hour, minute, second);
-  const date = new Date(timestamp);
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() !== month - 1 ||
-    date.getUTCDate() !== day ||
-    date.getUTCHours() !== hour ||
-    date.getUTCMinutes() !== minute ||
-    date.getUTCSeconds() !== second
-  ) {
-    return null;
-  }
-  return date.toISOString();
-}
-
-/** Format the selected UTC expiry in the browser's detected local time zone. */
-function formatLocalDateTime(value: string): string {
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const formatted = new Intl.DateTimeFormat(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(new Date(value));
-  return timeZone ? `${formatted} (${timeZone})` : formatted;
 }
 
 async function writeClipboardText(text: string) {
