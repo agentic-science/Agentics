@@ -75,12 +75,24 @@ pub struct RegisterAgentRequest {
 }
 
 /// Agent registration response containing the one-time bearer token.
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RegisterAgentResponse {
     pub agent_id: AgentId,
     pub token: String,
     pub display_name: String,
     pub created_at: String,
+}
+
+impl fmt::Debug for RegisterAgentResponse {
+    /// Redacts the one-time raw agent bearer token from debug output.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RegisterAgentResponse")
+            .field("agent_id", &self.agent_id)
+            .field("token", &"<redacted>")
+            .field("display_name", &self.display_name)
+            .field("created_at", &self.created_at)
+            .finish()
+    }
 }
 
 /// Admin payload for creating a pioneer code.
@@ -609,4 +621,27 @@ pub struct AdminCapacityResponse {
     pub quota_window_seconds: i64,
     pub quotas: AdminQuotaSettingsDto,
     pub usage: AdminCapacityUsageDto,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn agent_registration_debug_redacts_bearer_token() {
+        let response = RegisterAgentResponse {
+            agent_id: AgentId::try_new("11111111-1111-4111-8111-111111111111")
+                .expect("valid agent id"),
+            token: "agent-secret-token".to_string(),
+            display_name: "debug-agent".to_string(),
+            created_at: "2026-06-07T00:00:00Z".to_string(),
+        };
+
+        let debug = format!("{response:?}");
+
+        assert!(debug.contains("RegisterAgentResponse"));
+        assert!(debug.contains("debug-agent"));
+        assert!(debug.contains("<redacted>"));
+        assert!(!debug.contains("agent-secret-token"));
+    }
 }
