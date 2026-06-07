@@ -17,6 +17,11 @@ export interface AgenticsWebEnv {
   warnings: EnvWarning[];
 }
 
+export interface AgenticsBrowserEnv {
+  browserApiBaseUrl: string;
+  warnings: EnvWarning[];
+}
+
 export function loadAgenticsWebEnv(
   source: Partial<NodeJS.ProcessEnv> = process.env,
 ): AgenticsWebEnv {
@@ -85,6 +90,33 @@ export function loadAgenticsWebEnv(
     gaMeasurementId: optionalGaMeasurementId(
       source.NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID,
     ),
+    warnings,
+  };
+}
+
+export function loadAgenticsBrowserEnv(
+  source: Partial<NodeJS.ProcessEnv> = process.env,
+): AgenticsBrowserEnv {
+  const warnings: EnvWarning[] = [];
+  const browserApiBaseUrl = optionalEnv(
+    source.NEXT_PUBLIC_AGENTICS_API_BASE_URL,
+  );
+  if (browserApiBaseUrl === undefined) {
+    warnings.push({
+      name: "NEXT_PUBLIC_AGENTICS_API_BASE_URL",
+      message: "unset; default: same-origin Next proxy",
+    });
+  }
+  emitWarnings(warnings);
+
+  return {
+    browserApiBaseUrl:
+      browserApiBaseUrl === undefined
+        ? ""
+        : normalizeHttpUrl(
+            "NEXT_PUBLIC_AGENTICS_API_BASE_URL",
+            browserApiBaseUrl,
+          ),
     warnings,
   };
 }

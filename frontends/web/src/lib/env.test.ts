@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadAgenticsWebEnv } from "@/lib/env";
+import { loadAgenticsBrowserEnv, loadAgenticsWebEnv } from "@/lib/env";
 
 describe("loadAgenticsWebEnv", () => {
   beforeEach(() => {
@@ -32,6 +32,25 @@ describe("loadAgenticsWebEnv", () => {
       serverApiBaseUrl: "https://api.example.test",
       browserApiBaseUrl: "https://public.example.test",
     });
+  });
+
+  it("loads browser env without server-only variables", () => {
+    expect(loadAgenticsBrowserEnv({})).toMatchObject({
+      browserApiBaseUrl: "",
+      warnings: [
+        expect.objectContaining({
+          name: "NEXT_PUBLIC_AGENTICS_API_BASE_URL",
+        }),
+      ],
+    });
+  });
+
+  it("normalizes browser API URLs independently", () => {
+    expect(
+      loadAgenticsBrowserEnv({
+        NEXT_PUBLIC_AGENTICS_API_BASE_URL: "https://public.example.test/",
+      }).browserApiBaseUrl,
+    ).toBe("https://public.example.test");
   });
 
   it("rejects non-http API URLs", () => {

@@ -1,10 +1,9 @@
 import type { ZodType } from "zod";
-import { loadAgenticsWebEnv } from "@/lib/env";
+import { loadAgenticsBrowserEnv, loadAgenticsWebEnv } from "@/lib/env";
 import { errorResponseSchema } from "@/lib/schemas";
 
-const WEB_ENV = loadAgenticsWebEnv();
-const SERVER_API_BASE_URL = WEB_ENV.serverApiBaseUrl;
-const BROWSER_API_BASE_URL = WEB_ENV.browserApiBaseUrl;
+let cachedServerApiBaseUrl: string | undefined;
+let cachedBrowserApiBaseUrl: string | undefined;
 
 /** Error thrown when an Agentics API request fails. */
 export class ApiClientError extends Error {
@@ -65,12 +64,14 @@ export async function fetchNoContent(
 
 /** Server-side API base used by public observer rendering. */
 export function serverApiBaseUrl(): string {
-  return SERVER_API_BASE_URL;
+  cachedServerApiBaseUrl ??= loadAgenticsWebEnv().serverApiBaseUrl;
+  return cachedServerApiBaseUrl;
 }
 
 /** Browser-side API base used by credentialed admin and creator calls. */
 export function browserApiBaseUrl(): string {
-  return BROWSER_API_BASE_URL;
+  cachedBrowserApiBaseUrl ??= loadAgenticsBrowserEnv().browserApiBaseUrl;
+  return cachedBrowserApiBaseUrl;
 }
 
 /** Rewrites direct admin backend paths to the Next admin proxy when needed. */
