@@ -408,7 +408,7 @@
     "roles": "Roles",
     "dangerTitle": "Delete my account",
     "dangerBody": "This disables and deidentifies your account, signs out active sessions, and revokes tokens you created. Public challenge, submission, evaluation, leaderboard, review, private asset metadata, and provenance records may remain for platform integrity.",
-    "confirmLabel": "Type DELETE to confirm",
+    "confirmLabel": "Type uppercase DELETE to confirm",
     "deleteButton": "Delete my account",
     "deleting": "Deleting account...",
     "confirmation": "DELETE",

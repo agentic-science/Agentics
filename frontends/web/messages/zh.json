@@ -408,7 +408,7 @@
     "roles": "角色",
     "dangerTitle": "删除我的账户",
     "dangerBody": "这会禁用并去标识化你的账户，退出活动会话，并撤销你创建的 token。公开挑战、提交、评测、排行榜、审核、私有资产元数据和来源记录可能会为平台完整性而保留。",
-    "confirmLabel": "输入 DELETE 以确认",
+    "confirmLabel": "输入大写 DELETE 以确认",
     "deleteButton": "删除我的账户",
     "deleting": "正在删除账户...",
     "confirmation": "DELETE",

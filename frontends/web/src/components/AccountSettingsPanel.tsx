@@ -65,10 +65,6 @@ export function AccountSettingsPanel() {
                 <dd>@{session.github_login}</dd>
               </div>
               <div>
-                <dt>{t("githubUserId")}</dt>
-                <dd>{session.github_user_id}</dd>
-              </div>
-              <div>
                 <dt>{t("status")}</dt>
                 <dd>{statusT(session.status)}</dd>
               </div>
@@ -92,6 +88,7 @@ export function AccountSettingsPanel() {
               <input
                 autoComplete="off"
                 onChange={(event) => setConfirmation(event.target.value)}
+                placeholder={t("confirmation")}
                 value={confirmation}
               />
             </label>

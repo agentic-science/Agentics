@@ -59,7 +59,9 @@ describe("AccountSettingsPanel", () => {
     const view = renderAccountSettingsPanel();
 
     expect(await view.findByText("@octocat")).toBeTruthy();
-    fireEvent.change(view.getByLabelText("Type DELETE to confirm"), {
+    expect(view.queryByText("GitHub user id")).toBeNull();
+    expect(view.queryByText("123")).toBeNull();
+    fireEvent.change(view.getByLabelText("Type uppercase DELETE to confirm"), {
       target: { value: "DELETE" },
     });
     fireEvent.click(view.getByRole("button", { name: "Delete my account" }));
