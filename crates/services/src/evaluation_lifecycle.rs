@@ -146,8 +146,10 @@ impl<'a> EvaluationWorkerService<'a> {
                 job_id = %job.id,
                 worker_id,
                 attempt_count = job.attempt_count,
-                "evaluation row already exists for job; preserving original start record"
+                "evaluation start claim no longer matches worker; skipping runner execution"
             );
+            self.write_idle_heartbeat(worker_id, None, None).await?;
+            return Ok(EvaluationWorkerCycleOutcome::Idle);
         }
 
         let (lease_stop_tx, lease_stop_rx) = watch::channel(false);
