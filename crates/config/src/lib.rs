@@ -109,7 +109,7 @@ pub const DEFAULT_MAX_ACTIVE_AGENTS: u32 = 1_000;
 /// Default active challenge review record limit per human creator.
 pub const DEFAULT_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_HUMAN: u32 = 10;
 /// Default private asset byte budget per challenge review record.
-pub const DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD: u64 = 250 * 1024 * 1024;
+pub const DEFAULT_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD: u64 = 1024 * 1024 * 1024;
 /// Default challenge review record validation count per day.
 pub const DEFAULT_CHALLENGE_REVIEW_RECORD_VALIDATIONS_PER_DAY: u32 = 10;
 /// Default challenge review record validation timeout in minutes.

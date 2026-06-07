@@ -753,6 +753,7 @@ const REHEARSAL_OPTIONAL: &[OptionalEnv] = &[
     ),
     OptionalEnv::new("AGENTICS_DGX_RUNNER_DOCKER_BRIDGE", "agentics0"),
     OptionalEnv::new("AGENTICS_DGX_RUNNER_DOCKER_BRIDGE_CIDR", "172.30.0.1/16"),
+    OptionalEnv::new("AGENTICS_DGX_DOCKER_PULL_POLICY", "if-not-present"),
     OptionalEnv::new("AGENTICS_DGX_PERSIST_FSTAB", "false"),
     OptionalEnv::new("AGENTICS_DGX_RUN_MUTATING_PROBES", "false"),
     OptionalEnv::new("AGENTICS_REHEARSAL_CPU_IMAGE_SOURCE", "registry"),
@@ -780,7 +781,7 @@ const REHEARSAL_OPTIONAL: &[OptionalEnv] = &[
     OptionalEnv::new(ENV_REVIEW_RECORD_LIMIT, "10"),
     OptionalEnv::new(
         "AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD",
-        "262144000",
+        "1073741824",
     ),
     OptionalEnv::new("AGENTICS_CHALLENGE_REVIEW_RECORD_VALIDATIONS_PER_DAY", "10"),
     OptionalEnv::new("AGENTICS_CHALLENGE_REVIEW_RECORD_TTL_DAYS", "14"),
@@ -838,6 +839,7 @@ const PRODUCTION_OPTIONAL: &[OptionalEnv] = &[
     ),
     OptionalEnv::new("AGENTICS_DGX_RUNNER_DOCKER_BRIDGE", "agentics0"),
     OptionalEnv::new("AGENTICS_DGX_RUNNER_DOCKER_BRIDGE_CIDR", "172.30.0.1/16"),
+    OptionalEnv::new("AGENTICS_DGX_DOCKER_PULL_POLICY", "if-not-present"),
     OptionalEnv::new("AGENTICS_DGX_RUN_MUTATING_PROBES", "false"),
     OptionalEnv::new("AGENTICS_LOG_LEVEL", "info"),
     OptionalEnv::new("AGENTICS_RUNNER_MAX_OUTPUT_FILES", "8192"),
@@ -859,7 +861,7 @@ const PRODUCTION_OPTIONAL: &[OptionalEnv] = &[
     OptionalEnv::new(ENV_REVIEW_RECORD_LIMIT, "10"),
     OptionalEnv::new(
         "AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD",
-        "262144000",
+        "1073741824",
     ),
     OptionalEnv::new("AGENTICS_CHALLENGE_REVIEW_RECORD_VALIDATIONS_PER_DAY", "10"),
     OptionalEnv::new("AGENTICS_CHALLENGE_REVIEW_RECORD_TTL_DAYS", "14"),
