@@ -11,6 +11,7 @@ export function LocalizedStatusBadge({ status }: { status: string }) {
     abandoned: t("abandoned"),
     approved: t("approved"),
     completed: t("completed"),
+    deleted: t("deleted"),
     disabled: t("disabled"),
     pending_review: t("pending_review"),
     failed: t("failed"),

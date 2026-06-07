@@ -299,6 +299,16 @@
     color: var(--text-primary);
   }
 
+  .btn-danger {
+    background: var(--status-error);
+    color: var(--text-inverse);
+  }
+
+  .btn-danger:hover {
+    background: color-mix(in srgb, var(--status-error), white 12%);
+    transform: translateY(-1px);
+  }
+
   .btn-sm {
     padding: 6px 12px;
     font-size: var(--text-caption);
@@ -711,5 +721,158 @@
     height: 48px;
     color: var(--text-muted);
     opacity: 0.5;
+  }
+
+  /* ===================================================================
+   Legal, Consent, and Account Settings
+   =================================================================== */
+
+  .footer-link {
+    appearance: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    text-decoration: none;
+    transition: color var(--duration-fast) var(--ease-default);
+  }
+
+  .footer-link:hover,
+  .footer-link:focus-visible {
+    color: var(--text-primary);
+    outline: none;
+  }
+
+  .legal-page {
+    display: grid;
+    gap: var(--spacing-8);
+    max-width: 58rem;
+    margin: 0 auto;
+  }
+
+  .legal-page-header {
+    display: grid;
+    gap: var(--spacing-3);
+  }
+
+  .legal-page-body {
+    display: grid;
+    gap: var(--spacing-6);
+  }
+
+  .legal-section {
+    display: grid;
+    gap: var(--spacing-3);
+  }
+
+  .legal-section p,
+  .legal-section li {
+    color: var(--text-secondary);
+    line-height: 1.7;
+  }
+
+  .legal-section ul {
+    display: grid;
+    gap: var(--spacing-2);
+    padding-left: var(--spacing-5);
+    list-style: disc;
+  }
+
+  .legal-cookie-table td {
+    vertical-align: top;
+  }
+
+  .cookie-banner {
+    position: fixed;
+    right: var(--spacing-4);
+    bottom: var(--spacing-4);
+    left: var(--spacing-4);
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-4);
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: var(--spacing-4);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    background: var(--consent-surface);
+    box-shadow: var(--shadow-md);
+  }
+
+  .cookie-banner-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--spacing-2);
+  }
+
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: grid;
+    place-items: center;
+    padding: var(--spacing-4);
+    background: var(--consent-backdrop);
+  }
+
+  .modal-panel {
+    width: min(100%, 34rem);
+    padding: var(--spacing-6);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    background: var(--consent-surface);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .account-summary {
+    display: grid;
+    gap: var(--spacing-3);
+  }
+
+  .account-summary div {
+    display: grid;
+    grid-template-columns: minmax(9rem, 0.4fr) 1fr;
+    gap: var(--spacing-3);
+  }
+
+  .account-summary dt {
+    color: var(--text-muted);
+    font-size: var(--text-body-sm);
+  }
+
+  .account-summary dd {
+    min-width: 0;
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    overflow-wrap: anywhere;
+  }
+
+  .danger-zone {
+    border-color: color-mix(in srgb, var(--status-error), transparent 55%);
+  }
+
+  @media (max-width: 720px) {
+    .cookie-banner {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .cookie-banner-actions {
+      justify-content: stretch;
+    }
+
+    .cookie-banner-actions .btn {
+      flex: 1 1 auto;
+    }
+
+    .account-summary div {
+      grid-template-columns: 1fr;
+      gap: var(--spacing-1);
+    }
   }
 }

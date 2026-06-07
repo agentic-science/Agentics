@@ -4,6 +4,7 @@ import { KeyRound, ShieldCheck, UserCog } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { type FormEvent, useState } from "react";
 import { adminErrorMessage } from "@/components/admin/errors";
+import { LocalizedStatusBadge } from "@/components/admin/LocalizedStatusBadge";
 import { StatusBadge } from "@/components/admin/StatusBadge";
 import { ExpirationDateTimeField } from "@/components/ExpirationDateTimeField";
 import {
@@ -188,7 +189,7 @@ export function AdminIdentityPanel({
                     </td>
                     <td className="font-mono">{human.roles.join(", ")}</td>
                     <td>
-                      <StatusBadge status={human.status} />
+                      <LocalizedStatusBadge status={human.status} />
                     </td>
                     <td>{formatDate(human.created_at, locale)}</td>
                     <td>

@@ -99,3 +99,13 @@ export async function logoutHuman(csrfToken: string): Promise<void> {
     baseUrl: browserApiBaseUrl(),
   });
 }
+
+/** Deletes the current human account and clears browser auth cookies. */
+export async function deleteHumanAccount(csrfToken: string): Promise<void> {
+  return fetchNoContent("/api/auth/account/delete", {
+    init: { method: "POST" },
+    credentials: "include",
+    csrfToken,
+    baseUrl: browserApiBaseUrl(),
+  });
+}

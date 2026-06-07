@@ -67,6 +67,9 @@ export function SignInPanel() {
         )}
       </p>
       {error ? <p className="mt-4 text-body-sm text-danger">{error}</p> : null}
+      {!session ? (
+        <p className="mt-4 text-body-sm text-fg-muted">{t("githubNotice")}</p>
+      ) : null}
       <div className="mt-6 flex flex-wrap items-center gap-3">
         {!session ? (
           <>

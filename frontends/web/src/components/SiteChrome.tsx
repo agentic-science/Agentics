@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 import { AccountMenu } from "@/components/AccountMenu";
+import { CookieSettingsButton } from "@/components/CookieSettingsButton";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
@@ -66,6 +67,15 @@ export async function SiteChrome({ children }: { children: ReactNode }) {
               &copy; {new Date().getFullYear()} Agentics.{" "}
               {t("common.footerLicense")}
             </p>
+            <nav className="flex flex-wrap items-center justify-center gap-4 text-sm text-fg-muted">
+              <Link href="/privacy" className="footer-link">
+                {t("common.privacy")}
+              </Link>
+              <Link href="/cookies" className="footer-link">
+                {t("common.cookies")}
+              </Link>
+              <CookieSettingsButton />
+            </nav>
           </div>
         </div>
       </footer>

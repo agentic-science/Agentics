@@ -17,6 +17,7 @@
     "account": "账户",
     "signIn": "登录",
     "signOut": "退出登录",
+    "settings": "账户设置",
     "finishSetup": "完成设置",
     "creatorConsole": "创建者控制台",
     "adminPanel": "管理面板"
@@ -27,6 +28,7 @@
       "bodyBeforeEmail": "请使用 GitHub 登录 Agentics。由于算力资源有限，新用户目前需要先锋码才能完成注册。如果你正在用智能体做科学研究，请给我们发一封",
       "email": "邮件",
       "bodyAfterEmail": "介绍你正在做的事情，我们很乐意给你早期访问权限！",
+      "githubNotice": "Agentics 使用 GitHub 认证用户，并保存你的 GitHub 数字用户 id 和 login。",
       "button": "使用",
       "buttonAria": "使用 GitHub 登录",
       "cancel": "取消",
@@ -50,6 +52,7 @@
       "title": "完成设置",
       "loading": "正在加载你的会话...",
       "body": "已登录为 {login}。请输入先锋码以解锁创建者工作流。",
+      "githubNotice": "Agentics 使用 GitHub 认证用户，并保存你的 GitHub 数字用户 id 和 login。",
       "earlyAccessBeforeEmail": "由于算力资源有限，新用户目前需要先锋码才能完成注册。如果你正在用智能体做科学研究，请给我们发一封",
       "email": "邮件",
       "earlyAccessAfterEmail": "介绍你正在做的事情，我们很乐意给你早期访问权限！",
@@ -348,6 +351,9 @@
     "unlimited": "无限",
     "footerLicense": "以 AGPL v3.0 开源。",
     "githubRepository": "Agentics GitHub 仓库",
+    "privacy": "隐私",
+    "cookies": "Cookie",
+    "cookieSettings": "Cookie 设置",
     "pagination": "分页",
     "dateTime": {
       "localTime": "本地时间",
@@ -358,6 +364,7 @@
       "abandoned": "已放弃",
       "approved": "已批准",
       "completed": "已完成",
+      "deleted": "已删除",
       "disabled": "已禁用",
       "pending_review": "待审核",
       "failed": "失败",
@@ -374,6 +381,38 @@
   },
   "language": {
     "switchTo": "切换到 {locale}"
+  },
+  "cookieConsent": {
+    "title": "分析 Cookie",
+    "body": "Agentics 可以使用 Google Analytics 了解汇总的网站访问情况。只有在你接受后才会加载分析。",
+    "accept": "接受分析",
+    "reject": "拒绝分析",
+    "manage": "管理设置",
+    "save": "保存选择",
+    "close": "关闭",
+    "modalTitle": "Cookie 设置",
+    "modalBodyConfigured": "Google Analytics 是可选的。用于登录、安全和同意记录的严格必要 cookie 会保持启用。",
+    "modalBodyUnavailable": "此部署未配置 Google Analytics。Agentics 只使用必要和偏好设置 cookie。",
+    "accepted": "已接受分析",
+    "rejected": "已拒绝分析"
+  },
+  "accountSettings": {
+    "title": "账户设置",
+    "loading": "正在加载你的账户...",
+    "signInRequired": "请使用 GitHub 登录以管理你的账户。",
+    "signIn": "登录",
+    "identity": "身份",
+    "githubLogin": "GitHub login",
+    "githubUserId": "GitHub 用户 id",
+    "status": "状态",
+    "roles": "角色",
+    "dangerTitle": "删除我的账户",
+    "dangerBody": "这会禁用并去标识化你的账户，退出活动会话，并撤销你创建的 token。公开挑战、提交、评测、排行榜、审核、私有资产元数据和来源记录可能会为平台完整性而保留。",
+    "confirmLabel": "输入 DELETE 以确认",
+    "deleteButton": "删除我的账户",
+    "deleting": "正在删除账户...",
+    "confirmation": "DELETE",
+    "failed": "账户删除失败。"
   },
   "admin": {
     "layout": {

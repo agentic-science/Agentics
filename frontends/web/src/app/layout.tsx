@@ -3,7 +3,9 @@ import { GeistSans } from "geist/font/sans";
 import type { Metadata } from "next";
 import Script from "next/script";
 import { getLocale, getTranslations } from "next-intl/server";
+import { CookieConsent } from "@/components/CookieConsent";
 import { Providers } from "@/components/Providers";
+import { loadAgenticsWebEnv } from "@/lib/env";
 import enMessages from "../../messages/en.json";
 import zhMessages from "../../messages/zh.json";
 import "./globals.css";
@@ -35,6 +37,7 @@ export default async function RootLayout({
 }>) {
   const locale = await getLocale();
   const messages = allMessages[locale as "en" | "zh"] ?? allMessages.en;
+  const { gaMeasurementId } = loadAgenticsWebEnv();
 
   return (
     <html
@@ -48,6 +51,7 @@ export default async function RootLayout({
       <body>
         <Providers locale={locale} messages={messages}>
           {children}
+          <CookieConsent gaMeasurementId={gaMeasurementId} />
         </Providers>
       </body>
     </html>

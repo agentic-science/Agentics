@@ -97,6 +97,7 @@ export function AccountSetupPanel() {
               </a>
               {t("earlyAccessAfterEmail")}
             </p>
+            <p className="text-body-sm text-fg-muted">{t("githubNotice")}</p>
           </div>
           <label className="flex flex-col gap-1">
             <span className="text-caption uppercase tracking-wide text-fg-muted">

@@ -17,6 +17,7 @@
     "account": "Account",
     "signIn": "Sign in",
     "signOut": "Sign out",
+    "settings": "Account settings",
     "finishSetup": "Finish Setup",
     "creatorConsole": "Creator Console",
     "adminPanel": "Admin Panel"
@@ -27,6 +28,7 @@
       "bodyBeforeEmail": "Sign-in Agentics with GitHub. For new users, we currently require a pioneer code to complete the registration, due to our compute constraints. If you are doing science with agents, please drop us an ",
       "email": "email",
       "bodyAfterEmail": " about what you are doing and we'd love to give you the early access!",
+      "githubNotice": "Agentics uses GitHub to authenticate users and stores your GitHub numeric user id and login.",
       "button": "Sign-in with",
       "buttonAria": "Sign-in with GitHub",
       "cancel": "Cancel",
@@ -50,6 +52,7 @@
       "title": "Finish setup",
       "loading": "Loading your session...",
       "body": "Signed in as {login}. Enter a pioneer code to unlock creator workflows.",
+      "githubNotice": "Agentics uses GitHub to authenticate users and stores your GitHub numeric user id and login.",
       "earlyAccessBeforeEmail": "For new users, we currently require a pioneer code to complete the registration, due to our compute constraints. If you are doing science with agents, please drop us an ",
       "email": "email",
       "earlyAccessAfterEmail": " about what you are doing and we'd love to give you the early access!",
@@ -348,6 +351,9 @@
     "unlimited": "unlimited",
     "footerLicense": "Open source under AGPL v3.0.",
     "githubRepository": "Agentics GitHub repository",
+    "privacy": "Privacy",
+    "cookies": "Cookies",
+    "cookieSettings": "Cookie settings",
     "pagination": "Pagination",
     "dateTime": {
       "localTime": "Local time",
@@ -358,6 +364,7 @@
       "abandoned": "Abandoned",
       "approved": "Approved",
       "completed": "Completed",
+      "deleted": "Deleted",
       "disabled": "Disabled",
       "pending_review": "Pending review",
       "failed": "Failed",
@@ -374,6 +381,38 @@
   },
   "language": {
     "switchTo": "Switch to {locale}"
+  },
+  "cookieConsent": {
+    "title": "Analytics cookies",
+    "body": "Agentics can use Google Analytics to understand aggregate website visits. Analytics only loads if you accept.",
+    "accept": "Accept analytics",
+    "reject": "Reject analytics",
+    "manage": "Manage settings",
+    "save": "Save choice",
+    "close": "Close",
+    "modalTitle": "Cookie settings",
+    "modalBodyConfigured": "Google Analytics is optional. Strictly necessary cookies stay on for sign-in, security, and consent records.",
+    "modalBodyUnavailable": "Google Analytics is not configured. Agentics only uses necessary and preference cookies in this deployment.",
+    "accepted": "Analytics accepted",
+    "rejected": "Analytics rejected"
+  },
+  "accountSettings": {
+    "title": "Account settings",
+    "loading": "Loading your account...",
+    "signInRequired": "Sign in with GitHub to manage your account.",
+    "signIn": "Sign in",
+    "identity": "Identity",
+    "githubLogin": "GitHub login",
+    "githubUserId": "GitHub user id",
+    "status": "Status",
+    "roles": "Roles",
+    "dangerTitle": "Delete my account",
+    "dangerBody": "This disables and deidentifies your account, signs out active sessions, and revokes tokens you created. Public challenge, submission, evaluation, leaderboard, review, private asset metadata, and provenance records may remain for platform integrity.",
+    "confirmLabel": "Type DELETE to confirm",
+    "deleteButton": "Delete my account",
+    "deleting": "Deleting account...",
+    "confirmation": "DELETE",
+    "failed": "Account deletion failed."
   },
   "admin": {
     "layout": {

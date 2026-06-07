@@ -127,6 +127,14 @@ export function AccountMenu() {
             <div className="px-3 py-2 text-caption text-fg-muted">
               @{session.github_login}
             </div>
+            <Link
+              className="nav-dropdown-item"
+              href="/account"
+              onClick={() => setOpen(false)}
+              role="menuitem"
+            >
+              {t("settings")}
+            </Link>
             {setupRequired ? (
               <Link
                 className="nav-dropdown-item"

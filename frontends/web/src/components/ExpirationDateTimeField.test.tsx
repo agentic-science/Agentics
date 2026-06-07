@@ -1,14 +1,18 @@
 import { NextIntlClientProvider } from "next-intl";
 import { useState } from "react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import messages from "../../messages/en.json";
 import { ensureDomEnvironment } from "../test/dom";
 import { ExpirationDateTimeField } from "./ExpirationDateTimeField";
 
 ensureDomEnvironment();
-const { render, waitFor } = await import("@testing-library/react");
+const { cleanup, render, waitFor } = await import("@testing-library/react");
 
 describe("ExpirationDateTimeField", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it("normalizes slash-formatted defaults and updates the local-time preview", async () => {
     const onChange = vi.fn();
 

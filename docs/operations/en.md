@@ -156,6 +156,20 @@ generates the random code suffix; operators do not enter full code values.
 Revoking a human pioneer code returns linked humans to `setup_required`, removes
 creator access granted through that code, and deletes their active browser
 sessions so the UI refreshes immediately.
+Human account deletion is self-service from the account settings page. It
+requires an authenticated CSRF-protected browser session, rejects deletion of
+the final active human admin, marks the human as `deleted`, deidentifies the
+stored GitHub login, revokes active browser sessions and human-created admin
+service and creator API tokens, and keeps the numeric GitHub id as minimal
+provenance to prevent silent re-registration. Challenge ownership, review,
+private asset metadata, submission, evaluation, leaderboard, and other public or
+provenance records remain readable for platform integrity unless removal is
+required.
+If `NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID` is set, Google Analytics remains
+consent-gated in the web app. Rejecting or withdrawing analytics consent stores
+the `agentics_cookie_consent` choice and best-effort clears visible `_ga` and
+`_ga_*` cookies.
+
 Environment variables in the stage env examples must be mirrored by startup
 policy code. Required variables fail fast when missing, blank, or still set to a
 hosted placeholder; optional variables print a startup warning that states the

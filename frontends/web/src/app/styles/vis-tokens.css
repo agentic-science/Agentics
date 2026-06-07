@@ -114,6 +114,8 @@
   --surface-primary: rgba(255, 255, 255, 0.03);
   --surface-secondary: rgba(255, 255, 255, 0.02);
   --surface-elevated: rgba(255, 255, 255, 0.05);
+  --consent-surface: rgba(15, 23, 42, 0.96);
+  --consent-backdrop: rgba(2, 6, 23, 0.9);
 
   /* Border */
   --border-subtle: rgba(255, 255, 255, 0.06);
@@ -179,6 +181,8 @@ html[data-theme="light"] {
   --surface-primary: rgba(255, 255, 255, 0.7);
   --surface-secondary: rgba(241, 245, 249, 0.8);
   --surface-elevated: rgba(255, 255, 255, 0.9);
+  --consent-surface: var(--surface-elevated);
+  --consent-backdrop: color-mix(in srgb, #030712, transparent 25%);
 
   --border-subtle: rgba(15, 23, 42, 0.08);
   --border-medium: rgba(15, 23, 42, 0.12);

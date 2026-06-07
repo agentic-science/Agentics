@@ -13,7 +13,7 @@ interface ProvidersProps {
 /** Renders the providers component. */
 export function Providers({ children, locale, messages }: ProvidersProps) {
   return (
-    <NextIntlClientProvider locale={locale} messages={messages}>
+    <NextIntlClientProvider locale={locale} messages={messages} timeZone="UTC">
       {children}
     </NextIntlClientProvider>
   );

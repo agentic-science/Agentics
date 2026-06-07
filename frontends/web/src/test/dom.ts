@@ -15,6 +15,10 @@ export function ensureDomEnvironment() {
       value: window,
       configurable: true,
     });
+    Object.defineProperty(globalThis, "self", {
+      value: window,
+      configurable: true,
+    });
     Object.defineProperty(globalThis, "document", {
       value: window.document,
       configurable: true,
