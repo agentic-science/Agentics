@@ -13,6 +13,7 @@ WORKDIR /workspace/Agentics
 COPY --from=deps /workspace/Agentics/node_modules ./node_modules
 COPY --from=deps /workspace/Agentics/frontends/web/node_modules ./frontends/web/node_modules
 COPY frontends/web ./frontends/web
+COPY skills/agentics-introduction ./skills/agentics-introduction
 WORKDIR /workspace/Agentics/frontends/web
 ENV AGENTICS_DEPLOYMENT_STAGE=production
 ENV AGENTICS_API_BASE_URL=http://api:3100
