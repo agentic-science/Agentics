@@ -87,6 +87,12 @@ Rust services validate environment values at startup. Malformed
 startup instead of falling back to local defaults. When host probing is enabled,
 `AGENTICS_HOST_PROBE_COMMAND` must be non-empty.
 
+Environment variables in the stage env examples are part of the startup
+contract. Every new or renamed variable must have matching validation code:
+required values fail fast when unset, blank, or still set to hosted
+placeholders; optional values print a startup warning that includes the default;
+deprecated names are rejected or explicitly warned as ignored.
+
 For a non-loopback bind, `AGENTICS_AGENT_REGISTRATION_MODE=public` is rejected.
 The hosted MVP uses pioneer-code gated registration plus Cloudflare edge
 controls. Bootstrap the first admin through
@@ -104,11 +110,18 @@ redirects must use HTTPS.
 Frontend environment:
 
 ```bash
+export AGENTICS_DEPLOYMENT_STAGE='production'
 export AGENTICS_API_BASE_URL='http://127.0.0.1:3100'
+export AGENTICS_WEB_PORT='3001'
 export NEXT_PUBLIC_AGENTICS_API_BASE_URL=''
+export NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID=''
 ```
 
 Leave `NEXT_PUBLIC_AGENTICS_API_BASE_URL` unset when the web process proxies admin requests to the API. Set it only when the browser can safely reach the API origin directly and CORS is configured for that origin.
+Leave `NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID` unset to disable Google
+Analytics entirely. When set to a GA4 measurement id such as `G-XXXXXXXXXX`,
+the web app still loads Google Analytics only after the visitor accepts
+analytics cookies.
 Malformed frontend URL and port environment values also fail during Next.js
 config/module loading instead of being normalized silently.
 
@@ -212,7 +225,7 @@ For production Compose:
    ```
 
    `deploy/compose/env/rehearsal.env` must keep
-   `AGENTICS_REHEARSAL_ENVIRONMENT=true`, project `agentics-rehearsal`, bucket
+   `AGENTICS_DEPLOYMENT_STAGE=rehearsal`, project `agentics-rehearsal`, bucket
    `agentics-rehearsal`, prefix `rehearsal`, runner namespace
    `agentics-rehearsal`, and all mutable roots under `/srv/agentics-rehearsal`.
    The rehearsal stack uses loopback ports `13100` for API, `13001` for web,
@@ -237,7 +250,7 @@ For production Compose:
 
    Do not run rehearsal commands against a production database or storage
    bucket that is not explicitly disposable. The purge command refuses the
-   `agentics-prod` project, requires `AGENTICS_REHEARSAL_ENVIRONMENT=true`,
+   `agentics-prod` project, requires `AGENTICS_DEPLOYMENT_STAGE=rehearsal`,
    and refuses destructive paths outside `/srv/agentics-rehearsal`.
 
 6. Stop explicitly:

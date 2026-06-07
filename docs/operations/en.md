@@ -142,7 +142,7 @@ The backend currently enforces:
 | ZIP file count and expanded bytes | runner extraction limits | Runner extraction |
 | Per-container logs | phase log limit | Docker log collection |
 | Private asset bytes per review record | `AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD` | Private asset upload |
-| Active challenge review records per agent | `AGENTICS_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_AGENT` | Review record creation |
+| Active challenge review records per human creator | `AGENTICS_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_HUMAN` | Review record creation |
 | Review record validations per day | `AGENTICS_CHALLENGE_REVIEW_RECORD_VALIDATIONS_PER_DAY` | Admin review record validation |
 | Active review record validation lease | `AGENTICS_CHALLENGE_REVIEW_RECORD_VALIDATION_TIMEOUT_MINUTES` | Review record validation and private asset upload admission |
 | Pending private asset lease | `AGENTICS_CHALLENGE_PRIVATE_ASSET_PENDING_TIMEOUT_MINUTES` | Private asset upload retry admission |
@@ -156,6 +156,11 @@ generates the random code suffix; operators do not enter full code values.
 Revoking a human pioneer code returns linked humans to `setup_required`, removes
 creator access granted through that code, and deletes their active browser
 sessions so the UI refreshes immediately.
+Environment variables in the stage env examples must be mirrored by startup
+policy code. Required variables fail fast when missing, blank, or still set to a
+hosted placeholder; optional variables print a startup warning that states the
+default; deprecated names must either fail with the replacement name or warn
+that they are ignored.
 
 Recommended local Compose MVP values:
 
@@ -164,7 +169,7 @@ export AGENTICS_MAX_ACTIVE_AGENTS=100
 export AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY=10
 export AGENTICS_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY=3
 export AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS=2
-export AGENTICS_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_AGENT=3
+export AGENTICS_MAX_ACTIVE_CHALLENGE_REVIEW_RECORDS_PER_HUMAN=3
 export AGENTICS_CHALLENGE_PRIVATE_ASSET_BYTES_PER_REVIEW_RECORD=$((250 * 1024 * 1024))
 export AGENTICS_CHALLENGE_REVIEW_RECORD_VALIDATIONS_PER_DAY=10
 ```
@@ -377,7 +382,7 @@ just rehearsal::check
 just rehearsal::run
 ```
 
-The rehearsal env file must keep `AGENTICS_REHEARSAL_ENVIRONMENT=true`, project
+The rehearsal env file must keep `AGENTICS_DEPLOYMENT_STAGE=rehearsal`, project
 `agentics-rehearsal`, bucket `agentics-rehearsal`, prefix `rehearsal`, runner
 namespace `agentics-rehearsal`, and all mutable paths under
 `/srv/agentics-rehearsal`. The rehearsal Compose override exposes only

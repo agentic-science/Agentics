@@ -3,7 +3,9 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use agentics_config::{Config, DEFAULT_API_HOST, DEFAULT_API_PORT, local_api_base_url};
+use agentics_config::{
+    Config, DEFAULT_API_HOST, DEFAULT_API_PORT, EnvPolicyReport, EnvServiceRole, local_api_base_url,
+};
 use reqwest::Url;
 use secrecy::SecretString;
 use serde::Deserialize;
@@ -37,6 +39,8 @@ pub(super) fn resolve_run_config(
     args: &RunArgs,
 ) -> Result<ResolvedRunConfig, ProductionRehearsalError> {
     load_rehearsal_env_file(args.env_file.as_deref())?;
+    let env_report = agentics_config::validate_current_env_policy(EnvServiceRole::Compose)?;
+    print_env_policy_warnings(&env_report);
     let config = Config::from_env()?;
     let env = read_env()?;
     let admin_service_token = admin_service_token(args)?;
@@ -82,6 +86,15 @@ pub(super) fn resolve_run_config(
         image_config,
         wait_timeout,
     })
+}
+
+fn print_env_policy_warnings(report: &EnvPolicyReport) {
+    for warning in &report.warnings {
+        eprintln!(
+            "[agentics-rehearse] WARN env {}: {}",
+            warning.name, warning.message
+        );
+    }
 }
 
 pub(super) fn registration_code() -> String {

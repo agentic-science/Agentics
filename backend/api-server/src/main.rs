@@ -17,7 +17,7 @@
 
 use std::sync::Arc;
 
-use agentics_config::Config;
+use agentics_config::{Config, EnvPolicyReport, EnvServiceRole};
 use agentics_persistence::pool::create_pool;
 use agentics_storage::build_storage;
 use anyhow::Context;
@@ -29,9 +29,11 @@ use tracing::info;
 #[tokio::main]
 /// Starts the API server, wires storage/database state, and handles termination signals.
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    let env_report = agentics_config::validate_current_env_policy(EnvServiceRole::Api)?;
+    print_env_policy_warnings(&env_report);
 
     let config = Config::from_env()?;
+    init_logging(&config.logging.log_level)?;
     config.validate_api_security()?;
     info!(
         "starting api server on {}:{}",
@@ -103,4 +105,17 @@ async fn main() -> anyhow::Result<()> {
 
     info!("api server exited");
     Ok(())
+}
+
+fn init_logging(log_level: &str) -> anyhow::Result<()> {
+    let filter = tracing_subscriber::EnvFilter::try_new(log_level)
+        .map_err(|error| anyhow::anyhow!("invalid AGENTICS_LOG_LEVEL: {error}"))?;
+    tracing_subscriber::fmt().with_env_filter(filter).init();
+    Ok(())
+}
+
+fn print_env_policy_warnings(report: &EnvPolicyReport) {
+    for warning in &report.warnings {
+        eprintln!("[api] WARN env {}: {}", warning.name, warning.message);
+    }
 }

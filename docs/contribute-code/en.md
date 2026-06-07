@@ -205,6 +205,14 @@ http://127.0.0.1:3001
 
 Use the Tailscale/LAN environment variables in the containerized dev section
 when another machine needs to inspect the frontend.
+Local analytics is disabled by default. Set
+`NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID` to a GA4 measurement id only when you
+explicitly need to test the consent-gated Google Analytics path.
+
+When adding or renaming environment variables, update the matching stage env
+example, docs, and startup policy code in the same change. Required variables
+must fail fast when unset or invalid; optional variables must emit a startup
+warning that names the default; removed names must fail or warn explicitly.
 
 ## Build Binaries
 
@@ -217,7 +225,9 @@ Build the web frontend:
 
 ```bash
 (cd frontends/web && \
+  AGENTICS_DEPLOYMENT_STAGE="${AGENTICS_DEPLOYMENT_STAGE:-dev}" \
   AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:${AGENTICS_API_PORT:-3100}}" \
+  AGENTICS_WEB_PORT="${AGENTICS_WEB_PORT:-3001}" \
   bun run build)
 ```
 

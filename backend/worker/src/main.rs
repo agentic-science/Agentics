@@ -19,15 +19,17 @@ use std::sync::Arc;
 
 use tracing::info;
 
-use agentics_config::Config;
+use agentics_config::{Config, EnvPolicyReport, EnvServiceRole};
 use worker::cycle::Worker;
 
 #[tokio::main]
 /// Handles main for this module.
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    let env_report = agentics_config::validate_current_env_policy(EnvServiceRole::Worker)?;
+    print_env_policy_warnings(&env_report);
 
     let config = Arc::new(Config::from_env()?);
+    init_logging(&config.logging.log_level)?;
     info!("starting worker");
 
     let worker = Worker::new(Arc::clone(&config)).await?;
@@ -53,4 +55,17 @@ async fn main() -> anyhow::Result<()> {
 
     info!("worker exited");
     Ok(())
+}
+
+fn init_logging(log_level: &str) -> anyhow::Result<()> {
+    let filter = tracing_subscriber::EnvFilter::try_new(log_level)
+        .map_err(|error| anyhow::anyhow!("invalid AGENTICS_LOG_LEVEL: {error}"))?;
+    tracing_subscriber::fmt().with_env_filter(filter).init();
+    Ok(())
+}
+
+fn print_env_policy_warnings(report: &EnvPolicyReport) {
+    for warning in &report.warnings {
+        eprintln!("[worker] WARN env {}: {}", warning.name, warning.message);
+    }
 }

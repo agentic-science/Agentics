@@ -24,6 +24,7 @@ pub use storage_config::{
 };
 
 mod env;
+mod env_policy;
 mod groups;
 mod local_urls;
 mod runtime_modes;
@@ -32,6 +33,12 @@ mod validation;
 pub use env::{
     RawApiWebEnv, RawAppEnv, RawAuthEnv, RawDatabaseEnv, RawGithubAppEnv, RawLoggingEnv,
     RawMoltbookEnv, RawQuotaEnv, RawRunnerEnv, RawStorageEnv, RawWorkerEnv,
+};
+pub use env_policy::{
+    DeploymentStage, ENV_AGENTICS_DEPLOYMENT_STAGE, ENV_AGENTICS_REHEARSAL_ENVIRONMENT,
+    ENV_AGENTICS_WEB_HOST, ENV_REVIEW_RECORD_LIMIT, ENV_RUST_LOG, ENV_STALE_REVIEW_RECORD_LIMIT,
+    EnvPolicyReport, EnvPolicyWarning, EnvServiceRole, deployment_stage_from_env_map,
+    known_stage_env_names, process_env_map, validate_current_env_policy, validate_env_policy,
 };
 pub use groups::{
     ApiWebConfig, AuthConfig, Config, DatabaseConfig, GithubAppConfig, LoggingConfig,

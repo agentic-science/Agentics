@@ -192,6 +192,12 @@ http://127.0.0.1:3001
 
 如果需要从另一台机器检查 frontend，请使用容器化开发章节中的 Tailscale/LAN
 环境变量。
+Local analytics 默认禁用。只有在需要显式测试 consent-gated Google Analytics 路径时，
+才将 `NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID` 设置为 GA4 measurement id。
+
+新增或重命名 environment variables 时，必须在同一改动中更新对应的 stage env example、
+docs 和 startup policy code。Required variables 未设置或无效时必须 fail fast；optional
+variables 必须打印包含默认值的 startup warning；removed names 必须明确 fail 或 warning。
 
 ## 构建二进制
 
@@ -204,7 +210,9 @@ test -x target/release/agentics-check-dgx-spark-profile
 
 ```bash
 (cd frontends/web && \
+  AGENTICS_DEPLOYMENT_STAGE="${AGENTICS_DEPLOYMENT_STAGE:-dev}" \
   AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:${AGENTICS_API_PORT:-3100}}" \
+  AGENTICS_WEB_PORT="${AGENTICS_WEB_PORT:-3001}" \
   bun run build)
 ```
 

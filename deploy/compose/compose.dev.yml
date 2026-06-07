@@ -54,6 +54,7 @@ x-web-dev: &web-dev
     AGENTICS_WEB_BASE_URL: ${AGENTICS_WEB_BASE_URL:-http://localhost:3001}
     AGENTICS_WEB_ALLOWED_DEV_ORIGINS: ${AGENTICS_WEB_ALLOWED_DEV_ORIGINS:-127.0.0.1,localhost}
     NEXT_PUBLIC_AGENTICS_API_BASE_URL: ""
+    NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID: ${NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID:-}
   volumes:
     - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics
     - web_node_modules:/workspace/Agentics/frontends/web/node_modules

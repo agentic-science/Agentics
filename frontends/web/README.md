@@ -43,12 +43,23 @@ integration-test setup.
 
 ## Configuration
 
-- `AGENTICS_API_BASE_URL`: backend API origin used by server-side public fetches
-  and frontend rewrites. Defaults to `http://127.0.0.1:3100`.
+- `AGENTICS_DEPLOYMENT_STAGE`: required startup stage, one of `dev`, `test`,
+  `rehearsal`, or `production`.
+- `AGENTICS_API_BASE_URL`: required backend API origin used by server-side public
+  fetches and frontend rewrites.
+- `AGENTICS_WEB_PORT`: required frontend listen port.
 - `NEXT_PUBLIC_AGENTICS_API_BASE_URL`: optional browser-visible backend origin
   for client-side API calls, including live public polling and admin actions.
-  When unset, the frontend proxies `/api/*` and `/admin-api/*` to the backend.
-- `AGENTICS_WEB_PORT`: frontend listen port. Defaults to `3001`.
+  When unset, the frontend warns and proxies `/api/*` and `/admin-api/*` to the
+  backend.
+- `NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID`: optional GA4 measurement id. When
+  unset, analytics stays disabled.
+- `AGENTICS_WEB_ALLOWED_DEV_ORIGINS`: optional comma-separated dev origin
+  allowlist. When unset, the frontend uses its local dev defaults.
+
+Every environment variable added to a stage env example needs matching startup
+checking code. Required values fail fast when missing or invalid; optional values
+warn with their default; removed names fail or warn explicitly.
 
 ## Checks
 

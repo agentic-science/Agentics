@@ -14,12 +14,18 @@ COPY --from=deps /workspace/Agentics/node_modules ./node_modules
 COPY --from=deps /workspace/Agentics/frontends/web/node_modules ./frontends/web/node_modules
 COPY frontends/web ./frontends/web
 WORKDIR /workspace/Agentics/frontends/web
+ENV AGENTICS_DEPLOYMENT_STAGE=production
+ENV AGENTICS_API_BASE_URL=http://api:3100
+ENV AGENTICS_WEB_PORT=3001
 RUN bun run build
 
 FROM oven/bun:1 AS runtime
 WORKDIR /workspace/Agentics
 
 ENV NODE_ENV=production
+ENV AGENTICS_DEPLOYMENT_STAGE=production
+ENV AGENTICS_API_BASE_URL=http://api:3100
+ENV AGENTICS_WEB_PORT=3001
 COPY --from=builder /workspace/Agentics ./
 WORKDIR /workspace/Agentics/frontends/web
 

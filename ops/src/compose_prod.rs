@@ -17,7 +17,7 @@ use std::path::{Component, Path, PathBuf};
 use std::process::{ExitCode, Stdio};
 use std::time::Duration;
 
-use agentics_config::RunnerNamespace;
+use agentics_config::{DeploymentStage, EnvPolicyReport, EnvServiceRole, RunnerNamespace};
 use agentics_runner::RUNNER_SCOPE_HOSTED_WORKER;
 use clap::{Parser, Subcommand, ValueEnum};
 use serde::Deserialize;
@@ -156,12 +156,12 @@ pub enum RunnerCleanupScope {
 struct RawComposeProdEnv {
     compose_prod_project: Option<String>,
     compose_prod_env_file: Option<String>,
+    deployment_stage: Option<String>,
     runner_namespace: Option<String>,
     database_url: Option<String>,
     docker_host: Option<String>,
     docker_socket_path: Option<String>,
     docker_socket_gid: Option<u32>,
-    rehearsal_environment: Option<bool>,
     dgx_state_root: Option<String>,
     storage_work_root: Option<String>,
     challenge_review_repository_host_root: Option<String>,
@@ -583,9 +583,9 @@ fn build_rehearsal_purge_plan(
             context.project
         )));
     }
-    if context.file_env.rehearsal_environment != Some(true) {
+    if context.file_deployment_stage() != Some(DeploymentStage::Rehearsal) {
         return Err(ComposeProdError::InvalidConfig(
-            "rehearsal purge requires AGENTICS_REHEARSAL_ENVIRONMENT=true in the env file"
+            "rehearsal purge requires AGENTICS_DEPLOYMENT_STAGE=rehearsal in the env file"
                 .to_string(),
         ));
     }
@@ -748,6 +748,9 @@ impl ComposeContext {
             return Err(ComposeProdError::MissingEnvFile(env_file));
         }
         let env_values = load_env_file(&env_file)?;
+        let env_report = agentics_config::validate_env_policy(&env_values, EnvServiceRole::Compose)
+            .map_err(|error| ComposeProdError::InvalidConfig(error.to_string()))?;
+        print_env_policy_warnings(&env_report);
         let file_env = RawComposeProdEnv::from_map(&env_values)?;
         let project = resolve_project(cli.project.as_deref(), &process_env, &file_env);
         Ok(Self {
@@ -916,7 +919,20 @@ impl ComposeContext {
     }
 
     fn is_rehearsal_environment(&self) -> bool {
-        self.file_env.rehearsal_environment.unwrap_or(false)
+        self.file_deployment_stage() == Some(DeploymentStage::Rehearsal)
+    }
+
+    fn file_deployment_stage(&self) -> Option<DeploymentStage> {
+        self.file_env
+            .deployment_stage
+            .as_deref()
+            .and_then(|value| value.parse().ok())
+    }
+}
+
+fn print_env_policy_warnings(report: &EnvPolicyReport) {
+    for warning in &report.warnings {
+        eprintln!("[{PREFIX}] WARN env {}: {}", warning.name, warning.message);
     }
 }
 

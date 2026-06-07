@@ -15,6 +15,7 @@
 use super::Config;
 use agentics_domain::models::urls::GithubAppRedirectUrl;
 use secrecy::{ExposeSecret, SecretString};
+use std::collections::HashMap;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 
@@ -95,6 +96,145 @@ fn raw_app_env_deserializes_prefixed_values() {
     assert_eq!(
         config.quotas.max_active_challenge_review_records_per_human,
         7
+    );
+}
+
+/// Verifies stage-aware env policy parses every supported launch stage.
+#[test]
+fn env_policy_parses_supported_deployment_stages() {
+    for (raw, expected) in [
+        ("dev", super::DeploymentStage::Dev),
+        ("test", super::DeploymentStage::Test),
+        ("rehearsal", super::DeploymentStage::Rehearsal),
+        ("production", super::DeploymentStage::Production),
+    ] {
+        let parsed = raw
+            .parse::<super::DeploymentStage>()
+            .expect("stage should parse");
+        assert_eq!(parsed, expected);
+    }
+
+    assert!("staging".parse::<super::DeploymentStage>().is_err());
+}
+
+/// Verifies missing required production env values fail before service startup.
+#[test]
+fn env_policy_rejects_missing_required_production_values() {
+    let mut env = HashMap::new();
+    env.insert(
+        "AGENTICS_DEPLOYMENT_STAGE".to_string(),
+        "production".to_string(),
+    );
+
+    let error = super::validate_env_policy(&env, super::EnvServiceRole::Compose)
+        .expect_err("missing production env should fail");
+    assert!(error.to_string().contains("AGENTICS_POSTGRES_USER"));
+}
+
+/// Verifies optional values report defaults without failing startup.
+#[test]
+fn env_policy_reports_optional_defaults() {
+    let env = minimal_dev_env();
+
+    let report = super::validate_env_policy(&env, super::EnvServiceRole::LocalDev)
+        .expect("minimal dev env should pass");
+
+    assert!(report.warnings.iter().any(|warning| warning.name
+        == "NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID"
+        && warning.message.contains("analytics disabled")));
+}
+
+/// Verifies old env names are rejected instead of silently ignored.
+#[test]
+fn env_policy_rejects_removed_env_names() {
+    let mut env = minimal_dev_env();
+    env.insert(
+        super::ENV_STALE_REVIEW_RECORD_LIMIT.to_string(),
+        "3".to_string(),
+    );
+    env.insert(
+        super::ENV_AGENTICS_REHEARSAL_ENVIRONMENT.to_string(),
+        "true".to_string(),
+    );
+
+    let error = super::validate_env_policy(&env, super::EnvServiceRole::LocalDev)
+        .expect_err("removed env names should fail");
+    let message = error.to_string();
+    assert!(message.contains(super::ENV_STALE_REVIEW_RECORD_LIMIT));
+    assert!(message.contains(super::ENV_AGENTICS_REHEARSAL_ENVIRONMENT));
+}
+
+/// Verifies removed-but-ignored env values are surfaced as warnings.
+#[test]
+fn env_policy_warns_for_ignored_env_names() {
+    let mut env = minimal_dev_env();
+    env.insert(
+        super::ENV_AGENTICS_WEB_HOST.to_string(),
+        "0.0.0.0".to_string(),
+    );
+    env.insert(super::ENV_RUST_LOG.to_string(), "debug".to_string());
+
+    let report = super::validate_env_policy(&env, super::EnvServiceRole::LocalDev)
+        .expect("ignored env names should not fail");
+
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|warning| warning.name == super::ENV_AGENTICS_WEB_HOST)
+    );
+    assert!(
+        report
+            .warnings
+            .iter()
+            .any(|warning| warning.name == super::ENV_RUST_LOG)
+    );
+}
+
+/// Verifies hosted stage placeholders fail before Compose starts.
+#[test]
+fn env_policy_rejects_hosted_placeholders() {
+    let mut env = full_production_env();
+    env.insert(
+        "AGENTICS_POSTGRES_PASSWORD".to_string(),
+        "replace-with-postgres-password".to_string(),
+    );
+
+    let error = super::validate_env_policy(&env, super::EnvServiceRole::Compose)
+        .expect_err("placeholder values should fail");
+
+    assert!(error.to_string().contains("AGENTICS_POSTGRES_PASSWORD"));
+}
+
+/// Verifies every stage env example name is covered by env policy.
+#[test]
+fn stage_env_examples_are_covered_by_policy() {
+    let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(std::path::Path::parent)
+        .expect("config crate lives under crates/config");
+    let known = super::known_stage_env_names();
+    let mut missing = Vec::new();
+
+    for relative in [
+        "deploy/compose/env/dev.env.example",
+        "deploy/compose/env/test.env.example",
+        "deploy/compose/env/rehearsal.env.example",
+        "deploy/compose/env/prod.env.example",
+    ] {
+        let content = std::fs::read_to_string(repo_root.join(relative))
+            .expect("stage env example should be readable");
+        for name in env_names_from_example(&content) {
+            if !known.contains(name.as_str()) {
+                missing.push(format!("{relative}:{name}"));
+            }
+        }
+    }
+
+    assert!(
+        missing.is_empty(),
+        "stage env vars missing policy entries: {}",
+        missing.join(", ")
     );
 }
 
@@ -790,6 +930,120 @@ fn worker_accelerator_capabilities_are_explicit() {
         super::WorkerAccelerators::Gpu.heartbeat_values(),
         vec!["none".to_string(), "gpu".to_string()]
     );
+}
+
+fn minimal_dev_env() -> HashMap<String, String> {
+    env_map([
+        ("AGENTICS_DEPLOYMENT_STAGE", "dev"),
+        (
+            "AGENTICS_DATABASE_URL",
+            "postgres://agentics:agentics@postgres:5432/agentics_dev",
+        ),
+        ("AGENTICS_LOCAL_DEV_DATABASE_NAME", "agentics_dev"),
+        (
+            "AGENTICS_LOCAL_DEV_DATABASE_URL",
+            "postgres://agentics:agentics@postgres:5432/agentics_dev",
+        ),
+        (
+            "AGENTICS_LOCAL_DEV_DATABASE_URL_CONFIRM",
+            "non-loopback-local-dev-db",
+        ),
+        (
+            "AGENTICS_LOCAL_DEV_CHALLENGE_SOURCE_ROOT",
+            "/workspace/Agentics/challenge-repos/agentics-challenges/dev/challenges",
+        ),
+        (
+            "AGENTICS_LOCAL_DEV_TEST_SOLUTIONS_ROOT",
+            "/workspace/Agentics/challenge-repos/agentics-challenges/dev/test-solutions",
+        ),
+        ("AGENTICS_STORAGE_BACKEND", "s3"),
+        ("AGENTICS_S3_BUCKET", "agentics"),
+        ("AGENTICS_S3_REGION", "us-east-1"),
+        ("AGENTICS_S3_ENDPOINT_URL", "http://rustfs:9000"),
+        ("AGENTICS_S3_FORCE_PATH_STYLE", "true"),
+        ("AGENTICS_API_BASE_URL", "http://api:3100"),
+    ])
+}
+
+fn full_production_env() -> HashMap<String, String> {
+    env_map([
+        ("AGENTICS_DEPLOYMENT_STAGE", "production"),
+        ("AGENTICS_POSTGRES_USER", "agentics"),
+        ("AGENTICS_POSTGRES_PASSWORD", "postgres-password"),
+        ("AGENTICS_POSTGRES_DB", "agentics"),
+        ("AGENTICS_RUSTFS_ACCESS_KEY", "rustfs-access"),
+        ("AGENTICS_RUSTFS_SECRET_KEY", "rustfs-secret"),
+        ("AGENTICS_STORAGE_BACKEND", "s3"),
+        ("AGENTICS_S3_BUCKET", "agentics"),
+        ("AGENTICS_S3_PREFIX", "prod"),
+        ("AGENTICS_S3_REGION", "us-east-1"),
+        ("AGENTICS_S3_ENDPOINT_URL", "http://rustfs:9000"),
+        ("AGENTICS_S3_FORCE_PATH_STYLE", "true"),
+        ("AGENTICS_STORAGE_WORK_ROOT", "/srv/agentics/storage-work"),
+        ("AGENTICS_API_BASE_URL", "https://agentics.example"),
+        ("AGENTICS_WEB_BASE_URL", "https://agentics.example"),
+        ("AGENTICS_CORS_ALLOWED_ORIGINS", "https://agentics.example"),
+        ("AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS", "39153080"),
+        ("AGENTICS_WEB_SESSION_COOKIE_SECURE", "true"),
+        ("AGENTICS_GITHUB_APP_CLIENT_ID", "client-id"),
+        ("AGENTICS_GITHUB_APP_CLIENT_SECRET", "client-secret"),
+        (
+            "AGENTICS_GITHUB_APP_REDIRECT_URL",
+            "https://agentics.example/auth/github/callback",
+        ),
+        (
+            "AGENTICS_CHALLENGE_REVIEW_REPOSITORY_HOST_ROOT",
+            "/srv/agentics/review-checkouts/agentics-challenges",
+        ),
+        (
+            "AGENTICS_CHALLENGE_REVIEW_REPOSITORY_CONTAINER_ROOT",
+            "/srv/agentics/review-checkouts/agentics-challenges",
+        ),
+        ("AGENTICS_DOCKER_SOCKET_PATH", "/srv/agentics/docker.sock"),
+        ("AGENTICS_DOCKER_HOST", "unix:///srv/agentics/docker.sock"),
+        ("AGENTICS_RUNNER_NAMESPACE", "agentics-prod"),
+        ("AGENTICS_RUNTIME_UID", "10001"),
+        ("AGENTICS_RUNTIME_GID", "10001"),
+        ("AGENTICS_DOCKER_SOCKET_GID", "10001"),
+        ("AGENTICS_RUNNER_SECURITY_PROFILE", "production"),
+        ("AGENTICS_HOST_PROBE_MODE", "require"),
+        (
+            "AGENTICS_HOST_PROBE_COMMAND",
+            "/usr/local/bin/agentics-check-dgx-spark-profile",
+        ),
+        ("AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES", "true"),
+        (
+            "AGENTICS_RUNNER_WRITABLE_STORAGE_MODE",
+            "xfs-project-quota-slots",
+        ),
+        ("AGENTICS_RUNNER_RUNTIME_ROOT", "/srv/agentics/runtime"),
+        (
+            "AGENTICS_RUNNER_PHASE_MOUNT_ROOT",
+            "/srv/agentics/phase-mounts",
+        ),
+        (
+            "AGENTICS_RUNNER_WRITABLE_SLOT_CLASSES_MB",
+            "64,256,1024,4096",
+        ),
+        ("AGENTICS_RUNNER_DOCKER_LAYER_QUOTA", "true"),
+    ])
+}
+
+fn env_map<const N: usize>(entries: [(&str, &str); N]) -> HashMap<String, String> {
+    entries
+        .into_iter()
+        .map(|(name, value)| (name.to_string(), value.to_string()))
+        .collect()
+}
+
+fn env_names_from_example(content: &str) -> Vec<String> {
+    content
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .filter_map(|line| line.split_once('='))
+        .map(|(name, _value)| name.trim().to_string())
+        .collect()
 }
 
 /// Handles test config for this module.

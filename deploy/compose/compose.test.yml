@@ -98,6 +98,7 @@ services:
       - -c
       - |
         set -eu
+        cargo run -p agentics-ops --bin agentics-env-check -- --role test-harness
         if [ "$${AGENTICS_COMPOSE_TEST_INCLUDE_IGNORED:-false}" = "true" ]; then
           exec cargo test -p integration-tests -- --include-ignored
         fi

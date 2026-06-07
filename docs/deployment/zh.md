@@ -80,6 +80,11 @@ Rust services 会在 startup 时验证 environment values。格式错误的
 而不是回退到 local defaults。启用 host probing 时，`AGENTICS_HOST_PROBE_COMMAND`
 必须是非空值。
 
+Stage env examples 中的 environment variables 是 startup contract 的一部分。每个新增
+或重命名的变量都必须有对应的 validation code：required values 未设置、为空，或在
+hosted stage 仍使用 placeholder 时会 fail fast；optional values 未设置时会打印包含
+默认值的 startup warning；deprecated names 会被拒绝，或明确 warning 为 ignored。
+
 如果绑定到非 loopback 地址，backend 会拒绝
 `AGENTICS_AGENT_REGISTRATION_MODE=public`。Hosted MVP 使用 pioneer-code gated
 registration 和 Cloudflare edge controls。通过
@@ -97,11 +102,17 @@ HTTPS。
 Frontend 环境：
 
 ```bash
+export AGENTICS_DEPLOYMENT_STAGE='production'
 export AGENTICS_API_BASE_URL='http://127.0.0.1:3100'
+export AGENTICS_WEB_PORT='3001'
 export NEXT_PUBLIC_AGENTICS_API_BASE_URL=''
+export NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID=''
 ```
 
 当 web 进程代理 admin requests 到 API 时，保持 `NEXT_PUBLIC_AGENTICS_API_BASE_URL` 未设置。只有当浏览器可以安全地直连 API origin，并且 CORS 已正确配置时，才设置它。
+保持 `NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID` 未设置会完全禁用 Google
+Analytics。设置为 `G-XXXXXXXXXX` 这类 GA4 measurement id 后，web app 仍只会在访客接受
+analytics cookies 后加载 Google Analytics。
 Frontend URL 和 port environment values 格式错误时，也会在 Next.js config/module
 loading 时失败，而不会被静默 normalize。
 
@@ -200,7 +211,7 @@ Production Compose：
    ```
 
    `deploy/compose/env/rehearsal.env` 必须保留
-   `AGENTICS_REHEARSAL_ENVIRONMENT=true`、project `agentics-rehearsal`、bucket
+   `AGENTICS_DEPLOYMENT_STAGE=rehearsal`、project `agentics-rehearsal`、bucket
    `agentics-rehearsal`、prefix `rehearsal`、runner namespace
    `agentics-rehearsal`，并且所有 mutable roots 都必须位于
    `/srv/agentics-rehearsal` 下。Rehearsal stack 使用 loopback ports：API
@@ -224,7 +235,7 @@ Production Compose：
 
    不要把 rehearsal commands 指向非 disposable 的 production database 或 storage
    bucket。Purge 命令会拒绝 `agentics-prod` project，要求
-   `AGENTICS_REHEARSAL_ENVIRONMENT=true`，并拒绝 `/srv/agentics-rehearsal`
+   `AGENTICS_DEPLOYMENT_STAGE=rehearsal`，并拒绝 `/srv/agentics-rehearsal`
    之外的 destructive paths。
 
 6. 显式停止：

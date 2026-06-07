@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use agentics_config::{
     Config, DEFAULT_API_HOST, DEFAULT_API_PORT, ENV_AGENTICS_API_BASE_URL,
-    ENV_AGENTICS_S3_ENDPOINT_URL, local_api_base_url,
+    ENV_AGENTICS_S3_ENDPOINT_URL, EnvPolicyReport, EnvServiceRole, local_api_base_url,
 };
 use clap::{Parser, Subcommand};
 use secrecy::{ExposeSecret, SecretString};
@@ -280,6 +280,12 @@ impl LocalDevConfig {
         let process_env = RawLocalDevEnv::from_process()?;
         let env_file = resolve_env_file(&repo_root, &process_env);
         let file_env_values = load_dotenv_file(&env_file)?;
+        let mut policy_env = file_env_values.clone();
+        policy_env.extend(std::env::vars());
+        let env_report =
+            agentics_config::validate_env_policy(&policy_env, EnvServiceRole::LocalDev)
+                .map_err(|error| LocalDevError::InvalidConfig(error.to_string()))?;
+        print_env_policy_warnings(&env_report);
         let file_env = RawLocalDevEnv::from_map(&file_env_values)?;
         let database_name = resolve_database_name(&process_env, &file_env)?;
         let database_url = resolve_database_url(&database_name, &process_env, &file_env)?;
@@ -327,6 +333,12 @@ impl LocalDevConfig {
 
     fn test_solutions_root(&self) -> &Path {
         &self.test_solutions_root
+    }
+}
+
+fn print_env_policy_warnings(report: &EnvPolicyReport) {
+    for warning in &report.warnings {
+        eprintln!("[{PREFIX}] WARN env {}: {}", warning.name, warning.message);
     }
 }
 

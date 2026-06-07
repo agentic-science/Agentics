@@ -70,7 +70,7 @@ fn project_resolves_from_env_file_or_default() {
     );
 }
 
-/// Verifies rehearsal purge dry-run still requires the explicit rehearsal env marker.
+/// Verifies rehearsal purge dry-run still requires the explicit rehearsal stage marker.
 #[test]
 fn rehearsal_purge_refuses_missing_env_marker() {
     let mut context = fake_context();
@@ -80,7 +80,7 @@ fn rehearsal_purge_refuses_missing_env_marker() {
     let error =
         build_rehearsal_purge_plan(&context, false, true).expect_err("missing marker should fail");
     assert!(
-        matches!(error, ComposeProdError::InvalidConfig(message) if message.contains("AGENTICS_REHEARSAL_ENVIRONMENT"))
+        matches!(error, ComposeProdError::InvalidConfig(message) if message.contains("AGENTICS_DEPLOYMENT_STAGE"))
     );
 }
 
@@ -88,7 +88,7 @@ fn rehearsal_purge_refuses_missing_env_marker() {
 #[test]
 fn rehearsal_purge_refuses_production_project() {
     let mut context = fake_context();
-    context.file_env.rehearsal_environment = Some(true);
+    context.file_env.deployment_stage = Some("rehearsal".to_string());
     context.file_env.runner_namespace = Some(REHEARSAL_PROJECT.to_string());
     context.file_env.dgx_state_root = Some("/srv/agentics-rehearsal".to_string());
     let error = build_rehearsal_purge_plan(&context, true, false)
@@ -144,13 +144,13 @@ fn rehearsal_purge_dry_run_reports_resources_and_paths() {
 #[test]
 fn rehearsal_override_comes_from_env_file_marker() {
     let mut context = fake_context();
-    context.process_env.rehearsal_environment = Some(true);
+    context.process_env.deployment_stage = Some("rehearsal".to_string());
     assert!(
         !compose_args_text(&context).contains("compose.rehearsal.yml"),
         "process env alone must not turn production commands into rehearsal commands"
     );
 
-    context.file_env.rehearsal_environment = Some(true);
+    context.file_env.deployment_stage = Some("rehearsal".to_string());
     assert!(compose_args_text(&context).contains("compose.rehearsal.yml"));
 }
 
@@ -181,7 +181,7 @@ fn rehearsal_context() -> ComposeContext {
     let mut context = fake_context();
     context.env_file = PathBuf::from("/tmp/agentics-test/rehearsal.env");
     context.project = REHEARSAL_PROJECT.to_string();
-    context.file_env.rehearsal_environment = Some(true);
+    context.file_env.deployment_stage = Some("rehearsal".to_string());
     context.file_env.runner_namespace = Some(REHEARSAL_PROJECT.to_string());
     context.file_env.dgx_state_root = Some("/srv/agentics-rehearsal".to_string());
     context.file_env.storage_work_root = Some("/srv/agentics-rehearsal/storage-work".to_string());

@@ -8,7 +8,7 @@
 
 use std::process::ExitCode;
 
-use agentics_config::Config;
+use agentics_config::{Config, EnvPolicyReport, EnvServiceRole};
 use agentics_persistence::pool::create_pool;
 
 use crate::support::{ReportLine, print_reports, run_with_ctrl_c};
@@ -32,6 +32,8 @@ pub async fn run_from_process() -> ExitCode {
 }
 
 async fn run() -> anyhow::Result<Vec<ReportLine>> {
+    let env_report = agentics_config::validate_current_env_policy(EnvServiceRole::Migrate)?;
+    print_env_policy_warnings(&env_report);
     let config = Config::from_env()?;
     let pool = create_pool(&config, 5).await?;
     MIGRATOR.run(&pool).await?;
@@ -40,4 +42,10 @@ async fn run() -> anyhow::Result<Vec<ReportLine>> {
         "migrate",
         "applied database migrations",
     )])
+}
+
+fn print_env_policy_warnings(report: &EnvPolicyReport) {
+    for warning in &report.warnings {
+        eprintln!("[{PREFIX}] WARN env {}: {}", warning.name, warning.message);
+    }
 }
