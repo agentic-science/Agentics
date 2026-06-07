@@ -2,7 +2,7 @@
 
 mod helpers;
 
-use agentics_domain::models::ids::HumanId;
+use agentics_domain::models::ids::{AdminServiceTokenId, HumanId};
 use helpers::{
     admin_service_token_header, api_url, create_creator_session, examples_challenges_root,
     published_challenge_name, spawn_app, spawn_app_with_config, test_config,
@@ -283,6 +283,78 @@ async fn final_human_admin_role_cannot_be_revoked(pool: sqlx::PgPool) {
             .roles
             .contains(&agentics_domain::models::auth::HumanRole::Admin)
     );
+}
+
+/// Verifies admin service tokens cannot outlive the creator's admin role.
+#[sqlx::test(migrations = "../migrations")]
+async fn revoking_admin_role_revokes_owner_admin_service_tokens(pool: sqlx::PgPool) {
+    let app = spawn_app(pool.clone()).await;
+    let client = reqwest::Client::new();
+    let actor_admin = create_creator_session(&pool, 7_002, "actor-admin").await;
+    let actor_admin_human_id =
+        HumanId::try_new(actor_admin.human_id.clone()).expect("test actor human id should parse");
+    let target_admin = create_creator_session(&pool, 7_003, "token-admin").await;
+    let target_admin_human_id =
+        HumanId::try_new(target_admin.human_id.clone()).expect("test target human id should parse");
+    let repos = agentics_persistence::Repositories::new(&pool);
+    repos
+        .sessions()
+        .grant_admin_role(&actor_admin_human_id, &actor_admin_human_id)
+        .await
+        .expect("test actor admin role should grant");
+    repos
+        .sessions()
+        .grant_admin_role(&target_admin_human_id, &actor_admin_human_id)
+        .await
+        .expect("test target admin role should grant");
+    let token = agentics_services::auth::create_admin_service_token();
+    let token_record = repos
+        .sessions()
+        .create_admin_service_token(&agentics_persistence::CreateAdminServiceTokenInput {
+            id: AdminServiceTokenId::generate(),
+            token_hash: agentics_services::auth::hash_opaque_token(&token),
+            label: "role-bound-token".to_string(),
+            created_by_human_id: target_admin_human_id.clone(),
+            expires_at: None,
+        })
+        .await
+        .expect("admin service token should insert");
+
+    client
+        .get(api_url(&app, "/admin/capacity"))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .expect("admin service token request before revoke")
+        .error_for_status()
+        .expect("fresh admin service token should authenticate");
+
+    let revoke_response = client
+        .post(api_url(
+            &app,
+            &format!("/admin/humans/{target_admin_human_id}/roles/admin/revoke"),
+        ))
+        .header("Cookie", &actor_admin.cookie_header)
+        .header("X-Agentics-CSRF-Token", &actor_admin.csrf_token)
+        .send()
+        .await
+        .expect("failed to revoke admin role");
+    assert_eq!(revoke_response.status(), reqwest::StatusCode::OK);
+
+    let rejected = client
+        .get(api_url(&app, "/admin/capacity"))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .expect("admin service token request after revoke");
+    assert_eq!(rejected.status(), reqwest::StatusCode::UNAUTHORIZED);
+    let row_status: String =
+        sqlx::query_scalar("SELECT status FROM admin_service_tokens WHERE id = $1::uuid")
+            .bind(token_record.id.as_str())
+            .fetch_one(&pool)
+            .await
+            .expect("admin service token row should exist");
+    assert_eq!(row_status, "revoked");
 }
 
 /// Verifies that admin official run cannot overlap an active validation job.
