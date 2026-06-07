@@ -110,11 +110,7 @@ export function AccountMenu() {
           <UserRound className="w-4 h-4" />
         </button>
         {open ? (
-          <div
-            className="nav-dropdown-menu nav-dropdown-menu-right"
-            id={menuId}
-            role="menu"
-          >
+          <div className="nav-dropdown-menu" id={menuId} role="menu">
             <div className="px-3 py-2 text-caption text-fg-muted">
               @{session.github_login}
             </div>
