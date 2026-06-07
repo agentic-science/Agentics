@@ -371,6 +371,11 @@ Production Compose 下，请通过 wrapper 运行检查，这样 check 会使用
 just prod::check
 ```
 
+`just prod::check` 也会验证 production Compose bridge forwarding guard，并从 API
+container 对 GitHub 发起 TLS connection。若 GitHub sign-in 在 callback 阶段返回
+internal server error，请先运行这个 check，再排查 application credentials；否则即使
+DNS 正常，Docker forwarding state 也可能让 API container 无法访问 GitHub。
+
 Check service 会有意挂载 host Docker socket。API、web、Postgres 和 RustFS 不挂载它。
 
 Production-like release rehearsals 使用 disposable `agentics-rehearsal` Compose
@@ -454,6 +459,9 @@ MVP rehearsal 最小日志保留策略：
    ```
 
 3. 检查 API logs 中的 config validation failures，尤其是 GitHub sign-in 设置缺失、non-loopback bind 使用不安全 session-cookie 设置，或缺少 first-admin bootstrap GitHub user ids。
+4. Production callback failure 如果在 logs 中显示 GitHub token request send error，运行
+   `just prod::check`。这个 check 会尽可能修复 Compose bridge egress guard，并验证
+   API-container 到 GitHub 的 HTTPS egress。
 
 如果 logs 显示 SQLx migration version 或 checksum mismatch，说明该 database 来自旧的
 pre-MVP migration history。请重建 disposable dev/test database，或从与当前 code

@@ -386,6 +386,12 @@ Compose project name as the deployed stack:
 just prod::check
 ```
 
+`just prod::check` also verifies the production Compose bridge forwarding guard
+and opens a TLS connection from the API container to GitHub. If GitHub sign-in
+fails with an internal server error during the callback, run this check before
+debugging application credentials; Docker forwarding state can otherwise leave
+the API container unable to reach GitHub even when DNS works.
+
 The check service mounts the host Docker socket intentionally. API, web,
 Postgres, and RustFS do not mount it.
 
@@ -480,6 +486,9 @@ Minimum log retention for MVP rehearsal:
 3. Check API logs for config validation failures, especially missing GitHub sign-in
    settings, insecure session-cookie settings on non-loopback binds, or missing
    first-admin bootstrap GitHub user ids.
+4. For production callback failures that log a GitHub token request send error,
+   run `just prod::check`. The check repairs the Compose bridge egress guard
+   when possible and verifies API-container HTTPS egress to GitHub.
 
 If logs show a SQLx migration version or checksum mismatch, the database was
 created with an older pre-MVP migration history. Recreate the disposable dev or

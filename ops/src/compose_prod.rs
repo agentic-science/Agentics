@@ -28,9 +28,11 @@ use crate::support::{
     run_with_ctrl_c,
 };
 
+mod bridge_egress;
 mod runner_cleanup;
 mod runner_docker;
 
+use bridge_egress::{check_api_github_egress, ensure_compose_bridge_egress};
 use runner_cleanup::clean_runners;
 use runner_docker::{runner_docker_down, runner_docker_up};
 
@@ -222,17 +224,32 @@ async fn run(cli: Cli) -> Result<ExitCode, ComposeProdError> {
     match cli.command {
         ProdCommand::Build => context.run_compose_passthrough(["build"]).await,
         ProdCommand::Up => {
-            context
+            let compose_code = context
                 .run_compose_passthrough(["up", "-d", "--remove-orphans"])
-                .await
+                .await?;
+            if compose_code != ExitCode::SUCCESS {
+                return Ok(compose_code);
+            }
+            let reports = ensure_compose_bridge_egress(&context).await?;
+            Ok(print_reports(PREFIX, &reports))
         }
         ProdCommand::Down { runner, dry_run } => down(&context, runner, dry_run).await,
         ProdCommand::Logs => context.run_compose_passthrough(["logs", "-f"]).await,
         ProdCommand::Ps => context.run_compose_passthrough(["ps"]).await,
         ProdCommand::Check => {
-            context
+            let reports = ensure_compose_bridge_egress(&context).await?;
+            let egress_code = print_reports(PREFIX, &reports);
+            if egress_code != ExitCode::SUCCESS {
+                return Ok(egress_code);
+            }
+            let compose_code = context
                 .run_compose_passthrough(["run", "--rm", "check"])
-                .await
+                .await?;
+            if compose_code != ExitCode::SUCCESS {
+                return Ok(compose_code);
+            }
+            let reports = check_api_github_egress(&context).await?;
+            Ok(print_reports(PREFIX, &reports))
         }
         ProdCommand::RestorePrivateBundles { overwrite, dry_run } => {
             restore_private_bundles(&context, overwrite, dry_run).await

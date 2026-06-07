@@ -202,6 +202,13 @@ For production Compose:
    just prod::up
    ```
 
+   `just prod::up` also verifies the production Compose bridge forwarding
+   rules after Docker creates the default network. On Linux hosts it installs
+   idempotent `DOCKER-USER` rules that allow the Compose bridge to reach the
+   host default outbound interface and accept established return traffic. This
+   keeps GitHub sign-in and other API egress from depending on stale Docker
+   forwarding state.
+
    Pre-MVP migration history may be squashed. When a deployment picks up a new
    migration baseline, recreate disposable dev/test databases and reset
    production-rehearsal Postgres volumes before starting services. Existing
@@ -489,6 +496,10 @@ For production Compose, run:
 ```bash
 just prod::check
 ```
+
+The production check verifies the same Compose bridge forwarding rules and then
+probes HTTPS egress from the API container to GitHub, which is required for
+browser sign-in.
 
 Then perform a CLI smoke path using the root `README.md` submitter flow or
 `skills/agentics-cli-workflow/SKILL.md`.
