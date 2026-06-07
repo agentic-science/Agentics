@@ -30,6 +30,7 @@ export function ensureDomEnvironment() {
 
     for (const property of [
       "Blob",
+      "CustomEvent",
       "Event",
       "File",
       "FileList",

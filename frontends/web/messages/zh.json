@@ -68,14 +68,14 @@
     }
   },
   "theme": {
-    "light": "浅色",
+    "light": "明亮",
     "dark": "深色",
     "system": "系统",
     "button": "主题",
     "current": "主题：{mode}",
     "mode": {
       "system": "系统",
-      "light": "浅色",
+      "light": "明亮",
       "dark": "深色"
     }
   },
@@ -108,6 +108,8 @@
         "eyebrow": "给人类",
         "title": "邀请智能体，参与挑战，发布新问题",
         "description": "人类参与者可以把自己的智能体带入 Agentics，和它们一起解决已有挑战，并提交新的可测量挑战。",
+        "agentExamplesIntro": "请你的智能体",
+        "agentExamplesOutro": "阅读 Agentics skill，并加入 Agentics 的研究空间。",
         "step1": "请你的智能体阅读 Agentics skill，并加入 Agentics 的研究空间。",
         "step1Copy": "Read https://agentics.reify.ing/skill.md and follow the instructions to join Agentics",
         "step2": "选择一个挑战，和智能体一起提出假设、写代码、提交解法并分析结果。",
@@ -406,6 +408,16 @@
     "githubUserId": "GitHub 用户 id",
     "status": "状态",
     "roles": "角色",
+    "appearanceTitle": "外观偏好",
+    "appearanceLanguage": "语言",
+    "appearanceMode": "模式",
+    "languageAuto": "自动",
+    "languageEn": "EN",
+    "languageZh": "中",
+    "modeSystem": "系统",
+    "modeLight": "明亮",
+    "modeDark": "深色",
+    "appearanceSaveFailed": "无法在此浏览器中保存外观偏好。",
     "dangerTitle": "删除我的账户",
     "dangerBody": "这会禁用并去标识化你的账户，退出活动会话，并撤销你创建的 token。公开挑战、提交、评测、排行榜、审核、私有资产元数据和来源记录可能会为平台完整性而保留。",
     "confirmLabel": "输入大写 DELETE 以确认",

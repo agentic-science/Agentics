@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
+import { AccountAppearanceSync } from "@/components/AccountAppearanceSync";
 import { AccountMenu } from "@/components/AccountMenu";
 import { CookieSettingsButton } from "@/components/CookieSettingsButton";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -13,6 +14,7 @@ export async function SiteChrome({ children }: { children: ReactNode }) {
   return (
     <div className="site-shell">
       <header className="glass sticky top-0 z-50">
+        <AccountAppearanceSync />
         <div className="site-header-main">
           <nav className="grid h-11 grid-cols-[1fr_auto_1fr] items-center">
             <Link href="/" className="brand-lockup group justify-self-start">

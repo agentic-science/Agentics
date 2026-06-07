@@ -3,9 +3,19 @@
 import { Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTranslations } from "next-intl";
-import { type FormEvent, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
+import { type FormEvent, useEffect, useId, useState } from "react";
 import { mutate } from "swr";
+import {
+  type AppearancePreferences,
+  applyLanguagePreference,
+  applyThemeMode,
+  DEFAULT_APPEARANCE_PREFERENCES,
+  type LanguagePreference,
+  loadAccountAppearancePreferences,
+  saveAccountAppearancePreferences,
+  type ThemeMode,
+} from "@/lib/appearancePreferences";
 import { deleteHumanAccount } from "@/lib/authApi";
 import { clearCreatorApiTokenCaches } from "@/lib/creatorData";
 import { useHumanSession } from "@/lib/humanSession";
@@ -14,11 +24,40 @@ import { useHumanSession } from "@/lib/humanSession";
 export function AccountSettingsPanel() {
   const t = useTranslations("accountSettings");
   const statusT = useTranslations("common.statuses");
+  const locale = useLocale();
   const router = useRouter();
   const [confirmation, setConfirmation] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [appearance, setAppearance] = useState<AppearancePreferences>({
+    ...DEFAULT_APPEARANCE_PREFERENCES,
+  });
+  const [appearanceError, setAppearanceError] = useState<string | null>(null);
   const { data: session, isLoading } = useHumanSession();
+
+  useEffect(() => {
+    if (!session?.human_id) {
+      setAppearance({ ...DEFAULT_APPEARANCE_PREFERENCES });
+      return;
+    }
+
+    let canceled = false;
+    void loadAccountAppearancePreferences(session.human_id)
+      .then((preferences) => {
+        if (!canceled) {
+          setAppearance(preferences);
+        }
+      })
+      .catch(() => {
+        if (!canceled) {
+          setAppearanceError(t("appearanceSaveFailed"));
+        }
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [session?.human_id, t]);
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -36,6 +75,32 @@ export function AccountSettingsPanel() {
       setError(e instanceof Error ? e.message : t("failed"));
       setPending(false);
     }
+  };
+
+  const saveAppearance = async (next: AppearancePreferences) => {
+    setAppearance(next);
+    setAppearanceError(null);
+    if (!session?.human_id) {
+      return;
+    }
+    try {
+      await saveAccountAppearancePreferences(session.human_id, next);
+    } catch {
+      setAppearanceError(t("appearanceSaveFailed"));
+    }
+  };
+
+  const chooseLanguage = (language: LanguagePreference) => {
+    const next = { ...appearance, language };
+    void saveAppearance(next).then(() => {
+      applyLanguagePreference(language, locale);
+    });
+  };
+
+  const chooseMode = (mode: ThemeMode) => {
+    const next = { ...appearance, mode };
+    applyThemeMode(mode);
+    void saveAppearance(next);
   };
 
   return (
@@ -75,6 +140,35 @@ export function AccountSettingsPanel() {
             </dl>
           </section>
 
+          <section className="card-elevated">
+            <h2 className="text-h3 font-semibold">{t("appearanceTitle")}</h2>
+            <div className="mt-4 grid gap-4">
+              <SegmentedPreference
+                label={t("appearanceLanguage")}
+                value={appearance.language}
+                options={[
+                  { value: "auto", label: t("languageAuto") },
+                  { value: "en", label: t("languageEn") },
+                  { value: "zh", label: t("languageZh") },
+                ]}
+                onChange={chooseLanguage}
+              />
+              <SegmentedPreference
+                label={t("appearanceMode")}
+                value={appearance.mode}
+                options={[
+                  { value: "system", label: t("modeSystem") },
+                  { value: "light", label: t("modeLight") },
+                  { value: "dark", label: t("modeDark") },
+                ]}
+                onChange={chooseMode}
+              />
+              {appearanceError ? (
+                <p className="text-body-sm text-danger">{appearanceError}</p>
+              ) : null}
+            </div>
+          </section>
+
           <form className="card-elevated danger-zone" onSubmit={submit}>
             <div className="flex items-center gap-2">
               <Trash2 className="w-4 h-4 text-danger" />
@@ -104,5 +198,46 @@ export function AccountSettingsPanel() {
         </div>
       ) : null}
     </section>
+  );
+}
+
+interface SegmentedPreferenceProps<T extends string> {
+  label: string;
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+}
+
+/** Renders a compact segmented account preference selector. */
+function SegmentedPreference<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: SegmentedPreferenceProps<T>) {
+  const groupName = useId();
+
+  return (
+    <div className="appearance-preference-row">
+      <span className="form-field-label">{label}</span>
+      <div aria-label={label} className="segmented-control" role="radiogroup">
+        {options.map((option) => (
+          <label
+            className="segmented-control-option"
+            data-active={value === option.value ? "true" : undefined}
+            key={option.value}
+          >
+            <input
+              checked={value === option.value}
+              className="sr-only"
+              name={groupName}
+              onChange={() => onChange(option.value)}
+              type="radio"
+            />
+            {option.label}
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }

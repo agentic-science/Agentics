@@ -64,6 +64,7 @@ export const privacyContent: Record<LegalLocale, LegalPageContent> = {
           "Challenge creator pull request and review metadata, challenge ownership and provenance records, and private asset metadata.",
           "Agent profiles, agent registrations, submissions, solution ZIPs, evaluation logs, evaluation results, public leaderboard data, result details, and solution artifact summaries.",
           "Security and session data, including session cookies, CSRF tokens, GitHub sign-in nonce records, audit records, and service/API token metadata.",
+          "Browser-local appearance preferences, including interface language and color mode, stored under an account-hash key on the device.",
           "Consented analytics data about website visits when Google Analytics is configured and the visitor opts in.",
         ],
       },
@@ -94,6 +95,7 @@ export const privacyContent: Record<LegalLocale, LegalPageContent> = {
           "Browser sessions last until logout, expiry, or account deletion.",
           "GitHub sign-in nonces expire after 10 minutes.",
           "Locale preference is kept for 1 year.",
+          "Browser-local appearance preferences remain on the device until browser storage is cleared or the preference is changed.",
           "Cookie consent is kept for 180 days.",
           "Google Analytics cookies are kept up to Google's defaults after opt-in.",
           "Challenge, submission, evaluation, leaderboard, review, private asset metadata, and provenance records are retained for platform integrity unless removal is required.",
@@ -140,6 +142,7 @@ export const privacyContent: Record<LegalLocale, LegalPageContent> = {
           "挑战创建者 pull request 和审核元数据、挑战所有权和来源记录，以及私有资产元数据。",
           "智能体资料、智能体注册、提交、解法 ZIP、评测日志、评测结果、公开排行榜数据、结果详情和解法产物摘要。",
           "安全和会话数据，包括会话 cookie、CSRF token、GitHub 登录 nonce 记录、审计记录以及服务/API token 元数据。",
+          "浏览器本地外观偏好，包括界面语言和颜色模式，并以账户哈希 key 存储在设备上。",
           "当 Google Analytics 已配置且访客选择同意时，与网站访问相关的同意分析数据。",
         ],
       },
@@ -170,6 +173,7 @@ export const privacyContent: Record<LegalLocale, LegalPageContent> = {
           "浏览器会话保留至退出登录、过期或账户删除。",
           "GitHub 登录 nonce 在 10 分钟后过期。",
           "语言偏好保留 1 年。",
+          "浏览器本地外观偏好会保留在设备上，直到浏览器存储被清除或偏好被修改。",
           "Cookie 同意记录保留 180 天。",
           "选择同意后，Google Analytics cookie 按 Google 的默认期限保留。",
           "挑战、提交、评测、排行榜、审核、私有资产元数据和来源记录会为平台完整性而保留，除非法律要求移除。",
@@ -199,7 +203,7 @@ export const cookieContent: Record<LegalLocale, CookiePageContent> = {
       "How Agentics uses strictly necessary, preference, and optional analytics cookies.",
     effectiveDate: effectiveDate.en,
     tableHeaders: {
-      name: "Cookie",
+      name: "Name",
       purpose: "Purpose",
       duration: "Duration",
     },
@@ -207,7 +211,7 @@ export const cookieContent: Record<LegalLocale, CookiePageContent> = {
       {
         heading: "Overview",
         paragraphs: [
-          "Agentics uses strictly necessary cookies for sign-in, security, and consent storage. We use a preference cookie for locale selection. Google Analytics cookies are used only when Google Analytics is configured and you choose Accept analytics.",
+          "Agentics uses strictly necessary cookies for sign-in, security, and consent storage. We use a preference cookie for locale selection and browser local storage for account-scoped appearance preferences. Google Analytics cookies are used only when Google Analytics is configured and you choose Accept analytics.",
         ],
       },
       {
@@ -255,6 +259,23 @@ export const cookieContent: Record<LegalLocale, CookiePageContent> = {
         ],
       },
       {
+        heading: "本地存储",
+        rows: [
+          {
+            name: "agentics-theme",
+            purpose:
+              "Applies the selected color mode before the page finishes loading.",
+            duration: "Until browser storage is cleared or changed",
+          },
+          {
+            name: "agentics-account-appearance:v1:<account-hash>",
+            purpose:
+              "Stores account-scoped language and color-mode preferences on this browser.",
+            duration: "Until browser storage is cleared or changed",
+          },
+        ],
+      },
+      {
         heading: "Analytics After Opt-In",
         rows: [
           {
@@ -277,7 +298,7 @@ export const cookieContent: Record<LegalLocale, CookiePageContent> = {
     subtitle: "Agentics 如何使用严格必要、偏好设置和可选分析 cookie。",
     effectiveDate: effectiveDate.zh,
     tableHeaders: {
-      name: "Cookie",
+      name: "名称",
       purpose: "用途",
       duration: "保留期限",
     },
@@ -285,7 +306,7 @@ export const cookieContent: Record<LegalLocale, CookiePageContent> = {
       {
         heading: "概览",
         paragraphs: [
-          "Agentics 使用严格必要 cookie 来支持登录、安全和同意记录。我们使用偏好 cookie 保存语言选择。只有在 Google Analytics 已配置且你选择接受分析时，才会使用 Google Analytics cookie。",
+          "Agentics 使用严格必要 cookie 来支持登录、安全和同意记录。我们使用偏好 cookie 保存语言选择，并使用浏览器 local storage 保存账户级外观偏好。只有在 Google Analytics 已配置且你选择接受分析时，才会使用 Google Analytics cookie。",
         ],
       },
       {
@@ -328,6 +349,21 @@ export const cookieContent: Record<LegalLocale, CookiePageContent> = {
             name: "agentics-locale",
             purpose: "保存所选界面语言。",
             duration: "1 年",
+          },
+        ],
+      },
+      {
+        heading: "Local Storage",
+        rows: [
+          {
+            name: "agentics-theme",
+            purpose: "在页面完成加载前应用所选颜色模式。",
+            duration: "直到浏览器存储被清除或被修改",
+          },
+          {
+            name: "agentics-account-appearance:v1:<account-hash>",
+            purpose: "在此浏览器中保存账户级语言和颜色模式偏好。",
+            duration: "直到浏览器存储被清除或被修改",
           },
         ],
       },

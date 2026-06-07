@@ -2,6 +2,12 @@
 
 import { Globe } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
+import {
+  applyLanguagePreference,
+  type LanguagePreference,
+  updateAccountAppearancePreferences,
+} from "@/lib/appearancePreferences";
+import { useHumanSession } from "@/lib/humanSession";
 
 const locales = [
   { code: "en", label: "EN" },
@@ -12,13 +18,18 @@ const locales = [
 export function LanguageSwitcher() {
   const locale = useLocale();
   const t = useTranslations("language");
+  const { data: session } = useHumanSession();
 
   /** Navigates to the current route under the selected locale. */
-  const switchLocale = (next: string) => {
-    if (next === locale) return;
-    // biome-ignore lint/suspicious/noDocumentCookie: intentional cookie for locale persistence
-    document.cookie = `agentics-locale=${next}; path=/; max-age=31536000`;
-    window.location.reload();
+  const switchLocale = async (next: LanguagePreference) => {
+    if (session?.human_id) {
+      await updateAccountAppearancePreferences(session.human_id, {
+        language: next,
+      }).catch(() => {
+        // Header preferences are best-effort local browser state.
+      });
+    }
+    applyLanguagePreference(next, locale);
   };
 
   return (
@@ -28,7 +39,7 @@ export function LanguageSwitcher() {
         <button
           key={loc.code}
           type="button"
-          onClick={() => switchLocale(loc.code)}
+          onClick={() => void switchLocale(loc.code)}
           className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
             locale === loc.code
               ? "text-action-fg"

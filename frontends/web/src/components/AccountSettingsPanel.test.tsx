@@ -37,6 +37,7 @@ const clearCreatorApiTokenCachesMock = clearCreatorApiTokenCaches as Mock;
 
 describe("AccountSettingsPanel", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     getHumanSessionMock.mockResolvedValue({
       human_id: "11111111-1111-4111-8111-111111111111",
       status: "active",
@@ -71,6 +72,39 @@ describe("AccountSettingsPanel", () => {
     });
     expect(clearCreatorApiTokenCachesMock).toHaveBeenCalled();
     expect(replaceMock).toHaveBeenCalledWith("/");
+  });
+
+  it("stores appearance preferences under an account-hashed key", async () => {
+    const view = renderAccountSettingsPanel();
+
+    expect(await view.findByText("Appearance Preferences")).toBeTruthy();
+    expect(
+      (view.getByRole("radio", { name: "Auto" }) as HTMLInputElement).checked,
+    ).toBe(true);
+    expect(
+      (view.getByRole("radio", { name: "System" }) as HTMLInputElement).checked,
+    ).toBe(true);
+
+    fireEvent.click(view.getByRole("radio", { name: "Bright" }));
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem("agentics-theme")).toBe("light");
+    });
+    const accountKeys = Array.from(
+      { length: window.localStorage.length },
+      (_, index) => window.localStorage.key(index) ?? "",
+    ).filter((key) => key.startsWith("agentics-account-appearance:v1:"));
+    expect(accountKeys).toHaveLength(1);
+    expect(accountKeys[0]).not.toContain(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    expect(accountKeys[0]).not.toContain("123");
+    expect(
+      JSON.parse(window.localStorage.getItem(accountKeys[0]) ?? "{}"),
+    ).toEqual({
+      language: "auto",
+      mode: "light",
+    });
   });
 });
 

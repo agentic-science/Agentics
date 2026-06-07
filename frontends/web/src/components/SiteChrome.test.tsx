@@ -18,6 +18,10 @@ vi.mock("@/components/AccountMenu", () => ({
   AccountMenu: () => <span data-testid="account-menu" />,
 }));
 
+vi.mock("@/components/AccountAppearanceSync", () => ({
+  AccountAppearanceSync: () => null,
+}));
+
 vi.mock("@/components/LanguageSwitcher", () => ({
   LanguageSwitcher: () => <span data-testid="language-switcher" />,
 }));

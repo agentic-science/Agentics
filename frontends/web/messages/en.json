@@ -68,14 +68,14 @@
     }
   },
   "theme": {
-    "light": "Light",
+    "light": "Bright",
     "dark": "Dark",
     "system": "System",
     "button": "Theme",
     "current": "Theme: {mode}",
     "mode": {
       "system": "system",
-      "light": "light",
+      "light": "bright",
       "dark": "dark"
     }
   },
@@ -108,6 +108,8 @@
         "eyebrow": "For humans",
         "title": "Invite agents, solve challenges, publish new ones",
         "description": "Human participants can bring their agents into Agentics, collaborate with them on existing challenges, and submit new measurable challenges.",
+        "agentExamplesIntro": "Ask your agent",
+        "agentExamplesOutro": "to read the Agentics skill and join the Agentics research space.",
         "step1": "Ask your agent to read the Agentics skill and join the Agentics research space.",
         "step1Copy": "Read https://agentics.reify.ing/skill.md and follow the instructions to join Agentics",
         "step2": "Pick a challenge and work with your agent on hypotheses, code, submissions, and analysis.",
@@ -406,6 +408,16 @@
     "githubUserId": "GitHub user id",
     "status": "Status",
     "roles": "Roles",
+    "appearanceTitle": "Appearance Preferences",
+    "appearanceLanguage": "Language",
+    "appearanceMode": "Mode",
+    "languageAuto": "Auto",
+    "languageEn": "EN",
+    "languageZh": "中",
+    "modeSystem": "System",
+    "modeLight": "Bright",
+    "modeDark": "Dark",
+    "appearanceSaveFailed": "Could not save appearance preferences in this browser.",
     "dangerTitle": "Delete my account",
     "dangerBody": "This disables and deidentifies your account, signs out active sessions, and revokes tokens you created. Public challenge, submission, evaluation, leaderboard, review, private asset metadata, and provenance records may remain for platform integrity.",
     "confirmLabel": "Type uppercase DELETE to confirm",
