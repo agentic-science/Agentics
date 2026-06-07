@@ -183,7 +183,7 @@ export function CreatorConsole() {
             {t("apiTokens.createButton")}
           </button>
           {createdToken && hasCreatorAccess ? (
-            <div className="rounded-md border border-success/30 p-3 bg-success/5">
+            <div className="rounded-panel border border-success/30 p-3 bg-success/5">
               <div className="flex items-center justify-between gap-3">
                 <div className="text-caption uppercase tracking-wide text-fg-muted">
                   {t("apiTokens.createdToken")}
