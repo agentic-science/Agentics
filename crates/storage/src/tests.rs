@@ -9,6 +9,8 @@ use super::{
 };
 
 const TEST_INTENT: StorageWriteIntent = StorageWriteIntent::new("test object", 1024);
+const TEST_TAR_INTENT: StorageWriteIntent =
+    StorageWriteIntent::new("test bundle contents", 64 * 1024);
 
 #[tokio::test]
 async fn local_storage_round_trips_relative_keys() {
@@ -327,7 +329,7 @@ async fn bundle_tar_round_trips_without_overwrite() {
     )
     .await
     .expect("pack");
-    super::unpack_tar_to_directory(&archive, &destination)
+    super::unpack_tar_to_directory(&archive, &destination, TEST_TAR_INTENT)
         .await
         .expect("unpack");
 
@@ -347,9 +349,10 @@ async fn bundle_tar_unpack_rejects_traversal_entries() {
     let archive = root.join("bad.tar");
     write_raw_tar_file_entry(&archive, "../escape.txt", b"bad");
 
-    let error = super::unpack_tar_to_directory(&archive, &root.join("destination"))
-        .await
-        .expect_err("traversal tar entry should fail");
+    let error =
+        super::unpack_tar_to_directory(&archive, &root.join("destination"), TEST_TAR_INTENT)
+            .await
+            .expect_err("traversal tar entry should fail");
 
     assert!(matches!(error, StorageError::InvalidKey(_)));
     assert!(!root.join("escape.txt").exists());
@@ -361,9 +364,10 @@ async fn bundle_tar_unpack_rejects_absolute_entries() {
     let archive = root.join("bad.tar");
     write_raw_tar_file_entry(&archive, "/tmp/escape.txt", b"bad");
 
-    let error = super::unpack_tar_to_directory(&archive, &root.join("destination"))
-        .await
-        .expect_err("absolute tar entry should fail");
+    let error =
+        super::unpack_tar_to_directory(&archive, &root.join("destination"), TEST_TAR_INTENT)
+            .await
+            .expect_err("absolute tar entry should fail");
 
     assert!(matches!(error, StorageError::InvalidKey(_)));
 }
@@ -383,9 +387,10 @@ async fn bundle_tar_unpack_rejects_symlink_entries() {
         .expect("append symlink");
     builder.finish().expect("finish tar");
 
-    let error = super::unpack_tar_to_directory(&archive, &root.join("destination"))
-        .await
-        .expect_err("symlink tar entry should fail");
+    let error =
+        super::unpack_tar_to_directory(&archive, &root.join("destination"), TEST_TAR_INTENT)
+            .await
+            .expect_err("symlink tar entry should fail");
 
     assert!(matches!(error, StorageError::InvalidKey(_)));
 }
@@ -405,9 +410,10 @@ async fn bundle_tar_unpack_rejects_hardlink_entries() {
         .expect("append hardlink");
     builder.finish().expect("finish tar");
 
-    let error = super::unpack_tar_to_directory(&archive, &root.join("destination"))
-        .await
-        .expect_err("hardlink tar entry should fail");
+    let error =
+        super::unpack_tar_to_directory(&archive, &root.join("destination"), TEST_TAR_INTENT)
+            .await
+            .expect_err("hardlink tar entry should fail");
 
     assert!(matches!(error, StorageError::InvalidKey(_)));
 }
@@ -427,11 +433,106 @@ async fn bundle_tar_unpack_rejects_unsupported_entries() {
         .expect("append fifo");
     builder.finish().expect("finish tar");
 
-    let error = super::unpack_tar_to_directory(&archive, &root.join("destination"))
-        .await
-        .expect_err("unsupported tar entry should fail");
+    let error =
+        super::unpack_tar_to_directory(&archive, &root.join("destination"), TEST_TAR_INTENT)
+            .await
+            .expect_err("unsupported tar entry should fail");
 
     assert!(matches!(error, StorageError::InvalidKey(_)));
+}
+
+#[tokio::test]
+async fn bundle_tar_unpack_rejects_sparse_entries() {
+    let root = temp_storage_root("tar-sparse");
+    let archive = root.join("bad.tar");
+    let file = fs::File::create(&archive).expect("archive");
+    let mut builder = tar::Builder::new(file);
+    let mut header = tar::Header::new_gnu();
+    header.set_entry_type(tar::EntryType::GNUSparse);
+    header.set_size(4);
+    let gnu = header.as_gnu_mut().expect("gnu sparse header");
+    gnu.set_real_size(4);
+    gnu.sparse[0].set_offset(0);
+    gnu.sparse[0].set_length(4);
+    header.set_cksum();
+    builder
+        .append_data(&mut header, "sparse.bin", &b"data"[..])
+        .expect("append sparse");
+    builder.finish().expect("finish tar");
+
+    let error =
+        super::unpack_tar_to_directory(&archive, &root.join("destination"), TEST_TAR_INTENT)
+            .await
+            .expect_err("sparse tar entry should fail");
+
+    assert!(matches!(error, StorageError::InvalidKey(_)));
+}
+
+#[tokio::test]
+async fn bundle_tar_unpack_rejects_too_many_entries() {
+    let root = temp_storage_root("tar-too-many-entries");
+    let archive = root.join("bad.tar");
+    write_test_tar(
+        &archive,
+        &[
+            ("one.txt", b"one".as_slice(), false),
+            ("two.txt", b"two".as_slice(), false),
+        ],
+    );
+
+    let error = super::tar_archive::unpack_tar_to_directory_with_limits(
+        &archive,
+        &root.join("destination"),
+        TEST_TAR_INTENT,
+        1,
+        8,
+    )
+    .await
+    .expect_err("entry count should be capped");
+
+    assert!(matches!(error, StorageError::InvalidKey(_)));
+}
+
+#[tokio::test]
+async fn bundle_tar_unpack_rejects_excessive_depth() {
+    let root = temp_storage_root("tar-too-deep");
+    let archive = root.join("bad.tar");
+    write_test_tar(&archive, &[("nested/data.txt", b"data".as_slice(), false)]);
+
+    let error = super::tar_archive::unpack_tar_to_directory_with_limits(
+        &archive,
+        &root.join("destination"),
+        TEST_TAR_INTENT,
+        8,
+        1,
+    )
+    .await
+    .expect_err("path depth should be capped");
+
+    assert!(matches!(error, StorageError::InvalidKey(_)));
+}
+
+#[tokio::test]
+async fn bundle_tar_unpack_rejects_expanded_bytes_over_intent() {
+    let root = temp_storage_root("tar-too-large");
+    let archive = root.join("bad.tar");
+    write_test_tar(
+        &archive,
+        &[
+            ("one.txt", b"one".as_slice(), false),
+            ("two.txt", b"two".as_slice(), false),
+        ],
+    );
+
+    let error = super::unpack_tar_to_directory(
+        &archive,
+        &root.join("destination"),
+        StorageWriteIntent::new("tiny bundle contents", 4),
+    )
+    .await
+    .expect_err("expanded bytes should be capped");
+
+    assert!(matches!(error, StorageError::ObjectTooLarge { .. }));
 }
 
 #[tokio::test]
@@ -443,7 +544,7 @@ async fn bundle_tar_unpack_rejects_existing_destination_files() {
     fs::write(destination.join("statement.md"), "old").expect("existing file");
     write_test_tar(&archive, &[("statement.md", b"new".as_slice(), false)]);
 
-    super::unpack_tar_to_directory(&archive, &destination)
+    super::unpack_tar_to_directory(&archive, &destination, TEST_TAR_INTENT)
         .await
         .expect_err("existing destination file should fail");
 

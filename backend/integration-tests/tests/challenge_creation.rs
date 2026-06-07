@@ -1096,9 +1096,16 @@ async fn materialize_bundle_key(
         .await
         .expect("download challenge bundle");
     let bundle_dir = materialized.path().join("bundle");
-    unpack_tar_to_directory(&archive, &bundle_dir)
-        .await
-        .expect("unpack challenge bundle");
+    unpack_tar_to_directory(
+        &archive,
+        &bundle_dir,
+        StorageWriteIntent::new(
+            "challenge bundle contents",
+            config.storage.max_bundle_archive_bytes,
+        ),
+    )
+    .await
+    .expect("unpack challenge bundle");
     (materialized, bundle_dir)
 }
 

@@ -102,9 +102,16 @@ pub(crate) async fn execute_evaluation_job(
             )
             .await
             .map_err(storage_error_to_runner_error)?;
-        agentics_storage::unpack_tar_to_directory(&bundle_archive_path, &challenge_bundle_root)
-            .await
-            .map_err(storage_error_to_runner_error)?;
+        agentics_storage::unpack_tar_to_directory(
+            &bundle_archive_path,
+            &challenge_bundle_root,
+            agentics_storage::StorageWriteIntent::new(
+                "challenge bundle contents",
+                config.storage.max_bundle_archive_bytes,
+            ),
+        )
+        .await
+        .map_err(storage_error_to_runner_error)?;
         make_container_readable_tree(&challenge_bundle_root).await?;
         let bundle_dir = challenge_bundle_root.as_path();
         let spec =
