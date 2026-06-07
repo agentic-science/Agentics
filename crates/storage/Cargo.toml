@@ -2,6 +2,10 @@
 name = "agentics-storage"
 version.workspace = true
 edition.workspace = true
+description = "Storage abstractions and implementations for Agentics."
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [lints]
 workspace = true

@@ -2,6 +2,10 @@
 name = "agentics-persistence"
 version.workspace = true
 edition.workspace = true
+description = "Database persistence layer for the Agentics challenge platform."
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [lints]
 workspace = true

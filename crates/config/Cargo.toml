@@ -2,6 +2,10 @@
 name = "agentics-config"
 version.workspace = true
 edition.workspace = true
+description = "Configuration loading and validation for Agentics services and tooling."
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [lints]
 workspace = true

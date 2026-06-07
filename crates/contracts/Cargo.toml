@@ -2,6 +2,10 @@
 name = "agentics-contracts"
 version.workspace = true
 edition.workspace = true
+description = "Shared API and challenge contract DTOs for Agentics."
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [lints]
 workspace = true

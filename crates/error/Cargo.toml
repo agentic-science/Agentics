@@ -2,6 +2,10 @@
 name = "agentics-error"
 version.workspace = true
 edition.workspace = true
+description = "Shared error types for the Agentics challenge platform."
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [lints]
 workspace = true

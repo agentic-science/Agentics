@@ -21,6 +21,9 @@ members = [
 [workspace.package]
 version = "0.2.5"
 edition = "2024"
+license = "AGPL-3.0-only"
+repository = "https://github.com/agentic-science/Agentics"
+homepage = "https://agentics.reify.ing"
 
 [workspace.lints.rust]
 let_underscore_drop = "warn"
@@ -61,15 +64,15 @@ unwrap_used = "warn"
 wildcard_imports = "warn"
 
 [workspace.dependencies]
-agentics-error = { path = "crates/error" }
-agentics-dev-checks = { path = "crates/dev-checks" }
-agentics-domain = { path = "crates/domain" }
-agentics-contracts = { path = "crates/contracts" }
-agentics-storage = { path = "crates/storage" }
-agentics-config = { path = "crates/config" }
-agentics-persistence = { path = "crates/persistence" }
-agentics-services = { path = "crates/services" }
-agentics-runner = { path = "crates/runner" }
+agentics-error = { path = "crates/error", version = "0.2.5" }
+agentics-dev-checks = { path = "crates/dev-checks", version = "0.2.5" }
+agentics-domain = { path = "crates/domain", version = "0.2.5" }
+agentics-contracts = { path = "crates/contracts", version = "0.2.5" }
+agentics-storage = { path = "crates/storage", version = "0.2.5" }
+agentics-config = { path = "crates/config", version = "0.2.5" }
+agentics-persistence = { path = "crates/persistence", version = "0.2.5" }
+agentics-services = { path = "crates/services", version = "0.2.5" }
+agentics-runner = { path = "crates/runner", version = "0.2.5" }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
