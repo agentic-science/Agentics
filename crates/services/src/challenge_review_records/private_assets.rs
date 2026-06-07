@@ -40,7 +40,7 @@ pub async fn upload_challenge_private_asset(
     let repos = Repositories::new(pool);
     let review_record = repos
         .challenge_review_records()
-        .get(review_record_id.as_str())
+        .get(&review_record_id)
         .await?
         .ok_or(ServiceError::NotFound)?;
     let review_record = review_record_response(review_record);

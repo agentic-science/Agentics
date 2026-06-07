@@ -16,7 +16,7 @@ pub async fn get_challenge_review_record(
 ) -> Result<CreatorChallengeReviewRecordResponse> {
     let review_record = Repositories::new(pool)
         .challenge_review_records()
-        .get(review_record_id.as_str())
+        .get(review_record_id)
         .await?
         .ok_or(ServiceError::NotFound)?;
     let review_record = review_record_response(review_record);
@@ -48,12 +48,12 @@ pub async fn list_admin_challenge_review_record_private_assets(
     let repos = Repositories::new(pool);
     repos
         .challenge_review_records()
-        .get(review_record_id.as_str())
+        .get(review_record_id)
         .await?
         .ok_or(ServiceError::NotFound)?;
     let items = repos
         .challenge_review_records()
-        .list_private_asset_states(review_record_id.as_str())
+        .list_private_asset_states(review_record_id)
         .await?
         .into_iter()
         .map(admin_private_asset_response)

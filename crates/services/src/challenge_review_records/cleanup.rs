@@ -48,7 +48,7 @@ pub async fn cleanup_challenge_review_records(
         }
         repos
             .challenge_review_records()
-            .delete_private_asset(asset.id.as_str())
+            .delete_private_asset(&asset.id)
             .await?;
         purged = purged.checked_add(1).ok_or_else(|| {
             ServiceError::Internal("private asset purge count overflow".to_string())

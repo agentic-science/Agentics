@@ -10,7 +10,7 @@ use crate::repositories::{
     PublishArchiveChallengeReviewRecordInput, PublishNewChallengeReviewRecordInput,
 };
 use agentics_domain::models::ids::{
-    ChallengeReviewPublishClaimId, ChallengeReviewRecordId, HumanId,
+    ChallengePrivateAssetId, ChallengeReviewPublishClaimId, ChallengeReviewRecordId, HumanId,
 };
 use agentics_domain::storage::StorageKey;
 use agentics_error::Result;
@@ -29,7 +29,10 @@ impl ChallengeReviewRecordsRepository<'_> {
         db::challenge_creation::create_challenge_review_record(self.pool, input, audit_event).await
     }
 
-    pub async fn get(&self, review_record_id: &str) -> Result<Option<ChallengeReviewRecordRecord>> {
+    pub async fn get(
+        &self,
+        review_record_id: &ChallengeReviewRecordId,
+    ) -> Result<Option<ChallengeReviewRecordRecord>> {
         db::challenge_creation::get_challenge_review_record(self.pool, review_record_id).await
     }
 
@@ -39,7 +42,7 @@ impl ChallengeReviewRecordsRepository<'_> {
 
     pub async fn list_private_asset_states(
         &self,
-        review_record_id: &str,
+        review_record_id: &ChallengeReviewRecordId,
     ) -> Result<Vec<AdminChallengePrivateAssetRecord>> {
         db::challenge_creation::list_challenge_private_asset_states(self.pool, review_record_id)
             .await
@@ -160,7 +163,7 @@ impl ChallengeReviewRecordsRepository<'_> {
             .await
     }
 
-    pub async fn delete_private_asset(&self, asset_row_id: &str) -> Result<()> {
+    pub async fn delete_private_asset(&self, asset_row_id: &ChallengePrivateAssetId) -> Result<()> {
         db::challenge_creation::delete_challenge_private_asset(self.pool, asset_row_id).await
     }
 
@@ -207,7 +210,7 @@ impl ChallengeReviewRecordsRepository<'_> {
 
     pub async fn claim_for_publish(
         &self,
-        review_record_id: &str,
+        review_record_id: &ChallengeReviewRecordId,
         publish_timeout_minutes: i32,
     ) -> Result<ClaimedChallengeReviewRecordForPublish> {
         db::challenge_creation::claim_challenge_review_record_for_publish(
@@ -220,7 +223,7 @@ impl ChallengeReviewRecordsRepository<'_> {
 
     pub async fn fail_publish(
         &self,
-        review_record_id: &str,
+        review_record_id: &ChallengeReviewRecordId,
         publish_claim_id: &ChallengeReviewPublishClaimId,
         message: &str,
     ) -> Result<()> {
@@ -246,7 +249,7 @@ impl ChallengeReviewRecordsRepository<'_> {
 
     pub async fn mark_published(
         &self,
-        review_record_id: &str,
+        review_record_id: &ChallengeReviewRecordId,
         publish_claim_id: &ChallengeReviewPublishClaimId,
         published_challenge_name: Option<&agentics_domain::models::names::ChallengeName>,
     ) -> Result<()> {

@@ -103,7 +103,7 @@ pub struct ChallengeReviewRecordRecord {
 /// List all private asset lifecycle records for an admin review record review.
 pub async fn list_challenge_private_asset_states(
     pool: &PgPool,
-    review_record_id: &str,
+    review_record_id: &ChallengeReviewRecordId,
 ) -> Result<Vec<AdminChallengePrivateAssetRecord>> {
     let rows = sqlx::query(
         r#"
@@ -113,7 +113,7 @@ pub async fn list_challenge_private_asset_states(
         ORDER BY created_at ASC
         "#,
     )
-    .bind(review_record_id)
+    .bind(review_record_id.as_str())
     .fetch_all(pool)
     .await?;
 
@@ -125,7 +125,7 @@ pub async fn list_challenge_private_asset_states(
 /// Lists active private assets for review_record using the configured query scope.
 pub(super) async fn list_private_assets_for_review_record(
     pool: &PgPool,
-    review_record_id: &str,
+    review_record_id: &ChallengeReviewRecordId,
 ) -> Result<Vec<ChallengePrivateAssetRecord>> {
     let rows = sqlx::query(
         r#"
@@ -136,7 +136,7 @@ pub(super) async fn list_private_assets_for_review_record(
         ORDER BY created_at ASC
         "#,
     )
-    .bind(review_record_id)
+    .bind(review_record_id.as_str())
     .fetch_all(pool)
     .await?;
 
@@ -146,7 +146,7 @@ pub(super) async fn list_private_assets_for_review_record(
 /// Lists validation records for review_record using the configured query scope.
 pub(super) async fn list_validation_records_for_review_record(
     pool: &PgPool,
-    review_record_id: &str,
+    review_record_id: &ChallengeReviewRecordId,
 ) -> Result<Vec<ChallengeReviewValidationRecord>> {
     let rows = sqlx::query(
         r#"
@@ -156,7 +156,7 @@ pub(super) async fn list_validation_records_for_review_record(
         ORDER BY created_at DESC
         "#,
     )
-    .bind(review_record_id)
+    .bind(review_record_id.as_str())
     .fetch_all(pool)
     .await?;
 

@@ -989,6 +989,8 @@ async fn stale_publish_claim_cannot_mutate_newer_publish_claim(pool: sqlx::PgPoo
 
     let review_record = create_review_record(&client, &app, &creator, 34, manifest_json()).await;
     let review_record_id = review_record["id"].as_str().expect("review_record id");
+    let review_record_typed_id =
+        ChallengeReviewRecordId::try_new(review_record_id).expect("valid review_record id");
     sqlx::query(
         r#"
         UPDATE challenge_review_records
@@ -1007,7 +1009,7 @@ async fn stale_publish_claim_cannot_mutate_newer_publish_claim(pool: sqlx::PgPoo
     let repos = agentics_persistence::Repositories::new(&pool);
     let first = repos
         .challenge_review_records()
-        .claim_for_publish(review_record_id, 30)
+        .claim_for_publish(&review_record_typed_id, 30)
         .await
         .expect("first publish claim should reserve");
     let first_claim = first
@@ -1023,7 +1025,7 @@ async fn stale_publish_claim_cannot_mutate_newer_publish_claim(pool: sqlx::PgPoo
 
     let second = repos
         .challenge_review_records()
-        .claim_for_publish(review_record_id, 30)
+        .claim_for_publish(&review_record_typed_id, 30)
         .await
         .expect("second publish claim should reserve after stale reset");
     let second_claim = second
@@ -1033,14 +1035,14 @@ async fn stale_publish_claim_cannot_mutate_newer_publish_claim(pool: sqlx::PgPoo
 
     let stale_fail = repos
         .challenge_review_records()
-        .fail_publish(review_record_id, &first_claim, "stale failure")
+        .fail_publish(&review_record_typed_id, &first_claim, "stale failure")
         .await
         .expect_err("stale claim should not fail newer publish");
     assert!(matches!(stale_fail, ServiceError::Conflict));
 
     let stale_complete = repos
         .challenge_review_records()
-        .mark_published(review_record_id, &first_claim, None)
+        .mark_published(&review_record_typed_id, &first_claim, None)
         .await
         .expect_err("stale claim should not complete newer publish");
     assert!(matches!(stale_complete, ServiceError::Conflict));
@@ -1056,7 +1058,7 @@ async fn stale_publish_claim_cannot_mutate_newer_publish_claim(pool: sqlx::PgPoo
 
     repos
         .challenge_review_records()
-        .mark_published(review_record_id, &second_claim, None)
+        .mark_published(&review_record_typed_id, &second_claim, None)
         .await
         .expect("newer claim should complete publish");
     let status_and_claim: (String, Option<String>) = sqlx::query_as(

@@ -45,7 +45,7 @@ pub async fn publish_challenge_review_record(
     let claim = repos
         .challenge_review_records()
         .claim_for_publish(
-            review_record_id.as_str(),
+            &review_record_id,
             config
                 .quotas
                 .challenge_review_record_publish_timeout_minutes,
@@ -73,18 +73,14 @@ pub async fn publish_challenge_review_record(
     if let Err(error) = publish_result {
         repos
             .challenge_review_records()
-            .fail_publish(
-                review_record.id.as_str(),
-                &publish_claim_id,
-                &error.to_string(),
-            )
+            .fail_publish(&review_record.id, &publish_claim_id, &error.to_string())
             .await?;
         return Err(error);
     }
 
     repos
         .challenge_review_records()
-        .get(review_record.id.as_str())
+        .get(&review_record.id)
         .await?
         .map(review_record_response)
         .ok_or(ServiceError::NotFound)

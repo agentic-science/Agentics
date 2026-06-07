@@ -168,10 +168,10 @@ pub async fn create_challenge_review_record(
 /// Get one review_record with its private assets and validation records.
 pub async fn get_challenge_review_record(
     pool: &PgPool,
-    review_record_id: &str,
+    review_record_id: &ChallengeReviewRecordId,
 ) -> Result<Option<ChallengeReviewRecordRecord>> {
     let row = sqlx::query("SELECT * FROM challenge_review_records WHERE id = $1::uuid")
-        .bind(review_record_id)
+        .bind(review_record_id.as_str())
         .fetch_optional(pool)
         .await?;
 
@@ -205,9 +205,9 @@ pub async fn list_challenge_review_records(
     let mut review_records = Vec::with_capacity(rows.len());
     for row in rows {
         let review_record_id = challenge_review_record_id_from_row(&row, "id")?;
-        let assets = list_private_assets_for_review_record(pool, review_record_id.as_str()).await?;
+        let assets = list_private_assets_for_review_record(pool, &review_record_id).await?;
         let validation_records =
-            list_validation_records_for_review_record(pool, review_record_id.as_str()).await?;
+            list_validation_records_for_review_record(pool, &review_record_id).await?;
         review_records.push(row_to_review_record(row, assets, validation_records)?);
     }
     Ok(review_records)
@@ -617,7 +617,10 @@ pub async fn mark_challenge_private_asset_purging(
 }
 
 /// Delete a private asset record after its object has been removed.
-pub async fn delete_challenge_private_asset(pool: &PgPool, asset_row_id: &str) -> Result<()> {
+pub async fn delete_challenge_private_asset(
+    pool: &PgPool,
+    asset_row_id: &ChallengePrivateAssetId,
+) -> Result<()> {
     sqlx::query(
         r#"
         WITH deleted AS (
@@ -630,7 +633,7 @@ pub async fn delete_challenge_private_asset(pool: &PgPool, asset_row_id: &str) -
         WHERE d.id IN (SELECT review_record_id FROM deleted)
         "#,
     )
-    .bind(asset_row_id)
+    .bind(asset_row_id.as_str())
     .execute(pool)
     .await?;
 

@@ -550,7 +550,7 @@ async fn private_asset_lifecycle_refreshes_draft_activity(pool: sqlx::PgPool) {
     age_draft_for_cleanup(&pool, &review_record_id).await;
     repos
         .challenge_review_records()
-        .delete_private_asset(input_a.asset_row_id.as_str())
+        .delete_private_asset(&input_a.asset_row_id)
         .await
         .expect("active asset should delete");
     assert_draft_survives_stale_cleanup(&pool, &review_record_id).await;

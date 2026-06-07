@@ -67,11 +67,14 @@ pub struct ClaimedChallengeReviewRecordForPublish {
 /// Claim an approved review_record for publishing before filesystem work starts.
 pub async fn claim_challenge_review_record_for_publish(
     pool: &PgPool,
-    review_record_id: &str,
+    review_record_id: &ChallengeReviewRecordId,
     publish_timeout_minutes: i32,
 ) -> Result<ClaimedChallengeReviewRecordForPublish> {
     let mut tx = pool.begin().await?;
-    let scope = format!("challenge-review-record:{review_record_id}:publish");
+    let scope = format!(
+        "challenge-review-record:{}:publish",
+        review_record_id.as_str()
+    );
     lock_quota_scope(&mut tx, &scope).await?;
     reset_stale_publishing_review_record_tx(&mut tx, review_record_id, publish_timeout_minutes)
         .await?;
@@ -79,7 +82,7 @@ pub async fn claim_challenge_review_record_for_publish(
     let current: Option<String> = sqlx::query_scalar(
         "SELECT status FROM challenge_review_records WHERE id = $1::uuid FOR UPDATE",
     )
-    .bind(review_record_id)
+    .bind(review_record_id.as_str())
     .fetch_optional(&mut *tx)
     .await?;
     let Some(current) = current else {
@@ -117,7 +120,7 @@ pub async fn claim_challenge_review_record_for_publish(
           AND active_validation_record_id IS NULL
         "#,
     )
-    .bind(review_record_id)
+    .bind(review_record_id.as_str())
     .bind(publish_claim_id.as_str())
     .execute(&mut *tx)
     .await?;
@@ -138,7 +141,7 @@ pub async fn claim_challenge_review_record_for_publish(
 /// Reset a stale publishing claim back to approved so a reviewer can retry.
 async fn reset_stale_publishing_review_record_tx(
     tx: &mut Transaction<'_, Postgres>,
-    review_record_id: &str,
+    review_record_id: &ChallengeReviewRecordId,
     timeout_minutes: i32,
 ) -> Result<()> {
     sqlx::query(
@@ -153,7 +156,7 @@ async fn reset_stale_publishing_review_record_tx(
           AND updated_at < NOW() - INTERVAL '1 minute' * $2
         "#,
     )
-    .bind(review_record_id)
+    .bind(review_record_id.as_str())
     .bind(timeout_minutes.max(1))
     .execute(&mut **tx)
     .await?;
@@ -163,7 +166,7 @@ async fn reset_stale_publishing_review_record_tx(
 /// Release a publishing claim after filesystem or DB publication fails.
 pub async fn fail_challenge_review_record_publish(
     pool: &PgPool,
-    review_record_id: &str,
+    review_record_id: &ChallengeReviewRecordId,
     publish_claim_id: &ChallengeReviewPublishClaimId,
     message: &str,
 ) -> Result<()> {
@@ -179,7 +182,7 @@ pub async fn fail_challenge_review_record_publish(
           AND publish_claim_id = $3::uuid
         "#,
     )
-    .bind(review_record_id)
+    .bind(review_record_id.as_str())
     .bind(message)
     .bind(publish_claim_id.as_str())
     .execute(pool)
@@ -193,7 +196,7 @@ pub async fn fail_challenge_review_record_publish(
 /// Mark a review_record published and bind it to the published challenge row.
 pub async fn mark_challenge_review_record_published(
     pool: &PgPool,
-    review_record_id: &str,
+    review_record_id: &ChallengeReviewRecordId,
     publish_claim_id: &ChallengeReviewPublishClaimId,
     published_challenge_name: Option<&ChallengeName>,
 ) -> Result<()> {
@@ -210,7 +213,7 @@ pub async fn mark_challenge_review_record_published(
           AND active_validation_record_id IS NULL
         "#,
     )
-    .bind(review_record_id)
+    .bind(review_record_id.as_str())
     .bind(published_challenge_name.map(ChallengeName::as_str))
     .bind(publish_claim_id.as_str())
     .execute(pool)
@@ -244,7 +247,7 @@ pub async fn publish_new_challenge_review_record(
     add_challenge_owner_tx(&mut tx, &published.challenge_name, &input.owner_human_id).await?;
     mark_challenge_review_record_published_tx(
         &mut tx,
-        input.review_record_id.as_str(),
+        &input.review_record_id,
         &input.publish_claim_id,
         Some(&published.challenge_name),
     )
@@ -284,7 +287,7 @@ pub async fn publish_archive_challenge_review_record(
     archive_challenge_tx(&mut tx, &challenge_name).await?;
     mark_challenge_review_record_published_tx(
         &mut tx,
-        input.review_record_id.as_str(),
+        &input.review_record_id,
         &input.publish_claim_id,
         Some(&challenge_name),
     )
@@ -368,7 +371,7 @@ async fn ensure_human_owns_challenge_tx(
 /// Marks challenge review record published tx in persistent state.
 async fn mark_challenge_review_record_published_tx(
     tx: &mut Transaction<'_, Postgres>,
-    review_record_id: &str,
+    review_record_id: &ChallengeReviewRecordId,
     publish_claim_id: &ChallengeReviewPublishClaimId,
     published_challenge_name: Option<&ChallengeName>,
 ) -> Result<()> {
@@ -385,7 +388,7 @@ async fn mark_challenge_review_record_published_tx(
           AND active_validation_record_id IS NULL
         "#,
     )
-    .bind(review_record_id)
+    .bind(review_record_id.as_str())
     .bind(published_challenge_name.map(ChallengeName::as_str))
     .bind(publish_claim_id.as_str())
     .execute(&mut **tx)

@@ -42,7 +42,7 @@ pub async fn abandon_challenge_review_record(
 
     repos
         .challenge_review_records()
-        .get(review_record_id.as_str())
+        .get(&review_record_id)
         .await?
         .map(review_record_response)
         .ok_or(ServiceError::NotFound)
@@ -88,7 +88,7 @@ pub async fn approve_challenge_review_record(
         .await?;
     repos
         .challenge_review_records()
-        .get(review_record_id.as_str())
+        .get(&review_record_id)
         .await?
         .map(review_record_response)
         .ok_or(ServiceError::NotFound)
@@ -107,7 +107,7 @@ pub async fn reject_challenge_review_record(
     let repos = Repositories::new(pool);
     let review_record = repos
         .challenge_review_records()
-        .get(review_record_id.as_str())
+        .get(&review_record_id)
         .await?
         .ok_or(ServiceError::NotFound)?;
     if review_record.status == ChallengeReviewRecordStatus::Published {
@@ -134,7 +134,7 @@ pub async fn reject_challenge_review_record(
         .await?;
     repos
         .challenge_review_records()
-        .get(review_record.id.as_str())
+        .get(&review_record.id)
         .await?
         .map(review_record_response)
         .ok_or(ServiceError::NotFound)
