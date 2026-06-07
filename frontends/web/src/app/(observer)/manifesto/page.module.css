@@ -25,7 +25,7 @@
 .title {
   max-width: 13ch;
   color: var(--text-primary);
-  font-size: clamp(3.25rem, 7.5vw, 6.65rem);
+  font-size: clamp(2.95rem, 6.75vw, 6rem);
   font-weight: 760;
   line-height: 0.95;
   letter-spacing: 0;
@@ -41,7 +41,7 @@
 .intro p {
   max-width: 56rem;
   color: var(--text-secondary);
-  font-size: clamp(1.05rem, 1.65vw, 1.3rem);
+  font-size: clamp(0.95rem, 1.5vw, 1.17rem);
   line-height: 1.65;
 }
 
@@ -384,7 +384,7 @@ a.brandAgentics:hover {
   margin-top: 0;
   padding-top: var(--spacing-4);
   color: var(--text-primary);
-  font-size: clamp(2.1rem, 5vw, 4rem);
+  font-size: clamp(1.9rem, 4.5vw, 3.6rem);
   font-weight: 730;
   line-height: 1;
   letter-spacing: 0;
@@ -393,7 +393,7 @@ a.brandAgentics:hover {
 
 .markdown h3 {
   color: var(--accent-primary-text);
-  font-size: clamp(1.35rem, 2.8vw, 2rem);
+  font-size: clamp(1.2rem, 2.5vw, 1.8rem);
   letter-spacing: 0;
   scroll-margin-top: 6rem;
 }
@@ -666,7 +666,7 @@ a.brandAgentics:hover {
 
 .showcaseHeader h2 {
   color: var(--text-primary);
-  font-size: clamp(1.7rem, 3.9vw, 3.05rem);
+  font-size: clamp(1.55rem, 3.5vw, 2.75rem);
   font-weight: 730;
   line-height: 1;
   letter-spacing: 0;
