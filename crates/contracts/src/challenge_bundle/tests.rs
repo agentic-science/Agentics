@@ -651,6 +651,21 @@ fn validation_run_manifest_required_only_when_target_enables_validation() {
     assert!(error.to_string().contains("execution.validation_runs"));
 }
 
+/// Verifies validation-enabled targets must declare a lifetime validation limit.
+#[test]
+fn validation_enabled_target_requires_validation_submission_limit() {
+    let mut spec = base_spec();
+    spec.validation_submission_limit = None;
+    spec.targets[0].validation_enabled = false;
+
+    assert!(validate_challenge_bundle_spec(&spec).is_ok());
+
+    spec.targets[0].validation_enabled = true;
+    let error = validate_challenge_bundle_spec(&spec)
+        .expect_err("target validation should require validation submission limit");
+    assert!(error.to_string().contains("validation_submission_limit"));
+}
+
 /// Verifies that validation setup satisfies validation enabled target.
 #[test]
 fn validation_setup_satisfies_validation_enabled_target() {

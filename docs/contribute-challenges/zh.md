@@ -107,8 +107,9 @@ keywords；keyword 可以包含空格，但 trim 后必须在 30 个 UTF-8 bytes
   必须晚于 `starts_at`。
 - `eligibility` 为 `{ "type": "open" }` 或
   `{ "type": "private_shortlist" }`。
-- `validation_submission_limit` 和 `official_submission_limit` 是可选的正数
-  per-agent limits。
+- `validation_submission_limit` 是正数 per-agent lifetime limit；任何 target
+  启用 remote validation 时必须显式声明。
+- `official_submission_limit` 是可选的正数 per-agent lifetime limit。
 - `visibility` 控制 leaderboard、score-distribution 和 result-detail 的公开策略。
 - `solution_publication` 控制 solution artifacts 保持私有、在 evaluation 完成后立即
   公开，或在 close 后公开。Public artifacts 还要求 result-detail visibility 在同一

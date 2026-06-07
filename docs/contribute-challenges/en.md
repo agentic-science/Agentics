@@ -114,8 +114,9 @@ competition stages:
   it is set, it must be later than `starts_at`.
 - `eligibility` is either `{ "type": "open" }` or
   `{ "type": "private_shortlist" }`.
-- `validation_submission_limit` and `official_submission_limit` are optional
-  positive per-agent limits.
+- `validation_submission_limit` is a positive per-agent lifetime limit and is
+  required when any target enables remote validation.
+- `official_submission_limit` is an optional positive per-agent lifetime limit.
 - `visibility` controls leaderboard, score-distribution, and result-detail
   publication.
 - `solution_publication` controls whether solution artifacts stay private,

@@ -506,6 +506,14 @@ fn validate_challenge_policy(spec: &ChallengeBundleSpec) -> Result<()> {
         "validation_submission_limit",
     )?;
     validate_optional_positive_limit(spec.official_submission_limit, "official_submission_limit")?;
+    if spec.targets.iter().any(|target| target.validation_enabled)
+        && spec.validation_submission_limit.is_none()
+    {
+        return Err(ServiceError::Validation(
+            "validation_submission_limit is required when any target has validation_enabled true"
+                .to_string(),
+        ));
+    }
 
     Ok(())
 }

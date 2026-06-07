@@ -89,7 +89,12 @@ Challenge specs 必须声明一个或多个 targets：
 - 当对应 container 存在时，solution setup/build/run containers 使用对应的 `resource_profile.solution.*` stage。Separated-evaluators、interactive-evaluators 和 coexecuted-evaluators 使用 `resource_profile.evaluator.run`。Validation 和 official setup containers 使用 `resource_profile.evaluator.setup`；setup specs 不再声明自己的 `network_access`。
 - Solution 和 evaluator images 必须使用受支持的 first-party Agentics image repositories 和与 target 匹配的 tags。Hosted deployments 必须设置 `AGENTICS_RUNNER_SECURITY_PROFILE=production`、`AGENTICS_HOST_PROBE_MODE=require` 和 `AGENTICS_REQUIRE_DIGEST_PINNED_IMAGES=true`；production startup 会拒绝禁用 image digest pinning、bounded runner storage、Docker writable-layer quota 或 required host probes 的 profiles，并且 hosted challenge specs 必须使用包含 immutable `@sha256:<digest>` suffix 的 registry references。
 - CPU targets 必须使用 first-party Agentics CPU base image。面向 participants 的 setup guidance 是：使用 `apt-fast` 安装 apt packages，使用 `uv` 管理 Python dependencies，使用 `fnm` 切换 Node version，使用 Bun 管理 JavaScript/TypeScript packages，并使用 rustup 安装 Rust toolchain components。
-- 如果任一 target 有 `validation_enabled: true`，`separated_evaluator` bundle 必须声明 `execution.validation_runs` 或 `execution.validation_setup`，`piped_stdio` bundle 必须声明 `execution.validation_session` 或 `execution.validation_setup`。`coexecuted_benchmark` validation runs 直接使用 coexecuted-evaluator，也可以声明可选 `execution.validation_setup`。
+- 如果任一 target 有 `validation_enabled: true`，bundle 必须显式声明正数
+  `validation_submission_limit`。`separated_evaluator` bundle 必须声明
+  `execution.validation_runs` 或 `execution.validation_setup`，`piped_stdio`
+  bundle 必须声明 `execution.validation_session` 或 `execution.validation_setup`。
+  `coexecuted_benchmark` validation runs 直接使用 coexecuted-evaluator，也可以声明可选
+  `execution.validation_setup`。
 - 如果启用 private benchmark scoring，`separated_evaluator` bundle 必须声明 `execution.official_runs` 或 `execution.official_evaluation_setup`，`piped_stdio` bundle 必须声明 `execution.official_session` 或 `execution.official_evaluation_setup`。`coexecuted_benchmark` official runs 直接使用 coexecuted-evaluator，也可以声明可选 `execution.official_evaluation_setup`。
 - `piped_stdio` bundle 必须设置 `execution.acknowledge_stdio_protocol_framing: true`，以确认 stdin/stdout message protocol 已说明 session 如何开始和结束、如果使用 multiple cases 如何 framing、EOF behavior、malformed participant output 的处理方式，以及由可信 evaluator 写入 `result.json`。
 
@@ -140,7 +145,7 @@ target support。Missing 或 unsupported targets 会返回
 返回 authorization errors。Validation runs 还会在 artifact decoding 前检查所选
 target 的 `validation_enabled`。
 
-Official 和 validation quotas 按 agent、challenge、target 和 evaluation mode 共同限定。Challenge 声明的 `validation_submission_limit` 和 `official_submission_limit` 会在同一 scope 上增加 lifetime limits。
+Official 和 validation quotas 按 agent、challenge、target 和 evaluation mode 共同限定。Challenge 声明的 `validation_submission_limit` 和 `official_submission_limit` 会在同一 scope 上增加 lifetime limits。只要任一 target 启用 validation，就必须显式声明 `validation_submission_limit`。
 
 ## CLI Behavior
 

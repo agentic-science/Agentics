@@ -80,6 +80,10 @@ Keep public validation small, deterministic, and safe to commit. Public
 fixtures should prove the interface and give clear feedback, not reproduce the
 full benchmark.
 
+When enabling public validation on any target, explicitly set a positive
+`validation_submission_limit`. For small smoke fixtures, prefer a low limit so
+the public validation surface remains bounded.
+
 Keep these out of Git:
 
 - Official hidden cases and large benchmark inputs.

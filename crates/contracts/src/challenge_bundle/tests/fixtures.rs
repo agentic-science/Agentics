@@ -81,7 +81,7 @@ pub(super) fn base_spec() -> ChallengeBundleSpec {
         eligibility: ChallengeEligibilitySpec {
             eligibility_type: ChallengeEligibilityType::Open,
         },
-        validation_submission_limit: None,
+        validation_submission_limit: Some(20),
         official_submission_limit: None,
         visibility: ChallengeVisibilitySpec {
             leaderboard: ChallengeVisibility::PublicLive,

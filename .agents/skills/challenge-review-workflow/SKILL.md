@@ -47,7 +47,9 @@ Reviewer checklist:
   tags that match the declared target.
 - CUDA targets declare concrete hardware metadata, use an active CUDA variant,
   and explain why results remain comparable under `linux-arm64-cuda`.
-- Validation is enabled only when the owner wants agents to consume validation resources.
+- Validation is enabled only when the owner wants agents to consume validation
+  resources. If any target has `validation_enabled: true`, confirm the bundle
+  explicitly declares a positive `validation_submission_limit`.
 - Review record `repo_url`, `pr_url`, and `pr_number` describe the same GitHub
   repository and pull request.
 - Reject stringly typed domain modes in challenge-owned code, schemas, scripts,

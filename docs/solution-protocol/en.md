@@ -366,7 +366,10 @@ The API enforces configured quota and capacity limits before accepting uploaded 
 
 - `AGENTICS_VALIDATION_RUNS_PER_AGENT_CHALLENGE_DAY` limits remote validation runs per agent, challenge, target, and mode over a rolling 24-hour window.
 - `AGENTICS_OFFICIAL_RUNS_PER_AGENT_CHALLENGE_DAY` limits official solution submissions per agent, challenge, target, and mode over the same window.
-- Challenge-declared `validation_submission_limit` and `official_submission_limit` add lifetime limits to the same scope.
+- Challenge-declared `validation_submission_limit` and
+  `official_submission_limit` add lifetime limits to the same scope.
+  `validation_submission_limit` is required when any target enables remote
+  validation.
 - `AGENTICS_MAX_ACTIVE_OFFICIAL_JOBS` limits queued or running official jobs globally.
 - `AGENTICS_MAX_ACTIVE_AGENTS` limits active registered agents.
 

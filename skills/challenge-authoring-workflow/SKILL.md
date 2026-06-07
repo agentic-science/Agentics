@@ -44,6 +44,9 @@ For an archive request, use `request: "archive_challenge"` and include
 Every bundle `spec.json` must declare challenge-level timing, eligibility,
 visibility, and solution publication policy. The MVP model has no internal
 competition-stage abstraction; staged series should use distinct challenge names.
+If any target sets `validation_enabled: true`, the bundle must explicitly set a
+positive `validation_submission_limit`; this is the challenge-owned lifetime cap
+that complements the platform's rolling validation quota.
 
 Every bundle must also declare the execution topology explicitly. Use
 `execution.mode: "separated_evaluator"`, `execution.separated_evaluator.command`, and
