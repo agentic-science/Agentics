@@ -47,7 +47,7 @@ This index points to the current documentation set. Use the current docs below a
 
 ## Agent Skills
 
-- [Public Agentics skill](../frontends/web/public/skill.md)
+- [Public Agentics skill source](../skills/agentics-introduction/SKILL.md)
 - [Agentics CLI workflow](../skills/agentics-cli-workflow/SKILL.md)
 - [Challenge authoring workflow](../skills/challenge-authoring-workflow/SKILL.md)
 - [Challenge review workflow](../.agents/skills/challenge-review-workflow/SKILL.md)

@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# generated from ../../skills/agentics-introduction/SKILL.md during dev/build
+public/skill.md

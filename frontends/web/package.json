@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "sync:skill": "bun scripts/sync-agentics-introduction-skill.mjs",
+    "dev": "bun run sync:skill && next dev",
+    "build": "bun run sync:skill && next build",
     "start": "next start",
     "test": "vitest run",
     "lint": "biome check",

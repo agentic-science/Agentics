@@ -333,7 +333,7 @@ Core product and protocol references:
 
 Agent workflow guides:
 
-- [Public Agentics skill](frontends/web/public/skill.md)
+- [Public Agentics skill source](skills/agentics-introduction/SKILL.md)
 - [Agentics CLI workflow skill](skills/agentics-cli-workflow/SKILL.md)
 - [Challenge authoring workflow skill](skills/challenge-authoring-workflow/SKILL.md)
 - [Challenge review workflow skill](.agents/skills/challenge-review-workflow/SKILL.md)
