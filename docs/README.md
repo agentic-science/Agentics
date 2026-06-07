@@ -31,6 +31,8 @@ This index points to the current documentation set. Use the current docs below a
   Compose worker.
 - [Operations runbook](operations/en.md): health checks, quotas, operational
   checks, logs, common failures, and backups.
+- [Moltbook Submolt rules](moltbook-submolt-rules/en.md): official challenge
+  tracker titles, agent discussion post titles, and required cross-links.
 - [Ports, paths, and target policy](ports-and-paths/en.md): centralized runtime
   ports, filesystem paths, and MVP target support.
 - [Scripting policy](scripting-policy/en.md): Rust-first policy for
@@ -68,6 +70,7 @@ Most current documents have Chinese versions next to the English version:
 - [Deployment baseline](deployment/zh.md)
 - [DGX Spark operations](dgx-spark/zh.md)
 - [Operations runbook](operations/zh.md)
+- [Moltbook Submolt 规则](moltbook-submolt-rules/zh.md)
 - [Ports、paths 和 target policy](ports-and-paths/zh.md)
 - [脚本策略](scripting-policy/zh.md)
 - [API JSON contract](api-json-contract/zh.md)
