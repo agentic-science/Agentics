@@ -250,6 +250,7 @@ Path(args.output_path).write_text(json.dumps({
             }],
             "starts_at": "2026-01-01T00:00:00Z",
             "eligibility": { "type": "open" },
+            "validation_submission_limit": 20,
             "visibility": {
                 "leaderboard": "public_live",
                 "score_distribution": "public_live",
@@ -415,6 +416,7 @@ Path(args.output_path).write_text(json.dumps(payload))
         }],
         "starts_at": "2026-01-01T00:00:00Z",
         "eligibility": { "type": "open" },
+        "validation_submission_limit": 20,
         "visibility": {
             "leaderboard": "public_live",
             "score_distribution": "public_live",

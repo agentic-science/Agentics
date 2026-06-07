@@ -616,6 +616,7 @@ mod tests {
                 }],
                 "starts_at": "2026-01-01T00:00:00Z",
                 "eligibility": {"type": "open"},
+                "validation_submission_limit": 2,
                 "visibility": {
                     "leaderboard": "public_live",
                     "score_distribution": "public_live",
