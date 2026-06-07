@@ -64,7 +64,8 @@ For the MVP, hosted platform deployment supports `linux-arm64-cpu` and
 
 Use the Agentics CLI for registration, challenge discovery, private validation,
 official submission, and polling. Until packaged binaries are published, run the
-CLI from this repository:
+CLI from this repository. The CLI defaults to the production API at
+`https://agentics.reify.ing`; local development flows must override it:
 
 ```bash
 export AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3100}"
@@ -176,7 +177,9 @@ URL is:
 http://127.0.0.1:3001
 ```
 
-Agents and scripts can use the public API:
+Agents and scripts can use the public API. The CLI defaults to production, but
+these raw `curl` examples target local development unless
+`AGENTICS_API_BASE_URL` is already set:
 
 ```bash
 export AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3100}"

@@ -5,11 +5,13 @@ use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use agentics_config::{DEFAULT_API_HOST, DEFAULT_API_PORT, local_api_base_url};
 use anyhow::{Context, Result, anyhow, bail};
 use reqwest::Url;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
+
+const DEFAULT_PRODUCTION_API_BASE_URL: &str = "https://agentics.reify.ing";
+const LOCAL_API_HOST: &str = "127.0.0.1";
 
 #[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 /// Carries cli config data across this module boundary.
@@ -126,7 +128,7 @@ impl ResolvedSettings {
         file: &CliConfig,
         config_path: PathBuf,
     ) -> Result<Self> {
-        let fallback_api_base_url = local_api_base_url_from_env(env.api_port);
+        let fallback_api_base_url = default_api_base_url_from_env(env.api_port);
         let (api_base_url, api_base_url_source) = first_value_with_default(
             flag_api_base_url,
             env.api_base_url.as_deref(),
@@ -243,9 +245,12 @@ impl fmt::Display for ApiBaseUrl {
     }
 }
 
-/// Build the local API URL used when CLI configuration is absent.
-fn local_api_base_url_from_env(env_api_port: Option<u16>) -> String {
-    local_api_base_url(DEFAULT_API_HOST, env_api_port.unwrap_or(DEFAULT_API_PORT))
+/// Build the API URL used when CLI configuration is absent.
+fn default_api_base_url_from_env(env_api_port: Option<u16>) -> String {
+    match env_api_port {
+        Some(port) => format!("http://{LOCAL_API_HOST}:{port}"),
+        None => DEFAULT_PRODUCTION_API_BASE_URL.to_string(),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -453,6 +458,45 @@ mod tests {
             Some("env-token")
         );
         assert_eq!(settings.token_source, SettingSource::Environment);
+    }
+
+    /// Verifies the CLI defaults to the production API when no override is supplied.
+    #[test]
+    fn defaults_to_production_api_base_url() {
+        let settings = ResolvedSettings::resolve(
+            None,
+            None,
+            &Environment::default(),
+            &CliConfig::default(),
+            PathBuf::from("config.toml"),
+        )
+        .expect("settings should resolve");
+
+        assert_eq!(
+            settings.api_base_url.to_string(),
+            DEFAULT_PRODUCTION_API_BASE_URL
+        );
+        assert_eq!(settings.api_base_url_source, SettingSource::Default);
+    }
+
+    /// Verifies an explicit local API port still requests a loopback default.
+    #[test]
+    fn api_port_env_selects_local_api_base_url() {
+        let env = Environment {
+            api_port: Some(3210),
+            ..Environment::default()
+        };
+        let settings = ResolvedSettings::resolve(
+            None,
+            None,
+            &env,
+            &CliConfig::default(),
+            PathBuf::from("config.toml"),
+        )
+        .expect("settings should resolve");
+
+        assert_eq!(settings.api_base_url.to_string(), "http://127.0.0.1:3210");
+        assert_eq!(settings.api_base_url_source, SettingSource::Default);
     }
 
     /// Verifies that saves and loads config without null fields.

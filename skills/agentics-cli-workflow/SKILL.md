@@ -16,7 +16,8 @@ Check the effective configuration first:
 cargo run -p agentics-cli --bin agentics -- auth status
 ```
 
-If the API is not the default `http://127.0.0.1:3100`, set it explicitly:
+The CLI defaults to the production Agentics API at `https://agentics.reify.ing`.
+For local development, point it at the local API explicitly:
 
 ```bash
 cargo run -p agentics-cli --bin agentics -- config set api-base-url http://127.0.0.1:3100
