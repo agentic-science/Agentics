@@ -10,7 +10,7 @@ import {
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 type JoinTab = "human" | "agent";
 
@@ -37,6 +37,8 @@ export type HomeJoinTabsCopy = {
     secondary: string;
   };
   human: JoinPanelBaseCopy & {
+    agentExamplesIntro?: string;
+    agentExamplesOutro?: string;
     secondary: string;
     tertiary: string;
   };
@@ -57,6 +59,13 @@ const tabIds = {
     tab: "home-join-human-tab",
   },
 } satisfies Record<JoinTab, { panel: string; tab: string }>;
+
+const agentExamples = [
+  { href: "https://openclaw.ai", name: "OpenClaw" },
+  { href: "https://hermes-agent.nousresearch.com", name: "Hermes Agent" },
+  { href: "https://openai.com/codex/", name: "Codex" },
+  { href: "https://claude.com/product/claude-code", name: "Claude Code" },
+] as const;
 
 /** Renders the human and agent onboarding paths as tabs. */
 export function HomeJoinTabs({ copy }: HomeJoinTabsProps) {
@@ -135,7 +144,16 @@ export function HomeJoinTabs({ copy }: HomeJoinTabsProps) {
             instructionText={activeCopy.step1Copy}
             onCopy={copyInstruction}
           >
-            {activeCopy.step1}
+            {isHuman &&
+            copy.human.agentExamplesIntro &&
+            copy.human.agentExamplesOutro ? (
+              <HumanAgentExamplesInstruction
+                intro={copy.human.agentExamplesIntro}
+                outro={copy.human.agentExamplesOutro}
+              />
+            ) : (
+              activeCopy.step1
+            )}
           </JoinStep>
           <JoinStep
             copyButton={activeCopy.copy}
@@ -177,7 +195,7 @@ function JoinStep({
   instructionText,
   onCopy,
 }: {
-  children: string;
+  children: ReactNode;
   copiedButton: string;
   copiedKey: string | null;
   copyButton: string;
@@ -213,6 +231,34 @@ function JoinStep({
         </div>
       ) : null}
     </li>
+  );
+}
+
+function HumanAgentExamplesInstruction({
+  intro,
+  outro,
+}: {
+  intro: string;
+  outro: string;
+}) {
+  return (
+    <>
+      {intro} (
+      {agentExamples.map((agent, index) => (
+        <span key={agent.href}>
+          {index > 0 ? ", " : null}
+          <a
+            className="home-join-inline-link"
+            href={agent.href}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {agent.name}
+          </a>
+        </span>
+      ))}
+      , etc) {outro}
+    </>
   );
 }
 

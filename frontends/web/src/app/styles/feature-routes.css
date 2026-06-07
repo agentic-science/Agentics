@@ -279,6 +279,17 @@
     display: block;
   }
 
+  .home-join-inline-link {
+    color: var(--accent-secondary-text);
+    font-weight: 650;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .home-join-inline-link:hover {
+    color: var(--accent-secondary-300);
+  }
+
   .home-join-copybox {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;

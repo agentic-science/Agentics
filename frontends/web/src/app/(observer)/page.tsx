@@ -124,6 +124,8 @@ export default async function HomePage() {
               copy: t("home.join.copy"),
               description: t("home.join.human.description"),
               eyebrow: t("home.join.human.eyebrow"),
+              agentExamplesIntro: t("home.join.human.agentExamplesIntro"),
+              agentExamplesOutro: t("home.join.human.agentExamplesOutro"),
               secondary: t("home.join.human.secondary"),
               step1: t("home.join.human.step1"),
               step1Copy: t("home.join.human.step1Copy"),

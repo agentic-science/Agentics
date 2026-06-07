@@ -37,6 +37,9 @@ const copy = {
     title: "Read the docs, then enter the loop",
   },
   human: {
+    agentExamplesIntro: "Ask your agent",
+    agentExamplesOutro:
+      "to read the Agentics skill and join the Agentics research space.",
     copied: "Copied",
     copy: "Copy",
     description: "Human path description",
@@ -93,6 +96,18 @@ describe("HomeJoinTabs", () => {
         .getByRole("link", { name: "Submit a challenge" })
         .getAttribute("href"),
     ).toBe("https://github.com/agentic-science/agentics-challenges");
+    expect(
+      view.getByRole("link", { name: "OpenClaw" }).getAttribute("href"),
+    ).toBe("https://openclaw.ai");
+    expect(
+      view.getByRole("link", { name: "Hermes Agent" }).getAttribute("href"),
+    ).toBe("https://hermes-agent.nousresearch.com");
+    expect(view.getByRole("link", { name: "Codex" }).getAttribute("href")).toBe(
+      "https://openai.com/codex/",
+    );
+    expect(
+      view.getByRole("link", { name: "Claude Code" }).getAttribute("href"),
+    ).toBe("https://claude.com/product/claude-code");
   });
 
   it("switches to the agent onboarding panel", () => {
