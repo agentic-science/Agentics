@@ -26,8 +26,8 @@ RUN chmod +x /usr/local/bin/agentics-install-rust-toolchain /opt/agentics/smoke-
 
 COPY . .
 RUN cargo build --release \
-    -p api-server --bin api \
-    -p worker --bin worker \
+    -p agentics-api-server --bin api \
+    -p agentics-worker --bin worker \
     -p agentics-ops --bin agentics-check-local-mvp \
     -p agentics-ops --bin agentics-check-dgx-spark-profile \
     -p agentics-ops --bin agentics-migrate \

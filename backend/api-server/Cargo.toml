@@ -1,7 +1,11 @@
 [package]
-name = "api-server"
+name = "agentics-api-server"
 version.workspace = true
 edition.workspace = true
+description = "HTTP API server for the Agentics challenge platform."
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 
 [lints]
 workspace = true
