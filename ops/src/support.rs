@@ -74,6 +74,11 @@ impl ReportLine {
         matches!(self.status, ReportStatus::Fail(_))
     }
 
+    /// Whether this line is an ordinary passing check.
+    pub fn is_pass(&self) -> bool {
+        matches!(self.status, ReportStatus::Pass(_))
+    }
+
     /// Print one line using the requested prefix.
     pub fn print(&self, prefix: &str) {
         let (label, message) = match &self.status {

@@ -1,8 +1,9 @@
 use super::{
     Cli, ComposeContext, ComposeProdError, DEFAULT_PROJECT, ProdCommand, REHEARSAL_PROJECT,
     RawComposeProdEnv, RunnerDownPolicy, build_rehearsal_purge_plan, down, env_value,
-    private_bundle_restore_args, resolve_project, run,
+    private_bundle_restore_args, resolve_project, run, unavailable_runner_cleanup_reports,
 };
+use agentics_config::RunnerNamespace;
 use clap::ValueEnum;
 use std::path::PathBuf;
 
@@ -137,6 +138,31 @@ fn rehearsal_purge_dry_run_reports_resources_and_paths() {
         reports
             .iter()
             .any(|report| format!("{report:?}").contains("Compose project"))
+    );
+}
+
+/// Verifies a partially completed purge can be retried after the runner daemon is gone.
+#[test]
+fn rehearsal_purge_skips_runner_cleanup_when_socket_is_missing() {
+    let mut context = rehearsal_context();
+    let missing_socket = std::env::temp_dir().join(format!(
+        "agentics-missing-rehearsal-runner-{}-{}.sock",
+        std::process::id(),
+        line!()
+    ));
+    let _ignored = std::fs::remove_file(&missing_socket);
+    context.file_env.docker_socket_path = Some(missing_socket.display().to_string());
+
+    let reports = unavailable_runner_cleanup_reports(
+        &context,
+        &RunnerNamespace::try_new(REHEARSAL_PROJECT.to_string()).expect("valid namespace"),
+    )
+    .expect("missing socket should skip runner cleanup");
+
+    assert!(
+        reports
+            .iter()
+            .any(|report| format!("{report:?}").contains("assuming daemon already stopped"))
     );
 }
 

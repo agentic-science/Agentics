@@ -19,7 +19,8 @@ use tokio::time::timeout;
 use tracing::{info, warn};
 use uuid::Uuid;
 
-const MAX_PROBE_OUTPUT_BYTES: usize = 8192;
+const MAX_PROBE_OUTPUT_BYTES: usize = 256 * 1024;
+const ENV_HOST_PROBE_QUIET_PASSES: &str = "AGENTICS_HOST_PROBE_QUIET_PASSES";
 const GPU_PROBE_TIMEOUT_SECS: u64 = 30;
 const HOST_PROBE_TIMEOUT_SECS: u64 = 60;
 
@@ -79,6 +80,7 @@ async fn run_host_probe_command(
 ) -> anyhow::Result<HostProbeCommandOutput> {
     let mut child = Command::new(command)
         .env("AGENTICS_HOST_PROBE_MODE", mode.as_str())
+        .env(ENV_HOST_PROBE_QUIET_PASSES, "1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -438,9 +440,9 @@ mod tests {
     /// Verifies probe output is bounded before it reaches startup errors or logs.
     #[test]
     fn probe_output_is_bounded() {
-        let text = bounded_utf8(&vec![b'x'; 9000]);
+        let text = bounded_utf8(&vec![b'x'; super::MAX_PROBE_OUTPUT_BYTES + 1]);
 
-        assert!(text.len() < 9000);
+        assert!(text.len() < super::MAX_PROBE_OUTPUT_BYTES + 128);
         assert!(text.contains("truncated"));
     }
 

@@ -28,11 +28,12 @@ use crate::dgx::{
     SlotMetadata, phase_slot_path,
 };
 use crate::support::{
-    CommandOutput, DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, run_process,
-    run_with_ctrl_c,
+    CommandOutput, DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, SupportError, env_non_empty,
+    run_process, run_with_ctrl_c,
 };
 
 const PREFIX: &str = "agentics-dgx-check";
+const ENV_HOST_PROBE_QUIET_PASSES: &str = "AGENTICS_HOST_PROBE_QUIET_PASSES";
 
 mod profile_probes;
 
@@ -77,7 +78,7 @@ pub async fn run_from_process() -> ExitCode {
     run_with_ctrl_c(PREFIX, async move {
         match run(cli).await {
             Ok((mode, reports)) => {
-                for report in &reports {
+                for report in reports_for_output(&reports, host_probe_quiet_passes_enabled()) {
                     report.print(PREFIX);
                 }
                 if reports.iter().any(ReportLine::is_failure) && mode != HostProbeMode::Warn {
@@ -136,6 +137,32 @@ async fn run(cli: Cli) -> Result<(HostProbeMode, Vec<ReportLine>), ProfileCheckE
     reports.extend(check_docker_daemon(&config).await);
     reports.extend(check_mutating_probe_policy(&config).await);
     Ok((config.host_probe_mode, reports))
+}
+
+fn host_probe_quiet_passes_enabled() -> bool {
+    matches!(
+        env_non_empty(ENV_HOST_PROBE_QUIET_PASSES).as_deref(),
+        Some("1" | "true" | "TRUE" | "yes" | "on")
+    )
+}
+
+fn reports_for_output(reports: &[ReportLine], quiet_passes: bool) -> Vec<ReportLine> {
+    if !quiet_passes {
+        return reports.to_vec();
+    }
+    let visible = reports
+        .iter()
+        .filter(|report| !report.is_pass())
+        .cloned()
+        .collect::<Vec<_>>();
+    if visible.is_empty() {
+        vec![ReportLine::pass(
+            "DGX profile",
+            format!("{} checks passed", reports.len()),
+        )]
+    } else {
+        visible
+    }
 }
 
 fn linux_gate() -> ReportLine {
@@ -613,11 +640,12 @@ mod tests {
     use std::path::Path;
 
     use super::{
-        parse_mountinfo_line, parse_project_inode_hard_limit, validate_slot_metadata,
-        xfs_quota_report_container_mount_unavailable, xfs_quota_report_requires_privilege,
+        parse_mountinfo_line, parse_project_inode_hard_limit, reports_for_output,
+        validate_slot_metadata, xfs_quota_report_container_mount_unavailable,
+        xfs_quota_report_requires_privilege,
     };
     use crate::dgx::{DgxPhase, SlotMetadata};
-    use crate::support::CommandOutput;
+    use crate::support::{CommandOutput, ReportLine};
 
     /// Verifies mountinfo parsing extracts target, fstype, and quota options.
     #[test]
@@ -694,5 +722,39 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    /// Verifies worker quiet mode collapses all-pass output to one summary line.
+    #[test]
+    fn quiet_pass_output_collapses_passing_checks() {
+        let output = reports_for_output(
+            &[
+                ReportLine::pass("first", "ok"),
+                ReportLine::pass("second", "ok"),
+            ],
+            true,
+        );
+
+        assert_eq!(output.len(), 1);
+        assert!(format!("{output:?}").contains("2 checks passed"));
+    }
+
+    /// Verifies worker quiet mode still reports non-passing checks.
+    #[test]
+    fn quiet_pass_output_keeps_non_passing_checks() {
+        let output = reports_for_output(
+            &[
+                ReportLine::pass("first", "ok"),
+                ReportLine::skip("optional", "not configured"),
+                ReportLine::fail("required", "missing"),
+            ],
+            true,
+        );
+
+        assert_eq!(output.len(), 2);
+        let debug = format!("{output:?}");
+        assert!(!debug.contains("first"));
+        assert!(debug.contains("optional"));
+        assert!(debug.contains("required"));
     }
 }

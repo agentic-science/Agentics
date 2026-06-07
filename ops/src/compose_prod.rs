@@ -484,13 +484,18 @@ async fn purge_rehearsal_data(
     }
 
     stop_running_workers(context).await?;
-    let runner_reports = clean_runners(
-        context,
-        &plan.namespace,
-        RunnerCleanupScope::HostedWorker,
-        false,
-    )
-    .await?;
+    let runner_reports = match unavailable_runner_cleanup_reports(context, &plan.namespace) {
+        Some(reports) => reports,
+        None => {
+            clean_runners(
+                context,
+                &plan.namespace,
+                RunnerCleanupScope::HostedWorker,
+                false,
+            )
+            .await?
+        }
+    };
     let runner_code = print_reports(PREFIX, &runner_reports);
     if runner_code != ExitCode::SUCCESS {
         return Ok(runner_code);
@@ -520,6 +525,24 @@ async fn purge_rehearsal_data(
         reports.push(remove_rehearsal_path(path).await?);
     }
     Ok(print_reports(PREFIX, &reports))
+}
+
+fn unavailable_runner_cleanup_reports(
+    context: &ComposeContext,
+    namespace: &RunnerNamespace,
+) -> Option<Vec<ReportLine>> {
+    let socket_path = context.docker_socket_path().map(PathBuf::from)?;
+    if socket_path.exists() {
+        return None;
+    }
+    Some(vec![ReportLine::skip(
+        "runner cleanup",
+        format!(
+            "runner Docker socket {} did not exist; assuming daemon already stopped for namespace {}",
+            socket_path.display(),
+            namespace.as_str()
+        ),
+    )])
 }
 
 #[derive(Debug, Clone)]
