@@ -65,6 +65,7 @@ async fn main() -> anyhow::Result<()> {
     let state = AppState {
         db: db.clone(),
         config: Arc::new(config.clone()),
+        deployment_stage: env_report.stage,
         storage,
         github_sign_in_client: Arc::new(agentics_services::auth::ReqwestGithubSignInClient),
     };

@@ -16,13 +16,16 @@ curl -fsS "$AGENTICS_API_BASE_URL/healthz"
 {
   "status": "ok",
   "service": "api-server",
-  "environment": "development",
+  "environment": "production",
   "database": {
     "connected": true,
     "current_time": "2026-05-07T00:00:00Z"
   }
 }
 ```
+
+`environment` 会报告配置的 deployment stage：`dev`、`test`、`rehearsal`
+或 `production`。
 
 如果临时使用 `curl`，不要把 admin service token 放进 argv。先在当前 shell 中创建一个
 `0600` curl config file，检查结束后删除：

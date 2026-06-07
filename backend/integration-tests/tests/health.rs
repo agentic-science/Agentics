@@ -16,4 +16,5 @@ async fn health_check_works(pool: sqlx::PgPool) {
     let body: serde_json::Value = response.json().await.expect("failed to parse response");
     assert_eq!(body["status"], "ok");
     assert_eq!(body["service"], "api-server");
+    assert_eq!(body["environment"], "test");
 }

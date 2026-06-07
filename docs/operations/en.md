@@ -16,13 +16,16 @@ Expected response:
 {
   "status": "ok",
   "service": "api-server",
-  "environment": "development",
+  "environment": "production",
   "database": {
     "connected": true,
     "current_time": "2026-05-07T00:00:00Z"
   }
 }
 ```
+
+`environment` reports the configured deployment stage: `dev`, `test`,
+`rehearsal`, or `production`.
 
 For ad hoc `curl` calls, avoid putting the admin service token in argv. Create a
 temporary `0600` curl config file in the current shell and remove it after the

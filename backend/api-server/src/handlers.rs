@@ -68,7 +68,7 @@ pub async fn healthz(
     Ok(Json(agentics_domain::models::HealthResponse {
         status: "ok".to_string(),
         service: "api-server".to_string(),
-        environment: "development".to_string(),
+        environment: state.deployment_stage.as_str().to_string(),
         database: db,
     }))
 }

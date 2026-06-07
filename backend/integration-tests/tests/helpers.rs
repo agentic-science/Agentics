@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use agentics_config::{
     AgentRegistrationMode, Config, DEFAULT_S3_BUCKET, DEFAULT_S3_ENDPOINT_URL,
-    DEFAULT_S3_FORCE_PATH_STYLE, DEFAULT_S3_REGION, ENV_AGENTICS_S3_BUCKET,
+    DEFAULT_S3_FORCE_PATH_STYLE, DEFAULT_S3_REGION, DeploymentStage, ENV_AGENTICS_S3_BUCKET,
     ENV_AGENTICS_S3_ENDPOINT_URL, ENV_AGENTICS_S3_FORCE_PATH_STYLE, ENV_AGENTICS_S3_PREFIX,
     ENV_AGENTICS_S3_REGION, RunnerWritableStorageMode, StorageBackend,
 };
@@ -99,6 +99,7 @@ pub async fn spawn_app_with_config_and_github_client(
     let state = AppState {
         db: pool,
         config: Arc::new(config.clone()),
+        deployment_stage: DeploymentStage::Test,
         storage,
         github_sign_in_client,
     };
