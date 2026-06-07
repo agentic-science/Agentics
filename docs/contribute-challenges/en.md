@@ -271,9 +271,9 @@ read -rsp "Agentics creator API token: " AGENTICS_CREATOR_API_TOKEN; echo
 export AGENTICS_CREATOR_API_TOKEN
 
 agentics challenge-creator review-record create \
-  --repo-url https://github.com/agentics-reifying/agentics-challenges \
+  --repo-url https://github.com/agentic-science/agentics-challenges \
   --pr-number 42 \
-  --pr-url https://github.com/agentics-reifying/agentics-challenges/pull/42 \
+  --pr-url https://github.com/agentic-science/agentics-challenges/pull/42 \
   --commit-sha <40-hex-git-commit> \
   --repo-dir /path/to/agentics-challenges \
   --challenge-path challenges/sample-sum \

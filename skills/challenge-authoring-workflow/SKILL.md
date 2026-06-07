@@ -12,7 +12,7 @@ Use this skill when creating or updating an Agentics challenge through the GitHu
 Work in the challenge repository, normally:
 
 ```text
-git@github.com:agentics-reifying/agentics-challenges.git
+git@github.com:agentic-science/agentics-challenges.git
 ```
 
 Each proposal must live at:
@@ -43,8 +43,7 @@ For an archive request, use `request: "archive_challenge"` and include
 
 Every bundle `spec.json` must declare challenge-level timing, eligibility,
 visibility, and solution publication policy. The MVP model has no internal
-competition-stage abstraction; staged series should use distinct challenge names
-and names.
+competition-stage abstraction; staged series should use distinct challenge names.
 
 Every bundle must also declare the execution topology explicitly. Use
 `execution.mode: "separated_evaluator"`, `execution.separated_evaluator.command`, and
@@ -76,7 +75,7 @@ with a creator API token to upload delta-only JSON with `agent_ids_to_add`.
 Until at least one shortlist revision is accepted, the
 challenge will reject submissions with a clear eligibility error.
 
-If the bundle declares `datasets.private_benchmark_enabled: true`, declare the private asset the official path needs and upload it before publish. Static `execution.official_runs` or `execution.official_session` usually needs `private_benchmark_data`. Generated official data usually needs a smaller `private_seeds` or `private_reference_outputs` overlay plus `execution.official_evaluation_setup`.
+If the bundle declares `datasets.private_benchmark_enabled: true`, declare the private assets the official evaluation path needs and upload them before publish. Static `execution.official_runs` or `execution.official_session` usually needs `private_benchmark_data`. Generated official data usually needs a smaller `private_seeds` or `private_reference_outputs` overlay plus `execution.official_evaluation_setup`.
 Use `private_assets[].required_paths` for any private overlay path that must
 exist in the final runtime bundle, for example `private-benchmark/runs.json` for
 static official data or `private-benchmark/config.json` for setup-generated
