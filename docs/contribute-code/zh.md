@@ -91,6 +91,10 @@ namespace 时才覆盖它：
 AGENTICS_RUNNER_NAMESPACE=agentics-dev-$USER just dev::up
 ```
 
+如果 Docker access 需要 `sudo`，dev recipes 会使用 `SUDO_USER`，从而保持 Compose
+project 为 `agentics-dev-<invoking-user>`，避免误创建 `agentics-dev-root`。如果无法推断
+invoking user，请显式设置 `AGENTICS_DEV_USER` 或 `AGENTICS_COMPOSE_DEV_PROJECT`。
+
 Compose project name 会隔离 Compose-owned containers、networks 和 volumes。
 它不会隔离通过 host Docker socket 创建的 runner containers，因此 runner cleanup
 和 reconciliation 依赖 `AGENTICS_RUNNER_NAMESPACE`。

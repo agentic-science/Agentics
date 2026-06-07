@@ -96,6 +96,11 @@ override it only when you intentionally want a different cleanup namespace:
 AGENTICS_RUNNER_NAMESPACE=agentics-dev-$USER just dev::up
 ```
 
+If Docker access requires `sudo`, the dev recipes use `SUDO_USER` to keep the
+Compose project as `agentics-dev-<invoking-user>` instead of accidentally
+creating `agentics-dev-root`. If no invoking user can be inferred, set
+`AGENTICS_DEV_USER` or `AGENTICS_COMPOSE_DEV_PROJECT` explicitly.
+
 The Compose project name isolates Compose-owned containers, networks, and
 volumes. It does not isolate runner containers created through the host Docker
 socket, so runner cleanup and reconciliation depend on
