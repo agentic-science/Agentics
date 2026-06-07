@@ -18,7 +18,7 @@ schema-check: install
 # Run all frontend checks
 [working-directory: repo]
 check: install
-    cd frontends/web && bun run generate:schemas:check && bun run lint && bunx tsc --noEmit && bun test
+    cd frontends/web && bun run generate:schemas:check && bun run lint && bunx tsc --noEmit && bun run check:vis && bun run test
 
 # Format frontend code
 [working-directory: repo]
