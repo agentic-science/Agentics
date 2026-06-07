@@ -4,13 +4,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
-import useSWR from "swr";
-import {
-  getHumanSession,
-  HUMAN_SESSION_CACHE_KEY,
-  startGithubLogin,
-} from "@/lib/authApi";
-import type { HumanSessionResponse } from "@/lib/schemas";
+import { startGithubLogin } from "@/lib/authApi";
+import { useHumanSession } from "@/lib/humanSession";
 
 /** Renders the unified human sign-in page panel. */
 export function SignInPanel() {
@@ -18,11 +13,7 @@ export function SignInPanel() {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { data: session } = useSWR<HumanSessionResponse>(
-    HUMAN_SESSION_CACHE_KEY,
-    getHumanSession,
-    { shouldRetryOnError: false },
-  );
+  const { data: session } = useHumanSession();
   const returnTo = normalizedReturnTo(searchParams.get("return_to"));
   const active = session?.status === "active";
   const admin = active && session.roles.includes("admin");

@@ -5,14 +5,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useEffect, useId, useRef, useState } from "react";
-import useSWR, { mutate } from "swr";
-import {
-  getHumanSession,
-  HUMAN_SESSION_CACHE_KEY,
-  logoutHuman,
-} from "@/lib/authApi";
+import { logoutHuman } from "@/lib/authApi";
 import { clearCreatorApiTokenCaches } from "@/lib/creatorData";
-import type { HumanSessionResponse } from "@/lib/schemas";
+import { clearHumanSessionCache, useHumanSession } from "@/lib/humanSession";
 
 /** Renders the shared account controls in the site header. */
 export function AccountMenu() {
@@ -24,11 +19,7 @@ export function AccountMenu() {
   const menuId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const { data: session } = useSWR<HumanSessionResponse>(
-    HUMAN_SESSION_CACHE_KEY,
-    getHumanSession,
-    { shouldRetryOnError: false },
-  );
+  const { data: session } = useHumanSession();
   useEffect(() => {
     setReturnTo(`${pathname}${window.location.search}`);
   }, [pathname]);
@@ -71,7 +62,7 @@ export function AccountMenu() {
     setSigningOut(true);
     try {
       await logoutHuman(session.csrf_token);
-      await mutate(HUMAN_SESSION_CACHE_KEY, undefined, { revalidate: false });
+      await clearHumanSessionCache();
       await clearCreatorApiTokenCaches();
       setOpen(false);
     } finally {

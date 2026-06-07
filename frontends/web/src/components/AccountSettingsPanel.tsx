@@ -5,14 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { type FormEvent, useState } from "react";
-import useSWR, { mutate } from "swr";
-import {
-  deleteHumanAccount,
-  getHumanSession,
-  HUMAN_SESSION_CACHE_KEY,
-} from "@/lib/authApi";
+import { mutate } from "swr";
+import { deleteHumanAccount } from "@/lib/authApi";
 import { clearCreatorApiTokenCaches } from "@/lib/creatorData";
-import type { HumanSessionResponse } from "@/lib/schemas";
+import { useHumanSession } from "@/lib/humanSession";
 
 /** Renders signed-in account identity and deletion controls. */
 export function AccountSettingsPanel() {
@@ -22,11 +18,7 @@ export function AccountSettingsPanel() {
   const [confirmation, setConfirmation] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { data: session, isLoading } = useSWR<HumanSessionResponse>(
-    HUMAN_SESSION_CACHE_KEY,
-    getHumanSession,
-    { shouldRetryOnError: false },
-  );
+  const { data: session, isLoading } = useHumanSession();
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
