@@ -10,8 +10,10 @@ and MVP target support.
 | Compose dev Postgres host port | `AGENTICS_POSTGRES_PORT` | `55432` in `deploy/compose/env/dev.env.example` | Local Compose development |
 | Rehearsal Postgres host port | `AGENTICS_POSTGRES_PORT` | `15432` in `deploy/compose/env/rehearsal.env.example` | Disposable production rehearsal only |
 | Production Compose bind address | `AGENTICS_COMPOSE_BIND_IP` | `127.0.0.1` | Production API and web host publishes |
-| API listen port | `AGENTICS_API_PORT` | `3100` | API service on loopback by default |
-| Web listen port | `AGENTICS_WEB_PORT` | `3001` | Next.js web service on loopback by default |
+| API listen port | `AGENTICS_API_PORT` | `3100` | Dev/local API service listen port |
+| Web listen port | `AGENTICS_WEB_PORT` | `3001` | Dev/local Next.js service listen port |
+| Production API host port | `AGENTICS_API_HOST_PORT` | `3100` in `prod.env.example` | Production Compose host publish |
+| Production web host port | `AGENTICS_WEB_HOST_PORT` | `3001` in `prod.env.example` | Production Compose host publish |
 | Rehearsal API host port | `AGENTICS_API_HOST_PORT` | `13100` in `rehearsal.env.example` | Disposable production rehearsal only |
 | Rehearsal web host port | `AGENTICS_WEB_HOST_PORT` | `13001` in `rehearsal.env.example` | Disposable production rehearsal only |
 | Production RustFS S3 endpoint | `AGENTICS_S3_ENDPOINT_URL` | `http://rustfs:9000` | Internal production Compose storage |

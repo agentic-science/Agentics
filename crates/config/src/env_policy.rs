@@ -787,7 +787,9 @@ const PRODUCTION_OPTIONAL: &[OptionalEnv] = &[
     OptionalEnv::new("AGENTICS_COMPOSE_BIND_IP", "127.0.0.1"),
     OptionalEnv::new("AGENTICS_POSTGRES_PORT", "5432"),
     OptionalEnv::new("AGENTICS_API_HOST", "0.0.0.0 in Compose API service"),
+    OptionalEnv::new("AGENTICS_API_HOST_PORT", "3100"),
     OptionalEnv::new("AGENTICS_API_PORT", "3100"),
+    OptionalEnv::new("AGENTICS_WEB_HOST_PORT", "3001"),
     OptionalEnv::new("AGENTICS_WEB_PORT", "3001"),
     OptionalEnv::new(
         "NEXT_PUBLIC_AGENTICS_API_BASE_URL",

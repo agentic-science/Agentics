@@ -270,8 +270,9 @@ Cloudflare 或其他外部 ingress 管理。它应该：
 - 如果 hosted MVP 不准备公开 admin access，应限制 admin paths 只允许可信 operators 访问。
 
 对于 production Compose，将 `/healthz`、`/api/*`、`/admin/*` 等 API paths 转发到
-`${AGENTICS_COMPOSE_BIND_IP}:${AGENTICS_API_PORT:-3100}`，并把 web traffic 转发到
-`${AGENTICS_COMPOSE_BIND_IP}:${AGENTICS_WEB_PORT:-3001}`。
+`${AGENTICS_COMPOSE_BIND_IP}:${AGENTICS_API_HOST_PORT:-3100}`，并把 web traffic
+转发到 `${AGENTICS_COMPOSE_BIND_IP}:${AGENTICS_WEB_HOST_PORT:-3001}`。Production
+Compose 中 container listen ports 固定为 API `3100` 和 web `3001`。
 
 ## Storage 和备份
 

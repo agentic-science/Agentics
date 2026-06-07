@@ -286,8 +286,11 @@ should:
 - Restrict admin paths to trusted operators when the hosted MVP is not meant to expose admin access publicly.
 
 For production Compose, route API paths such as `/healthz`, `/api/*`, and
-`/admin/*` to `${AGENTICS_COMPOSE_BIND_IP}:${AGENTICS_API_PORT:-3100}`, and
-route web traffic to `${AGENTICS_COMPOSE_BIND_IP}:${AGENTICS_WEB_PORT:-3001}`.
+`/admin/*` to `${AGENTICS_COMPOSE_BIND_IP}:${AGENTICS_API_HOST_PORT:-3100}`,
+and route web traffic to
+`${AGENTICS_COMPOSE_BIND_IP}:${AGENTICS_WEB_HOST_PORT:-3001}`. The container
+listen ports stay fixed at `3100` for API and `3001` for web in production
+Compose.
 
 ## Storage And Backups
 

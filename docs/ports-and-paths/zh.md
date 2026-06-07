@@ -10,8 +10,10 @@ reference。
 | Compose dev Postgres host port | `AGENTICS_POSTGRES_PORT` | `deploy/compose/env/dev.env.example` 中的 `55432` | Local Compose development |
 | Rehearsal Postgres host port | `AGENTICS_POSTGRES_PORT` | `deploy/compose/env/rehearsal.env.example` 中的 `15432` | 仅 disposable production rehearsal |
 | Production Compose bind address | `AGENTICS_COMPOSE_BIND_IP` | `127.0.0.1` | Production API 和 web host publishes |
-| API listen port | `AGENTICS_API_PORT` | `3100` | API service，默认 loopback |
-| Web listen port | `AGENTICS_WEB_PORT` | `3001` | Next.js web service，默认 loopback |
+| API listen port | `AGENTICS_API_PORT` | `3100` | Dev/local API service listen port |
+| Web listen port | `AGENTICS_WEB_PORT` | `3001` | Dev/local Next.js service listen port |
+| Production API host port | `AGENTICS_API_HOST_PORT` | `prod.env.example` 中的 `3100` | Production Compose host publish |
+| Production web host port | `AGENTICS_WEB_HOST_PORT` | `prod.env.example` 中的 `3001` | Production Compose host publish |
 | Rehearsal API host port | `AGENTICS_API_HOST_PORT` | `rehearsal.env.example` 中的 `13100` | 仅 disposable production rehearsal |
 | Rehearsal web host port | `AGENTICS_WEB_HOST_PORT` | `rehearsal.env.example` 中的 `13001` | 仅 disposable production rehearsal |
 | Production RustFS S3 endpoint | `AGENTICS_S3_ENDPOINT_URL` | `http://rustfs:9000` | Internal production Compose storage |
