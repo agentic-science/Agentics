@@ -14,6 +14,10 @@ use super::ids::{
     admin_service_token_id_from_row, creator_api_token_id_from_row, human_id_from_row,
 };
 
+mod account_deletion;
+
+pub use account_deletion::{DeleteHumanAccountOutcome, delete_human_account};
+
 const ADMIN_SERVICE_TOKEN_ACTIVE_LABEL_INDEX: &str = "idx_admin_service_tokens_owner_active_label";
 const CREATOR_API_TOKEN_ACTIVE_LABEL_INDEX: &str = "idx_creator_api_tokens_owner_active_label";
 
@@ -27,6 +31,7 @@ pub struct HumanRecord {
     pub roles: Vec<HumanRole>,
     pub created_at: DateTime<Utc>,
     pub disabled_at: Option<DateTime<Utc>>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 /// Persisted human identity resolved from a browser session.
@@ -156,6 +161,11 @@ pub async fn resolve_github_human(
         if existing.status == HumanStatus::Disabled.as_str() {
             return Err(ServiceError::Forbidden(
                 "linked human account is disabled".to_string(),
+            ));
+        }
+        if existing.status == HumanStatus::Deleted.as_str() {
+            return Err(ServiceError::Forbidden(
+                "linked human account has been deleted".to_string(),
             ));
         }
         if input.bootstrap_admin_candidate {
@@ -294,6 +304,11 @@ pub async fn complete_human_setup(
             "human account is disabled".to_string(),
         ));
     }
+    if status == HumanStatus::Deleted.as_str() {
+        return Err(ServiceError::Forbidden(
+            "human account has been deleted".to_string(),
+        ));
+    }
     if status == HumanStatus::Active.as_str()
         && active_role_exists_tx(&mut tx, human_id, HumanRole::Creator).await?
     {
@@ -418,6 +433,7 @@ pub async fn get_human_by_id(pool: &PgPool, human_id: &HumanId) -> Result<HumanR
             h.status,
             h.created_at,
             h.disabled_at,
+            h.deleted_at,
             e.provider_user_id AS github_user_id,
             e.provider_login AS github_login,
             COALESCE(
@@ -429,7 +445,7 @@ pub async fn get_human_by_id(pool: &PgPool, human_id: &HumanId) -> Result<HumanR
         JOIN human_external_identities e ON e.human_id = h.id AND e.provider = 'github'
         LEFT JOIN human_roles r ON r.human_id = h.id
         WHERE h.id = $1::uuid
-        GROUP BY h.id, h.status, h.created_at, h.disabled_at, e.provider_user_id, e.provider_login
+        GROUP BY h.id, h.status, h.created_at, h.disabled_at, h.deleted_at, e.provider_user_id, e.provider_login
         "#,
     )
     .bind(human_id.as_str())
@@ -815,19 +831,6 @@ pub async fn delete_expired_web_auth_rows(pool: &PgPool) -> Result<()> {
     Ok(())
 }
 
-/// Delete all active browser sessions for one human.
-pub async fn delete_human_sessions_tx(
-    tx: &mut Transaction<'_, Postgres>,
-    human_id: &str,
-) -> Result<i64> {
-    let result = sqlx::query("DELETE FROM human_sessions WHERE human_id = $1::uuid")
-        .bind(human_id)
-        .execute(&mut **tx)
-        .await?;
-    i64::try_from(result.rows_affected())
-        .map_err(|_| ServiceError::Internal("deleted human session count overflow".to_string()))
-}
-
 async fn find_github_human_for_update_tx(
     tx: &mut Transaction<'_, Postgres>,
     github_user_id: GithubUserId,
@@ -840,6 +843,7 @@ async fn find_github_human_for_update_tx(
                 h.status,
                 h.created_at,
                 h.disabled_at,
+                h.deleted_at,
                 e.provider_user_id,
                 e.provider_login
             FROM human_external_identities e
@@ -853,6 +857,7 @@ async fn find_github_human_for_update_tx(
             locked_human.status,
             locked_human.created_at,
             locked_human.disabled_at,
+            locked_human.deleted_at,
             locked_human.provider_user_id AS github_user_id,
             locked_human.provider_login AS github_login,
             COALESCE(
@@ -867,6 +872,7 @@ async fn find_github_human_for_update_tx(
             locked_human.status,
             locked_human.created_at,
             locked_human.disabled_at,
+            locked_human.deleted_at,
             locked_human.provider_user_id,
             locked_human.provider_login
         "#,
@@ -901,9 +907,10 @@ async fn activate_human_tx(tx: &mut Transaction<'_, Postgres>, human_id: &HumanI
         r#"
         UPDATE humans
         SET status = 'active',
-            disabled_at = NULL
+            disabled_at = NULL,
+            deleted_at = NULL
         WHERE id = $1::uuid
-          AND status <> 'disabled'
+          AND status NOT IN ('disabled', 'deleted')
         "#,
     )
     .bind(human_id.as_str())
@@ -1000,7 +1007,7 @@ async fn ensure_active_human_tx(
     let status: String = row.try_get("status")?;
     if status != "active" {
         return Err(ServiceError::Forbidden(
-            "human account is disabled".to_string(),
+            "human account is not active".to_string(),
         ));
     }
     Ok(())
@@ -1058,6 +1065,7 @@ fn human_list_sql() -> &'static str {
         h.status,
         h.created_at,
         h.disabled_at,
+        h.deleted_at,
         e.provider_user_id AS github_user_id,
         e.provider_login AS github_login,
         COALESCE(
@@ -1068,7 +1076,7 @@ fn human_list_sql() -> &'static str {
     FROM humans h
     JOIN human_external_identities e ON e.human_id = h.id AND e.provider = 'github'
     LEFT JOIN human_roles r ON r.human_id = h.id
-    GROUP BY h.id, h.status, h.created_at, h.disabled_at, e.provider_user_id, e.provider_login
+    GROUP BY h.id, h.status, h.created_at, h.disabled_at, h.deleted_at, e.provider_user_id, e.provider_login
     ORDER BY h.created_at DESC
     "#
 }
@@ -1082,6 +1090,7 @@ fn human_record_from_row(row: &sqlx::postgres::PgRow) -> Result<HumanRecord> {
         roles: roles_from_row(row)?,
         created_at: row.try_get("created_at")?,
         disabled_at: row.try_get("disabled_at")?,
+        deleted_at: row.try_get("deleted_at")?,
     })
 }
 

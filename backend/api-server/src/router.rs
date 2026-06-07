@@ -80,6 +80,10 @@ pub fn router(config: &Config) -> Router<AppState> {
             post(crate::auth_handlers::complete_human_setup),
         )
         .route("/api/auth/logout", post(crate::auth_handlers::human_logout))
+        .route(
+            "/api/auth/account/delete",
+            post(crate::auth_handlers::delete_human_account),
+        )
         .route("/api/auth/session", get(crate::auth_handlers::human_session))
         .route(
             "/api/creator/challenge-review-records",

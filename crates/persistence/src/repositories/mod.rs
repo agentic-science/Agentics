@@ -58,7 +58,7 @@ pub use crate::db::sessions::{
     AdminServiceTokenRecord, AuthenticatedAdminServiceToken, AuthenticatedCreatorApiToken,
     AuthenticatedHumanSession, ConsumedGithubSignInState, CreateAdminServiceTokenInput,
     CreateCreatorApiTokenInput, CreateGithubSignInStateInput, CreateHumanSessionInput,
-    CreatorApiTokenRecord, HumanRecord, ResolveGithubHumanInput,
+    CreatorApiTokenRecord, DeleteHumanAccountOutcome, HumanRecord, ResolveGithubHumanInput,
 };
 pub use crate::db::solution_submissions::{
     AdminSolutionSubmissionListItemRecord, CreateSolutionSubmissionInput,

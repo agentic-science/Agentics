@@ -41,6 +41,19 @@ pub async fn human_logout(
     ))
 }
 
+/// Delete the authenticated human account and clear browser auth cookies.
+pub async fn delete_human_account(
+    human: HumanAuth,
+    State(state): State<AppState>,
+) -> Result<(StatusCode, AppendHeaders<[(HeaderName, String); 2]>)> {
+    auth::delete_human_account(&state.db, &human.human_id).await?;
+
+    Ok((
+        StatusCode::NO_CONTENT,
+        AppendHeaders(expired_session_cookies(&state)),
+    ))
+}
+
 /// Return the current human session when browser cookies are still valid.
 pub async fn human_session(
     State(state): State<AppState>,

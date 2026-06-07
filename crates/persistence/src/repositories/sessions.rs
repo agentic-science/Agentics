@@ -5,7 +5,7 @@ use crate::repositories::{
     AdminServiceTokenRecord, AuthenticatedAdminServiceToken, AuthenticatedCreatorApiToken,
     AuthenticatedHumanSession, ConsumedGithubSignInState, CreateAdminServiceTokenInput,
     CreateCreatorApiTokenInput, CreateGithubSignInStateInput, CreateHumanSessionInput,
-    CreatorApiTokenRecord, HumanRecord, ResolveGithubHumanInput,
+    CreatorApiTokenRecord, DeleteHumanAccountOutcome, HumanRecord, ResolveGithubHumanInput,
 };
 use agentics_domain::models::ids::{AdminServiceTokenId, CreatorApiTokenId, HumanId};
 use agentics_error::Result;
@@ -59,6 +59,13 @@ impl SessionsRepository<'_> {
 
     pub async fn delete_human_session_by_token(&self, session_token: &str) -> Result<()> {
         db::sessions::delete_human_session_by_token(self.pool, session_token).await
+    }
+
+    pub async fn delete_human_account(
+        &self,
+        human_id: &HumanId,
+    ) -> Result<DeleteHumanAccountOutcome> {
+        db::sessions::delete_human_account(self.pool, human_id).await
     }
 
     pub async fn list_humans(&self) -> Result<Vec<HumanRecord>> {

@@ -521,7 +521,7 @@ export const adminHumanListResponseSchema = z
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
           status: z
-            .enum(["active", "setup_required", "disabled"])
+            .enum(["active", "setup_required", "disabled", "deleted"])
             .describe("Persistent lifecycle state for a human account."),
           github_user_id: z.number().int().gte(1),
           github_login: z.string(),
@@ -532,6 +532,7 @@ export const adminHumanListResponseSchema = z
           ),
           created_at: z.string(),
           disabled_at: z.string().optional(),
+          deleted_at: z.string().optional(),
         })
         .strict()
         .describe("Admin-visible human identity row."),
@@ -551,7 +552,7 @@ export const adminHumanRoleResponseSchema = z
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
           ),
         status: z
-          .enum(["active", "setup_required", "disabled"])
+          .enum(["active", "setup_required", "disabled", "deleted"])
           .describe("Persistent lifecycle state for a human account."),
         github_user_id: z.number().int().gte(1),
         github_login: z.string(),
@@ -562,6 +563,7 @@ export const adminHumanRoleResponseSchema = z
         ),
         created_at: z.string(),
         disabled_at: z.string().optional(),
+        deleted_at: z.string().optional(),
       })
       .strict()
       .describe("Admin-visible human identity row."),
@@ -2345,7 +2347,7 @@ export const completeHumanSetupResponseSchema = z
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
           ),
         status: z
-          .enum(["active", "setup_required", "disabled"])
+          .enum(["active", "setup_required", "disabled", "deleted"])
           .describe("Persistent lifecycle state for a human account."),
         github_user_id: z.number().int().gte(1),
         github_login: z.string(),
@@ -3058,7 +3060,7 @@ export const githubSignInCallbackResponseSchema = z
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
           ),
         status: z
-          .enum(["active", "setup_required", "disabled"])
+          .enum(["active", "setup_required", "disabled", "deleted"])
           .describe("Persistent lifecycle state for a human account."),
         github_user_id: z.number().int().gte(1),
         github_login: z.string(),
@@ -3099,7 +3101,7 @@ export const humanSessionResponseSchema = z
       .uuid()
       .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/),
     status: z
-      .enum(["active", "setup_required", "disabled"])
+      .enum(["active", "setup_required", "disabled", "deleted"])
       .describe("Persistent lifecycle state for a human account."),
     github_user_id: z.number().int().gte(1),
     github_login: z.string(),

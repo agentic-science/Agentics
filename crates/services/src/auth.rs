@@ -312,6 +312,15 @@ pub async fn delete_web_session_by_token(pool: &PgPool, session_token: &str) -> 
         .await
 }
 
+/// Soft-delete the current human account and revoke active credentials it owns.
+pub async fn delete_human_account(pool: &PgPool, human_id: &HumanId) -> Result<()> {
+    Repositories::new(pool)
+        .sessions()
+        .delete_human_account(human_id)
+        .await?;
+    Ok(())
+}
+
 /// Return the current human session when browser cookies are still valid.
 pub async fn authenticate_human_session(
     pool: &PgPool,

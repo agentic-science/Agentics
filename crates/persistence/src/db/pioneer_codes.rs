@@ -436,9 +436,10 @@ pub async fn revoke_pioneer_code(
             r#"
             UPDATE humans
             SET status = 'setup_required',
-                disabled_at = NULL
+                disabled_at = NULL,
+                deleted_at = NULL
             WHERE id = ANY($1::uuid[])
-              AND status <> 'disabled'
+              AND status NOT IN ('disabled', 'deleted')
             "#,
         )
         .bind(&human_ids)

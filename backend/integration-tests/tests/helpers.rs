@@ -459,7 +459,8 @@ pub async fn create_creator_session(
         r#"
         UPDATE humans
         SET status = 'active',
-            disabled_at = NULL
+            disabled_at = NULL,
+            deleted_at = NULL
         WHERE id = $1::uuid
         "#,
     )
@@ -497,7 +498,7 @@ pub async fn create_creator_session(
 
     TestCreatorSession {
         human_id: human.human_id.as_str().to_string(),
-        cookie_header: format!("agentics_session={session_token}"),
+        cookie_header: format!("agentics_session={session_token}; agentics_csrf={csrf_token}"),
         csrf_token,
     }
 }

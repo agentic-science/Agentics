@@ -483,6 +483,7 @@ fn present_human(record: HumanRecord) -> Result<AdminHumanDto> {
         disabled_at: record
             .disabled_at
             .map(|disabled_at| disabled_at.to_rfc3339()),
+        deleted_at: record.deleted_at.map(|deleted_at| deleted_at.to_rfc3339()),
     })
 }
 

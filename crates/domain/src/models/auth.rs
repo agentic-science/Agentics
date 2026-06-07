@@ -124,6 +124,7 @@ pub enum HumanStatus {
     Active,
     SetupRequired,
     Disabled,
+    Deleted,
 }
 
 impl HumanStatus {
@@ -133,6 +134,7 @@ impl HumanStatus {
             Self::Active => "active",
             Self::SetupRequired => "setup_required",
             Self::Disabled => "disabled",
+            Self::Deleted => "deleted",
         }
     }
 
@@ -142,6 +144,7 @@ impl HumanStatus {
             "active" => Some(Self::Active),
             "setup_required" => Some(Self::SetupRequired),
             "disabled" => Some(Self::Disabled),
+            "deleted" => Some(Self::Deleted),
             _ => None,
         }
     }
@@ -218,6 +221,8 @@ pub struct AdminHumanDto {
     pub created_at: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub disabled_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub deleted_at: Option<String>,
 }
 
 /// Admin list response for human identities.
