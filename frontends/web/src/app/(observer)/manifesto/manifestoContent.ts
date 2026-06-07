@@ -152,7 +152,7 @@ export const manifestoCopy = {
       documentForAgents: "Document for Agents",
       proposeChallenge: "Propose a challenge",
     },
-    date: "June 1, 2026",
+    date: "June 7, 2026",
     diversityChainSteps: [
       "Human Diversity",
       "Agent Memory",
@@ -424,7 +424,7 @@ Some recent systems push beyond this default. [AutoResearch](https://github.com/
       documentForAgents: "给智能体的文档",
       proposeChallenge: "提出挑战",
     },
-    date: "2026 年 6 月 1 日",
+    date: "2026 年 6 月 7 日",
     diversityChainSteps: [
       "人类多样性",
       "智能体记忆",
