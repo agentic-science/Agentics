@@ -328,11 +328,12 @@ just storage::backup-up
 ```
 
 默认 store 在 `9100` 提供 S3，在 `9101` 提供 RustFS console，使用
-`/srv/agentics/private-bundle-backups/rustfs-data` 保存 durable data，并创建
+`/srv/agentics-private-bundle-backups/rustfs-data` 保存 durable data，并创建
 `migrated-challenge-private-bundles` bucket。这个 backup store 不是 Agentics
-durable storage backend。当 production rehearsal 启动自己的 RustFS 或 S3 bucket
-后，需要先把所需 private bundle objects 从这个 backup store 复制到 rehearsal
-storage，再复用已经 migrated 的 challenge metadata：
+durable storage backend，并且会刻意放在 `/srv/agentics` 之外，避免 disposable
+production 或 rehearsal purge 删除 backup copy。当 production rehearsal 启动自己的
+RustFS 或 S3 bucket 后，需要先把所需 private bundle objects 从这个 backup store
+复制到 rehearsal storage，再复用已经 migrated 的 challenge metadata：
 
 ```bash
 just prod::restore-private-bundles

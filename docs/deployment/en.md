@@ -351,12 +351,13 @@ just storage::backup-up
 ```
 
 The default store listens on `9100` for S3 and `9101` for the RustFS console,
-uses `/srv/agentics/private-bundle-backups/rustfs-data` for durable data, and
+uses `/srv/agentics-private-bundle-backups/rustfs-data` for durable data, and
 creates the `migrated-challenge-private-bundles` bucket. This backup store is
-not the Agentics durable storage backend. When a production rehearsal starts
-with its own RustFS or S3 bucket, copy the needed private bundle objects from
-this backup store into the rehearsal storage before reusing previously migrated
-challenge metadata:
+not the Agentics durable storage backend and intentionally lives outside
+`/srv/agentics`, so disposable production or rehearsal purges do not delete the
+backup copy. When a production rehearsal starts with its own RustFS or S3
+bucket, copy the needed private bundle objects from this backup store into the
+rehearsal storage before reusing previously migrated challenge metadata:
 
 ```bash
 just prod::restore-private-bundles

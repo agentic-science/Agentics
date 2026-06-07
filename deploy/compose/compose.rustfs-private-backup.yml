@@ -6,7 +6,7 @@ services:
     user: root
     volumes:
       - type: bind
-        source: ${AGENTICS_RUSTFS_BACKUP_DATA_DIR:-/srv/agentics/private-bundle-backups/rustfs-data}
+        source: ${AGENTICS_RUSTFS_BACKUP_DATA_DIR:-/srv/agentics-private-bundle-backups/rustfs-data}
         target: /data
     command: ["sh", "-c", "mkdir -p /data && chown -R 10001:10001 /data"]
     restart: "no"
@@ -30,7 +30,7 @@ services:
       - "${AGENTICS_RUSTFS_BACKUP_BIND_IP:-0.0.0.0}:${AGENTICS_RUSTFS_BACKUP_CONSOLE_PORT:-9101}:9001"
     volumes:
       - type: bind
-        source: ${AGENTICS_RUSTFS_BACKUP_DATA_DIR:-/srv/agentics/private-bundle-backups/rustfs-data}
+        source: ${AGENTICS_RUSTFS_BACKUP_DATA_DIR:-/srv/agentics-private-bundle-backups/rustfs-data}
         target: /data
     command: ["/data"]
     restart: unless-stopped
