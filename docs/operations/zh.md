@@ -269,6 +269,11 @@ Disposable rehearsal storage 使用
 migrated interactive official sessions 在 MVP 中会有意在 runtime 生成 hidden state，
 以匹配原始 Frontier-CS interactor 行为；这些 challenges 的 public validation 仍是
 deterministic。
+Production 和 rehearsal startup seeding 会在
+`private-bundle-backups/<challenge-name>/<asset-name>.zip` 读取这些已恢复对象。
+App image 内置的 public catalog 会有意省略 private benchmark directories；API 会先把
+恢复的 private ZIPs overlay 到临时 runtime bundle，再 validate、archive 并 publish
+每个 challenge。
 
 ## Operational Checks
 
@@ -390,7 +395,9 @@ API `13100`、web `13001`、Postgres `15432`、RustFS `19000`/`19001`。
 因为 rehearsal web origin 是 HTTP loopback，env example 保持
 `AGENTICS_WEB_SESSION_COOKIE_SECURE=false`。
 
-Rehearsal 会 seed 临时 fixture challenges，创建一次性 pioneer code，注册
+Rehearsal stack startup 会在 private bundle backups 已恢复到 rehearsal RustFS
+namespace 后，seed 与 production 相同的 real migrated challenge catalog。Rehearsal
+run harness 还会 seed 临时 fixture challenges，创建一次性 pioneer code，注册
 rehearsal agent，覆盖三种 execution modes 的 validation 和 official submissions，
 验证 public projection/redaction surfaces，运行 hostile ZIP、network、private-data
 probes，并把 JSON/Markdown evidence 写入 `rehearsals/<run-id>/`。当 GPU worker

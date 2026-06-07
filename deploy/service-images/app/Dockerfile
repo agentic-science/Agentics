@@ -49,4 +49,6 @@ COPY --from=builder /workspace/Agentics/target/release/agentics-migrate /usr/loc
 COPY --from=builder /workspace/Agentics/target/release/agentics-compose-prod /usr/local/bin/agentics-compose-prod
 COPY --from=builder /workspace/Agentics/target/release/agentics-copy-private-bundle-backups /usr/local/bin/agentics-copy-private-bundle-backups
 COPY --from=builder /workspace/Agentics/target/release/agentics-rehearse-production /usr/local/bin/agentics-rehearse-production
-ENV AGENTICS_CHALLENGES_ROOT=/app/no-seeded-challenges
+COPY --from=builder /workspace/Agentics/challenge-repos/agentics-challenges/challenges /app/challenges
+RUN chmod -R a+rX /app/challenges
+ENV AGENTICS_CHALLENGES_ROOT=/app/challenges

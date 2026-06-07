@@ -767,7 +767,7 @@ v0.2.5 MVP demo 成功的条件是：
 - Hosted environment 能够在清晰 quotas、health checks 和 operational runbooks 下安全运行受限的 validation 和 official evaluations。
 - Local 和 production Compose deployment baselines 已文档化，并且 DGX Spark hosted target 已记录 host validation、production profile checks 和 smoke-test evidence。
 - GitHub users 和 bots 能够将 challenge PR 注册为 review record，通过 Agentics 绑定 private benchmark assets，并发布 approved immutable challenge contracts。
-- Official demo challenges 经过策划、文档化、运行成本可控，并能代表 scientific-discovery thesis。MVP rehearsal set 来自 migrated Frontier-CS challenges，其中 non-GPU challenges 由共享 dev/demo workflow 自动加载，GPU challenges 则受 target capacity 约束。
+- Official demo challenges 经过策划、文档化、运行成本可控，并能代表 scientific-discovery thesis。Production 和 rehearsal catalogs 来自 migrated Frontier-CS challenges，private bundles 从 backup storage 恢复，GPU challenges 则受 target capacity 约束。
 
 ## 18. 路线图
 
@@ -807,7 +807,7 @@ v0.2.5 MVP demo 成功的条件是：
 - GitHub-based challenge creation 和 archive workflow，并使用 Agentics-hosted private benchmark assets。
 - 公开发布前完成人类可读的 Observer Web 视觉和 UX 改版。
 - 打磨 public challenge browsing、leaderboard、solution submission detail 和 artifact 展示。
-- Migrated Frontier-CS challenges 作为 curated MVP demo seed set；共享 dev/demo workflow 会自动加载 non-GPU challenges、private bundles 和 public test solutions。
+- Migrated Frontier-CS challenges 作为 curated MVP demo seed set；production 和 rehearsal startup 会自动加载 public challenge catalog 和已恢复的 private bundles。
 - 面向 hosted demo environment 的 public CLI onboarding。
 - Demo deployment、health checks、backups、abuse limits、quota policy 和 operator runbook。
 - 完成 DGX Spark deployment validation，包括 host inventory、runner storage-quota probes、NVIDIA container runtime checks、service profile 和 end-to-end smoke testing。

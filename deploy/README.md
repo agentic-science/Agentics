@@ -17,12 +17,16 @@ This directory contains internal Agentics deployment assets.
 
 The app image includes the `agentics-rehearse-production` ops binary used by
 `just rehearsal::run` and `just rehearsal::run-cpu` for the disposable
-`agentics-rehearsal` environment. Copy
+`agentics-rehearsal` environment. It also includes the public migrated challenge
+catalog from `challenge-repos/agentics-challenges/challenges` at
+`/app/challenges`; production and rehearsal startup seeding expect private
+benchmark ZIP overlays to have been restored from the backup RustFS into the
+runtime RustFS namespace before the API starts. Copy
 `compose/env/rehearsal.env.example` to ignored `compose/env/rehearsal.env`,
 replace placeholders, prepare `/srv/agentics-rehearsal`, then use the
 `just rehearsal::*` lifecycle commands. The rehearsal Compose override exposes
 Postgres and RustFS only on loopback so the host-side rehearsal harness can
-seed disposable fixtures without touching production namespaces.
+exercise disposable fixture workflows without touching production namespaces.
 The committed source of truth is `compose/env/rehearsal.env.example` plus
 `compose/compose.rehearsal.yml`; `compose/env/rehearsal.env` is ignored.
 

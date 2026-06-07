@@ -502,7 +502,7 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 
 - **M0.2.5-DEMO-1：确定 official demo challenge set**
   - Commit target：`docs: define official mvp demo challenge set`
-  - Scope：使用 migrated Frontier-CS challenges 作为 MVP demo seed set。共享 dev/demo workflow 应自动加载 non-GPU migrated challenges、恢复后的 private bundles 和 public test solutions；GPU challenges 继续受 target capacity 约束。选择标准应包括 human understandability、deterministic scoring、低运行成本、清晰的 metricized research framing、validation support 和 official private benchmark cases。
+  - Scope：使用 migrated Frontier-CS challenges 作为 MVP demo seed set。Production 和 rehearsal startup 应自动加载 public migrated challenge catalog 和恢复后的 private bundles；GPU challenges 继续受 target capacity 约束。选择标准应包括 human understandability、deterministic scoring、低运行成本、清晰的 metricized research framing、validation support 和 official private benchmark cases。
   - Test spec：在实现开始前，根据选择标准审查 candidate challenges。
 
 - **M0.2.5-DEMO-2：打包 official demo challenges**
@@ -593,7 +593,7 @@ v0.2.5-mvp 是 v0.2 之后、v0.3 之前的产品化检查点。它让 Agentics 
 | `M0.2.5-CREATE-4：添加 challenge review record validation 和 review lifecycle` | 已实现 | 已实现 review record validation records、approval、rejection、publish transition 和 audit events。 |
 | `M0.2.5-CREATE-5：添加 challenge archive flow 并拒绝 version updates` | 已实现 | `new_version` manifests 会被拒绝；archive review records 会隐藏 challenge 但保留 direct records。 |
 | `M0.2.5-CREATE-6：添加 stale review record cleanup 和 challenge creation quotas` | 已实现 | 已实现 active review record limits、private asset byte limits、validation-frequency limits、stale review record abandonment 和 unpublished asset purge。 |
-| `M0.2.5-DEMO-1：确定 official demo challenge set` | 已实现 | Migrated Frontier-CS challenges 是 MVP demo seed set；共享 dev/demo workflow 会自动加载 non-GPU challenges、private bundles 和 test solutions。 |
+| `M0.2.5-DEMO-1：确定 official demo challenge set` | 已实现 | Migrated Frontier-CS challenges 是 MVP demo seed set；production 和 rehearsal startup 会自动加载 public challenge catalog 和已恢复的 private bundles。 |
 | `M0.2.5-DEMO-2：打包 official demo challenges` | 已实现 | Demo challenges 位于 `agentics-challenges`，使用从 RustFS backup storage 恢复的 private asset overlays，并包含 public test solutions 用于 local official-submission smoke paths。 |
 | `M0.2.5-DEPLOY-1：添加 hosted deployment baseline` | 已实现 | 已文档化 Local Compose MVP deployment rehearsal；DGX Spark host preparation 现在由 DGX-1 和 DGX-2 单独覆盖。 |
 | `M0.2.5-OPS-1：添加 public quota 和 abuse limits` | 已实现 | 已记录 backend-enforced quotas、pioneer-code gated registration、推荐 local Compose MVP 数值和 Cloudflare edge controls。 |

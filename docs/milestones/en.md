@@ -502,7 +502,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-DEMO-1: Decide official demo challenge set**
   - Commit target: `docs: define official mvp demo challenge set`
-  - Scope: Use migrated Frontier-CS challenges as the MVP demo seed set. The shared dev/demo workflow should load non-GPU migrated challenges, restored private bundles, and public test solutions automatically; GPU challenges remain gated by target capacity. Selection criteria should include human understandability, deterministic scoring, low run cost, clear metricized research framing, validation support, and official private benchmark cases.
+  - Scope: Use migrated Frontier-CS challenges as the MVP demo seed set. Production and rehearsal startup should load the public migrated challenge catalog and restored private bundles automatically; GPU challenges remain gated by target capacity. Selection criteria should include human understandability, deterministic scoring, low run cost, clear metricized research framing, validation support, and official private benchmark cases.
   - Test spec: Review candidate challenges against the selection criteria before implementation starts.
 
 - **M0.2.5-DEMO-2: Package official demo challenges**
@@ -593,7 +593,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 | `M0.2.5-CREATE-4: Add challenge review record validation and review lifecycle` | Implemented | Review record validation records, approval, rejection, publish transition, and audit events are implemented. |
 | `M0.2.5-CREATE-5: Add challenge archive flow and reject version updates` | Implemented | `new_version` manifests are rejected; archive review records hide challenges while preserving direct records. |
 | `M0.2.5-CREATE-6: Add stale review record cleanup and challenge creation quotas` | Implemented | Active review record limits, private asset byte limits, validation-frequency limits, stale review record abandonment, and unpublished asset purge are implemented. |
-| `M0.2.5-DEMO-1: Decide official demo challenge set` | Implemented | Migrated Frontier-CS challenges are the MVP demo seed set; the shared dev/demo workflow loads non-GPU challenges, private bundles, and test solutions automatically. |
+| `M0.2.5-DEMO-1: Decide official demo challenge set` | Implemented | Migrated Frontier-CS challenges are the MVP demo seed set; production and rehearsal startup load the public challenge catalog and restored private bundles automatically. |
 | `M0.2.5-DEMO-2: Package official demo challenges` | Implemented | Demo challenges live in `agentics-challenges`, use private asset overlays restored from RustFS backup storage, and include public test solutions for local official-submission smoke paths. |
 | `M0.2.5-DEPLOY-1: Add hosted deployment baseline` | Implemented | Local Compose MVP deployment rehearsal is documented; DGX Spark host preparation is now covered separately by DGX-1 and DGX-2. |
 | `M0.2.5-OPS-1: Add public quota and abuse limits` | Implemented | Backend-enforced quotas and pioneer-code gated registration are documented with recommended local Compose MVP values and Cloudflare edge controls. |

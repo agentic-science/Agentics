@@ -711,7 +711,12 @@ const TEST_OPTIONAL: &[OptionalEnv] = &[
 const REHEARSAL_OPTIONAL: &[OptionalEnv] = &[
     OptionalEnv::new("COMPOSE_PROFILES", "no optional Compose profile"),
     OptionalEnv::new("AGENTICS_COMPOSE_PROD_PROJECT", "agentics-prod"),
+    OptionalEnv::new(
+        "AGENTICS_COMPOSE_PROD_SERVICE_ENV_FILE",
+        "./env/prod.env.example",
+    ),
     OptionalEnv::new("AGENTICS_COMPOSE_BIND_IP", "127.0.0.1"),
+    OptionalEnv::new("AGENTICS_CHALLENGES_ROOT", "/app/challenges"),
     OptionalEnv::new(
         "NEXT_PUBLIC_AGENTICS_API_BASE_URL",
         "same-origin Next proxy",
@@ -784,8 +789,13 @@ const REHEARSAL_OPTIONAL: &[OptionalEnv] = &[
 
 const PRODUCTION_OPTIONAL: &[OptionalEnv] = &[
     OptionalEnv::new("AGENTICS_COMPOSE_PROD_PROJECT", "agentics-prod"),
+    OptionalEnv::new(
+        "AGENTICS_COMPOSE_PROD_SERVICE_ENV_FILE",
+        "./env/prod.env.example",
+    ),
     OptionalEnv::new("AGENTICS_COMPOSE_BIND_IP", "127.0.0.1"),
     OptionalEnv::new("AGENTICS_POSTGRES_PORT", "5432"),
+    OptionalEnv::new("AGENTICS_CHALLENGES_ROOT", "/app/challenges"),
     OptionalEnv::new("AGENTICS_API_HOST", "0.0.0.0 in Compose API service"),
     OptionalEnv::new("AGENTICS_API_HOST_PORT", "3100"),
     OptionalEnv::new("AGENTICS_API_PORT", "3100"),

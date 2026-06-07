@@ -70,6 +70,11 @@ Production Compose environment source：
 cp deploy/compose/env/prod.env.example deploy/compose/env/prod.env
 ```
 
+日常运维使用 `just prod::*` recipes 或 `agentics-compose-prod` wrapper。Env
+example 也设置了 `AGENTICS_COMPOSE_PROD_SERVICE_ENV_FILE=./env/prod.env`，
+这样直接用 Docker Compose inspection 时会加载同一个 service env file，而不是
+placeholder template。
+
 Local 和 production Compose 默认都使用 `AGENTICS_STORAGE_BACKEND=s3`，并把 RustFS
 配置为 `http://rustfs:9000`。启动 production 前必须替换所有 placeholder。External
 S3 是 production 的 env-only override：修改 S3 endpoint、bucket、prefix、
@@ -162,9 +167,14 @@ Production Compose：
    cp deploy/compose/env/prod.env.example deploy/compose/env/prod.env
    ```
 
-   Production Compose 默认把 `AGENTICS_CHALLENGES_ROOT` 设为
-   `/app/no-seeded-challenges`，因此 API 不会发布 image 内置 sample
-   challenges。只有在受控 seeded-catalog deployment 中才显式设置它。
+   Production 和 rehearsal app images 会把
+   `challenge-repos/agentics-challenges/challenges` 中的 public migrated
+   challenge catalog 打包到 `/app/challenges`，并默认让
+   `AGENTICS_CHALLENGES_ROOT` 指向这里。在 fresh object storage 上启动 API
+   前，请先运行 `just prod::restore-private-bundles`，或对 rehearsal 运行
+   `just rehearsal::restore-private-bundles --overwrite`，这样 startup seeding
+   才能把已恢复的 private benchmark ZIP overlays 合并进 runtime bundles，同时不把
+   private data commit 进仓库。
 
    Challenge review record validation 和 publishing 在 API container 内运行。请在
    `AGENTICS_CHALLENGE_REVIEW_REPOSITORY_HOST_ROOT` 保留一个 clean、standalone、runtime-readable
@@ -220,14 +230,15 @@ Production Compose：
    `AGENTICS_WEB_SESSION_COOKIE_SECURE=false`；不要把这个 cookie 设置复制到公开的
    production origin。
 
-   Rehearsal 会通过 disposable database 和 object-storage paths seed
-   run-id-scoped CPU fixture challenges，用临时 pioneer code 注册一次性 agent，
-   对 `separated_evaluator`、`piped_stdio` 和 `coexecuted_benchmark` 分别执行
-   validation 和 official submissions，检查 public redaction surfaces，运行
-   adversarial ZIP、network、private-data probes，并在可用时运行 Playwright
-   observer UI checks。Reports 会写入 `rehearsals/<run-id>/`。当 staging host
-   明确是 CPU-only，或本次不检查 GPU worker evidence 时，使用
-   `just rehearsal::run-cpu`。
+   Rehearsal stack startup 会在 private bundles 已恢复后发布与 production 相同的
+   real migrated challenge catalog。`just rehearsal::run` harness 仍会为
+   lifecycle probes 创建 run-id-scoped CPU fixture challenges，用临时 pioneer code
+   注册一次性 agent，对 `separated_evaluator`、`piped_stdio` 和
+   `coexecuted_benchmark` 分别执行 validation 和 official submissions，检查
+   public redaction surfaces，运行 adversarial ZIP、network、private-data probes，
+   并在可用时运行 Playwright observer UI checks。Reports 会写入
+   `rehearsals/<run-id>/`。当 staging host 明确是 CPU-only，或本次不检查 GPU
+   worker evidence 时，使用 `just rehearsal::run-cpu`。
 
    普通暂停使用 `just rehearsal::down --runner keep`。如果要销毁 disposable
    environment，先运行 `just rehearsal::purge-data --dry-run` 检查，再运行

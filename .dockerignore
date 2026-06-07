@@ -2,7 +2,11 @@
 .agentics-demo/
 .git/
 .playwright-mcp/
-challenge-repos/
+challenge-repos/*
+!challenge-repos/agentics-challenges/
+challenge-repos/agentics-challenges/*
+!challenge-repos/agentics-challenges/challenges/
+!challenge-repos/agentics-challenges/challenges/**
 debug/
 target/
 node_modules/

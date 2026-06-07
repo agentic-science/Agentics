@@ -281,6 +281,11 @@ only in disposable or explicitly approved refresh environments. Some migrated
 interactive official sessions intentionally generate hidden state at runtime for
 MVP, matching the original Frontier-CS interactor behavior. Public validation
 for those challenges remains deterministic.
+Production and rehearsal startup seeding expects these restored objects under
+`private-bundle-backups/<challenge-name>/<asset-name>.zip`. The public catalog
+bundled in the app image intentionally omits private benchmark directories; the
+API overlays the restored private ZIPs into a temporary runtime bundle before
+validating, archiving, and publishing each challenge.
 
 ## Operational Checks
 
@@ -408,11 +413,13 @@ loopback ports: API `13100`, web `13001`, Postgres `15432`, and RustFS
 Because the rehearsal web origin is HTTP loopback, its env example keeps
 `AGENTICS_WEB_SESSION_COOKIE_SECURE=false`.
 
-The rehearsal seeds temporary fixture challenges, creates a one-use pioneer
-code, registers a rehearsal agent, runs validation and official submissions
-across the three execution modes, verifies public projection/redaction
-surfaces, runs hostile ZIP/network/private-data probes, and writes
-JSON/Markdown evidence under `rehearsals/<run-id>/`. Use
+The rehearsal stack startup seeds the real migrated challenge catalog used by
+production, after private bundle backups have been restored into the rehearsal
+RustFS namespace. The rehearsal run harness also creates temporary fixture
+challenges, creates a one-use pioneer code, registers a rehearsal agent, runs
+validation and official submissions across the three execution modes, verifies
+public projection/redaction surfaces, runs hostile ZIP/network/private-data
+probes, and writes JSON/Markdown evidence under `rehearsals/<run-id>/`. Use
 `just rehearsal::run-cpu` when GPU worker evidence is intentionally out of
 scope.
 

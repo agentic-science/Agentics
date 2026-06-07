@@ -76,6 +76,12 @@ Production Compose environment source:
 cp deploy/compose/env/prod.env.example deploy/compose/env/prod.env
 ```
 
+Use the `just prod::*` recipes or `agentics-compose-prod` wrapper for normal
+operations. The env example also sets
+`AGENTICS_COMPOSE_PROD_SERVICE_ENV_FILE=./env/prod.env` so direct Docker
+Compose inspection loads the same service env file instead of the placeholder
+template.
+
 Local and production Compose both use `AGENTICS_STORAGE_BACKEND=s3` with RustFS
 at `http://rustfs:9000` by default. Replace every placeholder before starting
 production. External S3 is an env-only production override: change the S3
@@ -173,10 +179,14 @@ For production Compose:
    cp deploy/compose/env/prod.env.example deploy/compose/env/prod.env
    ```
 
-   Production Compose defaults `AGENTICS_CHALLENGES_ROOT` to
-   `/app/no-seeded-challenges` so the API does not publish image-bundled sample
-   challenges. Set it explicitly only for a controlled seeded-catalog
-   deployment.
+   Production and rehearsal app images include the public migrated challenge
+   catalog from `challenge-repos/agentics-challenges/challenges` at
+   `/app/challenges`, and `AGENTICS_CHALLENGES_ROOT` points there by default.
+   Before starting the API against fresh object storage, run
+   `just prod::restore-private-bundles` or
+   `just rehearsal::restore-private-bundles --overwrite` so startup seeding can
+   merge the restored private benchmark ZIP overlays into runtime bundles
+   without committing private data.
 
    Challenge review record validation and publishing run inside the API container. Keep
    a clean, standalone, runtime-readable `agentics-challenges` checkout at
@@ -234,9 +244,11 @@ For production Compose:
    `AGENTICS_WEB_SESSION_COOKIE_SECURE=false`; do not copy that cookie setting
    to a public production origin.
 
-   The rehearsal seeds run-id-scoped CPU fixture challenges through disposable
-   database and object-storage paths, registers a one-use agent with a
-   temporary pioneer code, exercises validation and official submissions for
+   The rehearsal stack startup publishes the same real migrated challenge
+   catalog used by production after private bundles have been restored. The
+   `just rehearsal::run` harness still creates run-id-scoped CPU fixture
+   challenges for lifecycle probes, registers a one-use agent with a temporary
+   pioneer code, exercises validation and official submissions for
    `separated_evaluator`, `piped_stdio`, and `coexecuted_benchmark`, checks
    public redaction surfaces, runs adversarial ZIP/network/private-data probes,
    and optionally runs Playwright observer UI checks. Reports are written under
