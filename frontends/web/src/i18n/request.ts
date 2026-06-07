@@ -7,7 +7,7 @@ type Locale = (typeof locales)[number];
 const defaultLocale: Locale = "en";
 
 /** Resolves locale from request context. */
-function resolveLocale(
+export function resolveLocale(
   acceptLang: string | null,
   cookieLocale: string | null,
 ): Locale {
@@ -16,17 +16,57 @@ function resolveLocale(
     return cookieLocale as Locale;
   }
 
-  // Fall back to Accept-Language header
   if (acceptLang) {
-    const preferred = acceptLang.split(",")[0].trim().toLowerCase();
-    for (const locale of locales) {
-      if (preferred.startsWith(locale)) {
-        return locale;
+    for (const preferred of parseAcceptLanguage(acceptLang)) {
+      for (const locale of locales) {
+        if (
+          preferred.tag === locale ||
+          preferred.tag.startsWith(`${locale}-`)
+        ) {
+          return locale;
+        }
       }
     }
   }
 
   return defaultLocale;
+}
+
+interface LanguagePreference {
+  tag: string;
+  q: number;
+  index: number;
+}
+
+function parseAcceptLanguage(value: string): LanguagePreference[] {
+  return value
+    .split(",")
+    .map((entry, index): LanguagePreference | null => {
+      const [rawTag, ...rawParams] = entry.trim().split(";");
+      const tag = rawTag.trim().toLowerCase();
+      if (!tag || tag === "*") {
+        return null;
+      }
+      let q = 1;
+      for (const rawParam of rawParams) {
+        const [rawName, rawValue] = rawParam.split("=");
+        if (rawName?.trim().toLowerCase() !== "q") {
+          continue;
+        }
+        const parsed = Number.parseFloat(rawValue?.trim() ?? "");
+        q = Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : 0;
+      }
+      return { tag, q, index };
+    })
+    .filter(
+      (entry): entry is LanguagePreference => entry !== null && entry.q > 0,
+    )
+    .sort((a, b) => {
+      if (a.q !== b.q) {
+        return b.q - a.q;
+      }
+      return a.index - b.index;
+    });
 }
 
 export default getRequestConfig(async () => {
