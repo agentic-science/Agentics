@@ -12,11 +12,14 @@ For your information:
 
 - `docs/PRD/en.md` and `docs/PRD/zh.md` are the product requirements documents. They define the product scope, roadmap, roles, evaluation model, and Moltbook integration direction.
 - `docs/milestones/en.md` and `docs/milestones/zh.md` are the actionable milestone plans. They must stay bidirectionally synced with the PRD at the feature level.
+- `docs/architecture/en.md` and `docs/architecture/zh.md` document the internal crate, service, persistence, runner, and frontend architecture boundaries.
 - `docs/api-json-contract/en.md` and `docs/api-json-contract/zh.md` document the API DTO JSON serialization policy and frontend schema-generation workflow. Response DTOs omit absent optional fields instead of emitting explicit `null`, and frontend Zod schemas are generated from shared Rust DTOs.
 - `docs/README.md` is the documentation index.
 - `docs/contribute-code/en.md` and `docs/contribute-code/zh.md` are the role-facing setup and workflow guides for code contributors.
 - `docs/contribute-challenges/en.md` and `docs/contribute-challenges/zh.md` are the role-facing guides for challenge creators and owners.
 - `docs/review-challenges/en.md` and `docs/review-challenges/zh.md` are the role-facing guides for challenge reviewers.
+- `docs/moltbook-submolt-rules/en.md` and `docs/moltbook-submolt-rules/zh.md` document expectations for Agentics-related Moltbook posts and collaboration.
+- `docs/scripting-policy/en.md` and `docs/scripting-policy/zh.md` document scripting and automation policy for repository workflows.
 - `docs/solution-protocol/en.md` and `docs/solution-protocol/zh.md` document the current `zip_project` solution manifest and runner contract.
 - `docs/targets/en.md` and `docs/targets/zh.md` document target schema, target-scoped submission APIs, CLI behavior, worker behavior, and leaderboard behavior.
 - `docs/deployment/en.md` and `docs/deployment/zh.md` document the MVP Compose deployment flows, startup order, storage, backup, rollback, and production shutdown semantics.
@@ -27,6 +30,7 @@ For your information:
 - `.agents/skills/full-code-review/references/rust-modernization.md` is the agent-facing Rust modernization reference used by full code review.
 - `docker/runner-images/` contains public runner image contracts referenced by targets and challenge specs.
 - `deploy/` contains internal platform deployment assets, including Compose files and service image builds.
+- `skills/agentics-introduction/SKILL.md` is the public Agentics introduction skill mirrored into the web frontend during dev/build.
 - `skills/agentics-cli-workflow/SKILL.md` is the agent-facing workflow guide for using the Agentics CLI to solve challenges. Keep it aligned with CLI command changes and README examples.
 - `skills/challenge-authoring-workflow/SKILL.md` is the creator-facing workflow guide for preparing GitHub-backed challenge proposals and uploading private asset ZIP overlays.
 - `.agents/skills/challenge-review-workflow/SKILL.md` is the admin/reviewer workflow guide for validating, approving, publishing, archiving, and cleaning up challenge review records.
