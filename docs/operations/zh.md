@@ -79,7 +79,7 @@ Startup config validation 会 fail fast。格式错误的 numeric port variables
 ## Internal Rust Toolchain Image
 
 Compose development 和 integration-test Rust services 默认使用内部
-`agentics-rust-toolchain:bookworm-llvm22-local` image。该 image 从
+`agentics-rust-toolchain:trixie-llvm22-local` image。该 image 从
 `deploy/service-images/rust-toolchain/` 构建，并安装 Homebrew LLVM 22、Homebrew
 `cargo-binstall` 和 Wild 0.9.0。进入 image 后可检查
 `/opt/agentics/toolchain-info.json` 确认实际 toolchain，并检查
@@ -88,9 +88,9 @@ Compose development 和 integration-test Rust services 默认使用内部
 手动 rebuild 和 smoke：
 
 ```bash
-docker build --network host -t agentics-rust-toolchain:bookworm-llvm22-local \
+docker build --network host -t agentics-rust-toolchain:trixie-llvm22-local \
   deploy/service-images/rust-toolchain
-docker run --rm --network none agentics-rust-toolchain:bookworm-llvm22-local \
+docker run --rm --network none agentics-rust-toolchain:trixie-llvm22-local \
   /opt/agentics/smoke-rust-toolchain.sh
 ```
 
@@ -578,11 +578,8 @@ stale `_tmp/` keys 的第二道防线。
 恢复时停止 API 和 worker，从同一 snapshot 恢复 database 和 storage，然后依次启动
 API、worker 和 web。Agentics 不维护 down migrations；schema rollback 依赖 snapshot。
 
-PostgreSQL 18 production upgrade 时，先只停止 `web`、`api`、`worker-cpu` 和
-`worker-gpu` 来冻结写入，保留 `postgres` 和 `rustfs` 运行以完成 logical backup。
-使用 PostgreSQL 18 client tools 执行 `pg_dumpall --globals-only`、
-`pg_dump --format=custom --blobs` 和 `pg_restore --list`，并在 cutover 前把
-timestamped backup directory 复制到 off-host 位置。执行
-`just prod::down --runner keep` 后，为旧 `agentics-prod_postgres_data` volume
-创建 cold archive，再 restore 到声明好的 fresh PG18 volume `postgres_data_pg18`；不要运行
-`down -v`，也不要让 PG18 复用旧 PG16 volume。
+Production 现在通过共享 Compose 路径运行 PostgreSQL 18，数据位于
+`postgres_data_pg18` named volume。请保留 timestamped logical backup 和旧
+`agentics-prod_postgres_data` PG16 volume 的 cold archive，直到 rollback window
+结束。不要对 production 运行 `down -v`；rollback 依赖 volume 和 backup，而不是
+migration downgrade。

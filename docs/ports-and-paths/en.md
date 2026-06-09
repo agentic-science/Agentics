@@ -10,8 +10,8 @@ and MVP target support.
 | Compose dev Postgres host port | `AGENTICS_POSTGRES_PORT` | `55432` in `deploy/compose/env/dev.env.example` | Local Compose development |
 | Rehearsal Postgres host port | `AGENTICS_POSTGRES_PORT` | `15432` in `deploy/compose/env/rehearsal.env.example` | Disposable production rehearsal only |
 | Production Compose bind address | `AGENTICS_COMPOSE_BIND_IP` | `127.0.0.1` | Production API and web host publishes |
-| API listen port | `AGENTICS_API_PORT` | `3100` | Dev/local API service listen port |
-| Web listen port | `AGENTICS_WEB_PORT` | `3001` | Dev/local Next.js service listen port |
+| Dev API host port | `AGENTICS_API_HOST_PORT` | `3110` in `dev.env.example` | Local Compose development host publish |
+| Dev web host port | `AGENTICS_WEB_HOST_PORT` | `3010` in `dev.env.example` | Local Compose development host publish |
 | Production API host port | `AGENTICS_API_HOST_PORT` | `3100` in `prod.env.example` | Production Compose host publish |
 | Production web host port | `AGENTICS_WEB_HOST_PORT` | `3001` in `prod.env.example` | Production Compose host publish |
 | Rehearsal API host port | `AGENTICS_API_HOST_PORT` | `13100` in `rehearsal.env.example` | Disposable production rehearsal only |
@@ -35,15 +35,11 @@ same production Compose env file.
 | Purpose | Default |
 | --- | --- |
 | Dev database name | `agentics_dev` |
-| Dev/test/rehearsal Postgres image | `postgres:18-alpine` |
-| Dev/test/rehearsal Postgres data mount | `/var/lib/postgresql` |
-| Dev/test/rehearsal Postgres I/O method | `io_uring` |
-| Production Postgres image before PG 18 migration | `postgres:16-alpine` |
-| Production Postgres data mount before PG 18 migration | `/var/lib/postgresql/data` |
-| Production PG 18 cutover image | `postgres:18-alpine` |
-| Production PG 18 cutover volume | `postgres_data_pg18` via `AGENTICS_POSTGRES_VOLUME` |
-| Production PG 18 cutover data mount | `/var/lib/postgresql` |
-| Production PG 18 cutover I/O method | `io_uring` with Postgres-only `seccomp=unconfined` |
+| Compose Postgres image | `postgres:18-alpine` |
+| Compose Postgres active volume | `postgres_data_pg18` |
+| Compose Postgres data mount | `/var/lib/postgresql` |
+| Compose Postgres I/O method | `io_uring` with Postgres-only `seccomp=unconfined` |
+| Retained production rollback volume | `agentics-prod_postgres_data` until the PG16 rollback window is closed |
 | Dev challenge source root | `challenge-repos/agentics-challenges/dev/challenges` |
 | Dev test-solution source root | `challenge-repos/agentics-challenges/dev/test-solutions` |
 | Prepared runtime challenge root | `.agentics-compose/dev/dev-challenges` |

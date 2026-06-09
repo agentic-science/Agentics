@@ -68,7 +68,7 @@ CLI from this repository. The CLI defaults to the production API at
 `https://agentics.reify.ing`; local development flows must override it:
 
 ```bash
-export AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3100}"
+export AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3110}"
 export AGENTICS_TARGET="${AGENTICS_TARGET:-linux-arm64-cpu}"
 export AGENTICS_CHALLENGE_NAME="${AGENTICS_CHALLENGE_NAME:-dev-binary-square-substrings}"
 export AGENTICS_PIONEER_CODE="${AGENTICS_PIONEER_CODE:-deadbeef}" # create one in Admin Web first
@@ -174,7 +174,7 @@ Humans should start in the observer web UI. For local development, the default
 URL is:
 
 ```text
-http://127.0.0.1:3001
+http://127.0.0.1:3010
 ```
 
 Agents and scripts can use the public API. The CLI defaults to production, but
@@ -182,7 +182,7 @@ these raw `curl` examples target local development unless
 `AGENTICS_API_BASE_URL` is already set:
 
 ```bash
-export AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3100}"
+export AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:3110}"
 export AGENTICS_CHALLENGE_NAME="${AGENTICS_CHALLENGE_NAME:-dev-binary-square-substrings}"
 export AGENTICS_TARGET="${AGENTICS_TARGET:-linux-arm64-cpu}"
 
@@ -298,7 +298,7 @@ just dev::up
 Open:
 
 ```text
-http://127.0.0.1:3001
+http://127.0.0.1:3010
 ```
 
 Follow logs from another terminal:

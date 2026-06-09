@@ -10,8 +10,8 @@ reference。
 | Compose dev Postgres host port | `AGENTICS_POSTGRES_PORT` | `deploy/compose/env/dev.env.example` 中的 `55432` | Local Compose development |
 | Rehearsal Postgres host port | `AGENTICS_POSTGRES_PORT` | `deploy/compose/env/rehearsal.env.example` 中的 `15432` | 仅 disposable production rehearsal |
 | Production Compose bind address | `AGENTICS_COMPOSE_BIND_IP` | `127.0.0.1` | Production API 和 web host publishes |
-| API listen port | `AGENTICS_API_PORT` | `3100` | Dev/local API service listen port |
-| Web listen port | `AGENTICS_WEB_PORT` | `3001` | Dev/local Next.js service listen port |
+| Dev API host port | `AGENTICS_API_HOST_PORT` | `dev.env.example` 中的 `3110` | Local Compose development host publish |
+| Dev web host port | `AGENTICS_WEB_HOST_PORT` | `dev.env.example` 中的 `3010` | Local Compose development host publish |
 | Production API host port | `AGENTICS_API_HOST_PORT` | `prod.env.example` 中的 `3100` | Production Compose host publish |
 | Production web host port | `AGENTICS_WEB_HOST_PORT` | `prod.env.example` 中的 `3001` | Production Compose host publish |
 | Rehearsal API host port | `AGENTICS_API_HOST_PORT` | `rehearsal.env.example` 中的 `13100` | 仅 disposable production rehearsal |
@@ -35,15 +35,11 @@ production Compose env file。
 | Purpose | Default |
 | --- | --- |
 | Dev database name | `agentics_dev` |
-| Dev/test/rehearsal Postgres image | `postgres:18-alpine` |
-| Dev/test/rehearsal Postgres data mount | `/var/lib/postgresql` |
-| Dev/test/rehearsal Postgres I/O method | `io_uring` |
-| PG 18 production migration 前的 production Postgres image | `postgres:16-alpine` |
-| PG 18 production migration 前的 production Postgres data mount | `/var/lib/postgresql/data` |
-| Production PG 18 cutover image | `postgres:18-alpine` |
-| Production PG 18 cutover volume | 通过 `AGENTICS_POSTGRES_VOLUME` 使用 `postgres_data_pg18` |
-| Production PG 18 cutover data mount | `/var/lib/postgresql` |
-| Production PG 18 cutover I/O method | `io_uring`，并只对 Postgres 设置 `seccomp=unconfined` |
+| Compose Postgres image | `postgres:18-alpine` |
+| Compose Postgres active volume | `postgres_data_pg18` |
+| Compose Postgres data mount | `/var/lib/postgresql` |
+| Compose Postgres I/O method | `io_uring`，并只对 Postgres 设置 `seccomp=unconfined` |
+| Retained production rollback volume | `agentics-prod_postgres_data`，保留到 PG16 rollback window 结束 |
 | Dev challenge source root | `challenge-repos/agentics-challenges/dev/challenges` |
 | Dev test-solution source root | `challenge-repos/agentics-challenges/dev/test-solutions` |
 | Prepared runtime challenge root | `.agentics-compose/dev/dev-challenges` |

@@ -30,23 +30,21 @@ exercise disposable fixture workflows without touching production namespaces.
 The committed source of truth is `compose/env/rehearsal.env.example` plus
 `compose/compose.rehearsal.yml`; `compose/env/rehearsal.env` is ignored.
 
-Dev, test, and disposable rehearsal Compose environments opt in to
-`postgres:18-alpine`, mount Postgres data at `/var/lib/postgresql`, and run
-`io_method=io_uring`. Their Postgres services use `seccomp=unconfined` because
-the current Docker default seccomp profile blocks PG 18 `io_uring`. Production
-keeps the base `postgres:16-alpine` default until the operator performs the
-documented dump/restore cutover. The PG 18 production cutover uses
-`AGENTICS_POSTGRES_VOLUME=postgres_data_pg18`, so the old PG 16 `postgres_data`
-volume remains available for rollback. The production Compose wrapper refuses
-to run PG 18 against the old default volume.
+All Compose environments use `postgres:18-alpine`, mount Postgres data at
+`/var/lib/postgresql`, and run `io_method=io_uring`. The Postgres service uses
+`seccomp=unconfined` because the current Docker default seccomp profile blocks
+PG 18 `io_uring`. The active named volume is `postgres_data_pg18`; the old PG 16
+`postgres_data` production volume is retained only as a rollback artifact until
+the rollback window is closed.
 
 These files are platform implementation details. Challenge specs and target
 contracts must not reference Dockerfiles or images under `deploy/service-images/`.
 Public runner image contracts live under `docker/runner-images/`.
 
 The default internal Rust image tag is
-`agentics-rust-toolchain:bookworm-llvm22-local`. Compose development and
+`agentics-rust-toolchain:trixie-llvm22-local`. Compose development and
 integration-test services build it from `service-images/rust-toolchain/` when
-needed. Public runner images under `docker/runner-images/` are intentionally not
-changed by this internal toolchain image; adding LLVM/Wild there requires a
-separate runner-image release and digest update.
+needed. The image is based on Debian Trixie. Public runner images under
+`docker/runner-images/` are intentionally not changed by this internal toolchain
+image; adding LLVM/Wild there requires a separate runner-image release and
+digest update.

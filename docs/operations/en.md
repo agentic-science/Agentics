@@ -80,7 +80,7 @@ not ignored, and hosted worker probe mode requires a non-empty
 ## Internal Rust Toolchain Image
 
 Compose development and integration-test Rust services use the internal
-`agentics-rust-toolchain:bookworm-llvm22-local` image by default. The image is
+`agentics-rust-toolchain:trixie-llvm22-local` image by default. The image is
 built from `deploy/service-images/rust-toolchain/` and installs Homebrew LLVM
 22, Homebrew `cargo-binstall`, and Wild 0.9.0. Inspect
 `/opt/agentics/toolchain-info.json` inside the image to confirm the effective
@@ -89,9 +89,9 @@ toolchain and `/opt/cargo/config.toml` for the Cargo linker settings.
 Rebuild and smoke the image manually with:
 
 ```bash
-docker build --network host -t agentics-rust-toolchain:bookworm-llvm22-local \
+docker build --network host -t agentics-rust-toolchain:trixie-llvm22-local \
   deploy/service-images/rust-toolchain
-docker run --rm --network none agentics-rust-toolchain:bookworm-llvm22-local \
+docker run --rm --network none agentics-rust-toolchain:trixie-llvm22-local \
   /opt/agentics/smoke-rust-toolchain.sh
 ```
 
@@ -613,12 +613,8 @@ Restore by stopping API and worker, restoring database and storage from the
 same snapshot, then starting API, worker, and web. Agentics does not maintain
 down migrations; schema rollback is snapshot-based.
 
-For the PostgreSQL 18 production upgrade, freeze writes by stopping only
-`web`, `api`, `worker-cpu`, and `worker-gpu` while keeping `postgres` and
-`rustfs` running for the logical backup. Use PostgreSQL 18 client tools for
-`pg_dumpall --globals-only`, `pg_dump --format=custom --blobs`, and
-`pg_restore --list`, then copy the timestamped backup directory off-host before
-cutover. After `just prod::down --runner keep`, take a cold archive of the old
-`agentics-prod_postgres_data` volume and restore into the declared fresh PG18
-volume `postgres_data_pg18`; never run `down -v` or reuse the old PG16 volume
-for PG18.
+Production now runs PostgreSQL 18 from the shared Compose path, with data in the
+`postgres_data_pg18` named volume. Keep the timestamped logical backup and the
+cold archive of the old `agentics-prod_postgres_data` PG16 volume until the
+rollback window is closed. Never run `down -v` against production; rollback is a
+volume and backup operation, not a migration downgrade.

@@ -4,20 +4,10 @@ Date: 2026-06-10
 
 ## Summary
 
-Dev, test, and disposable production rehearsal should run PostgreSQL 18 through
-`postgres:18-alpine`. Production stays on PostgreSQL 16 until a separate
-production migration is planned and rehearsed.
-
-The shared Compose base stays production-safe by default:
-
-- default image: `postgres:16-alpine`
-- default data mount: `/var/lib/postgresql/data`
-
-Disposable environments opt in with env vars:
-
-- `AGENTICS_POSTGRES_IMAGE=postgres:18-alpine`
-- `AGENTICS_POSTGRES_DATA_MOUNT=/var/lib/postgresql`
-- `AGENTICS_POSTGRES_IO_METHOD=io_uring`
+Dev, test, disposable production rehearsal, and production now run PostgreSQL
+18 through `postgres:18-alpine`. The shared Compose base owns the PG18 image,
+data mount, `io_method=io_uring`, and active `postgres_data_pg18` volume, so
+the temporary DB override env vars are no longer part of normal operation.
 
 ## PG 18 Docker Mount Note
 
@@ -54,27 +44,22 @@ Probe with `--security-opt seccomp=unconfined`:
   - `SHOW io_method;` -> `io_uring`
   - `SHOW effective_io_concurrency;` -> `16`
 
-Decision: use `io_uring` as the default for dev/test/rehearsal Postgres and add
-`security_opt: [seccomp=unconfined]` only to those disposable Postgres service
-overlays. Production remains on PostgreSQL 16 until its documented
-dump/restore cutover is executed.
+Decision: use `io_uring` as the default for all Compose Postgres services and
+set Postgres-only `security_opt: [seccomp=unconfined]` in the shared Compose
+service.
 
 ## Implementation Checklist
 
-- Make the shared Compose Postgres image and data mount target environment
-  controlled.
-- Add PG 18 env overrides to dev/test/rehearsal env examples.
-- Add dev/test/rehearsal-only Postgres commands for `io_method`.
-- Add dev/test/rehearsal-only Postgres `seccomp=unconfined`.
-- Add the temporary env names to env-policy known optional values.
+- Make the shared Compose Postgres image and data mount target PG18 by default.
+- Remove temporary PG image, volume, data-mount, and I/O-method env overrides.
+- Add the shared Postgres command for `io_method=io_uring`.
+- Add shared Postgres-only `seccomp=unconfined`.
 - Update English and Chinese docs for the split Postgres version policy and
   disposable-volume reset requirements.
 - Verify rendered Compose:
-  - dev/test/rehearsal use `postgres:18-alpine`
-  - dev/test/rehearsal mount `/var/lib/postgresql`
-  - dev/test/rehearsal run `io_method=io_uring`
-  - production defaults remain `postgres:16-alpine` and
-    `/var/lib/postgresql/data`
+  - dev/test/rehearsal/production use `postgres:18-alpine`
+  - dev/test/rehearsal/production mount `/var/lib/postgresql`
+  - dev/test/rehearsal/production run `io_method=io_uring`
 - Verify runtime after reset:
   - `SHOW server_version;`
   - `SHOW io_method;`
@@ -98,8 +83,6 @@ passes with the disposable PostgreSQL 18 test environment.
 
 ## Follow-Up TODOs
 
-- Execute the production PostgreSQL 18 dump/restore cutover from
-  `docs/deployment/en.md` and `docs/deployment/zh.md`.
-- After production is migrated and the rollback window is closed, delete the
-  temporary DB-related env vars and return the Compose base to a single PG 18
-  configuration path.
+- After the production PG18 rollback window is closed, decide whether to delete
+  the retained old `agentics-prod_postgres_data` volume and the cold PG16
+  archive.

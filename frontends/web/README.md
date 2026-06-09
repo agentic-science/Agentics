@@ -30,7 +30,7 @@ just dev::up
 Open:
 
 ```text
-http://127.0.0.1:3001
+http://127.0.0.1:3010
 ```
 
 The Compose dev stack starts the API, worker, Postgres, and Next.js service. It

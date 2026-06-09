@@ -47,7 +47,7 @@ just dev::up
 ```
 
 The Rust services in the dev and test Compose stacks use the internal
-`agentics-rust-toolchain:bookworm-llvm22-local` image. The image is built from
+`agentics-rust-toolchain:trixie-llvm22-local` image. The image is built from
 `deploy/service-images/rust-toolchain/` and installs Homebrew LLVM 22,
 Homebrew `cargo-binstall`, and Wild 0.9.0. Its Cargo config uses `clang` plus
 Wild for Linux ARM64 and Linux AMD64 builds. Override
@@ -69,8 +69,8 @@ volumes, while dev storage and runner work roots live under
 Dev and test Compose use `postgres:18-alpine` with the PostgreSQL 18 data mount
 root `/var/lib/postgresql`. They run Postgres with `io_method=io_uring` and a
 Postgres-only `seccomp=unconfined` Compose setting, which is required on the
-current Linux Docker host for PG 18 `io_uring` to start. Production remains on
-PostgreSQL 16 until the documented production dump/restore cutover is performed.
+current Linux Docker host for PG 18 `io_uring` to start. Production and
+rehearsal use the same PG18 Compose path.
 
 The dev database name is `agentics_dev`. If your local Compose Postgres volume
 was created before this rename and still contains `agentics_demo`, reset the
@@ -80,7 +80,7 @@ For local admin or creator UI testing with GitHub sign-in, put GitHub App
 client credentials in the ignored file `.agentics-compose/dev/github-app.env`
 using `AGENTICS_GITHUB_APP_CLIENT_ID`,
 `AGENTICS_GITHUB_APP_CLIENT_SECRET`, and
-`AGENTICS_GITHUB_APP_REDIRECT_URL=http://127.0.0.1:3001/auth/github/callback`.
+`AGENTICS_GITHUB_APP_REDIRECT_URL=http://127.0.0.1:3010/auth/github/callback`.
 Put the numeric bootstrap admin GitHub user id in the ignored file
 `.agentics-compose/dev/.github-user-id`. The `just dev::up` recipe loads those
 files when they exist, and neither file should be committed.
@@ -106,6 +106,9 @@ If Docker access requires `sudo`, the dev recipes use `SUDO_USER` to keep the
 Compose project as `agentics-dev-<invoking-user>` instead of accidentally
 creating `agentics-dev-root`. If no invoking user can be inferred, set
 `AGENTICS_DEV_USER` or `AGENTICS_COMPOSE_DEV_PROJECT` explicitly.
+The dev launcher also checks its host-published API and web ports before
+starting. It refuses production and rehearsal ports, so local development can
+run while production remains up.
 
 The Compose project name isolates Compose-owned containers, networks, and
 volumes. It does not isolate runner containers created through the host Docker
@@ -124,8 +127,8 @@ that interface and allow the hostname used by the browser:
 
 ```bash
 AGENTICS_COMPOSE_BIND_IP=100.x.y.z \
-AGENTICS_WEB_BASE_URL=http://your-host.tailnet.ts.net:3001 \
-AGENTICS_CORS_ALLOWED_ORIGINS=http://127.0.0.1:3001,http://localhost:3001,http://your-host.tailnet.ts.net:3001 \
+AGENTICS_WEB_BASE_URL=http://your-host.tailnet.ts.net:3010 \
+AGENTICS_CORS_ALLOWED_ORIGINS=http://127.0.0.1:3010,http://localhost:3010,http://your-host.tailnet.ts.net:3010 \
 AGENTICS_WEB_ALLOWED_DEV_ORIGINS=your-host.tailnet.ts.net \
 just dev::up
 ```
@@ -211,7 +214,7 @@ just dev::up
 Open the frontend at:
 
 ```text
-http://127.0.0.1:3001
+http://127.0.0.1:3010
 ```
 
 Use the Tailscale/LAN environment variables in the containerized dev section
@@ -237,8 +240,8 @@ Build the web frontend:
 ```bash
 (cd frontends/web && \
   AGENTICS_DEPLOYMENT_STAGE="${AGENTICS_DEPLOYMENT_STAGE:-dev}" \
-  AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:${AGENTICS_API_PORT:-3100}}" \
-  AGENTICS_WEB_PORT="${AGENTICS_WEB_PORT:-3001}" \
+  AGENTICS_API_BASE_URL="${AGENTICS_API_BASE_URL:-http://127.0.0.1:${AGENTICS_API_HOST_PORT:-3110}}" \
+  AGENTICS_WEB_PORT="${AGENTICS_WEB_HOST_PORT:-3010}" \
   bun run build)
 ```
 

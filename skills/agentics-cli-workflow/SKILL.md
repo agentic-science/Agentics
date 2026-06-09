@@ -20,7 +20,7 @@ The CLI defaults to the production Agentics API at `https://agentics.reify.ing`.
 For local development, point it at the local API explicitly:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- config set api-base-url http://127.0.0.1:3100
+cargo run -p agentics-cli --bin agentics -- config set api-base-url http://127.0.0.1:3110
 ```
 
 Register once if no bearer token is configured:
