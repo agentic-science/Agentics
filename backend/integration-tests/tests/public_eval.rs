@@ -14,11 +14,54 @@ use helpers::{
     spawn_app_with_config, test_config, zip_project_zip_base64,
 };
 
+fn write_challenge_manifest(
+    challenge_root: &Path,
+    challenge_name: &str,
+    title: &str,
+    summary_en: &str,
+    summary_zh: &str,
+    keywords: &[&str],
+) {
+    std::fs::write(
+        challenge_root.join("agentics.challenge.json"),
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema_version": 1,
+            "request": "new_challenge",
+            "challenge_name": challenge_name,
+            "title": title,
+            "summary": {
+                "en": summary_en,
+                "zh": summary_zh
+            },
+            "keywords": keywords,
+            "readme_path": "v1/statement.md",
+            "bundle_path": "v1",
+            "private_assets": [],
+            "ci": {
+                "validate_manifest": true,
+                "validate_public_bundle": true,
+                "smoke_test_public_validation": true
+            }
+        }))
+        .expect("failed to serialize challenge manifest"),
+    )
+    .expect("failed to write challenge manifest");
+}
+
 /// Creates validation disabled challenge after validating caller inputs.
 fn create_validation_disabled_challenge(root: &Path) {
     let source = examples_challenges_root().join("sample-sum/v1");
+    let challenge_root = root.join("validation-disabled");
     let bundle_dir = root.join("validation-disabled/v1");
     copy_dir_all(&source, &bundle_dir);
+    write_challenge_manifest(
+        &challenge_root,
+        "validation-disabled",
+        "Validation Disabled",
+        "A sample sum variant with public validation disabled.",
+        "禁用公开验证的 Sample Sum 变体。",
+        &["arithmetic", "validation", "admission"],
+    );
 
     let spec_path = bundle_dir.join("spec.json");
     let mut spec: serde_json::Value = serde_json::from_str(
@@ -132,6 +175,7 @@ async fn runner_log_text(config: &Config, runner_log_storage_key: Option<&str>) 
 
 /// Creates a minimal piped-stdio challenge after validating caller inputs.
 fn create_piped_stdio_challenge(root: &Path) {
+    let challenge_root = root.join("interactive-sum");
     let bundle_dir = root.join("interactive-sum/v1");
     std::fs::create_dir_all(bundle_dir.join("interactive-evaluator"))
         .expect("failed to create interactive-evaluator dir");
@@ -143,6 +187,14 @@ fn create_piped_stdio_challenge(root: &Path) {
         "# Interactive Sum\n\nAdd two numbers.\n",
     )
     .expect("failed to write statement");
+    write_challenge_manifest(
+        &challenge_root,
+        "interactive-sum",
+        "Interactive Sum",
+        "Add numbers through a trusted interactive evaluator.",
+        "通过可信交互器完成加法。",
+        &["interactive", "stdio", "arithmetic"],
+    );
     std::fs::write(
         bundle_dir.join("public/session.json"),
         serde_json::json!({

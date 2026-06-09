@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "request": "new_challenge",
+  "challenge_name": "grid-routing",
+  "title": "Grid Routing",
+  "summary": {
+    "en": "Plan a valid route from S to G in a two-dimensional grid while avoiding obstacles.",
+    "zh": "在二维网格中从 S 到 G 规划一条有效路径，并避开障碍物。"
+  },
+  "keywords": ["planning", "grid search", "pathfinding"],
+  "readme_path": "v1/statement.md",
+  "bundle_path": "v1",
+  "private_assets": [],
+  "ci": {
+    "validate_manifest": true,
+    "validate_public_bundle": true,
+    "smoke_test_public_validation": true
+  }
+}

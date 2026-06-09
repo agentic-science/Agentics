@@ -862,6 +862,33 @@ async fn submit_solution_with_target(
         .expect("failed to submit solution")
 }
 
+fn write_copied_sample_sum_manifest(root: &Path, challenge_name: &str, summary_en: &str) {
+    std::fs::write(
+        root.join(challenge_name).join("agentics.challenge.json"),
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema_version": 1,
+            "request": "new_challenge",
+            "challenge_name": challenge_name,
+            "title": challenge_name,
+            "summary": {
+                "en": summary_en,
+                "zh": "用于请求校验集成测试的 Sample Sum 变体。"
+            },
+            "keywords": ["arithmetic", "request validation", "fixture"],
+            "readme_path": "v1/statement.md",
+            "bundle_path": "v1",
+            "private_assets": [],
+            "ci": {
+                "validate_manifest": true,
+                "validate_public_bundle": true,
+                "smoke_test_public_validation": true
+            }
+        }))
+        .expect("failed to serialize copied sample-sum manifest"),
+    )
+    .expect("failed to write copied sample-sum manifest");
+}
+
 /// Writes challenge window challenge to the target path.
 fn write_challenge_window_challenge(
     root: &Path,
@@ -873,6 +900,11 @@ fn write_challenge_window_challenge(
     copy_dir_all(
         &examples_challenges_root().join("sample-sum/v1"),
         &bundle_dir,
+    );
+    write_copied_sample_sum_manifest(
+        root,
+        challenge_name,
+        "A sample sum variant with custom challenge windows.",
     );
     let spec_path = bundle_dir.join("spec.json");
     let mut spec: serde_json::Value =
@@ -900,6 +932,11 @@ fn write_private_shortlist_challenge(root: &Path, challenge_name: &str) {
         &examples_challenges_root().join("sample-sum/v1"),
         &bundle_dir,
     );
+    write_copied_sample_sum_manifest(
+        root,
+        challenge_name,
+        "A sample sum variant using private shortlist eligibility.",
+    );
     let spec_path = bundle_dir.join("spec.json");
     let mut spec: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&spec_path).expect("failed to read spec"))
@@ -920,6 +957,11 @@ fn write_limited_submission_challenge(root: &Path, challenge_name: &str, officia
     copy_dir_all(
         &examples_challenges_root().join("sample-sum/v1"),
         &bundle_dir,
+    );
+    write_copied_sample_sum_manifest(
+        root,
+        challenge_name,
+        "A sample sum variant with a custom official submission limit.",
     );
     let spec_path = bundle_dir.join("spec.json");
     let mut spec: serde_json::Value =

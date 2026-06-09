@@ -13,8 +13,34 @@ use helpers::{
 /// Create an admin-published bundle by adapting the legacy `sample-sum` fixture.
 fn create_admin_bundle(root: &Path) -> std::path::PathBuf {
     let source = examples_challenges_root().join("sample-sum/v1");
+    let challenge_root = root.join("admin-sum");
     let bundle_dir = root.join("admin-sum/v1");
     copy_dir_all(&source, &bundle_dir);
+
+    std::fs::write(
+        challenge_root.join("agentics.challenge.json"),
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema_version": 1,
+            "request": "new_challenge",
+            "challenge_name": "admin-sum",
+            "title": "Admin Sum",
+            "summary": {
+                "en": "Official flow test",
+                "zh": "官方流程测试"
+            },
+            "keywords": ["arithmetic", "admin", "official"],
+            "readme_path": "v1/statement.md",
+            "bundle_path": "v1",
+            "private_assets": [],
+            "ci": {
+                "validate_manifest": true,
+                "validate_public_bundle": true,
+                "smoke_test_public_validation": true
+            }
+        }))
+        .expect("failed to serialize admin challenge manifest"),
+    )
+    .expect("failed to write admin challenge manifest");
 
     let spec_path = bundle_dir.join("spec.json");
     let mut spec: serde_json::Value = serde_json::from_str(

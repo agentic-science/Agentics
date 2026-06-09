@@ -824,11 +824,36 @@ async fn insert_validation_evaluation_for_submission(
 
 /// Writes private artifact challenge to the target path.
 fn write_private_artifact_challenge(root: &Path, challenge_name: &str) {
-    let bundle_dir = root.join(challenge_name).join("v1");
+    let challenge_root = root.join(challenge_name);
+    let bundle_dir = challenge_root.join("v1");
     copy_dir_all(
         &examples_challenges_root().join("sample-sum/v1"),
         &bundle_dir,
     );
+    std::fs::write(
+        challenge_root.join("agentics.challenge.json"),
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema_version": 1,
+            "request": "new_challenge",
+            "challenge_name": challenge_name,
+            "title": challenge_name,
+            "summary": {
+                "en": "A sample sum variant whose submitted artifacts stay private.",
+                "zh": "提交工件保持私有的 Sample Sum 变体。"
+            },
+            "keywords": ["arithmetic", "private artifact", "public read"],
+            "readme_path": "v1/statement.md",
+            "bundle_path": "v1",
+            "private_assets": [],
+            "ci": {
+                "validate_manifest": true,
+                "validate_public_bundle": true,
+                "smoke_test_public_validation": true
+            }
+        }))
+        .expect("failed to serialize private artifact challenge manifest"),
+    )
+    .expect("failed to write private artifact challenge manifest");
     let spec_path = bundle_dir.join("spec.json");
     let mut spec: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&spec_path).expect("failed to read spec"))
