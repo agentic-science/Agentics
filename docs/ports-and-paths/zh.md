@@ -35,6 +35,15 @@ production Compose env file。
 | Purpose | Default |
 | --- | --- |
 | Dev database name | `agentics_dev` |
+| Dev/test/rehearsal Postgres image | `postgres:18-alpine` |
+| Dev/test/rehearsal Postgres data mount | `/var/lib/postgresql` |
+| Dev/test/rehearsal Postgres I/O method | `io_uring` |
+| PG 18 production migration 前的 production Postgres image | `postgres:16-alpine` |
+| PG 18 production migration 前的 production Postgres data mount | `/var/lib/postgresql/data` |
+| Production PG 18 cutover image | `postgres:18-alpine` |
+| Production PG 18 cutover volume | 通过 `AGENTICS_POSTGRES_VOLUME` 使用 `postgres_data_pg18` |
+| Production PG 18 cutover data mount | `/var/lib/postgresql` |
+| Production PG 18 cutover I/O method | `io_uring`，并只对 Postgres 设置 `seccomp=unconfined` |
 | Dev challenge source root | `challenge-repos/agentics-challenges/dev/challenges` |
 | Dev test-solution source root | `challenge-repos/agentics-challenges/dev/test-solutions` |
 | Prepared runtime challenge root | `.agentics-compose/dev/dev-challenges` |
@@ -42,6 +51,8 @@ production Compose env file。
 
 从 `agentics_demo` 改名到 `agentics_dev` 之前创建的本地 Compose Postgres volumes
 是 disposable 的，可能需要重置。
+使用 PostgreSQL 16 创建的 disposable Postgres volumes 在启动 PostgreSQL 18 的
+dev/test/rehearsal services 前也必须重置。
 
 ## DGX Paths
 

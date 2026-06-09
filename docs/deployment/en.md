@@ -151,6 +151,13 @@ For local development:
    contains `agentics_demo`, reset the disposable local dev volume before
    starting the stack.
 
+   Dev, test, and production rehearsal Compose run PostgreSQL 18 with
+   `postgres:18-alpine`, mount Postgres data at `/var/lib/postgresql`, and set
+   `io_method=io_uring`. The Postgres service in those disposable environments
+   also uses `seccomp=unconfined`, because the current Docker default seccomp
+   profile blocks PG 18 `io_uring`. Production remains on PostgreSQL 16 until
+   the documented dump/restore cutover below is performed.
+
 2. Follow logs from another terminal:
 
    ```bash
@@ -228,7 +235,127 @@ For production Compose:
    just prod::logs
    ```
 
-5. For a disposable staging stack, use the first-class rehearsal environment:
+5. PostgreSQL 18 production migration is dump/restore based. Keep production
+   on the default `postgres:16-alpine` settings until the maintenance window.
+   During cutover, stop only write-producing services while keeping Postgres
+   and RustFS alive for the logical backup:
+
+   ```bash
+   COMPOSE='docker compose --env-file deploy/compose/env/prod.env -f deploy/compose/compose.yml -f deploy/compose/compose.prod.yml -p agentics-prod'
+   $COMPOSE stop web api worker-cpu
+   $COMPOSE ps --services | grep -qx worker-gpu && $COMPOSE stop worker-gpu || true
+   ```
+
+   Take the logical backup with PostgreSQL 18 client tools into a root-owned
+   directory outside `/srv/agentics`, then copy it off-host before cutover:
+
+   ```bash
+   BACKUP_ROOT="/srv/agentics-backups/postgres/$(date -u +%Y%m%dT%H%M%SZ)"
+   sudo install -d -m 0700 "$BACKUP_ROOT"
+
+   set -a
+   . deploy/compose/env/prod.env
+   set +a
+
+   export PGHOST=postgres
+   export PGPORT=5432
+   export PGUSER="$AGENTICS_POSTGRES_USER"
+   export PGPASSWORD="$AGENTICS_POSTGRES_PASSWORD"
+   export PGDATABASE="$AGENTICS_POSTGRES_DB"
+   export NETWORK="${AGENTICS_COMPOSE_PROD_PROJECT:-agentics-prod}_default"
+
+   docker run --rm --network "$NETWORK" \
+     -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE \
+     postgres:18-alpine \
+     pg_dumpall --globals-only > "$BACKUP_ROOT/globals.sql"
+
+   docker run --rm --network "$NETWORK" \
+     -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE \
+     postgres:18-alpine \
+     pg_dump --format=custom --blobs --compress=9 "$PGDATABASE" \
+     > "$BACKUP_ROOT/agentics.dump"
+
+   docker run --rm --network "$NETWORK" \
+     postgres:18-alpine \
+     pg_restore --list /dev/stdin < "$BACKUP_ROOT/agentics.dump" \
+     > "$BACKUP_ROOT/agentics.dump.list"
+
+   sha256sum "$BACKUP_ROOT"/* > "$BACKUP_ROOT/SHA256SUMS"
+   ```
+
+   After the logical backup is verified, stop the full stack without deleting
+   volumes and archive the old PostgreSQL 16 volume for rollback:
+
+   ```bash
+   just prod::down --runner keep
+
+   OLD_VOLUME="${AGENTICS_COMPOSE_PROD_PROJECT:-agentics-prod}_postgres_data"
+   docker run --rm \
+     -v "$OLD_VOLUME":/from:ro \
+     -v "$BACKUP_ROOT":/backup \
+     alpine:3.20 \
+     sh -lc 'tar -C /from -cpf /backup/postgres_data_pg16.tar .'
+
+   sha256sum "$BACKUP_ROOT/postgres_data_pg16.tar" >> "$BACKUP_ROOT/SHA256SUMS"
+   ```
+
+   Then uncomment or add the PostgreSQL 18 cutover settings in
+   `deploy/compose/env/prod.env`:
+
+   ```dotenv
+   AGENTICS_POSTGRES_IMAGE=postgres:18-alpine
+   AGENTICS_POSTGRES_VOLUME=postgres_data_pg18
+   AGENTICS_POSTGRES_DATA_MOUNT=/var/lib/postgresql
+   AGENTICS_POSTGRES_IO_METHOD=io_uring
+   ```
+
+   PostgreSQL 18 production uses a fresh volume and the production Compose
+   wrapper refuses to run if PG18 is pointed at the old `postgres_data` volume.
+   The PG18 override also sets Postgres `io_method=io_uring` and
+   `seccomp=unconfined`, matching the host probe result. Start only Postgres on
+   the fresh volume, restore the custom dump, then run `ANALYZE`:
+
+   ```bash
+   COMPOSE_PG18='docker compose --env-file deploy/compose/env/prod.env -f deploy/compose/compose.yml -f deploy/compose/compose.prod.yml -f deploy/compose/compose.prod-postgres18.yml -p agentics-prod'
+   $COMPOSE_PG18 up -d postgres
+
+   $COMPOSE_PG18 exec -T postgres \
+     pg_restore \
+       -U "$AGENTICS_POSTGRES_USER" \
+       -d "$AGENTICS_POSTGRES_DB" \
+       --clean \
+       --if-exists \
+       --no-owner \
+       --exit-on-error \
+       /dev/stdin < "$BACKUP_ROOT/agentics.dump"
+
+   $COMPOSE_PG18 exec -T postgres \
+     psql -U "$AGENTICS_POSTGRES_USER" -d "$AGENTICS_POSTGRES_DB" \
+       -c 'ANALYZE;'
+
+   $COMPOSE_PG18 exec -T postgres \
+     psql -U "$AGENTICS_POSTGRES_USER" -d "$AGENTICS_POSTGRES_DB" \
+       -c 'SHOW server_version;' \
+       -c 'SHOW io_method;' \
+       -c 'SELECT version, success FROM _sqlx_migrations ORDER BY version;'
+   ```
+
+   Keep `globals.sql` with the backup. Do not blindly replay it over the
+   Compose-initialized cluster unless inspection shows additional roles or
+   grants beyond the configured `POSTGRES_USER`; the official image already
+   creates that role and database on first boot. Then start the full stack:
+
+   ```bash
+   just prod::up
+   just prod::check
+   ```
+
+   Keep the old PG16 volume and cold archive until the PG18 deployment has
+   survived the agreed observation window. Rollback means switching env back to
+   the PG16 defaults and restarting from the retained old volume; do not run
+   manual down migrations.
+
+6. For a disposable staging stack, use the first-class rehearsal environment:
 
    ```bash
    cp deploy/compose/env/rehearsal.env.example deploy/compose/env/rehearsal.env

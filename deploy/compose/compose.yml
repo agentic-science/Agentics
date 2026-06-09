@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: ${AGENTICS_POSTGRES_IMAGE:-postgres:16-alpine}
     environment:
       POSTGRES_USER: ${AGENTICS_POSTGRES_USER:-agentics}
       POSTGRES_PASSWORD: ${AGENTICS_POSTGRES_PASSWORD:-agentics}
@@ -11,10 +11,13 @@ services:
       timeout: 5s
       retries: 30
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - type: volume
+        source: ${AGENTICS_POSTGRES_VOLUME:-postgres_data}
+        target: ${AGENTICS_POSTGRES_DATA_MOUNT:-/var/lib/postgresql/data}
 
 volumes:
   postgres_data:
+  postgres_data_pg18:
   cargo_registry:
   cargo_git:
   cargo_target:

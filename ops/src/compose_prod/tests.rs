@@ -180,6 +180,55 @@ fn rehearsal_override_comes_from_env_file_marker() {
     assert!(compose_args_text(&context).contains("compose.rehearsal.yml"));
 }
 
+/// Verifies production PostgreSQL 18 adds the explicit cutover override file.
+#[test]
+fn production_postgres18_adds_explicit_override() {
+    let mut context = fake_context();
+    context.file_env.deployment_stage = Some("production".to_string());
+    context.file_env.postgres_image = Some("postgres:18-alpine".to_string());
+    context.file_env.postgres_volume = Some("postgres_data_pg18".to_string());
+    context.file_env.postgres_data_mount = Some("/var/lib/postgresql".to_string());
+
+    assert!(compose_args_text(&context).contains("compose.prod-postgres18.yml"));
+    context
+        .validate_postgres_cutover_guardrails()
+        .expect("fresh PG18 volume should be accepted");
+}
+
+/// Verifies production PostgreSQL 18 refuses to reuse the old PG16 volume.
+#[test]
+fn production_postgres18_refuses_default_volume() {
+    let mut context = fake_context();
+    context.file_env.deployment_stage = Some("production".to_string());
+    context.file_env.postgres_image = Some("postgres:18-alpine".to_string());
+    context.file_env.postgres_volume = Some("postgres_data".to_string());
+    context.file_env.postgres_data_mount = Some("/var/lib/postgresql".to_string());
+
+    let error = context
+        .validate_postgres_cutover_guardrails()
+        .expect_err("old volume should fail");
+    assert!(
+        matches!(error, ComposeProdError::InvalidConfig(message) if message.contains("must not use old default"))
+    );
+}
+
+/// Verifies production PostgreSQL 18 requires the PG18 Docker data mount root.
+#[test]
+fn production_postgres18_requires_pg18_mount_root() {
+    let mut context = fake_context();
+    context.file_env.deployment_stage = Some("production".to_string());
+    context.file_env.postgres_image = Some("postgres:18-alpine".to_string());
+    context.file_env.postgres_volume = Some("postgres_data_pg18".to_string());
+    context.file_env.postgres_data_mount = Some("/var/lib/postgresql/data".to_string());
+
+    let error = context
+        .validate_postgres_cutover_guardrails()
+        .expect_err("old mount should fail");
+    assert!(
+        matches!(error, ComposeProdError::InvalidConfig(message) if message.contains("AGENTICS_POSTGRES_DATA_MOUNT"))
+    );
+}
+
 /// Verifies restore-private-bundles passes explicit refresh flags to the copy tool.
 #[test]
 fn private_bundle_restore_args_forward_overwrite_and_dry_run() {

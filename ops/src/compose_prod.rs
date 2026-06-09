@@ -41,6 +41,8 @@ const ENV_PREFIX: &str = "AGENTICS_";
 const DEFAULT_PROJECT: &str = "agentics-prod";
 const DEFAULT_ENV_FILE: &str = "deploy/compose/env/prod.env";
 const DEFAULT_PRIVATE_BUNDLE_BACKUP_CONTAINER: &str = "agentics-rustfs-private-backup";
+const DEFAULT_POSTGRES_VOLUME: &str = "postgres_data";
+const POSTGRES18_CUTOVER_VOLUME: &str = "postgres_data_pg18";
 const REHEARSAL_PROJECT: &str = "agentics-rehearsal";
 const REHEARSAL_ROOT: &str = "/srv/agentics-rehearsal";
 const WORKER_SERVICES: &[&str] = &["worker-cpu", "worker-gpu"];
@@ -159,6 +161,9 @@ struct RawComposeProdEnv {
     compose_prod_project: Option<String>,
     compose_prod_env_file: Option<String>,
     deployment_stage: Option<String>,
+    postgres_image: Option<String>,
+    postgres_volume: Option<String>,
+    postgres_data_mount: Option<String>,
     runner_namespace: Option<String>,
     database_url: Option<String>,
     docker_host: Option<String>,
@@ -793,13 +798,15 @@ impl ComposeContext {
         print_env_policy_warnings(&env_report);
         let file_env = RawComposeProdEnv::from_map(&env_values)?;
         let project = resolve_project(cli.project.as_deref(), &process_env, &file_env);
-        Ok(Self {
+        let context = Self {
             repo_root,
             env_file,
             process_env,
             file_env,
             project,
-        })
+        };
+        context.validate_postgres_cutover_guardrails()?;
+        Ok(context)
     }
 
     fn compose_args<I, S>(&self, args: I) -> Vec<OsString>
@@ -825,6 +832,13 @@ impl ComposeContext {
             output.push(
                 self.repo_root
                     .join("deploy/compose/compose.rehearsal.yml")
+                    .into_os_string(),
+            );
+        } else if self.is_production_postgres18() {
+            output.push(OsString::from("-f"));
+            output.push(
+                self.repo_root
+                    .join("deploy/compose/compose.prod-postgres18.yml")
                     .into_os_string(),
             );
         }
@@ -962,6 +976,55 @@ impl ComposeContext {
         self.file_deployment_stage() == Some(DeploymentStage::Rehearsal)
     }
 
+    fn is_production_postgres18(&self) -> bool {
+        self.file_deployment_stage() == Some(DeploymentStage::Production)
+            && env_value(
+                self.process_env.postgres_image.as_ref(),
+                self.file_env.postgres_image.as_ref(),
+            )
+            .is_some_and(|image| postgres_image_is_pg18(&image))
+    }
+
+    fn validate_postgres_cutover_guardrails(&self) -> Result<(), ComposeProdError> {
+        if !self.is_production_postgres18() {
+            return Ok(());
+        }
+
+        let volume = env_value(
+            self.process_env.postgres_volume.as_ref(),
+            self.file_env.postgres_volume.as_ref(),
+        )
+        .ok_or_else(|| {
+            ComposeProdError::InvalidConfig(
+                "production PostgreSQL 18 requires AGENTICS_POSTGRES_VOLUME=postgres_data_pg18"
+                    .to_string(),
+            )
+        })?;
+        if volume == DEFAULT_POSTGRES_VOLUME {
+            return Err(ComposeProdError::InvalidConfig(format!(
+                "production PostgreSQL 18 must not use old default AGENTICS_POSTGRES_VOLUME={DEFAULT_POSTGRES_VOLUME}; use AGENTICS_POSTGRES_VOLUME={POSTGRES18_CUTOVER_VOLUME}"
+            )));
+        }
+        if volume != POSTGRES18_CUTOVER_VOLUME {
+            return Err(ComposeProdError::InvalidConfig(format!(
+                "production PostgreSQL 18 requires AGENTICS_POSTGRES_VOLUME={POSTGRES18_CUTOVER_VOLUME}; only the default PG16 and PG18 cutover volumes are declared in Compose"
+            )));
+        }
+
+        if let Some(data_mount) = env_value(
+            self.process_env.postgres_data_mount.as_ref(),
+            self.file_env.postgres_data_mount.as_ref(),
+        ) && data_mount != "/var/lib/postgresql"
+        {
+            return Err(ComposeProdError::InvalidConfig(
+                "production PostgreSQL 18 requires AGENTICS_POSTGRES_DATA_MOUNT=/var/lib/postgresql"
+                    .to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
     fn file_deployment_stage(&self) -> Option<DeploymentStage> {
         self.file_env
             .deployment_stage
@@ -1058,6 +1121,11 @@ fn load_env_file(path: &Path) -> Result<HashMap<String, String>, ComposeProdErro
 
 fn env_value(process_value: Option<&String>, file_value: Option<&String>) -> Option<String> {
     non_empty_value(process_value).or_else(|| non_empty_value(file_value))
+}
+
+fn postgres_image_is_pg18(image: &str) -> bool {
+    let image = image.trim();
+    image.starts_with("postgres:18") || image.contains("/postgres:18")
 }
 
 fn non_empty_value(value: Option<&String>) -> Option<String> {

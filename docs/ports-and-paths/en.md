@@ -35,6 +35,15 @@ same production Compose env file.
 | Purpose | Default |
 | --- | --- |
 | Dev database name | `agentics_dev` |
+| Dev/test/rehearsal Postgres image | `postgres:18-alpine` |
+| Dev/test/rehearsal Postgres data mount | `/var/lib/postgresql` |
+| Dev/test/rehearsal Postgres I/O method | `io_uring` |
+| Production Postgres image before PG 18 migration | `postgres:16-alpine` |
+| Production Postgres data mount before PG 18 migration | `/var/lib/postgresql/data` |
+| Production PG 18 cutover image | `postgres:18-alpine` |
+| Production PG 18 cutover volume | `postgres_data_pg18` via `AGENTICS_POSTGRES_VOLUME` |
+| Production PG 18 cutover data mount | `/var/lib/postgresql` |
+| Production PG 18 cutover I/O method | `io_uring` with Postgres-only `seccomp=unconfined` |
 | Dev challenge source root | `challenge-repos/agentics-challenges/dev/challenges` |
 | Dev test-solution source root | `challenge-repos/agentics-challenges/dev/test-solutions` |
 | Prepared runtime challenge root | `.agentics-compose/dev/dev-challenges` |
@@ -42,6 +51,8 @@ same production Compose env file.
 
 Existing local Compose Postgres volumes created before the rename from
 `agentics_demo` to `agentics_dev` are disposable and may need to be reset.
+Existing disposable Postgres volumes created with PostgreSQL 16 must also be
+reset before starting the PostgreSQL 18 dev/test/rehearsal services.
 
 ## DGX Paths
 

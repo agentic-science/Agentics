@@ -1,0 +1,8 @@
+services:
+  postgres:
+    command:
+      - postgres
+      - -c
+      - io_method=${AGENTICS_POSTGRES_IO_METHOD:-io_uring}
+    security_opt:
+      - seccomp=unconfined

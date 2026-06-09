@@ -62,8 +62,14 @@ x-web-dev: &web-dev
 
 services:
   postgres:
+    command:
+      - postgres
+      - -c
+      - io_method=${AGENTICS_POSTGRES_IO_METHOD:-io_uring}
     ports:
       - "127.0.0.1:${AGENTICS_POSTGRES_PORT:-5432}:5432"
+    security_opt:
+      - seccomp=unconfined
 
   rustfs:
     image: rustfs/rustfs:latest@sha256:f7cb98ef492fa3c3ed0dbd65df3ce2dd205c666e24e7d7234d9402c9ed1001f9

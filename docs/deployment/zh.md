@@ -139,6 +139,12 @@ Local development：
    Dev database 名称是 `agentics_dev`。如果旧的 Compose volume 里仍然有
    `agentics_demo`，请先重置这个 disposable local dev volume，再启动 stack。
 
+   Dev、test 和 production rehearsal Compose 运行 PostgreSQL 18，image 为
+   `postgres:18-alpine`，Postgres data 挂载到 `/var/lib/postgresql`，并设置
+   `io_method=io_uring`。这些 disposable environments 的 Postgres service 还会使用
+   `seccomp=unconfined`，因为当前 Docker 默认 seccomp profile 会阻止 PG 18
+   `io_uring`。Production 在完成下文记录的 dump/restore cutover 前仍使用 PostgreSQL 16。
+
 2. 在另一个 terminal 跟随 logs：
 
    ```bash
@@ -213,7 +219,123 @@ Production Compose：
    just prod::logs
    ```
 
-5. 对 disposable staging stack 使用一等的 rehearsal environment：
+5. Production PostgreSQL 18 migration 使用 dump/restore。Maintenance window
+   前，production 继续使用默认的 `postgres:16-alpine` 设置。Cutover 时先只停止会写入
+   DB 的 services，保留 Postgres 和 RustFS 运行以完成 logical backup：
+
+   ```bash
+   COMPOSE='docker compose --env-file deploy/compose/env/prod.env -f deploy/compose/compose.yml -f deploy/compose/compose.prod.yml -p agentics-prod'
+   $COMPOSE stop web api worker-cpu
+   $COMPOSE ps --services | grep -qx worker-gpu && $COMPOSE stop worker-gpu || true
+   ```
+
+   使用 PostgreSQL 18 client tools 把 logical backup 写到 `/srv/agentics`
+   之外的 root-owned 目录，并在 cutover 前复制到 off-host 位置：
+
+   ```bash
+   BACKUP_ROOT="/srv/agentics-backups/postgres/$(date -u +%Y%m%dT%H%M%SZ)"
+   sudo install -d -m 0700 "$BACKUP_ROOT"
+
+   set -a
+   . deploy/compose/env/prod.env
+   set +a
+
+   export PGHOST=postgres
+   export PGPORT=5432
+   export PGUSER="$AGENTICS_POSTGRES_USER"
+   export PGPASSWORD="$AGENTICS_POSTGRES_PASSWORD"
+   export PGDATABASE="$AGENTICS_POSTGRES_DB"
+   export NETWORK="${AGENTICS_COMPOSE_PROD_PROJECT:-agentics-prod}_default"
+
+   docker run --rm --network "$NETWORK" \
+     -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE \
+     postgres:18-alpine \
+     pg_dumpall --globals-only > "$BACKUP_ROOT/globals.sql"
+
+   docker run --rm --network "$NETWORK" \
+     -e PGHOST -e PGPORT -e PGUSER -e PGPASSWORD -e PGDATABASE \
+     postgres:18-alpine \
+     pg_dump --format=custom --blobs --compress=9 "$PGDATABASE" \
+     > "$BACKUP_ROOT/agentics.dump"
+
+   docker run --rm --network "$NETWORK" \
+     postgres:18-alpine \
+     pg_restore --list /dev/stdin < "$BACKUP_ROOT/agentics.dump" \
+     > "$BACKUP_ROOT/agentics.dump.list"
+
+   sha256sum "$BACKUP_ROOT"/* > "$BACKUP_ROOT/SHA256SUMS"
+   ```
+
+   Logical backup 验证后，停止整个 stack，但不要删除 volumes，然后为旧 PostgreSQL 16
+   volume 创建 cold archive，作为 rollback 保险：
+
+   ```bash
+   just prod::down --runner keep
+
+   OLD_VOLUME="${AGENTICS_COMPOSE_PROD_PROJECT:-agentics-prod}_postgres_data"
+   docker run --rm \
+     -v "$OLD_VOLUME":/from:ro \
+     -v "$BACKUP_ROOT":/backup \
+     alpine:3.20 \
+     sh -lc 'tar -C /from -cpf /backup/postgres_data_pg16.tar .'
+
+   sha256sum "$BACKUP_ROOT/postgres_data_pg16.tar" >> "$BACKUP_ROOT/SHA256SUMS"
+   ```
+
+   然后在 `deploy/compose/env/prod.env` 中取消注释或加入 PostgreSQL 18 cutover
+   设置：
+
+   ```dotenv
+   AGENTICS_POSTGRES_IMAGE=postgres:18-alpine
+   AGENTICS_POSTGRES_VOLUME=postgres_data_pg18
+   AGENTICS_POSTGRES_DATA_MOUNT=/var/lib/postgresql
+   AGENTICS_POSTGRES_IO_METHOD=io_uring
+   ```
+
+   Production PostgreSQL 18 使用 fresh volume；production Compose wrapper 会拒绝让
+   PG18 使用旧的 `postgres_data` volume。PG18 override 同时设置 Postgres
+   `io_method=io_uring` 和 `seccomp=unconfined`，与 host probe 结果一致。先只在 fresh
+   volume 上启动 Postgres，restore custom dump，然后运行 `ANALYZE`：
+
+   ```bash
+   COMPOSE_PG18='docker compose --env-file deploy/compose/env/prod.env -f deploy/compose/compose.yml -f deploy/compose/compose.prod.yml -f deploy/compose/compose.prod-postgres18.yml -p agentics-prod'
+   $COMPOSE_PG18 up -d postgres
+
+   $COMPOSE_PG18 exec -T postgres \
+     pg_restore \
+       -U "$AGENTICS_POSTGRES_USER" \
+       -d "$AGENTICS_POSTGRES_DB" \
+       --clean \
+       --if-exists \
+       --no-owner \
+       --exit-on-error \
+       /dev/stdin < "$BACKUP_ROOT/agentics.dump"
+
+   $COMPOSE_PG18 exec -T postgres \
+     psql -U "$AGENTICS_POSTGRES_USER" -d "$AGENTICS_POSTGRES_DB" \
+       -c 'ANALYZE;'
+
+   $COMPOSE_PG18 exec -T postgres \
+     psql -U "$AGENTICS_POSTGRES_USER" -d "$AGENTICS_POSTGRES_DB" \
+       -c 'SHOW server_version;' \
+       -c 'SHOW io_method;' \
+       -c 'SELECT version, success FROM _sqlx_migrations ORDER BY version;'
+   ```
+
+   `globals.sql` 要和 backup 一起保留。不要在未经检查时直接把它 replay 到 Compose
+   初始化过的 cluster 上，除非确认存在配置的 `POSTGRES_USER` 之外的额外 roles 或
+   grants；官方 image 第一次启动时已经创建了该 role 和 database。然后启动完整 stack：
+
+   ```bash
+   just prod::up
+   just prod::check
+   ```
+
+   在 PG18 deployment 经过约定 observation window 前，保留旧 PG16 volume 和 cold
+   archive。Rollback 意味着把 env 切回 PG16 defaults，并从保留的旧 volume 启动；不要手动运行
+   down migrations。
+
+6. 对 disposable staging stack 使用一等的 rehearsal environment：
 
    ```bash
    cp deploy/compose/env/rehearsal.env.example deploy/compose/env/rehearsal.env

@@ -66,6 +66,12 @@ Cargo build output, Bun dependencies, and Postgres data live in Compose
 volumes, while dev storage and runner work roots live under
 `.agentics-compose/dev/` by default.
 
+Dev and test Compose use `postgres:18-alpine` with the PostgreSQL 18 data mount
+root `/var/lib/postgresql`. They run Postgres with `io_method=io_uring` and a
+Postgres-only `seccomp=unconfined` Compose setting, which is required on the
+current Linux Docker host for PG 18 `io_uring` to start. Production remains on
+PostgreSQL 16 until the documented production dump/restore cutover is performed.
+
 The dev database name is `agentics_dev`. If your local Compose Postgres volume
 was created before this rename and still contains `agentics_demo`, reset the
 disposable dev volume before running `just dev::up`.

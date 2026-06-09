@@ -577,3 +577,12 @@ stale `_tmp/` keys 的第二道防线。
 
 恢复时停止 API 和 worker，从同一 snapshot 恢复 database 和 storage，然后依次启动
 API、worker 和 web。Agentics 不维护 down migrations；schema rollback 依赖 snapshot。
+
+PostgreSQL 18 production upgrade 时，先只停止 `web`、`api`、`worker-cpu` 和
+`worker-gpu` 来冻结写入，保留 `postgres` 和 `rustfs` 运行以完成 logical backup。
+使用 PostgreSQL 18 client tools 执行 `pg_dumpall --globals-only`、
+`pg_dump --format=custom --blobs` 和 `pg_restore --list`，并在 cutover 前把
+timestamped backup directory 复制到 off-host 位置。执行
+`just prod::down --runner keep` 后，为旧 `agentics-prod_postgres_data` volume
+创建 cold archive，再 restore 到声明好的 fresh PG18 volume `postgres_data_pg18`；不要运行
+`down -v`，也不要让 PG18 复用旧 PG16 volume。

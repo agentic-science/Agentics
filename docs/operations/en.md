@@ -612,3 +612,13 @@ Back up together:
 Restore by stopping API and worker, restoring database and storage from the
 same snapshot, then starting API, worker, and web. Agentics does not maintain
 down migrations; schema rollback is snapshot-based.
+
+For the PostgreSQL 18 production upgrade, freeze writes by stopping only
+`web`, `api`, `worker-cpu`, and `worker-gpu` while keeping `postgres` and
+`rustfs` running for the logical backup. Use PostgreSQL 18 client tools for
+`pg_dumpall --globals-only`, `pg_dump --format=custom --blobs`, and
+`pg_restore --list`, then copy the timestamped backup directory off-host before
+cutover. After `just prod::down --runner keep`, take a cold archive of the old
+`agentics-prod_postgres_data` volume and restore into the declared fresh PG18
+volume `postgres_data_pg18`; never run `down -v` or reuse the old PG16 volume
+for PG18.

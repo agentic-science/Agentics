@@ -30,6 +30,16 @@ exercise disposable fixture workflows without touching production namespaces.
 The committed source of truth is `compose/env/rehearsal.env.example` plus
 `compose/compose.rehearsal.yml`; `compose/env/rehearsal.env` is ignored.
 
+Dev, test, and disposable rehearsal Compose environments opt in to
+`postgres:18-alpine`, mount Postgres data at `/var/lib/postgresql`, and run
+`io_method=io_uring`. Their Postgres services use `seccomp=unconfined` because
+the current Docker default seccomp profile blocks PG 18 `io_uring`. Production
+keeps the base `postgres:16-alpine` default until the operator performs the
+documented dump/restore cutover. The PG 18 production cutover uses
+`AGENTICS_POSTGRES_VOLUME=postgres_data_pg18`, so the old PG 16 `postgres_data`
+volume remains available for rollback. The production Compose wrapper refuses
+to run PG 18 against the old default volume.
+
 These files are platform implementation details. Challenge specs and target
 contracts must not reference Dockerfiles or images under `deploy/service-images/`.
 Public runner image contracts live under `docker/runner-images/`.
