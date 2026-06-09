@@ -1,13 +1,7 @@
 services:
   postgres:
-    command:
-      - postgres
-      - -c
-      - io_method=${AGENTICS_POSTGRES_IO_METHOD:-io_uring}
     ports:
       - "${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:${AGENTICS_POSTGRES_PORT:-15432}:5432"
-    security_opt:
-      - seccomp=unconfined
 
   rustfs:
     ports:

@@ -1,15 +1,9 @@
 services:
   postgres:
-    command:
-      - postgres
-      - -c
-      - io_method=${AGENTICS_POSTGRES_IO_METHOD:-io_uring}
     environment:
       POSTGRES_USER: agentics
       POSTGRES_PASSWORD: agentics
       POSTGRES_DB: agentics_test
-    security_opt:
-      - seccomp=unconfined
 
   rustfs:
     image: rustfs/rustfs:latest@sha256:f7cb98ef492fa3c3ed0dbd65df3ce2dd205c666e24e7d7234d9402c9ed1001f9
@@ -62,7 +56,7 @@ services:
     restart: "no"
 
   tests:
-    image: ${AGENTICS_RUST_TOOLCHAIN_IMAGE:-agentics-rust-toolchain:bookworm-llvm22-local}
+    image: ${AGENTICS_RUST_TOOLCHAIN_IMAGE:-agentics-rust-toolchain:trixie-llvm22-local}
     build:
       context: ../service-images/rust-toolchain
       dockerfile: Dockerfile

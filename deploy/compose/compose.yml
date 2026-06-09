@@ -1,10 +1,16 @@
 services:
   postgres:
-    image: ${AGENTICS_POSTGRES_IMAGE:-postgres:16-alpine}
+    image: postgres:18-alpine
+    command:
+      - postgres
+      - -c
+      - io_method=io_uring
     environment:
       POSTGRES_USER: ${AGENTICS_POSTGRES_USER:-agentics}
       POSTGRES_PASSWORD: ${AGENTICS_POSTGRES_PASSWORD:-agentics}
       POSTGRES_DB: ${AGENTICS_POSTGRES_DB:-agentics}
+    security_opt:
+      - seccomp=unconfined
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 2s
@@ -12,8 +18,8 @@ services:
       retries: 30
     volumes:
       - type: volume
-        source: ${AGENTICS_POSTGRES_VOLUME:-postgres_data}
-        target: ${AGENTICS_POSTGRES_DATA_MOUNT:-/var/lib/postgresql/data}
+        source: postgres_data_pg18
+        target: /var/lib/postgresql
 
 volumes:
   postgres_data:

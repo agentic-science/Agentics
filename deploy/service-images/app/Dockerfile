@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1.7
 
-ARG RUST_BASE_IMAGE=rust:1-bookworm@sha256:6258907abe69656e41cd992e0b705cdcfabcbbe3db374f92ed2d47121282d4a1
+ARG RUST_BASE_IMAGE=rust:1-trixie@sha256:fb328f0f58becb23ba1719940a2c94ece8b0b48afa837d05b79ef64bc1e18f6e
 FROM ${RUST_BASE_IMAGE} AS builder
 
-ARG RUST_BASE_IMAGE=rust:1-bookworm@sha256:6258907abe69656e41cd992e0b705cdcfabcbbe3db374f92ed2d47121282d4a1
+ARG RUST_BASE_IMAGE=rust:1-trixie@sha256:fb328f0f58becb23ba1719940a2c94ece8b0b48afa837d05b79ef64bc1e18f6e
 ARG LLVM_MAJOR=22
 ARG WILD_LINKER_VERSION=0.9.0
 
@@ -35,7 +35,7 @@ RUN cargo build --release \
     -p agentics-ops --bin agentics-copy-private-bundle-backups \
     -p agentics-ops --bin agentics-rehearse-production
 
-FROM debian:bookworm-slim AS runtime
+FROM debian:trixie-slim@sha256:b6e2a152f22a40ff69d92cb397223c906017e1391a73c952b588e51af8883bf8 AS runtime
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates git xfsprogs \
     && rm -rf /var/lib/apt/lists/*

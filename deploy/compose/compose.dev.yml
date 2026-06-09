@@ -1,5 +1,5 @@
 x-rust-dev: &rust-dev
-  image: ${AGENTICS_RUST_TOOLCHAIN_IMAGE:-agentics-rust-toolchain:bookworm-llvm22-local}
+  image: ${AGENTICS_RUST_TOOLCHAIN_IMAGE:-agentics-rust-toolchain:trixie-llvm22-local}
   build:
     context: ../service-images/rust-toolchain
     dockerfile: Dockerfile
@@ -29,13 +29,13 @@ x-rust-dev: &rust-dev
     AGENTICS_RUNNER_RUNTIME_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/runtime
     AGENTICS_RUNNER_PHASE_MOUNT_ROOT: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/phase-mounts
     AGENTICS_RUNNER_NAMESPACE: ${AGENTICS_RUNNER_NAMESPACE:-agentics-dev}
-    AGENTICS_WEB_BASE_URL: ${AGENTICS_WEB_BASE_URL:-http://localhost:3001}
+    AGENTICS_WEB_BASE_URL: ${AGENTICS_WEB_BASE_URL:-http://localhost:3010}
     AGENTICS_WEB_SESSION_COOKIE_SECURE: ${AGENTICS_WEB_SESSION_COOKIE_SECURE:-false}
-    AGENTICS_CORS_ALLOWED_ORIGINS: ${AGENTICS_CORS_ALLOWED_ORIGINS:-http://127.0.0.1:3001,http://localhost:3001}
+    AGENTICS_CORS_ALLOWED_ORIGINS: ${AGENTICS_CORS_ALLOWED_ORIGINS:-http://127.0.0.1:3010,http://localhost:3010}
     AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS: ${AGENTICS_BOOTSTRAP_ADMIN_GITHUB_USER_IDS:-}
     AGENTICS_GITHUB_APP_CLIENT_ID: ${AGENTICS_GITHUB_APP_CLIENT_ID:-agentics-dev-placeholder-client-id}
     AGENTICS_GITHUB_APP_CLIENT_SECRET: ${AGENTICS_GITHUB_APP_CLIENT_SECRET:-agentics-dev-placeholder-client-secret}
-    AGENTICS_GITHUB_APP_REDIRECT_URL: ${AGENTICS_GITHUB_APP_REDIRECT_URL:-http://127.0.0.1:3001/auth/github/callback}
+    AGENTICS_GITHUB_APP_REDIRECT_URL: ${AGENTICS_GITHUB_APP_REDIRECT_URL:-http://127.0.0.1:3010/auth/github/callback}
     TMPDIR: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/tmp
   volumes:
     - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics
@@ -51,7 +51,7 @@ x-web-dev: &web-dev
     - ./env/dev.env.example
   environment:
     AGENTICS_API_BASE_URL: http://api:3100
-    AGENTICS_WEB_BASE_URL: ${AGENTICS_WEB_BASE_URL:-http://localhost:3001}
+    AGENTICS_WEB_BASE_URL: ${AGENTICS_WEB_BASE_URL:-http://localhost:3010}
     AGENTICS_WEB_ALLOWED_DEV_ORIGINS: ${AGENTICS_WEB_ALLOWED_DEV_ORIGINS:-127.0.0.1,localhost}
     NEXT_PUBLIC_AGENTICS_API_BASE_URL: ""
     NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID: ${NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID:-}
@@ -62,14 +62,8 @@ x-web-dev: &web-dev
 
 services:
   postgres:
-    command:
-      - postgres
-      - -c
-      - io_method=${AGENTICS_POSTGRES_IO_METHOD:-io_uring}
     ports:
       - "127.0.0.1:${AGENTICS_POSTGRES_PORT:-5432}:5432"
-    security_opt:
-      - seccomp=unconfined
 
   rustfs:
     image: rustfs/rustfs:latest@sha256:f7cb98ef492fa3c3ed0dbd65df3ce2dd205c666e24e7d7234d9402c9ed1001f9
@@ -122,11 +116,11 @@ services:
       - --bin
       - agentics-local-dev
       - -p
-      - api-server
+      - agentics-api-server
       - --bin
       - api
       - -p
-      - worker
+      - agentics-worker
       - --bin
       - worker
     restart: "no"
@@ -196,12 +190,12 @@ services:
       rustfs-bucket-init:
         condition: service_completed_successfully
     ports:
-      - "${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:${AGENTICS_API_PORT:-3100}:3100"
+      - "${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:${AGENTICS_API_HOST_PORT:-3110}:3100"
     command:
       - cargo
       - run
       - -p
-      - api-server
+      - agentics-api-server
       - --bin
       - api
 
@@ -241,7 +235,7 @@ services:
       - cargo
       - run
       - -p
-      - worker
+      - agentics-worker
       - --bin
       - worker
 
@@ -261,7 +255,7 @@ services:
       seed:
         condition: service_completed_successfully
     ports:
-      - "${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:${AGENTICS_WEB_PORT:-3001}:3001"
+      - "${AGENTICS_COMPOSE_BIND_IP:-127.0.0.1}:${AGENTICS_WEB_HOST_PORT:-3010}:3001"
     command:
       - bun
       - run
