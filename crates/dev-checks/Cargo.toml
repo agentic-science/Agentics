@@ -6,6 +6,7 @@ description = "Development check primitives used by Agentics tooling."
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
+publish = false
 
 [lints]
 workspace = true

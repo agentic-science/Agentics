@@ -20,8 +20,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "agentics"
+version = "0.3.0"
+dependencies = [
+ "agentics-config",
+ "agentics-contracts",
+ "agentics-domain",
+ "agentics-runner",
+ "agentics-storage",
+ "anyhow",
+ "base64",
+ "clap",
+ "dirs",
+ "envy",
+ "ignore",
+ "reqwest",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "toml",
+ "wiremock",
+ "zip",
+]
+
+[[package]]
 name = "agentics-api-server"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "agentics-config",
  "agentics-contracts",
@@ -51,34 +77,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "agentics-cli"
-version = "0.2.5"
-dependencies = [
- "agentics-config",
- "agentics-contracts",
- "agentics-domain",
- "agentics-runner",
- "agentics-storage",
- "anyhow",
- "base64",
- "clap",
- "dirs",
- "envy",
- "ignore",
- "reqwest",
- "secrecy",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
- "toml",
- "wiremock",
- "zip",
-]
-
-[[package]]
 name = "agentics-config"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "agentics-contracts",
  "agentics-domain",
@@ -97,7 +97,7 @@ dependencies = [
 
 [[package]]
 name = "agentics-contracts"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "agentics-domain",
  "agentics-error",
@@ -117,7 +117,7 @@ dependencies = [
 
 [[package]]
 name = "agentics-dev-checks"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "clap",
  "ignore",
@@ -128,7 +128,7 @@ dependencies = [
 
 [[package]]
 name = "agentics-domain"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "agentics-error",
  "chrono",
@@ -149,7 +149,7 @@ dependencies = [
 
 [[package]]
 name = "agentics-error"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "schemars",
  "serde",
@@ -160,7 +160,7 @@ dependencies = [
 
 [[package]]
 name = "agentics-ops"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "agentics-config",
  "agentics-contracts",
@@ -200,7 +200,7 @@ dependencies = [
 
 [[package]]
 name = "agentics-persistence"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "agentics-config",
  "agentics-contracts",
@@ -220,7 +220,7 @@ dependencies = [
 
 [[package]]
 name = "agentics-pre-commit"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "agentics-dev-checks",
  "clap",
@@ -232,7 +232,7 @@ dependencies = [
 
 [[package]]
 name = "agentics-runner"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "agentics-config",
  "agentics-contracts",
@@ -257,7 +257,7 @@ dependencies = [
 
 [[package]]
 name = "agentics-services"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "agentics-config",
  "agentics-contracts",
@@ -286,7 +286,7 @@ dependencies = [
 
 [[package]]
 name = "agentics-storage"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "agentics-domain",
  "anyhow",
@@ -303,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "agentics-worker"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "agentics-config",
  "agentics-contracts",
@@ -3254,7 +3254,7 @@ dependencies = [
 
 [[package]]
 name = "integration-tests"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "agentics-api-server",
  "agentics-config",

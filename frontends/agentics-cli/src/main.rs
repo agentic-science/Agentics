@@ -18,7 +18,7 @@
 #[tokio::main]
 /// Handles main for this module.
 async fn main() {
-    if let Err(error) = agentics_cli::run_from_env().await {
+    if let Err(error) = agentics::run_from_env().await {
         eprintln!("error: {error:#}");
         std::process::exit(1);
     }

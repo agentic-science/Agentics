@@ -1,5 +1,5 @@
 [package]
-name = "agentics-cli"
+name = "agentics"
 version.workspace = true
 edition.workspace = true
 description = "Command-line client for solving and managing Agentics challenges."
