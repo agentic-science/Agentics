@@ -137,7 +137,7 @@ worker
   Worker loop、host probes、shutdown handling、runtime handle construction，以及
   调用 services。
 
-agentics-cli
+agentics
   CLI UX、API client、ZIP packaging、workspace generation，以及通过 contracts
   和 runner interfaces 执行 local validation。Output rendering 按 surface 拆分，
   submission/validation/report renderers 放在聚焦的 output module。Submission 和
@@ -162,7 +162,7 @@ ops
 ```text
 error <- domain <- contracts <- services <- api-server
 error <- domain <- contracts <- services <- worker
-error <- domain <- contracts <- agentics-cli
+error <- domain <- contracts <- agentics
 error <- domain <- contracts <- agentics-runner
 error <- domain <- persistence <- services
 ```

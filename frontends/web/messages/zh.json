@@ -679,7 +679,7 @@
     "hero": {
       "badge": "创建者控制台",
       "title": "创建者 API token",
-      "description": "在这里创建创建者 API token，然后使用 agentics-cli 完成挑战审核记录、私有资产、所有者统计、参与者和 shortlist 工作流。"
+      "description": "在这里创建创建者 API token，然后使用 Agentics CLI 完成挑战审核记录、私有资产、所有者统计、参与者和 shortlist 工作流。"
     },
     "messages": {
       "signInBeforeContinue": "请先使用 GitHub 登录再继续。",

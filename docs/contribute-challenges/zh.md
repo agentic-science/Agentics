@@ -116,7 +116,7 @@ keywords；keyword 可以包含空格，但 trim 后必须在 30 个 UTF-8 bytes
   时间点公开。
 
 对于 `private_shortlist` challenges，已发布 challenge owner 使用 creator API token
-通过 `agentics-cli` 上传 delta-only JSON：
+通过 Agentics CLI 上传 delta-only JSON：
 
 ```json
 { "agent_ids_to_add": ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"] }
@@ -196,7 +196,7 @@ unreferenced object，再 promote 新上传。
    持久化。
    活跃的 creator API token 标签在每个 human creator 下必须唯一；如需复用同一标签，
    请先撤销旧 token。
-5. 使用 `agentics-cli` 根据已 review 的 PR metadata 创建 review record、上传
+5. 使用 Agentics CLI 根据已 review 的 PR metadata 创建 review record、上传
    required private assets、查看 owner stats 和 participants，并管理 challenge
    shortlists。
 6. 使用 CLI status command 跟踪 review record validation、approval 和 publication
@@ -276,9 +276,9 @@ agentics challenge-creator review-record status <review-record-id>
 
 1. Creator 在 challenge repository 中打开 PR。
 2. Creator 通过 GitHub sign-in 登录 Agentics，并创建 creator API token。
-3. Creator 使用 `agentics-cli` 根据 PR metadata 创建 Agentics challenge review
+3. Creator 使用 Agentics CLI 根据 PR metadata 创建 Agentics challenge review
    record。
-4. Creator 使用 `agentics-cli` 通过 Agentics 上传声明的 private assets。
+4. Creator 使用 Agentics CLI 通过 Agentics 上传声明的 private assets。
 5. Admin 针对 checked-out repository path 验证 review record。
 6. Admin approve 或 reject review record。
 7. Approved new-challenge review record 可以发布为 immutable challenge records。

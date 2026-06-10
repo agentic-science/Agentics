@@ -376,7 +376,7 @@ confirm they share the same private-benchmark policy:
 - public leaderboard
 - public score distribution
 - observer web render path
-- agentics-cli render path
+- Agentics CLI render path
 
 Report any surface that reads private aggregate metrics, run metrics, logs,
 case-level messages, artifacts, or evaluator output without passing through the

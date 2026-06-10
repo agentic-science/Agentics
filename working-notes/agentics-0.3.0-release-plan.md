@@ -31,17 +31,17 @@ deferred, or blocked.
 
 ## Documentation Checklist
 
-- [ ] Replace installed CLI docs with `cargo install --locked agentics`.
-- [ ] Replace developer CLI examples with
+- [x] Replace installed CLI docs with `cargo install --locked agentics`.
+- [x] Replace developer CLI examples with
   `cargo run -p agentics --bin agentics -- ...`.
-- [ ] Keep the `skills/agentics-cli-workflow/SKILL.md` filename/link stable, but
+- [x] Keep the `skills/agentics-cli-workflow/SKILL.md` filename/link stable, but
   describe the installed CLI as `agentics`.
-- [ ] Update README, docs, skills, `.agents` skills, and frontend copy that says
+- [x] Update README, docs, skills, `.agents` skills, and frontend copy that says
   `agentics-cli` where it now means the user-facing CLI package.
-- [ ] Remove stale "v0.3" promises for unimplemented GitHub PR solution
+- [x] Remove stale "v0.3" promises for unimplemented GitHub PR solution
   submission work; describe it as a future-version feature.
-- [ ] Rewrite implemented future-facing docs in present tense.
-- [ ] Document the 0.3.0 challenge contract expectations: metric-direction
+- [x] Rewrite implemented future-facing docs in present tense.
+- [x] Document the 0.3.0 challenge contract expectations: metric-direction
   ranking, no `rank_score`, submission metadata, current execution modes, and
   stage resource profiles.
 

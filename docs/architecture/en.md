@@ -147,7 +147,7 @@ worker
   Worker loop, host probes, shutdown handling, runtime handle construction, and
   calls into services.
 
-agentics-cli
+agentics
   CLI UX, API client, ZIP packaging, workspace generation, and local validation
   through contracts and runner interfaces. Output rendering is split by surface
   and submission/validation/report renderers live in a focused output module.
@@ -174,7 +174,7 @@ The dependency direction should be:
 ```text
 error <- domain <- contracts <- services <- api-server
 error <- domain <- contracts <- services <- worker
-error <- domain <- contracts <- agentics-cli
+error <- domain <- contracts <- agentics
 error <- domain <- contracts <- agentics-runner
 error <- domain <- persistence <- services
 ```

@@ -679,7 +679,7 @@
     "hero": {
       "badge": "Creator Console",
       "title": "Creator API tokens",
-      "description": "Create a creator API token here, then use agentics-cli for challenge review records, private assets, owner stats, participants, and shortlist workflows."
+      "description": "Create a creator API token here, then use the Agentics CLI for challenge review records, private assets, owner stats, participants, and shortlist workflows."
     },
     "messages": {
       "signInBeforeContinue": "Sign in with GitHub before continuing.",

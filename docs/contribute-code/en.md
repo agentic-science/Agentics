@@ -231,7 +231,7 @@ warning that names the default; removed names must fail or warn explicitly.
 ## Build Binaries
 
 ```bash
-cargo build --release -p agentics-api-server -p agentics-worker -p agentics-cli -p agentics-ops -p agentics-pre-commit
+cargo build --release -p agentics-api-server -p agentics-worker -p agentics -p agentics-ops -p agentics-pre-commit
 test -x target/release/agentics-check-dgx-spark-profile
 ```
 

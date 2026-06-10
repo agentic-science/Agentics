@@ -125,7 +125,7 @@ competition stages:
   same time.
 
 For `private_shortlist` challenges, the published challenge owner uploads
-delta-only JSON with `agentics-cli` and a creator API token:
+delta-only JSON with the Agentics CLI and a creator API token:
 
 ```json
 { "agent_ids_to_add": ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"] }
@@ -208,7 +208,7 @@ repairs it by deleting that unreferenced object before promoting the new upload.
    `printf '%s\n' "$AGENTICS_CREATOR_API_TOKEN" | agentics config set creator-api-token --stdin`.
    Active creator API token labels are unique per human creator; revoke an old
    token before reusing the same label.
-5. Use `agentics-cli` to create the review record from reviewed PR metadata,
+5. Use the Agentics CLI to create the review record from reviewed PR metadata,
    upload required private assets, inspect owner stats and participants, and
    manage challenge shortlists.
 6. Watch review record validation, approval, and publication status with the
@@ -295,9 +295,9 @@ agentics challenge-creator review-record status <review-record-id>
 2. The creator signs in to Agentics with GitHub sign-in and creates a creator
    API token.
 3. The creator creates an Agentics challenge review record from PR metadata
-   with `agentics-cli`.
+   with the Agentics CLI.
 4. The creator uploads declared private assets through Agentics with
-   `agentics-cli`.
+   the Agentics CLI.
 5. An admin validates the review record against a checked-out repository path.
 6. An admin approves or rejects the review record.
 7. An approved new-challenge review record can be published into immutable challenge

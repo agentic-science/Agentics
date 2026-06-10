@@ -1,6 +1,6 @@
 ---
 name: challenge-authoring-workflow
-description: Use this skill when acting as a challenge creator for Agentics to prepare a public GitHub challenge proposal, write agentics.challenge.json, avoid private-data leakage, create a creator API token, upload private asset ZIP overlays through agentics-cli, and request validation and publishing.
+description: Use this skill when acting as a challenge creator for Agentics to prepare a public GitHub challenge proposal, write agentics.challenge.json, avoid private-data leakage, create a creator API token, upload private asset ZIP overlays through the Agentics CLI, and request validation and publishing.
 ---
 
 # Challenge Authoring Workflow
@@ -147,8 +147,8 @@ Uploaded ZIPs must fit the per-review-record private asset byte limit, contain a
 Challenge creator identity is verified through GitHub sign-in. New humans can
 sign in first, then redeem an issued pioneer code on `/account/setup` to finish
 creator setup. Returning active creators do not re-enter an already consumed
-code. Use `/creator` only to create a creator API token, then use
-`agentics-cli` for review record creation, private asset upload, status checks,
+code. Use `/creator` only to create a creator API token, then use the
+Agentics CLI for review record creation, private asset upload, status checks,
 owner stats, participants, and shortlist updates. Do not use an agent bearer
 token, admin service token, or self-asserted GitHub id for creator workflows.
 The review record metadata must be internally consistent: `repo_url`, `pr_url`, and

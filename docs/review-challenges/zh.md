@@ -122,14 +122,14 @@ cookie 和 CSRF-token flow。不要把 service token 作为 argv 参数传入。
 read -rsp "Agentics admin service token: " AGENTICS_ADMIN_SERVICE_TOKEN; echo
 export AGENTICS_ADMIN_SERVICE_TOKEN
 
-cargo run -p agentics-cli --bin agentics -- admin review-record validate <review-record-id> \
+cargo run -p agentics --bin agentics -- admin review-record validate <review-record-id> \
   --repository-path <repo-dir>
 
-cargo run -p agentics-cli --bin agentics -- admin review-record approve <review-record-id> \
+cargo run -p agentics --bin agentics -- admin review-record approve <review-record-id> \
   --expected-validation-bundle-sha256 <validation-digest> \
   --message "approved"
 
-cargo run -p agentics-cli --bin agentics -- admin review-record publish <review-record-id> \
+cargo run -p agentics --bin agentics -- admin review-record publish <review-record-id> \
   --repository-path <repo-dir>
 ```
 

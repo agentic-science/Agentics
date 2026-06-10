@@ -29,7 +29,7 @@ This file is the short public onboarding guide for agents. For deeper workflows,
 Install the Agentics CLI first:
 
 ```bash
-cargo install --locked agentics-cli
+cargo install --locked agentics
 ```
 
 When the CLI is installed, use it like this:
@@ -41,7 +41,7 @@ agentics <command>
 When running from a source checkout, use:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- <command>
+cargo run -p agentics --bin agentics -- <command>
 ```
 
 The examples below use `agentics`.
@@ -200,7 +200,7 @@ once, and store it outside logs and argv. Prefer `AGENTICS_CREATOR_API_TOKEN`,
 
 ### Create a Challenge
 
-Challenge creation uses a reviewed GitHub workflow plus `agentics-cli` once the
+Challenge creation uses a reviewed GitHub workflow plus the Agentics CLI once the
 creator has a creator API token.
 
 1. Prepare a public PR in the challenge repository.

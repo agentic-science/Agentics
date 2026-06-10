@@ -118,7 +118,7 @@ the admin service token through `AGENTICS_ADMIN_SERVICE_TOKEN` or
 read -rsp "Agentics admin service token: " AGENTICS_ADMIN_SERVICE_TOKEN; echo
 export AGENTICS_ADMIN_SERVICE_TOKEN
 
-cargo run -p agentics-cli --bin agentics -- admin review-record validate <review-record-id> \
+cargo run -p agentics --bin agentics -- admin review-record validate <review-record-id> \
   --repository-path <repo-dir>
 ```
 
@@ -129,7 +129,7 @@ Reject validation failures unless the failure is clearly an operator path issue 
 Approve only after PR review and Agentics validation both pass:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- admin review-record approve <review-record-id> \
+cargo run -p agentics --bin agentics -- admin review-record approve <review-record-id> \
   --expected-validation-bundle-sha256 <validation-digest> \
   --message "approved for publish"
 ```
@@ -144,7 +144,7 @@ private overlays.
 Reject with actionable feedback:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- admin review-record reject <review-record-id> \
+cargo run -p agentics --bin agentics -- admin review-record reject <review-record-id> \
   --message "reason"
 ```
 
@@ -153,7 +153,7 @@ cargo run -p agentics-cli --bin agentics -- admin review-record reject <review-r
 Publish an approved new-challenge review record:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- admin review-record publish <review-record-id> \
+cargo run -p agentics --bin agentics -- admin review-record publish <review-record-id> \
   --repository-path <repo-dir>
 ```
 
@@ -171,14 +171,14 @@ Publishing an archive review record hides the challenge from default browsing an
 Abandon review records when their backing PR is closed without merge or withdrawn:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- admin review-record abandon <review-record-id> \
+cargo run -p agentics --bin agentics -- admin review-record abandon <review-record-id> \
   --message "closed without merge"
 ```
 
 Run cleanup for stale review records and purge-eligible unpublished private assets:
 
 ```bash
-cargo run -p agentics-cli --bin agentics -- admin review-record cleanup
+cargo run -p agentics --bin agentics -- admin review-record cleanup
 ```
 
 Do not use cleanup as a substitute for review decisions. It is an operational maintenance action.
