@@ -4,6 +4,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 use super::challenge::{MetricDirection, MetricSchemaSpec, MetricVisibility};
+use super::hashes::Sha256Digest;
 use super::ids::{EvaluationId, EvaluationJobId};
 use super::names::{ChallengeName, MetricName, RunName, TargetName};
 use crate::storage::StorageKey;
@@ -854,6 +855,19 @@ pub struct EvaluationJobDto {
     pub id: EvaluationJobId,
     pub target: TargetName,
     pub status: EvaluationJobStatus,
+}
+
+/// Immutable metadata measured from the submitted solution artifact.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct SolutionArtifactMetadata {
+    /// Compressed ZIP object size in bytes.
+    pub artifact_zip_bytes: u64,
+    /// Sum of expanded regular-file entry sizes in bytes.
+    pub artifact_uncompressed_bytes: u64,
+    /// Number of validated archive entries.
+    pub artifact_file_count: u64,
+    /// SHA-256 digest of the exact submitted ZIP bytes.
+    pub artifact_sha256: Sha256Digest,
 }
 
 /// Runner payload persisted on an evaluation job.

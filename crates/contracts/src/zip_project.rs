@@ -9,11 +9,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::validation::archive::{ArchiveEnvelopePolicy, inspect_zip_bytes};
 use crate::validation::text;
+use agentics_domain::models::evaluation::SolutionArtifactMetadata;
+use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::paths::{LogRelativePath, ScriptPath};
 pub use agentics_domain::zip_project::{
     DockerNetworkMode, ZipProjectNetworkAccess, ZipProjectPhaseLimits,
 };
 use agentics_error::{Result, ServiceError};
+use sha2::{Digest, Sha256};
 
 pub const ZIP_PROJECT_MANIFEST_FILE: &str = "agentics.solution.json";
 pub const ZIP_PROJECT_PROTOCOL: &str = "zip_project";
@@ -27,6 +30,31 @@ pub const MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES: u64 = 50 * 1024 * 1024;
 pub fn validate_zip_project_archive_envelope(bytes: &[u8]) -> Result<()> {
     inspect_zip_bytes(bytes, &zip_project_archive_policy())?;
     Ok(())
+}
+
+/// Parsed artifact envelope plus the solution manifest from one ZIP artifact.
+#[derive(Debug, Clone)]
+pub struct ZipProjectArtifact {
+    pub manifest: ZipProjectManifest,
+    pub metadata: SolutionArtifactMetadata,
+}
+
+/// Inspect a submitted ZIP project once and return manifest plus stable metadata.
+pub fn inspect_zip_project_artifact(bytes: &[u8]) -> Result<ZipProjectArtifact> {
+    let envelope = inspect_zip_bytes(bytes, &zip_project_archive_policy())?;
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    let artifact_file_count = u64::try_from(envelope.entries().len()).map_err(|_| {
+        ServiceError::Validation("solution archive entry count exceeds supported range".to_string())
+    })?;
+    let metadata = SolutionArtifactMetadata {
+        artifact_zip_bytes: envelope.archive_size(),
+        artifact_uncompressed_bytes: envelope.expanded_size(),
+        artifact_file_count,
+        artifact_sha256: Sha256Digest::from_bytes(hasher.finalize().into()),
+    };
+    let manifest = read_manifest_from_zip_bytes(bytes)?;
+    Ok(ZipProjectArtifact { manifest, metadata })
 }
 
 /// Shared archive envelope policy for `zip_project` solution ZIPs.
@@ -113,21 +141,7 @@ impl ZipProjectManifest {
 
     /// Parse and validate `agentics.solution.json` directly from a ZIP artifact.
     pub fn from_zip_bytes(bytes: &[u8]) -> Result<Self> {
-        validate_zip_project_archive_envelope(bytes)?;
-        let reader = std::io::Cursor::new(bytes);
-        let mut archive = zip::ZipArchive::new(reader)?;
-        let mut manifest = archive.by_name(ZIP_PROJECT_MANIFEST_FILE).map_err(|_| {
-            ServiceError::Validation(format!("{ZIP_PROJECT_MANIFEST_FILE} is required"))
-        })?;
-        if manifest.size() > 128 * 1024 {
-            return Err(ServiceError::Validation(format!(
-                "{ZIP_PROJECT_MANIFEST_FILE} must be at most 131072 bytes"
-            )));
-        }
-
-        let mut raw = String::new();
-        manifest.read_to_string(&mut raw)?;
-        Self::parse_json(&raw)
+        inspect_zip_project_artifact(bytes).map(|artifact| artifact.manifest)
     }
 
     /// Validate protocol versioning, submitter metadata, and script paths.
@@ -173,6 +187,24 @@ impl ZipProjectManifest {
     }
 }
 
+/// Read the manifest from ZIP bytes after the caller has validated the envelope.
+fn read_manifest_from_zip_bytes(bytes: &[u8]) -> Result<ZipProjectManifest> {
+    let reader = std::io::Cursor::new(bytes);
+    let mut archive = zip::ZipArchive::new(reader)?;
+    let mut manifest = archive.by_name(ZIP_PROJECT_MANIFEST_FILE).map_err(|_| {
+        ServiceError::Validation(format!("{ZIP_PROJECT_MANIFEST_FILE} is required"))
+    })?;
+    if manifest.size() > 128 * 1024 {
+        return Err(ServiceError::Validation(format!(
+            "{ZIP_PROJECT_MANIFEST_FILE} must be at most 131072 bytes"
+        )));
+    }
+
+    let mut raw = String::new();
+    manifest.read_to_string(&mut raw)?;
+    ZipProjectManifest::parse_json(&raw)
+}
+
 impl ZipProjectCommands {
     /// Handles validate for this module.
     fn validate(&self) -> Result<()> {
@@ -204,12 +236,14 @@ mod tests {
     use std::io::{Cursor, Write};
 
     use serde_json::json;
+    use sha2::Digest;
 
     use agentics_domain::models::paths::LogRelativePath;
 
     use super::{
         MAX_ZIP_PROJECT_NOTE_BYTES, ZipProjectManifest, ZipProjectPhaseFailureReason,
-        ZipProjectPhaseFailureReport, ZipProjectPhaseName, validate_zip_project_archive_envelope,
+        ZipProjectPhaseFailureReport, ZipProjectPhaseName, inspect_zip_project_artifact,
+        validate_zip_project_archive_envelope,
     };
 
     /// Builds a test ZIP archive with the supplied stored entries.
@@ -265,6 +299,38 @@ mod tests {
         assert_eq!(phases[1].command.as_str(), "scripts/build.sh");
         assert_eq!(phases[2].name, ZipProjectPhaseName::Run);
         assert_eq!(phases[2].command.as_str(), "run.sh");
+    }
+
+    /// Verifies uploaded solution artifacts produce trusted size and digest metadata.
+    #[test]
+    fn inspect_zip_project_artifact_returns_manifest_and_metadata() {
+        let manifest = valid_manifest().to_string();
+        let readme = b"example solution";
+        let bytes = zip_with_entries(&[
+            (super::ZIP_PROJECT_MANIFEST_FILE, manifest.as_bytes()),
+            ("README.md", readme),
+        ]);
+
+        let artifact =
+            inspect_zip_project_artifact(&bytes).expect("artifact inspection should succeed");
+
+        assert_eq!(artifact.manifest.commands.run.as_str(), "run.sh");
+        assert_eq!(
+            artifact.metadata.artifact_zip_bytes,
+            u64::try_from(bytes.len()).expect("test ZIP length fits")
+        );
+        assert_eq!(
+            artifact.metadata.artifact_uncompressed_bytes,
+            u64::try_from(manifest.len() + readme.len()).expect("test size fits")
+        );
+        assert_eq!(artifact.metadata.artifact_file_count, 2);
+
+        let mut hasher = sha2::Sha256::new();
+        hasher.update(&bytes);
+        assert_eq!(
+            artifact.metadata.artifact_sha256.to_string(),
+            hex::encode(hasher.finalize())
+        );
     }
 
     /// Verifies that note defaults to empty when omitted.

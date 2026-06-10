@@ -26,6 +26,7 @@
 use std::path::{Path, PathBuf};
 
 use bollard::Docker;
+use serde::Serialize;
 
 use agentics_config::Config;
 use agentics_contracts::zip_project::{
@@ -36,7 +37,10 @@ use agentics_domain::models::challenge::{
     CoexecutedBenchmarkSetupSpec, DockerPlatform, MetricSchemaSpec, PipedStdioSessionManifest,
     PipedStdioSetupSpec, ResourceProfileSpec, TargetAccelerator,
 };
-use agentics_domain::models::evaluation::{EvaluationJobPayload, EvaluatorRunResult, ScoringMode};
+use agentics_domain::models::evaluation::{
+    EvaluationJobPayload, EvaluatorRunResult, ScoringMode, SolutionArtifactMetadata,
+};
+use agentics_domain::models::ids::SolutionSubmissionId;
 use agentics_domain::models::paths::BundleRelativePath;
 use agentics_error::{Result, ServiceError};
 use agentics_storage::{Storage, StorageKey};
@@ -222,6 +226,7 @@ struct EvaluatorRequest<'a> {
     setup_root: Option<&'a Path>,
     runs_root: &'a Path,
     retained_run_trees: &'a [RetainedRunTree],
+    metadata_root: &'a Path,
     evaluator_output_root: &'a Path,
 }
 
@@ -240,6 +245,7 @@ struct PipedStdioRequest<'a> {
     session_root: &'a Path,
     build_root: &'a RetainedRunnerTree,
     run_work_root: &'a Path,
+    metadata_root: &'a Path,
     evaluator_output_root: &'a Path,
     max_interaction_bytes_per_direction: u64,
     interaction_shutdown_grace_secs: u64,
@@ -257,6 +263,7 @@ struct CoexecutedBenchmarkRequest<'a> {
     bundle_dir: &'a Path,
     setup_root: &'a Path,
     build_root: &'a RetainedRunnerTree,
+    metadata_root: &'a Path,
     evaluator_output_root: &'a Path,
 }
 
@@ -359,10 +366,25 @@ pub struct EvaluationJobExecution<'a> {
     pub container_scope: RunnerContainerScope,
     /// Scoring mode that controls privacy and log exposure.
     pub eval_type: ScoringMode,
+    /// Persistent solution submission identifier for evaluator metadata.
+    pub solution_submission_id: &'a SolutionSubmissionId,
+    /// Immutable metadata measured from the submitted solution artifact.
+    pub artifact_metadata: &'a SolutionArtifactMetadata,
     /// Validated job payload produced by the API.
     pub payload: &'a EvaluationJobPayload,
     /// Durable artifact storage for inputs and bounded logs.
     pub storage: &'a dyn Storage,
+}
+
+/// Evaluator-facing metadata file written under `/metadata/submission.json`.
+#[derive(Debug, Serialize)]
+struct SubmissionMetadataFile<'a> {
+    schema_version: u8,
+    solution_submission_id: &'a SolutionSubmissionId,
+    artifact_zip_bytes: u64,
+    artifact_uncompressed_bytes: u64,
+    artifact_file_count: u64,
+    artifact_sha256: String,
 }
 
 impl std::fmt::Debug for EvaluationJobExecution<'_> {
@@ -384,6 +406,30 @@ pub fn evaluation_runner_log_storage_key(job_id: &str, attempt_count: i32) -> Re
     Ok(StorageKey::try_new(format!(
         "eval-artifacts/{job_id}/attempt-{attempt_count}/runner.log"
     ))?)
+}
+
+/// Write trusted evaluator-only submission metadata under a runner-owned root.
+async fn write_submission_metadata(
+    metadata_root: &Path,
+    solution_submission_id: &SolutionSubmissionId,
+    artifact_metadata: &SolutionArtifactMetadata,
+) -> Result<()> {
+    cleanup_paths([metadata_root.to_path_buf()]).await?;
+    tokio::fs::create_dir_all(metadata_root).await?;
+    let payload = SubmissionMetadataFile {
+        schema_version: 1,
+        solution_submission_id,
+        artifact_zip_bytes: artifact_metadata.artifact_zip_bytes,
+        artifact_uncompressed_bytes: artifact_metadata.artifact_uncompressed_bytes,
+        artifact_file_count: artifact_metadata.artifact_file_count,
+        artifact_sha256: format!("sha256:{}", artifact_metadata.artifact_sha256),
+    };
+    let bytes = serde_json::to_vec_pretty(&payload).map_err(|e| {
+        ServiceError::Internal(format!("serialize submission metadata failed: {e}"))
+    })?;
+    tokio::fs::write(metadata_root.join("submission.json"), bytes).await?;
+    make_container_readable_tree(metadata_root).await?;
+    Ok(())
 }
 
 /// Remove private official benchmark identifiers from runner errors crossing trust boundaries.

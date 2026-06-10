@@ -341,6 +341,7 @@ pub(super) async fn run_evaluator(
     let mut mounts = vec![
         bind_mount(request.bundle_dir, "/challenge", true),
         bind_mount(request.runs_root, "/solution-runs", true),
+        bind_mount(request.metadata_root, "/metadata", true),
         bind_mount(output_mount.path(), "/output", false),
     ];
     for run_tree in request.retained_run_trees {
@@ -490,6 +491,7 @@ pub(super) async fn run_piped_stdio_session(
     let mut interactive_evaluator_mounts = vec![
         bind_mount(request.bundle_dir, "/challenge", true),
         bind_mount(request.session_root, "/session", true),
+        bind_mount(request.metadata_root, "/metadata", true),
         bind_mount(output_mount.path(), "/output", false),
     ];
     if let Some(setup_root) = session_plan
@@ -674,6 +676,7 @@ pub(super) async fn run_coexecuted_benchmark(
     let mut mounts = vec![
         bind_mount(request.bundle_dir, "/challenge", true),
         bind_mount(request.build_root.path(), "/workspace", true),
+        bind_mount(request.metadata_root, "/metadata", true),
         bind_mount(output_mount.path(), "/output", false),
     ];
     if let Some(setup_root) = retained_setup_root.as_ref().map(RetainedRunnerTree::path) {

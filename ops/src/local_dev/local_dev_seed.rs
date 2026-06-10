@@ -7,9 +7,10 @@ use std::path::{Path, PathBuf};
 use agentics_config::Config;
 use agentics_contracts::challenge_bundle::{read_challenge_bundle_spec, validate_challenge_bundle};
 use agentics_contracts::challenge_creation::read_challenge_creation_manifest;
+use agentics_contracts::zip_project::inspect_zip_project_artifact;
 use agentics_domain::models::challenge::{ChallengeBundleSpec, TargetAccelerator};
 use agentics_domain::models::challenge_creation::ChallengeCreationManifest;
-use agentics_domain::models::evaluation::ScoringMode;
+use agentics_domain::models::evaluation::{ScoringMode, SolutionArtifactMetadata};
 use agentics_domain::models::ids::{AgentId, EvaluationJobId, SolutionSubmissionId};
 use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::storage::StorageKey;
@@ -41,6 +42,12 @@ struct DevChallenge {
     challenge_root: PathBuf,
     manifest: ChallengeCreationManifest,
     spec: ChallengeBundleSpec,
+}
+
+#[derive(Debug, Clone)]
+struct UploadedTestSolutionArtifact {
+    key: StorageKey,
+    metadata: SolutionArtifactMetadata,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -163,7 +170,9 @@ pub(super) async fn upload_test_solution_artifact_for_test(
     solution_root: &Path,
     challenge_name: &str,
 ) -> Result<StorageKey, LocalDevError> {
-    upload_test_solution_artifact(storage, config, solution_root, challenge_name).await
+    upload_test_solution_artifact(storage, config, solution_root, challenge_name)
+        .await
+        .map(|artifact| artifact.key)
 }
 
 async fn discover_dev_challenges(
@@ -286,7 +295,7 @@ async fn seed_test_solution_submission(
         return Ok(false);
     }
 
-    let artifact_key = upload_test_solution_artifact(
+    let artifact = upload_test_solution_artifact(
         storage,
         config.storage_config(),
         &solution_root,
@@ -302,7 +311,8 @@ async fn seed_test_solution_submission(
             agent_id,
             challenge_name: challenge.name.clone(),
             target: target.clone(),
-            artifact_key,
+            artifact_key: artifact.key,
+            artifact_metadata: artifact.metadata,
             note: DEV_SEED_NOTE.to_string(),
             eval_type: ScoringMode::Official,
             explanation: format!(
@@ -354,7 +364,7 @@ async fn upload_test_solution_artifact(
     config: &Config,
     solution_root: &Path,
     challenge_name: &str,
-) -> Result<StorageKey, LocalDevError> {
+) -> Result<UploadedTestSolutionArtifact, LocalDevError> {
     let artifact_key = StorageKey::try_new(format!(
         "solution-submissions/local-dev-seed/{challenge_name}.zip"
     ))
@@ -367,6 +377,10 @@ async fn upload_test_solution_artifact(
         uuid::Uuid::new_v4()
     ));
     zip_dir(solution_root, &archive_path)?;
+    let artifact_bytes = fs::read(&archive_path)?;
+    let metadata = inspect_zip_project_artifact(&artifact_bytes)
+        .map_err(|error| LocalDevError::InvalidConfig(error.to_string()))?
+        .metadata;
     storage
         .put_file(
             &artifact_key,
@@ -375,7 +389,10 @@ async fn upload_test_solution_artifact(
         )
         .await?;
     remove_file_if_exists(&archive_path)?;
-    Ok(artifact_key)
+    Ok(UploadedTestSolutionArtifact {
+        key: artifact_key,
+        metadata,
+    })
 }
 
 fn zip_dir(source_dir: &Path, destination: &Path) -> Result<(), LocalDevError> {

@@ -1,6 +1,6 @@
 use super::{
     RunnerAttempt, container_name, effective_phase_limits, evaluator_limits,
-    evaluator_setup_limits, read_limited_result_json,
+    evaluator_setup_limits, read_limited_result_json, write_submission_metadata,
 };
 use agentics_contracts::zip_project::{
     DockerNetworkMode, ZipProjectNetworkAccess, ZipProjectPhaseName, ZipProjectResolvedPhase,
@@ -8,6 +8,9 @@ use agentics_contracts::zip_project::{
 use agentics_domain::models::challenge::{
     EvaluatorStageProfiles, ResourceProfileSpec, SolutionStageProfiles, StageResourceProfile,
 };
+use agentics_domain::models::evaluation::SolutionArtifactMetadata;
+use agentics_domain::models::hashes::Sha256Digest;
+use agentics_domain::models::ids::SolutionSubmissionId;
 use agentics_domain::models::images::{ChallengeImageReference, LocalAgenticsImageReference};
 use agentics_domain::models::names::ResourceProfileName;
 use agentics_domain::models::paths::ScriptPath;
@@ -96,6 +99,49 @@ async fn result_json_symlink_is_rejected() {
         .expect_err("symlink result.json must be rejected");
 
     assert!(error.to_string().contains("not a regular file"));
+    drop(std::fs::remove_dir_all(temp));
+}
+
+/// Verifies evaluator-visible submission metadata uses the stable JSON contract.
+#[tokio::test]
+async fn writes_submission_metadata_file() {
+    let temp = std::env::temp_dir().join(format!(
+        "agentics-submission-metadata-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let submission_id = SolutionSubmissionId::generate();
+    let metadata = SolutionArtifactMetadata {
+        artifact_zip_bytes: 123,
+        artifact_uncompressed_bytes: 456,
+        artifact_file_count: 7,
+        artifact_sha256: Sha256Digest::try_new(
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        )
+        .expect("test digest is valid"),
+    };
+
+    write_submission_metadata(&temp, &submission_id, &metadata)
+        .await
+        .expect("metadata file should write");
+
+    let raw =
+        std::fs::read_to_string(temp.join("submission.json")).expect("metadata file should exist");
+    let value: serde_json::Value =
+        serde_json::from_str(&raw).expect("metadata file should be JSON");
+
+    assert_eq!(value["schema_version"], 1);
+    assert_eq!(
+        value["solution_submission_id"].as_str(),
+        Some(submission_id.to_string().as_str())
+    );
+    assert_eq!(value["artifact_zip_bytes"], 123);
+    assert_eq!(value["artifact_uncompressed_bytes"], 456);
+    assert_eq!(value["artifact_file_count"], 7);
+    assert_eq!(
+        value["artifact_sha256"].as_str(),
+        Some("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
+    );
+
     drop(std::fs::remove_dir_all(temp));
 }
 

@@ -4,6 +4,10 @@ CREATE TABLE IF NOT EXISTS solution_submissions (
   target TEXT NOT NULL,
   agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
   artifact_key TEXT NOT NULL,
+  artifact_zip_bytes BIGINT,
+  artifact_uncompressed_bytes BIGINT,
+  artifact_file_count BIGINT,
+  artifact_sha256 TEXT,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'queued', 'running', 'completed', 'failed')),
   explanation TEXT NOT NULL DEFAULT '',
   note TEXT NOT NULL DEFAULT '',
@@ -13,7 +17,25 @@ CREATE TABLE IF NOT EXISTS solution_submissions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (id, challenge_name, target),
-  CONSTRAINT solution_submissions_note_octets_check CHECK (octet_length(note) <= 1024)
+  CONSTRAINT solution_submissions_note_octets_check CHECK (octet_length(note) <= 1024),
+  CONSTRAINT solution_submissions_artifact_metadata_complete_check CHECK (
+    (
+      artifact_zip_bytes IS NULL
+      AND artifact_uncompressed_bytes IS NULL
+      AND artifact_file_count IS NULL
+      AND artifact_sha256 IS NULL
+    )
+    OR (
+      artifact_zip_bytes IS NOT NULL
+      AND artifact_uncompressed_bytes IS NOT NULL
+      AND artifact_file_count IS NOT NULL
+      AND artifact_sha256 IS NOT NULL
+      AND artifact_zip_bytes >= 0
+      AND artifact_uncompressed_bytes >= 0
+      AND artifact_file_count >= 0
+      AND artifact_sha256 ~ '^[0-9a-f]{64}$'
+    )
+  )
 );
 
 CREATE TABLE IF NOT EXISTS evaluation_jobs (

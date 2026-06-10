@@ -11,7 +11,7 @@ use super::{
     append_named_logs, cleanup_paths, configure_run_count_limits, create_private_host_dir,
     evaluation_runner_log_storage_key, extract_zip_safe, make_container_readable_tree,
     read_limited_result_json, resolve_run_plan, sanitize_runner_error, validate_evaluator_result,
-    visible_log_content,
+    visible_log_content, write_submission_metadata,
 };
 use agentics_storage::StorageError;
 
@@ -27,6 +27,8 @@ pub(crate) async fn execute_evaluation_job(
         attempt_count,
         container_scope,
         eval_type,
+        solution_submission_id,
+        artifact_metadata,
         payload,
         storage,
     } = request;
@@ -42,6 +44,7 @@ pub(crate) async fn execute_evaluation_job(
     let runs_root = working_root.join("solution-runs");
     let setup_root = working_root.join("setup");
     let session_root = working_root.join("session");
+    let metadata_root = working_root.join("metadata");
     let evaluator_output_root = working_root.join("evaluator-output");
     let challenge_bundle_root = working_root.join("challenge-bundle");
     let runner_log_storage_key = evaluation_runner_log_storage_key(job_id, attempt_count)?;
@@ -55,6 +58,7 @@ pub(crate) async fn execute_evaluation_job(
     tokio::fs::create_dir_all(&runs_root).await?;
     tokio::fs::create_dir_all(&session_root).await?;
     tokio::fs::create_dir_all(&evaluator_output_root).await?;
+    write_submission_metadata(&metadata_root, solution_submission_id, artifact_metadata).await?;
 
     let limits = EvaluationLimitConfig {
         max_runs: config.runner.max_runs,
@@ -233,6 +237,7 @@ pub(crate) async fn execute_evaluation_job(
                         setup_root: run_plan.setup_root.as_ref().map(RetainedRunnerTree::path),
                         runs_root: &runs_root,
                         retained_run_trees: &retained_run_trees,
+                        metadata_root: &metadata_root,
                         evaluator_output_root: &evaluator_output_root,
                     },
                     &mut logs,
@@ -257,6 +262,7 @@ pub(crate) async fn execute_evaluation_job(
                         session_root: &session_root,
                         build_root: &build_workspace,
                         run_work_root: &run_work_root,
+                        metadata_root: &metadata_root,
                         evaluator_output_root: &evaluator_output_root,
                         max_interaction_bytes_per_direction: config
                             .runner
@@ -284,6 +290,7 @@ pub(crate) async fn execute_evaluation_job(
                         bundle_dir,
                         setup_root: &setup_root,
                         build_root: &build_workspace,
+                        metadata_root: &metadata_root,
                         evaluator_output_root: &evaluator_output_root,
                     },
                     &mut logs,

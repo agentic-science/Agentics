@@ -297,7 +297,15 @@ fn extract_validated_zip_archive<R: Read + Seek>(
                 .write(true)
                 .create_new(true)
                 .open(&outpath)?;
-            std::io::copy(&mut file, &mut outfile)?;
+            let copied = std::io::copy(&mut file, &mut outfile)?;
+            if copied != entry.size() {
+                return Err(ServiceError::Validation(format!(
+                    "{} entry `{}` extracted {copied} bytes, expected {} bytes",
+                    envelope.label(),
+                    entry.path(),
+                    entry.size()
+                )));
+            }
         }
     }
 

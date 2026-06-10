@@ -4,6 +4,10 @@ mod helpers;
 
 use std::path::Path;
 
+use agentics_config::WorkerAccelerators;
+use agentics_contracts::zip_project::inspect_zip_project_artifact;
+use agentics_persistence::Repositories;
+use base64::Engine as _;
 use helpers::{
     TestCreatorSession, admin_service_token_header, api_url, copy_dir_all, create_creator_session,
     examples_challenges_root, published_challenge_name, run_worker_once, sample_sum_solution,
@@ -310,6 +314,73 @@ async fn solution_submission_rejects_oversized_manifest_note_before_storage(pool
             .expect("failed to query solution submission count");
     assert_eq!(solution_submission_count, 0);
     assert!(helpers::storage_prefix_is_empty(&config, "solution-submissions").await);
+}
+
+/// Verifies accepted submissions persist trusted artifact metadata for runner claims.
+#[sqlx::test(migrations = "../migrations")]
+async fn solution_submission_persists_artifact_metadata_for_runner(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let agent = register_api_agent(&client, &app, "artifact-metadata-agent").await;
+    let challenge_name = published_challenge_name(&pool, "sample-sum").await;
+    let artifact_base64 = solution_zip_base64(&sample_sum_solution("payload['a'] + payload['b']"));
+    let artifact_bytes = base64::engine::general_purpose::STANDARD
+        .decode(&artifact_base64)
+        .expect("test artifact should decode");
+    let expected = inspect_zip_project_artifact(&artifact_bytes)
+        .expect("test artifact should inspect")
+        .metadata;
+
+    let submission: serde_json::Value = submit_solution(
+        &client,
+        &app,
+        &agent.token,
+        &challenge_name,
+        &artifact_base64,
+    )
+    .await
+    .error_for_status()
+    .expect("solution submission should queue")
+    .json()
+    .await
+    .expect("failed to decode submission response");
+    let submission_id = submission["id"].as_str().expect("missing submission id");
+
+    let persisted: (i64, i64, i64, String) = sqlx::query_as(
+        r#"
+        SELECT artifact_zip_bytes, artifact_uncompressed_bytes, artifact_file_count, artifact_sha256
+        FROM solution_submissions
+        WHERE id = $1::uuid
+        "#,
+    )
+    .bind(submission_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query artifact metadata");
+    assert_eq!(
+        u64::try_from(persisted.0).expect("zip bytes should be non-negative"),
+        expected.artifact_zip_bytes
+    );
+    assert_eq!(
+        u64::try_from(persisted.1).expect("expanded bytes should be non-negative"),
+        expected.artifact_uncompressed_bytes
+    );
+    assert_eq!(
+        u64::try_from(persisted.2).expect("file count should be non-negative"),
+        expected.artifact_file_count
+    );
+    assert_eq!(persisted.3, expected.artifact_sha256.to_string());
+
+    let claimed = Repositories::new(&pool)
+        .evaluation_jobs()
+        .claim_next("metadata-test-worker", WorkerAccelerators::None)
+        .await
+        .expect("job claim should succeed")
+        .expect("submission should queue an evaluation job");
+    assert_eq!(claimed.solution_submission_id.to_string(), submission_id);
+    assert_eq!(claimed.artifact_metadata.as_ref(), Some(&expected));
 }
 
 /// Verifies that invalid solution submission path ids return bad request.

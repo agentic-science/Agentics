@@ -152,6 +152,16 @@ impl<'a> EvaluationWorkerService<'a> {
             return Ok(EvaluationWorkerCycleOutcome::Idle);
         }
 
+        let Some(artifact_metadata) = job.artifact_metadata.as_ref() else {
+            return self
+                .finish_failed_job(
+                    worker_id,
+                    &job,
+                    "solution submission is missing trusted artifact metadata",
+                )
+                .await;
+        };
+
         let (lease_stop_tx, lease_stop_rx) = watch::channel(false);
         let lease_task = tokio::spawn(refresh_claim_until_stopped(
             self.db.clone(),
@@ -171,6 +181,8 @@ impl<'a> EvaluationWorkerService<'a> {
                 attempt_count: job.attempt_count,
                 container_scope: RunnerContainerScope::HostedWorker,
                 eval_type: job.eval_type,
+                solution_submission_id: &job.solution_submission_id,
+                artifact_metadata,
                 payload: &job.payload,
                 storage: self.storage,
             })

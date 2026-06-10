@@ -5,8 +5,10 @@ use sqlx::{PgPool, Postgres, Row, Transaction};
 use agentics_domain::models::challenge::{ChallengeBundleSpec, TargetAccelerator};
 use agentics_domain::models::evaluation::{
     EvaluationDto, EvaluationJobPayload, EvaluationJobStatus, EvaluationStatus, MetricValue,
-    PublicCaseResult, RunMetricResult, ScoringMode, SolutionSubmissionStatus,
+    PublicCaseResult, RunMetricResult, ScoringMode, SolutionArtifactMetadata,
+    SolutionSubmissionStatus,
 };
+use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::ids::{AgentId, EvaluationId, EvaluationJobId, SolutionSubmissionId};
 use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::storage::StorageKey;
@@ -31,6 +33,7 @@ pub struct CreateSolutionSubmissionInput {
     pub challenge_name: ChallengeName,
     pub target: TargetName,
     pub artifact_key: StorageKey,
+    pub artifact_metadata: SolutionArtifactMetadata,
     pub note: String,
     pub eval_type: ScoringMode,
     pub explanation: String,
@@ -110,6 +113,7 @@ pub struct SolutionSubmissionRecord {
     pub challenge_title: Option<String>,
     pub challenge_spec: ChallengeBundleSpec,
     pub artifact_key: StorageKey,
+    pub artifact_metadata: Option<SolutionArtifactMetadata>,
     pub note: String,
     pub status: String,
     pub explanation: String,
@@ -163,11 +167,13 @@ pub async fn create_solution_submission_with_job(
         r#"
         INSERT INTO solution_submissions (
             id, challenge_name, target, agent_id, artifact_key, note,
+            artifact_zip_bytes, artifact_uncompressed_bytes, artifact_file_count, artifact_sha256,
             status, explanation, parent_solution_submission_id, credit_text, visible_after_eval
         )
-        VALUES ($1::uuid, $2, $3, $4::uuid, $5, $6, 'pending', $7, $8::uuid, $9, FALSE)
+        VALUES ($1::uuid, $2, $3, $4::uuid, $5, $6, $7, $8, $9, $10, 'pending', $11, $12::uuid, $13, FALSE)
         RETURNING
             id, challenge_name, target, agent_id, artifact_key, note,
+            artifact_zip_bytes, artifact_uncompressed_bytes, artifact_file_count, artifact_sha256,
             status, explanation, parent_solution_submission_id, credit_text, visible_after_eval,
             created_at, updated_at
         "#,
@@ -178,6 +184,19 @@ pub async fn create_solution_submission_with_job(
     .bind(input.agent_id.as_str())
     .bind(input.artifact_key.as_str())
     .bind(&input.note)
+    .bind(u64_to_i64(
+        input.artifact_metadata.artifact_zip_bytes,
+        "artifact_zip_bytes",
+    )?)
+    .bind(u64_to_i64(
+        input.artifact_metadata.artifact_uncompressed_bytes,
+        "artifact_uncompressed_bytes",
+    )?)
+    .bind(u64_to_i64(
+        input.artifact_metadata.artifact_file_count,
+        "artifact_file_count",
+    )?)
+    .bind(input.artifact_metadata.artifact_sha256.to_string())
     .bind(&input.explanation)
     .bind(
         input
@@ -238,6 +257,7 @@ pub async fn create_solution_submission_with_job(
         challenge_title: None,
         challenge_spec: spec,
         artifact_key: storage_key_from_row(&row, "artifact_key")?,
+        artifact_metadata: artifact_metadata_from_row(&row)?,
         note: row.try_get("note")?,
         status: row.try_get("status")?,
         explanation: row.try_get("explanation")?,
@@ -592,6 +612,7 @@ async fn get_solution_submission_by_id_inner(
             p.title AS challenge_title, p.spec_json AS challenge_spec_json,
             a.display_name AS agent_display_name,
             s.artifact_key, s.note, s.status, s.explanation,
+            s.artifact_zip_bytes, s.artifact_uncompressed_bytes, s.artifact_file_count, s.artifact_sha256,
             s.parent_solution_submission_id, s.credit_text, s.visible_after_eval,
             s.created_at, s.updated_at,
             j.id AS latest_job_id, j.status AS latest_job_status,
@@ -669,6 +690,7 @@ async fn get_solution_submission_by_id_inner(
         challenge_title: r.try_get::<Option<String>, _>("challenge_title")?,
         challenge_spec,
         artifact_key: storage_key_from_row(&r, "artifact_key")?,
+        artifact_metadata: artifact_metadata_from_row(&r)?,
         note: r.try_get("note")?,
         status: r.try_get("status")?,
         explanation: r.try_get("explanation")?,
@@ -1049,6 +1071,60 @@ fn storage_key_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<Sto
     StorageKey::try_new(&value).map_err(|e| {
         ServiceError::Internal(format!("stored invalid storage key in `{column}`: {e}"))
     })
+}
+
+/// Reads optional solution artifact metadata from a database row.
+fn artifact_metadata_from_row(
+    row: &sqlx::postgres::PgRow,
+) -> Result<Option<SolutionArtifactMetadata>> {
+    let artifact_zip_bytes = optional_u64_from_row(row, "artifact_zip_bytes")?;
+    let artifact_uncompressed_bytes = optional_u64_from_row(row, "artifact_uncompressed_bytes")?;
+    let artifact_file_count = optional_u64_from_row(row, "artifact_file_count")?;
+    let artifact_sha256: Option<String> = row.try_get("artifact_sha256")?;
+    match (
+        artifact_zip_bytes,
+        artifact_uncompressed_bytes,
+        artifact_file_count,
+        artifact_sha256,
+    ) {
+        (None, None, None, None) => Ok(None),
+        (
+            Some(artifact_zip_bytes),
+            Some(artifact_uncompressed_bytes),
+            Some(artifact_file_count),
+            Some(artifact_sha256),
+        ) => {
+            let artifact_sha256 = Sha256Digest::try_new(&artifact_sha256).map_err(|e| {
+                ServiceError::Internal(format!("stored invalid artifact_sha256: {e}"))
+            })?;
+            Ok(Some(SolutionArtifactMetadata {
+                artifact_zip_bytes,
+                artifact_uncompressed_bytes,
+                artifact_file_count,
+                artifact_sha256,
+            }))
+        }
+        _ => Err(ServiceError::Internal(
+            "stored partial solution artifact metadata".to_string(),
+        )),
+    }
+}
+
+/// Reads an optional non-negative BIGINT as `u64`.
+fn optional_u64_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<Option<u64>> {
+    let value: Option<i64> = row.try_get(column)?;
+    value
+        .map(|value| {
+            u64::try_from(value)
+                .map_err(|_| ServiceError::Internal(format!("stored negative value in `{column}`")))
+        })
+        .transpose()
+}
+
+/// Converts a bounded `u64` to PostgreSQL BIGINT.
+fn u64_to_i64(value: u64, field: &str) -> Result<i64> {
+    i64::try_from(value)
+        .map_err(|_| ServiceError::Validation(format!("{field} exceeds supported range")))
 }
 
 /// Reads optional storage key from a database row and validates its domain shape.

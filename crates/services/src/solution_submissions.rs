@@ -1,7 +1,7 @@
 //! Solution submission admission, artifact staging, and initial job creation.
 
 use agentics_config::Config;
-use agentics_contracts::zip_project::ZipProjectManifest;
+use agentics_contracts::zip_project::inspect_zip_project_artifact;
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::{AgentId, EvaluationJobId, SolutionSubmissionId};
 use agentics_domain::models::request::{
@@ -77,7 +77,7 @@ pub async fn create_solution_submission(
         .await?;
 
     let artifact_bytes = decode_solution_artifact(&body.artifact_base64)?;
-    let manifest = ZipProjectManifest::from_zip_bytes(&artifact_bytes)?;
+    let artifact = inspect_zip_project_artifact(&artifact_bytes)?;
 
     let solution_submission_id = SolutionSubmissionId::generate();
     let job_id = EvaluationJobId::generate();
@@ -96,7 +96,8 @@ pub async fn create_solution_submission(
             challenge_name: canonical_challenge_name,
             target,
             artifact_key: artifact_keys.durable.clone(),
-            note: manifest.note,
+            artifact_metadata: artifact.metadata,
+            note: artifact.manifest.note,
             eval_type,
             explanation: body.explanation.trim().to_string(),
             parent_solution_submission_id: body.parent_solution_submission_id,

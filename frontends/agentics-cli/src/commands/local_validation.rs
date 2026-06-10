@@ -3,8 +3,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use agentics_config::Config;
 use agentics_contracts::validation::targets::{self, TargetSelectionMode};
+use agentics_contracts::zip_project::inspect_zip_project_artifact;
 use agentics_domain::models::challenge::ChallengeBundleSpec;
-use agentics_domain::models::evaluation::{EvaluationJobPayload, ScoringMode};
+use agentics_domain::models::evaluation::{
+    EvaluationJobPayload, ScoringMode, SolutionArtifactMetadata,
+};
+use agentics_domain::models::ids::SolutionSubmissionId;
 use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_storage::{
     LocalStorage, Storage, StorageKey, StorageWriteIntent, pack_directory_to_tar,
@@ -48,6 +52,7 @@ struct LocalValidationContext {
     spec: ChallengeBundleSpec,
     targets: Vec<TargetName>,
     package: package::SolutionPackage,
+    artifact_metadata: SolutionArtifactMetadata,
     package_report: output::LocalValidationPackageReport,
     storage_root: PathBuf,
     config: Config,
@@ -64,6 +69,7 @@ async fn prepare_local_validation(args: ValidateArgs) -> Result<LocalValidationC
     require_requested_challenge(&spec, args.challenge_name.as_ref())?;
     let targets = select_local_targets(&spec, args.target.as_ref(), args.all_targets)?;
     let package = package::package_solution_workspace(&args.dir)?;
+    let artifact = inspect_zip_project_artifact(&package.bytes)?;
     let storage_root = prepare_local_storage_root(args.local_storage_dir.as_deref()).await?;
     let config = local_runner_config(&storage_root)?;
     let package_report = local_package_report(&package);
@@ -73,6 +79,7 @@ async fn prepare_local_validation(args: ValidateArgs) -> Result<LocalValidationC
         spec,
         targets,
         package,
+        artifact_metadata: artifact.metadata,
         package_report,
         storage_root,
         config,
@@ -171,6 +178,7 @@ async fn execute_local_validation_targets(
     let mut target_reports = Vec::with_capacity(context.targets.len());
     for target in &context.targets {
         let job_id = local_validation_job_id(&context.spec.challenge_name, target)?;
+        let solution_submission_id = SolutionSubmissionId::generate();
         let artifact_key = StorageKey::try_new(format!("local-validation/{job_id}/solution.zip"))?;
         let stored_artifact_key = storage
             .put(
@@ -202,6 +210,8 @@ async fn execute_local_validation_targets(
                 attempt_count: 1,
                 container_scope: agentics_runner::RunnerContainerScope::LocalValidation,
                 eval_type: ScoringMode::Validation,
+                solution_submission_id: &solution_submission_id,
+                artifact_metadata: &context.artifact_metadata,
                 payload: &payload,
                 storage: &storage,
             })

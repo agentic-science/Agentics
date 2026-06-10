@@ -3,7 +3,10 @@ use sqlx::{PgPool, Postgres, Row, Transaction};
 
 use agentics_config::WorkerAccelerators;
 use agentics_domain::models::challenge::{ChallengeBundleSpec, TargetAccelerator};
-use agentics_domain::models::evaluation::{EvaluationJobPayload, ScoringMode};
+use agentics_domain::models::evaluation::{
+    EvaluationJobPayload, ScoringMode, SolutionArtifactMetadata,
+};
+use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::ids::{EvaluationJobId, SolutionSubmissionId};
 use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_error::{Result, ServiceError};
@@ -29,6 +32,7 @@ pub struct EvaluationJobRecord {
     pub status: String,
     pub attempt_count: i32,
     pub payload: EvaluationJobPayload,
+    pub artifact_metadata: Option<SolutionArtifactMetadata>,
 }
 
 /// Current durable claim state for runner container reconciliation.
@@ -54,7 +58,7 @@ pub async fn claim_next_evaluation_job(
     let row = sqlx::query(
         r#"
         WITH next_job AS (
-            SELECT id
+            SELECT id, solution_submission_id
             FROM evaluation_jobs
             WHERE status = 'queued'
               AND scheduled_at <= NOW()
@@ -67,8 +71,12 @@ pub async fn claim_next_evaluation_job(
         UPDATE evaluation_jobs j
         SET status = 'running', claimed_at = NOW(), worker_id = $1, attempt_count = j.attempt_count + 1
         FROM next_job
+        JOIN solution_submissions s ON s.id = next_job.solution_submission_id
         WHERE j.id = next_job.id
-        RETURNING j.id, j.solution_submission_id, j.challenge_name, j.target, j.required_accelerator, j.eval_type, j.status, j.attempt_count, j.payload_json
+        RETURNING
+            j.id, j.solution_submission_id, j.challenge_name, j.target, j.required_accelerator,
+            j.eval_type, j.status, j.attempt_count, j.payload_json,
+            s.artifact_zip_bytes, s.artifact_uncompressed_bytes, s.artifact_file_count, s.artifact_sha256
         "#
     )
     .bind(worker_id)
@@ -114,6 +122,7 @@ pub async fn claim_next_evaluation_job(
         status: r.try_get("status")?,
         attempt_count: r.try_get("attempt_count")?,
         payload,
+        artifact_metadata: artifact_metadata_from_row(&r)?,
     }))
 }
 
@@ -330,6 +339,7 @@ pub async fn queue_evaluation_job(
     let row = sqlx::query(
         r#"
         SELECT s.id, s.challenge_name, s.target, s.agent_id::text AS agent_id, s.artifact_key, s.visible_after_eval,
+               s.artifact_zip_bytes, s.artifact_uncompressed_bytes, s.artifact_file_count, s.artifact_sha256,
                p.bundle_key, p.public_bundle_key, p.spec_json
         FROM solution_submissions s
         JOIN challenges p ON p.challenge_name = s.challenge_name
@@ -439,6 +449,7 @@ pub async fn queue_evaluation_job(
         attempt_count: 0,
         payload: serde_json::from_value(payload)
             .map_err(|e| ServiceError::Internal(e.to_string()))?,
+        artifact_metadata: artifact_metadata_from_row(&row)?,
     })
 }
 
@@ -478,6 +489,54 @@ fn required_accelerator_for_target(
         ))
     })?;
     Ok(target_spec.accelerator)
+}
+
+/// Reads optional solution artifact metadata from a database row.
+fn artifact_metadata_from_row(
+    row: &sqlx::postgres::PgRow,
+) -> Result<Option<SolutionArtifactMetadata>> {
+    let artifact_zip_bytes = optional_u64_from_row(row, "artifact_zip_bytes")?;
+    let artifact_uncompressed_bytes = optional_u64_from_row(row, "artifact_uncompressed_bytes")?;
+    let artifact_file_count = optional_u64_from_row(row, "artifact_file_count")?;
+    let artifact_sha256: Option<String> = row.try_get("artifact_sha256")?;
+    match (
+        artifact_zip_bytes,
+        artifact_uncompressed_bytes,
+        artifact_file_count,
+        artifact_sha256,
+    ) {
+        (None, None, None, None) => Ok(None),
+        (
+            Some(artifact_zip_bytes),
+            Some(artifact_uncompressed_bytes),
+            Some(artifact_file_count),
+            Some(artifact_sha256),
+        ) => {
+            let artifact_sha256 = Sha256Digest::try_new(&artifact_sha256).map_err(|e| {
+                ServiceError::Internal(format!("stored invalid artifact_sha256: {e}"))
+            })?;
+            Ok(Some(SolutionArtifactMetadata {
+                artifact_zip_bytes,
+                artifact_uncompressed_bytes,
+                artifact_file_count,
+                artifact_sha256,
+            }))
+        }
+        _ => Err(ServiceError::Internal(
+            "stored partial solution artifact metadata".to_string(),
+        )),
+    }
+}
+
+/// Reads an optional non-negative BIGINT as `u64`.
+fn optional_u64_from_row(row: &sqlx::postgres::PgRow, column: &str) -> Result<Option<u64>> {
+    let value: Option<i64> = row.try_get(column)?;
+    value
+        .map(|value| {
+            u64::try_from(value)
+                .map_err(|_| ServiceError::Internal(format!("stored negative value in `{column}`")))
+        })
+        .transpose()
 }
 
 /// Handles map active job conflict for this module.
