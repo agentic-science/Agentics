@@ -27,7 +27,7 @@ deferred, or blocked.
 - [x] Update `src/main.rs` in the CLI package to import the renamed library
   crate.
 - [x] Update lockfile and package references.
-- [ ] Confirm `agentics --version` reports `0.3.0`.
+- [x] Confirm `agentics --version` reports `0.3.0`.
 
 ## Documentation Checklist
 
@@ -48,19 +48,19 @@ deferred, or blocked.
 ## Challenge Compatibility Checklist
 
 - [x] Validate committed challenge bundles in `agentics-challenges`.
-- [ ] Validate dev seed catalog and test solutions.
+- [x] Validate dev seed catalog and test solutions.
 - [x] Scan challenge evaluators/manifests for removed `rank_score` output.
 - [x] Fix old resource-profile/execution fields.
-- [ ] Fix metric schemas missing primary metrics or directions.
-- [ ] Fix evaluator result payloads that do not match the current contract.
-- [ ] Fix metadata-aware evaluators or specs if they rely on old submission
+- [x] Fix metric schemas missing primary metrics or directions.
+- [x] Fix evaluator result payloads that do not match the current contract.
+- [x] Fix metadata-aware evaluators or specs if they rely on old submission
   assumptions.
-- [ ] Fix private asset overlays, run manifests, and session manifests that no
+- [x] Fix private asset overlays, run manifests, and session manifests that no
   longer validate.
-- [ ] Add a working-note section listing challenge breakages found and fixes
+- [x] Add a working-note section listing challenge breakages found and fixes
   applied.
-- [ ] Run dev up/down and representative challenge smoke.
-- [ ] Run rehearsal up/down and health check.
+- [x] Run dev up/down and representative challenge smoke.
+- [x] Run rehearsal up/down and health check.
 
 ## Publish Tooling Checklist
 
@@ -110,17 +110,17 @@ deferred, or blocked.
 
 ## Verification Checklist
 
-- [ ] `cargo fmt --all -- --check`
-- [ ] `cargo clippy --workspace --all-targets -- -D warnings`
-- [ ] `cargo test --workspace --exclude integration-tests`
-- [ ] Targeted `cargo test -p agentics`
+- [x] `cargo fmt --all -- --check`
+- [x] `cargo clippy --workspace --all-targets -- -D warnings`
+- [x] `cargo test --workspace --exclude integration-tests`
+- [x] Targeted `cargo test -p agentics`
 - [x] Publish-tool unit tests
-- [ ] `cd frontends/web && bun run generate:schemas:check`
-- [ ] `cd frontends/web && bunx biome check`
-- [ ] `cd frontends/web && bunx tsc --noEmit`
-- [ ] `cd frontends/web && bun test`
-- [ ] `just test-env-status`
-- [ ] `just test-all`
+- [x] `cd frontends/web && bun run generate:schemas:check`
+- [x] `cd frontends/web && bunx biome check`
+- [x] `cd frontends/web && bunx tsc --noEmit`
+- [x] `cd frontends/web && bun test`
+- [x] `just test-env-status`
+- [x] `just test-all`
 - [x] `just publish --dry-run`
 - [ ] After publish, crates.io API confirms all selected `0.3.0` packages are
   visible.
@@ -138,3 +138,22 @@ rehearsal smoke here.
   stage network fields. Directly invoking `agentics-local-dev prepare` without
   the dev Compose environment failed because local-dev roots were unset; dev
   catalog validation must be exercised through `just dev::up`.
+- 2026-06-11: `sudo env AGENTICS_DEV_USER=maplespark HOME=/home/maplespark
+  PATH="$PATH" just dev::up` used project `agentics-dev-maplespark`, prepared
+  12 local dev challenges, verified 12 runtime bundles, staged no missing test
+  submissions, served web on `127.0.0.1:3010`, and shut down cleanly with
+  `just dev::down`. The dev API and web ports did not overlap production.
+- 2026-06-11: `sudo env HOME=/home/maplespark PATH="$PATH" just
+  rehearsal::up` started `agentics-rehearsal` on `13100/13001` with PG 18 and
+  both CPU/GPU workers. The first `rehearsal::check` raced API startup and
+  failed health/catalog checks before the API was listening; rerunning the same
+  check passed API health, public catalog, web reachability, Docker reachability,
+  and GitHub egress. `rehearsal::down --runner clean` shut the stack down
+  cleanly.
+- 2026-06-11: Structural scan over 260 committed/dev bundle `spec.json` files
+  found zero missing primary metrics, undeclared primary metrics, or missing
+  metric directions. Execution-mode coverage in the catalog is 126
+  `separated_evaluator`, 74 `piped_stdio`, and 60 `coexecuted_benchmark`
+  bundles. A removed-field scan over challenge files found no `rank_score`,
+  `primary_score`, `official_score`, `best_rank_score`, `scorer`, old
+  `scorer_*`, or old flat stage-network fields.
