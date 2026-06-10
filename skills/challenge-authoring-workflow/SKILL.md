@@ -86,6 +86,13 @@ seed/config overlays.
 
 Run manifests and `piped_stdio` session manifests may use `input_files[].source_path` for large public or private input files. Public validation source paths must resolve inside the public bundle. Static official source paths usually resolve inside the uploaded private benchmark overlay. Setup-generated official source paths resolve inside `/setup`, relative to the generated run or session manifest's setup workspace. Keep expected outputs and reference data evaluator-owned; do not expose them to solution inputs unless the challenge intentionally makes them public.
 
+Trusted evaluator-side containers may read `/metadata/submission.json` for
+platform-owned submission artifact facts such as ZIP bytes, expanded bytes,
+file count, and SHA-256 digest. Use this only for evaluator scoring or
+diagnostics that need admission-time artifact metadata. Do not reference
+`/metadata` from challenge bundle input locators, and do not design participant
+run protocols that require access to it.
+
 Challenge bundles must use supported first-party Agentics images with explicit
 image sources. Local development may use `source: "local"` with
 `agentics-linux-arm64-cpu`; hosted challenge specs must use `source:

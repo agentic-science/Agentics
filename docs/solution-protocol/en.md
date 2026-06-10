@@ -336,6 +336,14 @@ only `agentics-run.json`, declared outputs, and challenge-owned reference data.
 Output count, depth, byte, symlink, and special-file checks reduce the surface
 but do not make arbitrary participant files trusted.
 
+Trusted evaluator-side containers also receive read-only submission artifact
+metadata at `/metadata/submission.json`. The file is platform-owned JSON with
+`schema_version`, `solution_submission_id`, `artifact_zip_bytes`,
+`artifact_uncompressed_bytes`, `artifact_file_count`, and `artifact_sha256`.
+Evaluators may use it for scoring or diagnostics that need admission-time facts
+about the submitted ZIP. Participant run containers never receive `/metadata`,
+and challenge bundles must not treat `/metadata` as an input path.
+
 ## Execution Environment Policy
 
 The worker uses separate solution and evaluator environments:
@@ -345,9 +353,11 @@ The worker uses separate solution and evaluator environments:
 - An optional setup container runs challenge-owned setup in the evaluator image before solution invocations, uses the `evaluator.setup` stage policy, and writes generated inputs under `/setup`.
 - A separated-evaluator container runs trusted challenge-owner scoring code and uses the `evaluator.run` stage policy.
 - In `piped_stdio`, the interactive-evaluator is the trusted evaluator process. It receives
-  `/challenge`, `/session`, optional `/setup`, and writable `/output`. The
-  participant run container receives only read-only `/workspace` and writable
-  `/io`.
+  `/challenge`, `/session`, optional `/setup`, read-only `/metadata`, and
+  writable `/output`. The participant run container receives only read-only
+  `/workspace` and writable `/io`.
+- Coexecuted evaluators receive `/workspace`, `/challenge`, optional `/setup`,
+  read-only `/metadata`, and writable `/output`.
 - Private benchmark reference outputs, evaluator-only files, and official scoring logic are mounted only into the evaluator container.
 - The solution run container receives only the specific input needed for the current CLI/stdin or file-mode invocation. Source-backed inputs are mounted read-only, and the writable `/io` tree is limited to stdin/stdout/stderr capture, declared outputs, home, and temporary files.
 - Hosted deployments should back every writable path in these phases with a

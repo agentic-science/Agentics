@@ -310,6 +310,10 @@ direct public records 可读，并拒绝新的 validation 和 official solution 
 - `coexecuted_benchmark` 必须包含 `acknowledge_danger: true`，必须省略
   `resource_profile.solution.run`，并且不得包含 secrets，因为 official evaluation 中
   participant code 和 private official data 会共享同一个 evaluator-image container。
+- Challenge-owned evaluators 如需 ZIP size、expanded size、file count 或 content
+  digest，可以读取 read-only `/metadata/submission.json` 中的可信 submission artifact
+  metadata。不要把 `/metadata` 当作 challenge-bundle input path，也不要假设
+  participant run containers 能看到它。
 - Images 使用显式 `local` 或 `registry` source、受支持的 first-party Agentics
   repositories 和与 target 匹配的 tags。Hosted deployments 必须拒绝 local
   images，并要求 digest-pinned registry images。

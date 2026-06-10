@@ -307,6 +307,14 @@ participant-controlled hostile input，忽略 unexpected files，并且只读取
 数量、深度、字节数、symlink 和 special-file checks 会降低风险面，但不会让任意
 participant files 变成可信输入。
 
+可信的 evaluator-side containers 还会以 read-only 方式收到
+`/metadata/submission.json` 中的 submission artifact metadata。该文件是
+platform-owned JSON，包含 `schema_version`、`solution_submission_id`、
+`artifact_zip_bytes`、`artifact_uncompressed_bytes`、`artifact_file_count` 和
+`artifact_sha256`。Evaluator 可以在需要 admission-time ZIP facts 的评分或诊断中使用
+它。Participant run containers 永远不会收到 `/metadata`，challenge bundles 也不得把
+`/metadata` 当作 input path。
+
 ## Execution Environment Policy
 
 Worker 使用隔离的 solution 和 evaluator environments：
@@ -316,8 +324,11 @@ Worker 使用隔离的 solution 和 evaluator environments：
 - 可选 setup container 会在 solution invocations 之前用 evaluator image 运行 challenge-owned setup，使用 `evaluator.setup` stage policy，并把生成的 inputs 写入 `/setup`。
 - Evaluator container 运行可信的 challenge-owner evaluator code，并使用 `evaluator.run` stage policy。
 - 在 `piped_stdio` 中，interactive-evaluator 就是可信 evaluator process。它会收到
-  `/challenge`、`/session`、可选 `/setup` 和可写 `/output`。Participant run
-  container 只会收到 read-only `/workspace` 和 writable `/io`。
+  `/challenge`、`/session`、可选 `/setup`、read-only `/metadata` 和可写
+  `/output`。Participant run container 只会收到 read-only `/workspace` 和
+  writable `/io`。
+- Coexecuted evaluators 会收到 `/workspace`、`/challenge`、可选 `/setup`、
+  read-only `/metadata` 和 writable `/output`。
 - Private benchmark reference outputs、evaluator-only files 和 official scoring logic 只会挂载到 evaluator container。
 - Solution run container 只接收当前 CLI/stdin 或 file-mode invocation 所需的具体 input。Source-backed inputs 以 read-only 方式挂载，writable `/io` tree 仅用于 stdin/stdout/stderr capture、declared outputs、home 和 temporary files。
 - Hosted deployments 应用 bounded loopback filesystem image 支撑这些 phases

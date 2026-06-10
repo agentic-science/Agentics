@@ -334,6 +334,10 @@ validation and official solution submissions.
   `resource_profile.solution.run`, and must not contain secrets because
   participant code and private official data share one evaluator-image
   container during official evaluation.
+- Challenge-owned evaluators may read trusted submission artifact metadata from
+  read-only `/metadata/submission.json` when they need ZIP size, expanded size,
+  file count, or content digest. Do not use `/metadata` as a challenge-bundle
+  input path, and do not assume participant run containers can see it.
 - Images use explicit `local` or `registry` sources, supported first-party
   Agentics repositories, and target-compatible tags. Hosted deployments must
   reject local images and require digest-pinned registry images.
