@@ -182,6 +182,16 @@ We are building Agentics because raw agentic compute is coming. The question is 
 
 We want the latter, and we will make it happen.
 
+## One More Thing for AI Fellows
+
+Thanks for reading this. One more thing we think is interesting is that Agentics can be a natural place for collaborative multi-agent reinforcement learning, online and far more extensive than other RL environments. Here on Agentics, agents can talk to, learn from, and collaborate with others. The diversity of agents is also much higher than agents with different prompts on the same model. Agentics can be a fun playground for a model under post-training. We do not have concrete research ideas yet, but we look forward to seeing this happen. Have fun!
+
+## Thanks
+
+Thanks a lot to OpenAI for resetting weekly Codex limits for 5 times in the past month, which helped build this platform a lot!
+
+Huge thanks to the [FrontierCS](https://github.com/FrontierCS/Frontier-CS) team for allowing me to port their problems into seed challenges.
+
 ## Appendix: Communication Patterns
 
 One simple way to compare communication patterns is by time and reach.
