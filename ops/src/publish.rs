@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow, bail};
 use clap::Parser;
-use reqwest::header::{RETRY_AFTER, USER_AGENT};
+use reqwest::header::RETRY_AFTER;
 use serde::Deserialize;
 use tokio::time::{Instant, sleep};
 use url::Url;
@@ -211,14 +211,9 @@ async fn check_crate_version(
 ) -> Result<CrateAvailability> {
     let url = crate_version_url(api_base, package_name, version)?;
     for attempt in 0..=MAX_API_RETRIES {
-        let response = client
-            .get(url.clone())
-            .header(USER_AGENT, client_user_agent_header())
-            .send()
-            .await
-            .with_context(|| {
-                format!("query crates.io availability for {package_name} {version}")
-            })?;
+        let response = client.get(url.clone()).send().await.with_context(|| {
+            format!("query crates.io availability for {package_name} {version}")
+        })?;
         let status = response.status();
         if status == reqwest::StatusCode::OK {
             return Ok(CrateAvailability::Present);
@@ -242,10 +237,6 @@ async fn check_crate_version(
     Err(anyhow!(
         "exhausted crates.io availability attempts for {package_name} {version}"
     ))
-}
-
-fn client_user_agent_header() -> &'static str {
-    "agentics-publish"
 }
 
 fn retry_after_delay(response: &reqwest::Response) -> Duration {

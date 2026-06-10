@@ -47,10 +47,10 @@ deferred, or blocked.
 
 ## Challenge Compatibility Checklist
 
-- [ ] Validate committed challenge bundles in `agentics-challenges`.
+- [x] Validate committed challenge bundles in `agentics-challenges`.
 - [ ] Validate dev seed catalog and test solutions.
-- [ ] Scan challenge evaluators/manifests for removed `rank_score` output.
-- [ ] Fix old resource-profile/execution fields.
+- [x] Scan challenge evaluators/manifests for removed `rank_score` output.
+- [x] Fix old resource-profile/execution fields.
 - [ ] Fix metric schemas missing primary metrics or directions.
 - [ ] Fix evaluator result payloads that do not match the current contract.
 - [ ] Fix metadata-aware evaluators or specs if they rely on old submission
@@ -131,4 +131,10 @@ deferred, or blocked.
 Record any challenge-specific issues discovered during validation, dev smoke, or
 rehearsal smoke here.
 
-- None recorded yet.
+- 2026-06-11: `challenge-repos/agentics-challenges/scripts/validate_challenges.py`
+  validated 248 committed challenges. A scan over committed and dev challenge
+  manifests/evaluators found no remaining `rank_score`, `primary_score`,
+  `official_score`, top-level `scorer`, old `scorer_*` resource fields, or old
+  stage network fields. Directly invoking `agentics-local-dev prepare` without
+  the dev Compose environment failed because local-dev roots were unset; dev
+  catalog validation must be exercised through `just dev::up`.
