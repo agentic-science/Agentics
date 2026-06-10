@@ -94,19 +94,46 @@ deferred, or blocked.
 
 ## Production Backup And Restart Checklist
 
-- [ ] Freeze production writes by stopping `web`, `api`, `worker-cpu`, and
+- [x] Freeze production writes by stopping `web`, `api`, `worker-cpu`, and
   `worker-gpu` if present while keeping PostgreSQL and RustFS running.
-- [ ] Back up PostgreSQL globals and database dump to a timestamped release
+- [x] Back up PostgreSQL globals and database dump to a timestamped release
   backup directory.
-- [ ] Verify PostgreSQL dump with `pg_restore --list`.
-- [ ] Record backup checksums.
-- [ ] Back up RustFS bucket/prefix contents and record object inventory.
-- [ ] Stop the full production stack without deleting volumes.
-- [ ] Take cold tar archives of PG18 and RustFS volumes.
-- [ ] Rebuild production app/web images from the 0.3.0 checkout.
-- [ ] Restart production services.
-- [ ] Run `just prod::check`.
-- [ ] Inspect logs/status and fix any release or challenge-contract issues.
+- [x] Verify PostgreSQL dump with `pg_restore --list`.
+- [x] Record backup checksums.
+- [x] Back up RustFS bucket/prefix contents and record object inventory.
+- [x] Stop the full production stack without deleting volumes.
+- [x] Take cold tar archives of PG18 and RustFS volumes.
+- [x] Rebuild production app/web images from the 0.3.0 checkout.
+- [x] Restart production services.
+- [x] Run `just prod::check`.
+- [x] Inspect logs/status and fix any release or challenge-contract issues.
+
+Production backup root:
+`/srv/agentics-backups/releases/0.3.0/20260610T202434Z`.
+
+Artifacts in that directory include:
+
+- `globals.sql`
+- `agentics.dump`
+- `agentics.dump.list`
+- `rustfs-inventory.jsonl`
+- `rustfs-objects/`
+- `agentics-prod_postgres_data_pg18.tar`
+- `agentics-prod_rustfs_data.tar`
+- `SHA256SUMS`
+
+Production restart note: the first restart failed because migration 004 had
+been edited after it was already applied in production. The fix restored
+`004_evaluations.sql` to its immutable historical contents and kept the current
+schema changes in migrations 007 and 008. After rebuilding the app image,
+`just prod::up` applied migrations 7 and 8, `just prod::check` passed, and the
+production catalog responded with 248 public challenges.
+
+Post-repair verification note: after restoring migration 004, a targeted
+`just test::integration` run passed the ignored CUDA smoke and all integration
+tests. A final canonical `just test-env-status && just test-all` pass also
+completed successfully, including fmt, clippy, workspace tests, web checks, and
+the full GPU/CUDA Compose integration suite.
 
 ## Verification Checklist
 

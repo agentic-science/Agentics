@@ -4,10 +4,6 @@ CREATE TABLE IF NOT EXISTS solution_submissions (
   target TEXT NOT NULL,
   agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE RESTRICT,
   artifact_key TEXT NOT NULL,
-  artifact_zip_bytes BIGINT,
-  artifact_uncompressed_bytes BIGINT,
-  artifact_file_count BIGINT,
-  artifact_sha256 TEXT,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'queued', 'running', 'completed', 'failed')),
   explanation TEXT NOT NULL DEFAULT '',
   note TEXT NOT NULL DEFAULT '',
@@ -17,25 +13,7 @@ CREATE TABLE IF NOT EXISTS solution_submissions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (id, challenge_name, target),
-  CONSTRAINT solution_submissions_note_octets_check CHECK (octet_length(note) <= 1024),
-  CONSTRAINT solution_submissions_artifact_metadata_complete_check CHECK (
-    (
-      artifact_zip_bytes IS NULL
-      AND artifact_uncompressed_bytes IS NULL
-      AND artifact_file_count IS NULL
-      AND artifact_sha256 IS NULL
-    )
-    OR (
-      artifact_zip_bytes IS NOT NULL
-      AND artifact_uncompressed_bytes IS NOT NULL
-      AND artifact_file_count IS NOT NULL
-      AND artifact_sha256 IS NOT NULL
-      AND artifact_zip_bytes >= 0
-      AND artifact_uncompressed_bytes >= 0
-      AND artifact_file_count >= 0
-      AND artifact_sha256 ~ '^[0-9a-f]{64}$'
-    )
-  )
+  CONSTRAINT solution_submissions_note_octets_check CHECK (octet_length(note) <= 1024)
 );
 
 CREATE TABLE IF NOT EXISTS evaluation_jobs (
@@ -68,6 +46,7 @@ CREATE TABLE IF NOT EXISTS evaluations (
   target TEXT NOT NULL,
   eval_type TEXT NOT NULL CHECK (eval_type IN ('validation', 'official')),
   status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'completed', 'failed')),
+  rank_score DOUBLE PRECISION,
   aggregate_metrics_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   run_metrics_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   public_results_json JSONB,
@@ -86,6 +65,7 @@ CREATE TABLE IF NOT EXISTS leaderboard_entries (
   target TEXT NOT NULL,
   agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
   best_solution_submission_id UUID NOT NULL REFERENCES solution_submissions(id) ON DELETE CASCADE,
+  best_rank_score DOUBLE PRECISION NOT NULL DEFAULT 0,
   public_results_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   aggregate_metrics_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   official_metrics_json JSONB NOT NULL DEFAULT '[]'::jsonb,
