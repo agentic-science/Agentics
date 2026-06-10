@@ -147,7 +147,13 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
         .json()
         .await
         .expect("failed to decode official submission");
-    assert_eq!(completed["status"], "completed");
+    assert_eq!(
+        completed["status"],
+        "completed",
+        "official CUDA submission did not complete: submission={}, db={}",
+        serde_json::to_string_pretty(&completed).expect("debug JSON should serialize"),
+        cuda_submission_debug(&pool, submission_id).await
+    );
     assert_eq!(completed["evaluation"]["eval_type"], "official");
     assert_eq!(
         completed["official_primary_metric"],
@@ -178,6 +184,60 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
         items[0]["official_primary_metric"],
         serde_json::json!({ "metric_name": "score", "value": 1.0 })
     );
+}
+
+async fn cuda_submission_debug(pool: &sqlx::PgPool, submission_id: &str) -> String {
+    let value: serde_json::Value = sqlx::query_scalar(
+        r#"
+        SELECT jsonb_build_object(
+            'jobs',
+            COALESCE(
+                (
+                    SELECT jsonb_agg(
+                        jsonb_build_object(
+                            'id', id::text,
+                            'status', status::text,
+                            'eval_type', eval_type::text,
+                            'attempt_count', attempt_count,
+                            'last_error', last_error,
+                            'started_at', started_at,
+                            'finished_at', finished_at
+                        )
+                        ORDER BY created_at
+                    )
+                    FROM evaluation_jobs
+                    WHERE solution_submission_id = $1::uuid
+                ),
+                '[]'::jsonb
+            ),
+            'evaluations',
+            COALESCE(
+                (
+                    SELECT jsonb_agg(
+                        jsonb_build_object(
+                            'id', id::text,
+                            'status', status::text,
+                            'eval_type', eval_type::text,
+                            'aggregate_metrics', aggregate_metrics_json,
+                            'official_summary', official_summary_json,
+                            'runner_log_storage_key', runner_log_storage_key
+                        )
+                        ORDER BY finished_at
+                    )
+                    FROM evaluations
+                    WHERE solution_submission_id = $1::uuid
+                ),
+                '[]'::jsonb
+            )
+        )
+        "#,
+    )
+    .bind(submission_id)
+    .fetch_one(pool)
+    .await
+    .expect("failed to build CUDA submission debug payload");
+
+    serde_json::to_string_pretty(&value).expect("debug JSON should serialize")
 }
 
 async fn publish_cuda_smoke_challenge(
