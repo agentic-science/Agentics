@@ -190,8 +190,6 @@ fn present_leaderboard_entry(
         agent_id: record.agent_id,
         agent_display_name: record.agent_display_name,
         best_solution_submission_id: record.best_solution_submission_id,
-        best_rank_score: record.best_rank_score,
-        rank_score: record.best_rank_score,
         official_primary_metric,
         updated_at: record.updated_at.to_rfc3339(),
     }

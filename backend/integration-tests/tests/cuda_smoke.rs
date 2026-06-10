@@ -101,7 +101,10 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
         .await
         .expect("failed to decode validation status");
     assert_eq!(validation_status["status"], "completed");
-    assert_eq!(validation_status["evaluation"]["rank_score"], 1.0);
+    assert_eq!(
+        validation_status["evaluation"]["validation_summary"]["score"],
+        1.0
+    );
 
     let official_response = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
@@ -146,7 +149,10 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
         .expect("failed to decode official submission");
     assert_eq!(completed["status"], "completed");
     assert_eq!(completed["evaluation"]["eval_type"], "official");
-    assert_eq!(completed["evaluation"]["rank_score"], 1.0);
+    assert_eq!(
+        completed["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 1.0 })
+    );
 
     let leaderboard: serde_json::Value = client
         .get(api_url(
@@ -168,7 +174,10 @@ async fn dgx_cuda_smoke_completes_official_result_and_leaderboard(pool: sqlx::Pg
         .expect("items should be array");
     assert_eq!(items.len(), 1);
     assert_eq!(items[0]["best_solution_submission_id"], submission_id);
-    assert_eq!(items[0]["rank_score"], 1.0);
+    assert_eq!(
+        items[0]["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 1.0 })
+    );
 }
 
 async fn publish_cuda_smoke_challenge(
@@ -314,7 +323,6 @@ score = passed_count / len(results)
 summary_key = "validation_summary" if args.mode == "validation" else "official_summary"
 payload = {
     "status": "passed" if passed_count == len(results) else "failed",
-    "rank_score": score,
     "aggregate_metrics": [
         {"metric_name": "score", "value": score},
         {"metric_name": "passed_cases", "value": passed_count},

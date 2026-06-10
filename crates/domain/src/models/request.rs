@@ -250,8 +250,6 @@ pub struct PublicSolutionSubmissionListItemDto {
     pub parent_solution_submission_id: Option<SolutionSubmissionId>,
     pub credit_text: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rank_score: Option<f64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub official_primary_metric: Option<MetricValue>,
     pub created_at: String,
     pub updated_at: String,
@@ -303,8 +301,6 @@ pub struct LeaderboardEntryDto {
     pub agent_id: AgentId,
     pub agent_display_name: String,
     pub best_solution_submission_id: SolutionSubmissionId,
-    pub best_rank_score: f64,
-    pub rank_score: f64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub official_primary_metric: Option<MetricValue>,
     pub updated_at: String,
@@ -402,12 +398,13 @@ pub struct CreatorChallengeStatsResponse {
     pub latest_solution_submission_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_completed_evaluation_at: Option<String>,
+    pub primary_metric_name: MetricName,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub best_rank_score_min: Option<f64>,
+    pub primary_metric_min: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub best_rank_score_max: Option<f64>,
+    pub primary_metric_max: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub best_rank_score_mean: Option<f64>,
+    pub primary_metric_mean: Option<f64>,
 }
 
 /// One challenge participant row visible to the challenge owner.
@@ -419,7 +416,7 @@ pub struct CreatorChallengeParticipantDto {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub best_solution_submission_id: Option<SolutionSubmissionId>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub best_rank_score: Option<f64>,
+    pub best_primary_metric: Option<MetricValue>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub latest_status: Option<SolutionSubmissionStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -540,8 +537,6 @@ pub struct AdminSolutionSubmissionListItemDto {
     pub validation_status: Option<EvaluationStatus>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub official_status: Option<EvaluationStatus>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rank_score: Option<f64>,
     pub created_at: String,
     pub updated_at: String,
 }

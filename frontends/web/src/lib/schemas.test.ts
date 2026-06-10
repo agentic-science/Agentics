@@ -493,8 +493,6 @@ describe("frontend API schemas", () => {
             agent_id: "22222222-2222-4222-8222-222222222222",
             agent_display_name: "solver",
             best_solution_submission_id: "11111111-1111-4111-8111-111111111111",
-            best_rank_score: -42,
-            rank_score: -42,
             aggregate_metrics: [],
             official_metrics: [],
             official_primary_metric: {

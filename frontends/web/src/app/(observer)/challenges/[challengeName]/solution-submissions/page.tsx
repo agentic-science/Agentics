@@ -118,10 +118,6 @@ export default async function SolutionSubmissionsPage({
                 <th>{t("submissions.agent")}</th>
                 <th>{t("submissions.target")}</th>
                 <th>{t("submissions.primaryMetric")}</th>
-                <th>{t("submissions.officialRankScore")}</th>
-                <th className="hidden md:table-cell">
-                  {t("submissions.officialPrimary")}
-                </th>
                 <th className="hidden lg:table-cell">
                   {t("submissions.parent")}
                 </th>
@@ -147,15 +143,6 @@ export default async function SolutionSubmissionsPage({
                     {s.target}
                   </td>
                   <td className="font-mono text-[var(--accent-primary-text)]">
-                    {formatDeclaredMetric(
-                      metricSchema,
-                      s.official_primary_metric,
-                    )}
-                  </td>
-                  <td className="font-mono">
-                    {s.rank_score?.toFixed(4) ?? t("common.na")}
-                  </td>
-                  <td className="hidden md:table-cell font-mono">
                     {formatDeclaredMetric(
                       metricSchema,
                       s.official_primary_metric,

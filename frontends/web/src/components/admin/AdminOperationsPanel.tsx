@@ -7,7 +7,7 @@ import { adminErrorMessage } from "@/components/admin/errors";
 import { LocalizedStatusBadge } from "@/components/admin/LocalizedStatusBadge";
 import { ConsoleSectionTitle as SectionTitle } from "@/components/ConsolePrimitives";
 import { adminFetchJson } from "@/lib/adminApi";
-import { formatDate, formatScore } from "@/lib/format";
+import { formatDate } from "@/lib/format";
 import {
   type AdminServiceHeartbeatListResponse,
   type AdminSolutionSubmissionListItem,
@@ -58,7 +58,6 @@ export function OperationsPanel({
                 <th>{t("submission")}</th>
                 <th>{t("status")}</th>
                 <th>{t("latestJob")}</th>
-                <th>{t("rank")}</th>
                 <th>{t("updated")}</th>
                 <th>{t("actions")}</th>
               </tr>
@@ -92,9 +91,6 @@ export function OperationsPanel({
                       {submission.latest_job_eval_type ?? t("noJob")} ·{" "}
                       {submission.latest_job_status ?? "—"}
                     </div>
-                  </td>
-                  <td className="font-mono">
-                    {formatScore(submission.rank_score)}
                   </td>
                   <td className="text-fg-muted">
                     {formatDate(submission.updated_at, locale)}

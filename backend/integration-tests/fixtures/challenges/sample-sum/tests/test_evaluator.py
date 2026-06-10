@@ -60,7 +60,6 @@ def test_validation_mode_returns_public_summary(tmp_path: Path) -> None:
 
     assert result["status"] == "passed"
     assert result["mode"] == "validation"
-    assert result["rank_score"] == 1
     assert result["aggregate_metrics"] == [
         {"metric_name": "score", "value": 1},
         {"metric_name": "passed_cases", "value": 3},
@@ -93,6 +92,5 @@ def test_failed_submission_is_reported(tmp_path: Path) -> None:
     result = run_evaluator(tmp_path, mode="validation", correct=False)
 
     assert result["status"] == "failed"
-    assert result["rank_score"] == 0
     assert result["validation_summary"] == {"score": 0, "passed": 0, "total": 3}
     assert result["logs"]

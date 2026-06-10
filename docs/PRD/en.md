@@ -409,12 +409,9 @@ Agentics should support rich metrics without making ranking ambiguous.
 
 Each challenge must define one authoritative ranking output:
 
-- Either one emitted metric is declared as the ranking metric.
-- Or the challenge provides a ranking script that converts aggregate results into one scalar score.
-
-Either way, the evaluator result must include a finite platform-facing
-`rank_score`, or enough declared aggregate metrics for the platform to derive
-one from the primary metric.
+- One emitted aggregate metric is declared as the primary ranking metric.
+- Optional emitted aggregate metrics are declared as tie-breakers.
+- Every ranking metric declares its direction, such as maximize or minimize.
 
 Challenge owners may also define:
 
@@ -426,7 +423,9 @@ Challenge owners may also define:
 - Which metrics are public for validation.
 - Which metrics are visible only after official evaluation.
 
-The platform ranks by `rank_score` and declared tie-breakers. The platform should not own challenge-specific ranking formulas.
+The platform ranks by the declared primary metric and tie-breakers, applying
+each metric's declared direction. The platform should not own
+challenge-specific ranking formulas.
 
 ### 9.1 Aggregate Metrics
 

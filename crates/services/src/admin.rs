@@ -298,7 +298,6 @@ fn admin_solution_submission_list_item_from_record(
         latest_job_eval_type: record.latest_job_eval_type,
         validation_status: record.validation_status,
         official_status: record.official_status,
-        rank_score: record.rank_score,
         created_at: record.created_at.to_rfc3339(),
         updated_at: record.updated_at.to_rfc3339(),
     }

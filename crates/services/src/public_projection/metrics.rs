@@ -1,7 +1,7 @@
 //! Shared metric projection helpers for public and audience-scoped surfaces.
 
 use agentics_domain::models::challenge::{ChallengeBundleSpec, MetricVisibility};
-use agentics_domain::models::evaluation::MetricValue;
+use agentics_domain::models::evaluation::{MetricValue, metric_value_by_name};
 use agentics_domain::models::names::MetricName;
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::LeaderboardMetricEntry;
@@ -23,13 +23,11 @@ pub(super) fn metric_value_from_leaderboard_entry(
     metric_name: &MetricName,
     spec: &ChallengeBundleSpec,
 ) -> Option<f64> {
-    match metric_name.as_str() {
-        "rank_score" | "best_rank_score" => Some(entry.best_rank_score),
-        _ if metric_name == &spec.metric_schema.ranking.primary_metric_name => {
-            metric_value_by_name(&entry.official_metrics, metric_name)
-                .or_else(|| metric_value_by_name(&entry.aggregate_metrics, metric_name))
-        }
-        _ => None,
+    if metric_name == &spec.metric_schema.ranking.primary_metric_name {
+        metric_value_by_name(&entry.official_metrics, metric_name)
+            .or_else(|| metric_value_by_name(&entry.aggregate_metrics, metric_name))
+    } else {
+        None
     }
 }
 
@@ -38,10 +36,6 @@ pub(super) fn ensure_metric_is_publicly_distributable(
     metric_name: &MetricName,
     spec: &ChallengeBundleSpec,
 ) -> Result<()> {
-    if matches!(metric_name.as_str(), "rank_score" | "best_rank_score") {
-        return Ok(());
-    }
-
     if metric_name == &spec.metric_schema.ranking.primary_metric_name
         && spec
             .metric_schema
@@ -52,15 +46,6 @@ pub(super) fn ensure_metric_is_publicly_distributable(
     }
 
     Err(ServiceError::Forbidden(
-        "score distribution is available only for rank_score, best_rank_score, or the public primary ranking metric"
-            .to_string(),
+        "score distribution is available only for the public primary ranking metric".to_string(),
     ))
-}
-
-/// Find one metric by name in an evaluator aggregate metric payload.
-fn metric_value_by_name(metrics: &[MetricValue], metric_name: &MetricName) -> Option<f64> {
-    metrics
-        .iter()
-        .find(|metric| &metric.metric_name == metric_name)
-        .map(|metric| metric.value)
 }

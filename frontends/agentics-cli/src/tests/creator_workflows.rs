@@ -93,7 +93,7 @@ async fn creator_stats_uses_creator_token_and_renders_table() {
 
     assert!(output.contains("challenge: sample-sum"));
     assert!(output.contains("solution_submissions: 5"));
-    assert!(output.contains("best_rank_score_max: 2.5"));
+    assert!(output.contains("primary_metric_max: 2.5"));
 }
 
 /// Verifies owner stats support JSON output.

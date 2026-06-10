@@ -1006,13 +1006,12 @@ async fn wait_for_submission(
                             .unwrap_or("<missing>");
                         match status {
                             "completed" => {
-                                let rank_score = value
-                                    .pointer("/evaluation/rank_score")
-                                    .or_else(|| value.pointer("/official_evaluation/rank_score"));
-                                if rank_score.is_some() {
+                                if let Some(primary_metric) =
+                                    value.pointer("/official_primary_metric")
+                                {
                                     return CheckEvidence::passed(
                                         name,
-                                        format!("completed with rank_score {rank_score:?}"),
+                                        format!("completed with primary metric {primary_metric:?}"),
                                     );
                                 }
                                 return CheckEvidence::passed(name, "completed");

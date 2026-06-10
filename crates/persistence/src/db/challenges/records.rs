@@ -2,13 +2,13 @@ use chrono::{DateTime, Utc};
 use serde_json::Value;
 
 use agentics_domain::models::challenge::{ChallengeBundleSpec, ChallengeLifecycleStatus};
-use agentics_domain::models::evaluation::SolutionSubmissionStatus;
+use agentics_domain::models::evaluation::{MetricValue, SolutionSubmissionStatus};
 use agentics_domain::models::hashes::Sha256Digest;
 use agentics_domain::models::ids::{
     AgentId, ChallengeShortlistRevisionId, HumanId, SolutionSubmissionId,
 };
 use agentics_domain::models::localization::LocalizedText;
-use agentics_domain::models::names::{ChallengeKeyword, ChallengeName, TargetName};
+use agentics_domain::models::names::{ChallengeKeyword, ChallengeName, MetricName, TargetName};
 use agentics_domain::models::urls::MoltbookPostUrl;
 use agentics_domain::storage::StorageKey;
 
@@ -150,9 +150,10 @@ pub struct CreatorChallengeStatsRecord {
     pub official_run_count: i64,
     pub latest_solution_submission_at: Option<DateTime<Utc>>,
     pub latest_completed_evaluation_at: Option<DateTime<Utc>>,
-    pub best_rank_score_min: Option<f64>,
-    pub best_rank_score_max: Option<f64>,
-    pub best_rank_score_mean: Option<f64>,
+    pub primary_metric_name: MetricName,
+    pub primary_metric_min: Option<f64>,
+    pub primary_metric_max: Option<f64>,
+    pub primary_metric_mean: Option<f64>,
 }
 
 /// Challenge-owner participant row before DTO projection.
@@ -162,7 +163,7 @@ pub struct CreatorChallengeParticipantRecord {
     pub agent_display_name: String,
     pub solution_submission_count: i64,
     pub best_solution_submission_id: Option<SolutionSubmissionId>,
-    pub best_rank_score: Option<f64>,
+    pub best_primary_metric: Option<MetricValue>,
     pub latest_status: Option<SolutionSubmissionStatus>,
     pub latest_solution_submission_at: Option<DateTime<Utc>>,
 }

@@ -247,7 +247,6 @@ impl<'a> EvaluationWorkerService<'a> {
     ) -> Result<EvaluationWorkerCycleOutcome> {
         let job_id = job.id.clone();
         let solution_submission_id = job.solution_submission_id.clone();
-        let rank_score = result.result.rank_score;
 
         let persisted = Repositories::new(self.db)
             .evaluation_jobs()
@@ -259,7 +258,6 @@ impl<'a> EvaluationWorkerService<'a> {
                 target: job.target.clone(),
                 eval_type: job.eval_type,
                 status: EvaluationStatus::Completed,
-                rank_score,
                 aggregate_metrics: result.result.aggregate_metrics,
                 run_metrics: result.result.run_metrics,
                 public_results: result.result.public_results,
@@ -286,7 +284,6 @@ impl<'a> EvaluationWorkerService<'a> {
         info!(
             job_id = %job_id,
             solution_submission_id = %solution_submission_id,
-            rank_score = ?rank_score,
             "evaluation completed"
         );
 
@@ -349,7 +346,6 @@ impl<'a> EvaluationWorkerService<'a> {
                 target: job.target.clone(),
                 eval_type: job.eval_type,
                 status: EvaluationStatus::Failed,
-                rank_score: None,
                 aggregate_metrics: vec![],
                 run_metrics: vec![],
                 public_results: vec![],

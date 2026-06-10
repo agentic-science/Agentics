@@ -206,7 +206,6 @@ fn public_solution_submission_list_item_from_record(
         explanation: record.explanation,
         parent_solution_submission_id: record.parent_solution_submission_id,
         credit_text: record.credit_text,
-        rank_score: record.rank_score,
         official_primary_metric: official_primary_metric(&record.official_metrics, spec),
         created_at: record.created_at.to_rfc3339(),
         updated_at: record.updated_at.to_rfc3339(),
@@ -290,7 +289,6 @@ fn redact_private_benchmark_details(
         target: evaluation.target.clone(),
         status: evaluation.status,
         eval_type: evaluation.eval_type,
-        rank_score: evaluation.rank_score,
         aggregate_metrics: if include_aggregate_feedback {
             evaluation.aggregate_metrics.clone()
         } else {

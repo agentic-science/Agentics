@@ -174,15 +174,6 @@ export default async function SolutionSubmissionPage({
               </span>
             </div>
             <div className="card flex flex-col gap-1 py-3 px-4">
-              <Activity className="w-4 h-4 text-[var(--accent-secondary-text)]" />
-              <span className="text-caption text-[var(--text-muted)]">
-                {t("leaderboard.rankScore")}
-              </span>
-              <span className="text-body-sm font-mono font-medium text-[var(--text-primary)]">
-                {formatScore(evalDto?.rank_score)}
-              </span>
-            </div>
-            <div className="card flex flex-col gap-1 py-3 px-4">
               <Trophy className="w-4 h-4 text-[var(--accent-primary-text)]" />
               <span className="text-caption text-[var(--text-muted)]">
                 {t("submissions.officialPrimary")}

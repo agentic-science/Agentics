@@ -464,7 +464,6 @@ def main() -> int:
     payload = {
         "status": "passed" if passed_count == total else "failed",
         "mode": args.mode,
-        "rank_score": score,
         "aggregate_metrics": [{"metric_name": "score", "value": score}],
         "run_metrics": [{"run_name": result["case_name"], "metrics": [{"metric_name": "score", "value": result["score"]}]} for result in results],
         "public_results": results if args.mode == "validation" else [],

@@ -225,7 +225,6 @@ async fn worker_completes_private_validation_run_without_leaderboard(pool: sqlx:
     assert_eq!(validation["visible_after_eval"], false);
     assert_eq!(validation["evaluation"]["eval_type"], "validation");
     assert_eq!(validation["evaluation"]["validation_summary"]["score"], 1.0);
-    assert_eq!(validation["evaluation"]["rank_score"], 1.0);
     assert_eq!(
         validation["evaluation"]["aggregate_metrics"],
         serde_json::json!([

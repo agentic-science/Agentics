@@ -421,7 +421,6 @@ fn official_solution_submission_response() -> SolutionSubmissionResponse {
             target: target_name("linux-arm64-cpu"),
             status: EvaluationStatus::Completed,
             eval_type: ScoringMode::Official,
-            rank_score: Some(-42.5),
             aggregate_metrics: vec![
                 MetricValue {
                     metric_name: metric_name("runtime_ms"),

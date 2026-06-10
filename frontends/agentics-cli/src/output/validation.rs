@@ -7,9 +7,7 @@ use serde::Serialize;
 
 use crate::cli::OutputFormat;
 
-use super::format::{
-    format_optional_metric, format_score, pretty_json, render_table, status_label,
-};
+use super::format::{format_optional_metric, pretty_json, render_table, status_label};
 
 #[derive(Debug, Clone, Serialize)]
 /// Carries local validation package report data across this module boundary.
@@ -48,16 +46,11 @@ pub(crate) fn render_local_validation_report(
         OutputFormat::Json => pretty_json(report),
         OutputFormat::Table => match report.targets.as_slice() {
             [target] => Ok(format!(
-                "Local validation completed\nchallenge: {}\ntarget: {}\nstatus: {}\nprimary_metric: {}\nrank_score: {}\nlog: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}\nbundle: {}\nstorage: {}",
+                "Local validation completed\nchallenge: {}\ntarget: {}\nstatus: {}\nprimary_metric: {}\nlog: {}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}\nbundle: {}\nstorage: {}",
                 report.challenge_name,
                 target.target,
                 status_label(&target.result.status),
                 format_optional_metric(target.primary_metric.as_ref()),
-                target
-                    .result
-                    .rank_score
-                    .map(format_score)
-                    .unwrap_or_else(|| "none".to_string()),
                 target.log_path.display(),
                 report.package.file_count,
                 report.package.uncompressed_bytes,
@@ -75,11 +68,6 @@ pub(crate) fn render_local_validation_report(
                             target.target.to_string(),
                             status_label(&target.result.status),
                             format_optional_metric(target.primary_metric.as_ref()),
-                            target
-                                .result
-                                .rank_score
-                                .map(format_score)
-                                .unwrap_or_else(|| "none".to_string()),
                             target.log_path.display().to_string(),
                         ]
                     })
@@ -87,10 +75,7 @@ pub(crate) fn render_local_validation_report(
                 Ok(format!(
                     "Local validation completed\nchallenge: {}\n{}\npackage: {} files, {} bytes uncompressed, {} bytes zipped\nworkspace: {}\nbundle: {}\nstorage: {}",
                     report.challenge_name,
-                    render_table(
-                        &["TARGET", "STATUS", "PRIMARY_METRIC", "RANK", "LOG"],
-                        &rows
-                    ),
+                    render_table(&["TARGET", "STATUS", "PRIMARY_METRIC", "LOG"], &rows),
                     report.package.file_count,
                     report.package.uncompressed_bytes,
                     report.package.zip_bytes,

@@ -2,12 +2,14 @@ use std::cmp::Ordering;
 
 use chrono::{DateTime, Utc};
 use serde_json::Value;
-use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
+use sqlx::{PgPool, Postgres, Row, Transaction};
 
-use agentics_domain::models::challenge::{ChallengeBundleSpec, MetricDirection};
-use agentics_domain::models::evaluation::{MetricValue, PublicCaseResult};
+use agentics_domain::models::challenge::ChallengeBundleSpec;
+use agentics_domain::models::evaluation::{
+    MetricValue, PublicCaseResult, compare_metric_payloads_by_ranking,
+};
 use agentics_domain::models::ids::{AgentId, SolutionSubmissionId};
-use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
+use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_error::{Result, ServiceError};
 
 use super::ids::{
@@ -127,24 +129,12 @@ async fn replacement_candidate_rows<'a>(
         SELECT
             s.id::text AS id,
             s.created_at,
-            COALESCE(
-                oe.rank_score,
-                ve.rank_score,
-                (oe.official_summary_json->>'score')::double precision,
-                (ve.validation_summary_json->>'score')::double precision
-            ) AS ranking_score,
-            COALESCE(oe.public_results_json, ve.public_results_json, '[]'::jsonb) AS public_results,
-            COALESCE(oe.aggregate_metrics_json, ve.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics,
+            COALESCE(oe.public_results_json, '[]'::jsonb) AS public_results,
+            COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS aggregate_metrics,
             COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS official_metrics
         FROM solution_submissions s
-        LEFT JOIN LATERAL (
-            SELECT rank_score, aggregate_metrics_json, validation_summary_json, public_results_json
-            FROM evaluations
-            WHERE solution_submission_id = s.id AND eval_type = 'validation' AND status = 'completed' AND target = s.target
-            ORDER BY created_at DESC LIMIT 1
-        ) ve ON TRUE
-        LEFT JOIN LATERAL (
-            SELECT rank_score, aggregate_metrics_json, official_summary_json, public_results_json
+        JOIN LATERAL (
+            SELECT aggregate_metrics_json, official_summary_json, public_results_json
             FROM evaluations
             WHERE solution_submission_id = s.id AND eval_type = 'official' AND status = 'completed' AND target = s.target
             ORDER BY created_at DESC LIMIT 1
@@ -152,12 +142,6 @@ async fn replacement_candidate_rows<'a>(
         WHERE s.challenge_name = $1 AND s.agent_id = $2::uuid AND s.id <> $3::uuid
           AND s.target = $4
           AND s.visible_after_eval = TRUE AND s.status = 'completed'
-          AND COALESCE(
-                oe.rank_score,
-                ve.rank_score,
-                (oe.official_summary_json->>'score')::double precision,
-                (ve.validation_summary_json->>'score')::double precision
-              ) IS NOT NULL
         "#,
     )
     .bind(scope.challenge_name.as_str())
@@ -179,7 +163,6 @@ fn leaderboard_replacement_candidate_from_row(
     Ok(LeaderboardReplacementCandidate {
         id: solution_submission_id_from_row(&row, "id")?,
         created_at: row.try_get("created_at")?,
-        rank_score: row.try_get("ranking_score")?,
         public_results_json: row.try_get("public_results")?,
         aggregate_metrics,
         aggregate_metrics_json: row.try_get("aggregate_metrics")?,
@@ -192,15 +175,9 @@ fn compare_replacement_candidates(
     a: &LeaderboardReplacementCandidate,
     b: &LeaderboardReplacementCandidate,
 ) -> Ordering {
-    compare_rank_payloads(
-        spec,
-        a.rank_score,
-        &a.aggregate_metrics,
-        b.rank_score,
-        &b.aggregate_metrics,
-    )
-    .then_with(|| a.created_at.cmp(&b.created_at))
-    .then_with(|| a.id.cmp(&b.id))
+    compare_rank_payloads(spec, &a.aggregate_metrics, &b.aggregate_metrics)
+        .then_with(|| a.created_at.cmp(&b.created_at))
+        .then_with(|| a.id.cmp(&b.id))
 }
 
 async fn upsert_replacement_leaderboard_entry<'a>(
@@ -211,13 +188,12 @@ async fn upsert_replacement_leaderboard_entry<'a>(
     sqlx::query(
         r#"
         INSERT INTO leaderboard_entries (
-            challenge_name, target, agent_id, best_solution_submission_id, best_rank_score,
+            challenge_name, target, agent_id, best_solution_submission_id,
             public_results_json, aggregate_metrics_json, official_metrics_json, updated_at
         )
-        VALUES ($1, $2, $3::uuid, $4::uuid, $5, $6, $7, $8, NOW())
+        VALUES ($1, $2, $3::uuid, $4::uuid, $5, $6, $7, NOW())
         ON CONFLICT (challenge_name, target, agent_id) DO UPDATE
         SET best_solution_submission_id = EXCLUDED.best_solution_submission_id,
-            best_rank_score = EXCLUDED.best_rank_score,
             public_results_json = EXCLUDED.public_results_json,
             aggregate_metrics_json = EXCLUDED.aggregate_metrics_json,
             official_metrics_json = EXCLUDED.official_metrics_json,
@@ -228,7 +204,6 @@ async fn upsert_replacement_leaderboard_entry<'a>(
     .bind(scope.target.as_str())
     .bind(scope.agent_id.as_str())
     .bind(best.id.as_str())
-    .bind(best.rank_score)
     .bind(&best.public_results_json)
     .bind(&best.aggregate_metrics_json)
     .bind(&best.official_metrics_json)
@@ -285,7 +260,6 @@ pub struct LeaderboardRecord {
     pub agent_id: AgentId,
     pub agent_display_name: String,
     pub best_solution_submission_id: SolutionSubmissionId,
-    pub best_rank_score: f64,
     pub aggregate_metrics: Vec<MetricValue>,
     pub official_metrics: Vec<MetricValue>,
     pub updated_at: DateTime<Utc>,
@@ -294,7 +268,6 @@ pub struct LeaderboardRecord {
 /// Internal leaderboard row that keeps metric payloads out of public DTOs.
 #[derive(Debug, Clone)]
 pub struct LeaderboardMetricEntry {
-    pub best_rank_score: f64,
     pub aggregate_metrics: Vec<MetricValue>,
     pub official_metrics: Vec<MetricValue>,
 }
@@ -304,7 +277,6 @@ pub struct LeaderboardMetricEntry {
 struct LeaderboardReplacementCandidate {
     id: SolutionSubmissionId,
     created_at: DateTime<Utc>,
-    rank_score: f64,
     public_results_json: Value,
     aggregate_metrics: Vec<MetricValue>,
     aggregate_metrics_json: Value,
@@ -315,7 +287,6 @@ impl LeaderboardRecord {
     /// Project this row into the backend-only metric payload shape.
     fn into_metric_entry(self) -> LeaderboardMetricEntry {
         LeaderboardMetricEntry {
-            best_rank_score: self.best_rank_score,
             aggregate_metrics: self.aggregate_metrics,
             official_metrics: self.official_metrics,
         }
@@ -331,57 +302,28 @@ async fn list_leaderboard_rows(
     spec: &ChallengeBundleSpec,
 ) -> Result<Vec<LeaderboardRecord>> {
     let requested_limit = limit.max(1);
-    let mut query = QueryBuilder::<Postgres>::new(
+    let rows = sqlx::query(
         r#"
         SELECT
             le.target, le.agent_id, a.display_name AS agent_display_name, le.best_solution_submission_id,
-            le.best_rank_score, le.aggregate_metrics_json, le.official_metrics_json,
+            le.aggregate_metrics_json, le.official_metrics_json,
             le.updated_at
         FROM leaderboard_entries le
         JOIN solution_submissions s ON s.id = le.best_solution_submission_id
         JOIN agents a ON a.id = le.agent_id
         JOIN challenges p ON p.challenge_name = le.challenge_name
-        WHERE p.challenge_name =
-        "#,
-    );
-    query
-        .push_bind(challenge_name.as_str())
-        .push(
-            r#"
-          AND le.target =
-        "#,
-        )
-        .push_bind(target.as_str())
-        .push(
-            r#"
+        WHERE p.challenge_name = $1
+          AND le.target = $2
           AND s.visible_after_eval = TRUE
           AND s.status = 'completed'
-        ORDER BY le.best_rank_score DESC
-        "#,
-        );
-    for metric_name in &spec.metric_schema.ranking.tie_breaker_metric_names {
-        let Some(definition) = spec.metric_schema.metric(metric_name) else {
-            continue;
-        };
-        query.push(
-            ", (SELECT (metric->>'value')::double precision \
-             FROM jsonb_array_elements(COALESCE(le.aggregate_metrics_json, '[]'::jsonb)) AS metric \
-             WHERE metric->>'metric_name' = ",
-        );
-        query.push_bind(metric_name.as_str());
-        query.push(" LIMIT 1) ");
-        match definition.direction {
-            MetricDirection::Maximize => query.push("DESC NULLS LAST"),
-            MetricDirection::Minimize => query.push("ASC NULLS LAST"),
-        };
-    }
-    query
-        .push(", le.updated_at ASC, a.display_name ASC, le.best_solution_submission_id ASC LIMIT ")
-        .push_bind(requested_limit);
+        "#
+    )
+    .bind(challenge_name.as_str())
+    .bind(target.as_str())
+    .fetch_all(pool)
+    .await?;
 
-    let rows = query.build().fetch_all(pool).await?;
-
-    let entries = rows
+    let mut entries = rows
         .into_iter()
         .map(|r| {
             let aggregate_metrics = decode_optional_json(
@@ -394,7 +336,6 @@ async fn list_leaderboard_rows(
                 "leaderboard official metrics",
             )?
             .unwrap_or_default();
-            let best_rank_score: f64 = r.try_get("best_rank_score")?;
 
             Ok(LeaderboardRecord {
                 target: target_from_row(&r, "target")?,
@@ -404,13 +345,29 @@ async fn list_leaderboard_rows(
                     &r,
                     "best_solution_submission_id",
                 )?,
-                best_rank_score,
                 aggregate_metrics,
                 official_metrics,
                 updated_at: r.try_get::<DateTime<Utc>, _>("updated_at")?,
             })
         })
         .collect::<Result<Vec<_>>>()?;
+    entries.sort_by(|a, b| {
+        compare_metric_payloads_by_ranking(
+            &spec.metric_schema,
+            &a.aggregate_metrics,
+            &b.aggregate_metrics,
+        )
+        .then_with(|| a.updated_at.cmp(&b.updated_at))
+        .then_with(|| a.agent_display_name.cmp(&b.agent_display_name))
+        .then_with(|| {
+            a.best_solution_submission_id
+                .cmp(&b.best_solution_submission_id)
+        })
+    });
+    let requested_limit = usize::try_from(requested_limit).map_err(|_| {
+        ServiceError::Validation("leaderboard limit exceeds supported range".to_string())
+    })?;
+    entries.truncate(requested_limit);
 
     Ok(entries)
 }
@@ -420,7 +377,6 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
     tx: &mut Transaction<'a, Postgres>,
     solution_submission_id: &SolutionSubmissionId,
     target: &TargetName,
-    rank_score: f64,
     public_results: &[PublicCaseResult],
     aggregate_metrics: &[MetricValue],
 ) -> Result<bool> {
@@ -448,22 +404,22 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
 
     lock_leaderboard_scope(tx, &challenge_name, target, &agent_id).await?;
 
-    let current: Option<(f64, Value)> = sqlx::query_as(
-        "SELECT best_rank_score, aggregate_metrics_json FROM leaderboard_entries WHERE challenge_name = $1 AND target = $2 AND agent_id = $3::uuid LIMIT 1"
+    let current: Option<(Value,)> = sqlx::query_as(
+        "SELECT aggregate_metrics_json FROM leaderboard_entries WHERE challenge_name = $1 AND target = $2 AND agent_id = $3::uuid LIMIT 1"
     )
     .bind(challenge_name.as_str())
     .bind(target.as_str())
     .bind(agent_id.as_str())
     .fetch_optional(&mut **tx)
     .await?;
-    let current: Option<(f64, Vec<MetricValue>)> = current
-        .map(|(score, metrics_json)| {
+    let current: Option<Vec<MetricValue>> = current
+        .map(|(metrics_json,)| {
             decode_optional_json(Some(metrics_json), "leaderboard aggregate metrics")
-                .map(|metrics| (score, metrics.unwrap_or_default()))
+                .map(|metrics| metrics.unwrap_or_default())
         })
         .transpose()?;
 
-    if !candidate_replaces_leaderboard_entry(&spec, current, rank_score, aggregate_metrics) {
+    if !candidate_replaces_leaderboard_entry(&spec, current, aggregate_metrics) {
         return Ok(false);
     }
 
@@ -475,15 +431,15 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
     sqlx::query(
         r#"
         INSERT INTO leaderboard_entries (
-            challenge_name, target, agent_id, best_solution_submission_id, best_rank_score,
-            public_results_json, aggregate_metrics_json, updated_at
+            challenge_name, target, agent_id, best_solution_submission_id,
+            public_results_json, aggregate_metrics_json, official_metrics_json, updated_at
         )
         VALUES ($1, $2, $3::uuid, $4::uuid, $5, $6, $7, NOW())
         ON CONFLICT (challenge_name, target, agent_id) DO UPDATE
         SET best_solution_submission_id = EXCLUDED.best_solution_submission_id,
-            best_rank_score = EXCLUDED.best_rank_score,
             public_results_json = EXCLUDED.public_results_json,
             aggregate_metrics_json = EXCLUDED.aggregate_metrics_json,
+            official_metrics_json = EXCLUDED.official_metrics_json,
             updated_at = NOW()
         "#,
     )
@@ -491,8 +447,8 @@ pub(super) async fn upsert_leaderboard_entry_for_solution_submission_tx<'a>(
     .bind(target.as_str())
     .bind(agent_id.as_str())
     .bind(solution_submission_id.as_str())
-    .bind(rank_score)
     .bind(&public_results_json)
+    .bind(&aggregate_metrics_json)
     .bind(&aggregate_metrics_json)
     .execute(&mut **tx)
     .await?;
@@ -578,84 +534,21 @@ async fn lock_leaderboard_scope(
 /// Handles compare rank payloads for this module.
 fn compare_rank_payloads(
     spec: &ChallengeBundleSpec,
-    a_score: f64,
     a_metrics: &[MetricValue],
-    b_score: f64,
     b_metrics: &[MetricValue],
 ) -> Ordering {
-    let score_order = compare_f64_desc(a_score, b_score);
-    if score_order != Ordering::Equal {
-        return score_order;
-    }
-
-    for metric_name in &spec.metric_schema.ranking.tie_breaker_metric_names {
-        let Some(definition) = spec.metric_schema.metric(metric_name) else {
-            continue;
-        };
-        let ordering = compare_metric_by_direction(
-            definition.direction,
-            metric_value(a_metrics, metric_name),
-            metric_value(b_metrics, metric_name),
-        );
-        if ordering != Ordering::Equal {
-            return ordering;
-        }
-    }
-
-    Ordering::Equal
+    compare_metric_payloads_by_ranking(&spec.metric_schema, a_metrics, b_metrics)
 }
 
 /// Handles candidate replaces leaderboard entry for this module.
 fn candidate_replaces_leaderboard_entry(
     spec: &ChallengeBundleSpec,
-    current: Option<(f64, Vec<MetricValue>)>,
-    candidate_score: f64,
+    current: Option<Vec<MetricValue>>,
     candidate_metrics: &[MetricValue],
 ) -> bool {
-    let Some((current_score, current_metrics)) = current else {
+    let Some(current_metrics) = current else {
         return true;
     };
 
-    compare_rank_payloads(
-        spec,
-        candidate_score,
-        candidate_metrics,
-        current_score,
-        &current_metrics,
-    ) == Ordering::Less
-}
-
-/// Handles metric value for this module.
-fn metric_value(metrics: &[MetricValue], metric_name: &MetricName) -> Option<f64> {
-    metrics
-        .iter()
-        .find(|metric| &metric.metric_name == metric_name)
-        .map(|metric| metric.value)
-}
-
-/// Handles compare metric by direction for this module.
-fn compare_metric_by_direction(
-    direction: MetricDirection,
-    a: Option<f64>,
-    b: Option<f64>,
-) -> Ordering {
-    match (a, b) {
-        (Some(a), Some(b)) => match direction {
-            MetricDirection::Maximize => compare_f64_desc(a, b),
-            MetricDirection::Minimize => compare_f64_asc(a, b),
-        },
-        (Some(_), None) => Ordering::Less,
-        (None, Some(_)) => Ordering::Greater,
-        (None, None) => Ordering::Equal,
-    }
-}
-
-/// Handles compare f64 desc for this module.
-fn compare_f64_desc(a: f64, b: f64) -> Ordering {
-    b.partial_cmp(&a).unwrap_or(Ordering::Equal)
-}
-
-/// Handles compare f64 asc for this module.
-fn compare_f64_asc(a: f64, b: f64) -> Ordering {
-    a.partial_cmp(&b).unwrap_or(Ordering::Equal)
+    compare_rank_payloads(spec, candidate_metrics, &current_metrics) == Ordering::Less
 }

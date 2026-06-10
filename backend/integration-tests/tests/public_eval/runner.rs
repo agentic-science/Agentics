@@ -102,7 +102,6 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     );
     assert_eq!(solution_submission["evaluation"]["status"], "completed");
     assert_eq!(solution_submission["evaluation"]["eval_type"], "official");
-    assert_eq!(solution_submission["evaluation"]["rank_score"], 1.0);
     assert_eq!(
         solution_submission["evaluation"]["aggregate_metrics"],
         serde_json::json!([
@@ -153,8 +152,8 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     .fetch_one(&pool)
     .await
     .expect("failed to query evaluation job");
-    let evaluation_status: (String, String, f64, serde_json::Value, serde_json::Value) = sqlx::query_as(
-        "SELECT status, eval_type, rank_score, aggregate_metrics_json, run_metrics_json FROM evaluations WHERE solution_submission_id = $1::uuid",
+    let evaluation_status: (String, String, serde_json::Value, serde_json::Value) = sqlx::query_as(
+        "SELECT status, eval_type, aggregate_metrics_json, run_metrics_json FROM evaluations WHERE solution_submission_id = $1::uuid",
     )
     .bind(solution_submission_id)
     .fetch_one(&pool)
@@ -170,7 +169,6 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
         (
             "completed".to_string(),
             "official".to_string(),
-            1.0,
             serde_json::json!([
                 { "metric_name": "score", "value": 1.0 },
                 { "metric_name": "passed_cases", "value": 2.0 }
@@ -351,7 +349,6 @@ async fn worker_completes_piped_stdio_solution_submission(pool: sqlx::PgPool) {
         validation_job_error.0, validation_runner_log
     );
     assert_eq!(validation["evaluation"]["eval_type"], "validation");
-    assert_eq!(validation["evaluation"]["rank_score"], 1.0);
     assert_eq!(validation["evaluation"]["validation_summary"]["score"], 1.0);
 
     let create_response: serde_json::Value = client
@@ -393,7 +390,6 @@ async fn worker_completes_piped_stdio_solution_submission(pool: sqlx::PgPool) {
         "unexpected piped_stdio submission response"
     );
     assert_eq!(solution_submission["evaluation"]["eval_type"], "official");
-    assert_eq!(solution_submission["evaluation"]["rank_score"], 1.0);
     assert_eq!(
         solution_submission["official_primary_metric"],
         serde_json::json!({ "metric_name": "score", "value": 1.0 })
@@ -510,7 +506,7 @@ async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {
         validation_job_error.0, validation_runner_log
     );
     assert_eq!(validation["evaluation"]["eval_type"], "validation");
-    assert_eq!(validation["evaluation"]["rank_score"], 1.0);
+    assert_eq!(validation["evaluation"]["validation_summary"]["score"], 1.0);
 
     let create_response = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
@@ -554,7 +550,6 @@ async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {
 
     assert_eq!(solution_submission["status"], "completed");
     assert_eq!(solution_submission["evaluation"]["eval_type"], "official");
-    assert_eq!(solution_submission["evaluation"]["rank_score"], 1.0);
     assert_eq!(
         solution_submission["official_primary_metric"],
         serde_json::json!({ "metric_name": "score", "value": 1.0 })

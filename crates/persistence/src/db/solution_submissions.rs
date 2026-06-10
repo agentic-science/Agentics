@@ -59,7 +59,6 @@ pub struct AdminSolutionSubmissionListItemRecord {
     pub latest_job_eval_type: Option<ScoringMode>,
     pub validation_status: Option<EvaluationStatus>,
     pub official_status: Option<EvaluationStatus>,
-    pub rank_score: Option<f64>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -78,7 +77,6 @@ pub struct PublicSolutionSubmissionListItemRecord {
     pub explanation: String,
     pub parent_solution_submission_id: Option<SolutionSubmissionId>,
     pub credit_text: String,
-    pub rank_score: Option<f64>,
     pub official_metrics: Vec<MetricValue>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -620,7 +618,6 @@ async fn get_solution_submission_by_id_inner(
             pe.target AS validation_eval_target,
             pe.status AS validation_eval_status,
             pe.eval_type AS validation_eval_eval_type,
-            pe.rank_score AS validation_eval_rank_score,
             pe.aggregate_metrics_json AS validation_eval_aggregate_metrics,
             pe.run_metrics_json AS validation_eval_run_metrics,
             pe.public_results_json AS validation_eval_public_results,
@@ -633,7 +630,6 @@ async fn get_solution_submission_by_id_inner(
             oe.target AS official_eval_target,
             oe.status AS official_eval_status,
             oe.eval_type AS official_eval_eval_type,
-            oe.rank_score AS official_eval_rank_score,
             oe.aggregate_metrics_json AS official_eval_aggregate_metrics,
             oe.run_metrics_json AS official_eval_run_metrics,
             oe.public_results_json AS official_eval_public_results,
@@ -649,11 +645,11 @@ async fn get_solution_submission_by_id_inner(
             SELECT id, status FROM evaluation_jobs WHERE solution_submission_id = s.id ORDER BY created_at DESC LIMIT 1
         ) j ON TRUE
         LEFT JOIN LATERAL (
-            SELECT id, target, status, eval_type, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, runner_log_storage_key, started_at, finished_at
+            SELECT id, target, status, eval_type, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, runner_log_storage_key, started_at, finished_at
             FROM evaluations WHERE solution_submission_id = s.id AND eval_type = 'validation' AND target = s.target ORDER BY created_at DESC LIMIT 1
         ) pe ON TRUE
         LEFT JOIN LATERAL (
-            SELECT id, target, status, eval_type, rank_score, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, runner_log_storage_key, started_at, finished_at
+            SELECT id, target, status, eval_type, aggregate_metrics_json, run_metrics_json, public_results_json, validation_summary_json, official_summary_json, runner_log_storage_key, started_at, finished_at
             FROM evaluations
             WHERE solution_submission_id = s.id
               AND eval_type = 'official'
@@ -733,8 +729,7 @@ pub async fn list_admin_solution_submissions(
             j.status AS latest_job_status,
             j.eval_type AS latest_job_eval_type,
             ve.status AS validation_status,
-            oe.status AS official_status,
-            oe.rank_score AS official_rank_score
+            oe.status AS official_status
         FROM solution_submissions s
         JOIN challenges p ON p.challenge_name = s.challenge_name
         JOIN agents a ON a.id = s.agent_id
@@ -753,7 +748,7 @@ pub async fn list_admin_solution_submissions(
             LIMIT 1
         ) ve ON TRUE
         LEFT JOIN LATERAL (
-            SELECT status, rank_score
+            SELECT status
             FROM evaluations
             WHERE solution_submission_id = s.id AND eval_type = 'official'
             ORDER BY created_at DESC
@@ -787,7 +782,6 @@ pub async fn list_admin_solution_submissions(
                 latest_job_eval_type: optional_scoring_mode_from_row(&r, "latest_job_eval_type")?,
                 validation_status: optional_evaluation_status_from_row(&r, "validation_status")?,
                 official_status: optional_evaluation_status_from_row(&r, "official_status")?,
-                rank_score: r.try_get("official_rank_score")?,
                 created_at: r.try_get("created_at")?,
                 updated_at: r.try_get("updated_at")?,
             })
@@ -808,13 +802,12 @@ pub async fn list_public_solution_submissions_for_challenge(
             s.id, s.challenge_name, s.target, p.title AS challenge_title,
             s.agent_id, a.display_name AS agent_display_name, s.status, s.note, s.explanation,
             s.parent_solution_submission_id, s.credit_text, s.created_at, s.updated_at,
-            oe.rank_score AS rank_score,
             COALESCE(oe.aggregate_metrics_json, '[]'::jsonb) AS official_metrics
         FROM solution_submissions s
         JOIN agents a ON a.id = s.agent_id
         JOIN challenges p ON p.challenge_name = s.challenge_name
         LEFT JOIN LATERAL (
-            SELECT rank_score, aggregate_metrics_json, official_summary_json
+            SELECT aggregate_metrics_json, official_summary_json
             FROM evaluations
             WHERE solution_submission_id = s.id AND eval_type = 'official' AND status = 'completed' AND target = s.target
             ORDER BY created_at DESC LIMIT 1
@@ -854,7 +847,6 @@ pub async fn list_public_solution_submissions_for_challenge(
                     "parent_solution_submission_id",
                 )?,
                 credit_text: r.try_get("credit_text")?,
-                rank_score: r.try_get::<Option<f64>, _>("rank_score")?,
                 official_metrics,
                 created_at: r.try_get("created_at")?,
                 updated_at: r.try_get("updated_at")?,
@@ -952,7 +944,6 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
     let target_col = format!("{}_target", prefix);
     let target = target_from_row(row, target_col.as_str())?;
     let eval_type_str: String = row.try_get(format!("{}_eval_type", prefix).as_str())?;
-    let rank_score: Option<f64> = row.try_get(format!("{}_rank_score", prefix).as_str())?;
     let aggregate_json: Option<Value> =
         row.try_get(format!("{}_aggregate_metrics", prefix).as_str())?;
     let run_metrics_json: Option<Value> =
@@ -997,7 +988,6 @@ fn parse_eval_from_row(row: &sqlx::postgres::PgRow, prefix: &str) -> Result<Opti
         target,
         status,
         eval_type,
-        rank_score,
         aggregate_metrics,
         run_metrics,
         public_results,

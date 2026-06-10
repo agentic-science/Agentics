@@ -520,7 +520,6 @@ score = 0 if total == 0 else passed / total
 summary_key = "validation_summary" if args.mode == "validation" else "official_summary"
 payload = {
     "status": "passed" if passed == total else "failed",
-    "rank_score": score,
     "aggregate_metrics": [{"metric_name": "score", "value": score}, {"metric_name": "passed_cases", "value": passed}],
     "run_metrics": [{"run_name": result["case_name"], "metrics": [{"metric_name": "score", "value": result["score"]}]} for result in results],
     "logs": logs,
@@ -562,7 +561,6 @@ score = 1.0 if passed else 0.0
 summary_key = "validation_summary" if args.mode == "validation" else "official_summary"
 payload = {
     "status": "passed" if passed else "failed",
-    "rank_score": score,
     "aggregate_metrics": [{"metric_name": "score", "value": score}, {"metric_name": "passed_cases", "value": score}],
     summary_key: {"score": score, "passed": 1 if passed else 0, "total": 1},
 }
@@ -608,7 +606,6 @@ score = 1.0 if passed else 0.0
 summary_key = "validation_summary" if args.mode == "validation" else "official_summary"
 payload = {
     "status": "passed" if passed else "failed",
-    "rank_score": score,
     "aggregate_metrics": [{"metric_name": "score", "value": score}, {"metric_name": "passed_cases", "value": score}],
     summary_key: {"score": score, "passed": 1 if passed else 0, "total": 1},
 }

@@ -126,7 +126,7 @@ mod tests {
     use agentics_error::ServiceError;
     use agentics_persistence::LeaderboardMetricEntry;
 
-    use super::{SCORE_DISTRIBUTION_TRUNCATION_WARNING, build_score_distribution_response};
+    use super::build_score_distribution_response;
 
     /// Parse a valid challenge name for a focused score-distribution test.
     fn challenge_name(value: &str) -> ChallengeName {
@@ -288,10 +288,9 @@ mod tests {
         }
     }
 
-    /// Build one leaderboard entry with distinct primary metric and rank scores.
-    fn entry(raw_latency: f64, rank_score: f64) -> LeaderboardMetricEntry {
+    /// Build one leaderboard entry with a minimized primary metric.
+    fn entry(raw_latency: f64) -> LeaderboardMetricEntry {
         LeaderboardMetricEntry {
-            best_rank_score: rank_score,
             aggregate_metrics: vec![MetricValue {
                 metric_name: metric_name("latency_ms"),
                 value: raw_latency,
@@ -312,7 +311,7 @@ mod tests {
             target_name("linux-arm64-cpu"),
             metric_name("latency_ms"),
             &spec,
-            vec![entry(20.0, -20.0), entry(50.0, -50.0)],
+            vec![entry(20.0), entry(50.0)],
             false,
         )
         .expect("score distribution should build");
@@ -321,29 +320,6 @@ mod tests {
         assert_eq!(response.min, Some(20.0));
         assert_eq!(response.max, Some(50.0));
         assert!(response.warnings.is_empty());
-    }
-
-    /// Verifies rank-score distributions intentionally use comparator values.
-    #[test]
-    fn rank_score_distribution_uses_comparator_values() {
-        let spec = minimized_metric_spec();
-        let response = build_score_distribution_response(
-            challenge_name("latency-challenge"),
-            target_name("linux-arm64-cpu"),
-            metric_name("rank_score"),
-            &spec,
-            vec![entry(20.0, -20.0), entry(50.0, -50.0)],
-            true,
-        )
-        .expect("score distribution should build");
-
-        assert_eq!(response.count, 2);
-        assert_eq!(response.min, Some(-50.0));
-        assert_eq!(response.max, Some(-20.0));
-        assert_eq!(
-            response.warnings,
-            vec![SCORE_DISTRIBUTION_TRUNCATION_WARNING.to_string()]
-        );
     }
 
     /// Verifies official-only primary metrics are not distributable through the public endpoint.
@@ -357,7 +333,7 @@ mod tests {
             target_name("linux-arm64-cpu"),
             metric_name("latency_ms"),
             &spec,
-            vec![entry(20.0, -20.0)],
+            vec![entry(20.0)],
             false,
         )
         .expect_err("official-only primary metric should be rejected");
@@ -368,7 +344,7 @@ mod tests {
             target_name("linux-arm64-cpu"),
             metric_name("official_score"),
             &spec,
-            vec![entry(20.0, -20.0)],
+            vec![entry(20.0)],
             false,
         )
         .expect_err("official_score built-in is no longer exposed");

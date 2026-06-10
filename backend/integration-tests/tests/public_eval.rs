@@ -242,7 +242,6 @@ score = 1.0 if passed else 0.0
 summary_key = "validation_summary" if args.mode == "validation" else "official_summary"
 payload = {
     "status": "passed" if passed else "failed",
-    "rank_score": score,
     "aggregate_metrics": [
         {"metric_name": "score", "value": score},
         {"metric_name": "passed_cases", "value": score}
@@ -404,7 +403,6 @@ score = 1.0 if passed else 0.0
 summary_key = "validation_summary" if args.mode == "validation" else "official_summary"
 payload = {
     "status": "passed" if passed else "failed",
-    "rank_score": score,
     "aggregate_metrics": [
         {"metric_name": "score", "value": score},
         {"metric_name": "passed_cases", "value": score},

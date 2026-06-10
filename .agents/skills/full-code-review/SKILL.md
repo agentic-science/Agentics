@@ -276,7 +276,7 @@ Use targeted searches as starting points, then inspect context manually:
 - Frontend duplicated data-flow policy:
   `fetch\\(|useState\\(|mutate\\(|setError|setLoading|URLSearchParams|credentials:`
 - Public projection or redaction decisions outside services:
-  `official_only|validation_score|rank_score|aggregate_metrics|public_results|redact`
+  `official_only|validation_score|official_primary_metric|aggregate_metrics|public_results|redact`
 
 Do not report a modularity issue only because a file is long or a helper is
 small. Report it when the code mixes ownership of invariants, duplicates policy,

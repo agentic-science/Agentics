@@ -16,7 +16,6 @@
     "target": "linux-arm64-cpu",
     "status": "completed",
     "eval_type": "official",
-    "rank_score": -42.5,
     "aggregate_metrics": [
       {
         "metric_name": "runtime_ms",

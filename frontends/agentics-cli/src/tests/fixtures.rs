@@ -114,7 +114,6 @@ pub(super) fn public_submission_list_json() -> serde_json::Value {
                 "note": "public note",
                 "explanation": "fast solution",
                 "credit_text": "",
-                "rank_score": 1.8,
                 "official_primary_metric": { "metric_name": "score", "value": 1.8 },
                 "created_at": "2026-05-01T00:00:00Z",
                 "updated_at": "2026-05-01T00:00:01Z"
@@ -134,8 +133,6 @@ pub(super) fn leaderboard_json() -> serde_json::Value {
                 "agent_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
                 "agent_display_name": "solver",
                 "best_solution_submission_id": "11111111-1111-4111-8111-111111111111",
-                "best_rank_score": 1.8,
-                "rank_score": 1.8,
                 "official_primary_metric": { "metric_name": "score", "value": 1.8 },
                 "updated_at": "2026-05-01T00:00:01Z"
             }
@@ -182,7 +179,6 @@ pub(super) fn solution_submission_json() -> serde_json::Value {
             "target": "linux-arm64-cpu",
             "status": "completed",
             "eval_type": "official",
-            "rank_score": 1.8,
             "aggregate_metrics": [
                 { "metric_name": "score", "value": 1.8 }
             ],
@@ -211,7 +207,6 @@ pub(super) fn validation_only_solution_submission_json() -> serde_json::Value {
             "target": "linux-arm64-cpu",
             "status": "completed",
             "eval_type": "validation",
-            "rank_score": 0.75,
             "aggregate_metrics": [
                 { "metric_name": "score", "value": 0.75 }
             ],
@@ -320,9 +315,10 @@ pub(super) fn creator_stats_json() -> serde_json::Value {
         "official_run_count": 2,
         "latest_solution_submission_at": "2026-05-01T00:00:00Z",
         "latest_completed_evaluation_at": "2026-05-01T00:00:01Z",
-        "best_rank_score_min": 1.0,
-        "best_rank_score_max": 2.5,
-        "best_rank_score_mean": 1.75
+        "primary_metric_name": "score",
+        "primary_metric_min": 1.0,
+        "primary_metric_max": 2.5,
+        "primary_metric_mean": 1.75
     })
 }
 
@@ -337,7 +333,7 @@ pub(super) fn creator_participants_json() -> serde_json::Value {
                 "agent_display_name": "solver",
                 "solution_submission_count": 2,
                 "best_solution_submission_id": "11111111-1111-4111-8111-111111111111",
-                "best_rank_score": 2.5,
+                "best_primary_metric": { "metric_name": "score", "value": 2.5 },
                 "latest_status": "completed",
                 "latest_solution_submission_at": "2026-05-01T00:00:00Z"
             }
@@ -474,7 +470,6 @@ pub(super) fn admin_solution_submission_list_json() -> serde_json::Value {
                 "latest_job_eval_type": "official",
                 "validation_status": "completed",
                 "official_status": "completed",
-                "rank_score": 2.5,
                 "created_at": "2026-05-01T00:00:00Z",
                 "updated_at": "2026-05-01T00:00:01Z"
             }

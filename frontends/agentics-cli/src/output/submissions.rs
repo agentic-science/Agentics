@@ -124,16 +124,11 @@ pub(crate) fn render_solution_submission_status(
                 .as_ref()
                 .map(|eval| status_label(&eval.status))
                 .unwrap_or_else(|| "none".to_string());
-            let display_eval = select_submission_display_evaluation(response);
-            let rank_score = display_eval
-                .and_then(|eval| eval.rank_score)
-                .map(format_score)
-                .unwrap_or_else(|| "none".to_string());
             let official_primary_metric =
                 format_optional_metric(response.official_primary_metric.as_ref());
 
             Ok(format!(
-                "solution submission: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation_evaluation: {}\nofficial_evaluation: {}\nofficial_primary_metric: {}\nrank_score: {}\nvisible_after_eval: {}",
+                "solution submission: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation_evaluation: {}\nofficial_evaluation: {}\nofficial_primary_metric: {}\nvisible_after_eval: {}",
                 response.id,
                 response.challenge_name,
                 response.target,
@@ -142,7 +137,6 @@ pub(crate) fn render_solution_submission_status(
                 validation_eval,
                 official_eval,
                 official_primary_metric,
-                rank_score,
                 response.visible_after_eval
             ))
         }
@@ -181,13 +175,9 @@ fn render_validation_run_status(
                 .unwrap_or_else(|| "none".to_string());
             let primary_metric =
                 format_optional_metric(validation_eval.and_then(first_aggregate_metric));
-            let rank_score = validation_eval
-                .and_then(|eval| eval.rank_score)
-                .map(format_score)
-                .unwrap_or_else(|| "none".to_string());
 
             Ok(format!(
-                "validation_run: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation: {}\nprimary_metric: {}\nrank_score: {}\nvisible_after_eval: {}",
+                "validation_run: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation: {}\nprimary_metric: {}\nvisible_after_eval: {}",
                 response.id,
                 response.challenge_name,
                 response.target,
@@ -195,7 +185,6 @@ fn render_validation_run_status(
                 evaluation_job,
                 validation_status,
                 primary_metric,
-                rank_score,
                 response.visible_after_eval
             ))
         }
@@ -227,22 +216,28 @@ pub(crate) fn render_validation_run_status_batch(
                         let validation_status = validation_eval
                             .map(|eval| status_label(&eval.status))
                             .unwrap_or_else(|| "none".to_string());
-                        let rank_score = validation_eval
-                            .and_then(|eval| eval.rank_score)
-                            .map(format_score)
-                            .unwrap_or_else(|| "none".to_string());
+                        let primary_metric = format_optional_metric(
+                            validation_eval.and_then(first_aggregate_metric),
+                        );
                         vec![
                             response.target.to_string(),
                             response.id.to_string(),
                             status_label(&response.status),
                             evaluation_job,
                             validation_status,
-                            rank_score,
+                            primary_metric,
                         ]
                     })
                     .collect::<Vec<_>>();
                 Ok(render_table(
-                    &["TARGET", "ID", "STATUS", "JOB", "VALIDATION", "RANK_SCORE"],
+                    &[
+                        "TARGET",
+                        "ID",
+                        "STATUS",
+                        "JOB",
+                        "VALIDATION",
+                        "PRIMARY_METRIC",
+                    ],
                     &rows,
                 ))
             }
@@ -336,9 +331,6 @@ pub(crate) fn render_public_solution_submission_list(
                         item.agent_display_name.clone(),
                         item.target.to_string(),
                         item.status.to_string(),
-                        item.rank_score
-                            .map(format_score)
-                            .unwrap_or_else(|| "none".to_string()),
                         format_optional_metric(item.official_primary_metric.as_ref()),
                         item.created_at.clone(),
                     ]
@@ -353,7 +345,6 @@ pub(crate) fn render_public_solution_submission_list(
                         "AGENT",
                         "TARGET",
                         "STATUS",
-                        "RANK_SCORE",
                         "OFFICIAL_PRIMARY_METRIC",
                         "CREATED",
                     ],
@@ -387,10 +378,6 @@ pub(crate) fn render_solution_submission_report(
             );
             let official_primary_metric =
                 format_optional_metric(submission.official_primary_metric.as_ref());
-            let rank_score = select_submission_display_evaluation(submission)
-                .and_then(|evaluation| evaluation.rank_score)
-                .map(format_score)
-                .unwrap_or_else(|| "none".to_string());
             let metrics = select_submission_display_evaluation(submission)
                 .map(|evaluation| {
                     evaluation
@@ -423,7 +410,7 @@ pub(crate) fn render_solution_submission_report(
             };
 
             Ok(format!(
-                "solution_submission: {}\nchallenge: {}\ntarget: {}\nagent: {}\nstatus: {}\ncreated_at: {}\nupdated_at: {}\nvalidation_primary_metric: {}\nofficial_primary_metric: {}\nrank_score: {}\nrank: {}\ntotal_ranked: {}\npercentile: {}\nis_agent_best: {}\nmetrics:\n{}\nlogs: {}",
+                "solution_submission: {}\nchallenge: {}\ntarget: {}\nagent: {}\nstatus: {}\ncreated_at: {}\nupdated_at: {}\nvalidation_primary_metric: {}\nofficial_primary_metric: {}\nrank: {}\ntotal_ranked: {}\npercentile: {}\nis_agent_best: {}\nmetrics:\n{}\nlogs: {}",
                 submission.id,
                 submission.challenge_name,
                 submission.target,
@@ -436,7 +423,6 @@ pub(crate) fn render_solution_submission_report(
                 submission.updated_at,
                 validation_primary_metric,
                 official_primary_metric,
-                rank_score,
                 rank,
                 total_ranked,
                 percentile,
@@ -464,7 +450,7 @@ pub(crate) fn render_ranking_context(
                         entry.rank.to_string(),
                         entry.entry.agent_display_name.clone(),
                         entry.entry.best_solution_submission_id.to_string(),
-                        format_score(entry.entry.best_rank_score),
+                        format_optional_metric(entry.entry.official_primary_metric.as_ref()),
                     ]
                 })
                 .collect::<Vec<_>>();
@@ -484,7 +470,10 @@ pub(crate) fn render_ranking_context(
                     .unwrap_or_else(|| "none".to_string()),
                 response.is_agent_best,
                 format_warnings(&response.warnings),
-                render_table(&["RANK", "AGENT", "SUBMISSION", "SCORE"], &nearby)
+                render_table(
+                    &["RANK", "AGENT", "SUBMISSION", "OFFICIAL_PRIMARY_METRIC"],
+                    &nearby
+                )
             ))
         }
     }

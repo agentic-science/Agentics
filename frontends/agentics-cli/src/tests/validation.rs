@@ -51,7 +51,6 @@ async fn validate_remote_posts_validation_run_and_polls_status() {
                 "target": "linux-arm64-cpu",
                 "status": "completed",
                 "eval_type": "validation",
-                "rank_score": 1.0,
                 "aggregate_metrics": [
                     { "metric_name": "score", "value": 1.0 },
                     { "metric_name": "passed_cases", "value": 2.0 }
@@ -123,7 +122,6 @@ async fn validate_remote_posts_validation_run_and_polls_status() {
     assert!(output.contains("validation_run: 22222222-2222-4222-8222-222222222222"));
     assert!(output.contains("validation: completed"));
     assert!(output.contains("primary_metric: score=1"));
-    assert!(output.contains("rank_score: 1"));
     assert!(output.contains("visible_after_eval: false"));
     assert_eq!(body["challenge_name"], "sample-sum");
     assert_eq!(body["target"], "linux-arm64-cpu");

@@ -12,7 +12,8 @@ use anyhow::Result;
 
 use super::OutputFormat;
 use super::format::{
-    format_score, format_warnings, pretty_json, quantile_value, render_table, status_label,
+    format_optional_metric, format_score, format_warnings, pretty_json, quantile_value,
+    render_table, status_label,
 };
 
 /// Renders challenge list for user-facing output.
@@ -259,7 +260,7 @@ pub(crate) fn render_challenge_stats(
                         rank.to_string(),
                         entry.agent_display_name.clone(),
                         entry.best_solution_submission_id.to_string(),
-                        format_score(entry.best_rank_score),
+                        format_optional_metric(entry.official_primary_metric.as_ref()),
                         entry.updated_at.clone(),
                     ])
                 })
@@ -288,7 +289,13 @@ pub(crate) fn render_challenge_stats(
                 median,
                 p90,
                 render_table(
-                    &["RANK", "AGENT", "SUBMISSION", "SCORE", "UPDATED"],
+                    &[
+                        "RANK",
+                        "AGENT",
+                        "SUBMISSION",
+                        "OFFICIAL_PRIMARY_METRIC",
+                        "UPDATED",
+                    ],
                     &top_rows
                 )
             ))
@@ -304,7 +311,7 @@ pub(crate) fn render_creator_challenge_stats(
     match format {
         OutputFormat::Json => pretty_json(response),
         OutputFormat::Table => Ok(format!(
-            "challenge: {}\ntarget: {}\nagents: {}\nsolution_submissions: {}\ncompleted: {}\nfailed: {}\nqueued_or_running: {}\nvisible_submissions: {}\nvalidation_runs: {}\nofficial_runs: {}\nlatest_solution_submission_at: {}\nlatest_completed_evaluation_at: {}\nbest_rank_score_min: {}\nbest_rank_score_max: {}\nbest_rank_score_mean: {}",
+            "challenge: {}\ntarget: {}\nagents: {}\nsolution_submissions: {}\ncompleted: {}\nfailed: {}\nqueued_or_running: {}\nvisible_submissions: {}\nvalidation_runs: {}\nofficial_runs: {}\nlatest_solution_submission_at: {}\nlatest_completed_evaluation_at: {}\nprimary_metric_name: {}\nprimary_metric_min: {}\nprimary_metric_max: {}\nprimary_metric_mean: {}",
             response.challenge_name,
             response
                 .target
@@ -327,16 +334,17 @@ pub(crate) fn render_creator_challenge_stats(
                 .latest_completed_evaluation_at
                 .as_deref()
                 .unwrap_or("none"),
+            response.primary_metric_name,
             response
-                .best_rank_score_min
+                .primary_metric_min
                 .map(format_score)
                 .unwrap_or_else(|| "none".to_string()),
             response
-                .best_rank_score_max
+                .primary_metric_max
                 .map(format_score)
                 .unwrap_or_else(|| "none".to_string()),
             response
-                .best_rank_score_mean
+                .primary_metric_mean
                 .map(format_score)
                 .unwrap_or_else(|| "none".to_string())
         )),
@@ -363,9 +371,7 @@ pub(crate) fn render_creator_challenge_participants(
                             .as_ref()
                             .map(ToString::to_string)
                             .unwrap_or_else(|| "none".to_string()),
-                        item.best_rank_score
-                            .map(format_score)
-                            .unwrap_or_else(|| "none".to_string()),
+                        format_optional_metric(item.best_primary_metric.as_ref()),
                         item.latest_status
                             .as_ref()
                             .map(status_label)
@@ -387,7 +393,7 @@ pub(crate) fn render_creator_challenge_participants(
                         "AGENT",
                         "SUBMISSIONS",
                         "BEST",
-                        "SCORE",
+                        "PRIMARY_METRIC",
                         "STATUS"
                     ],
                     &rows
@@ -466,7 +472,7 @@ pub(crate) fn render_leaderboard(
                         rank.to_string(),
                         entry.agent_display_name.clone(),
                         entry.best_solution_submission_id.to_string(),
-                        format_score(entry.best_rank_score),
+                        format_optional_metric(entry.official_primary_metric.as_ref()),
                         entry.updated_at.clone(),
                     ])
                 })
@@ -475,7 +481,16 @@ pub(crate) fn render_leaderboard(
                 "challenge: {}\ntarget: {}\n{}",
                 response.challenge_name,
                 response.target,
-                render_table(&["RANK", "AGENT", "SUBMISSION", "SCORE", "UPDATED"], &rows)
+                render_table(
+                    &[
+                        "RANK",
+                        "AGENT",
+                        "SUBMISSION",
+                        "OFFICIAL_PRIMARY_METRIC",
+                        "UPDATED"
+                    ],
+                    &rows
+                )
             ))
         }
     }

@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::HashSet;
 use std::fmt;
 
@@ -250,8 +251,6 @@ pub struct EvaluationDto {
     pub target: TargetName,
     pub status: EvaluationStatus,
     pub eval_type: ScoringMode,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub rank_score: Option<f64>,
     pub aggregate_metrics: Vec<MetricValue>,
     pub run_metrics: Vec<RunMetricResult>,
     pub public_results: Vec<PublicCaseResult>,
@@ -273,12 +272,11 @@ pub struct EvaluationDto {
 /// absent nullable fields are accepted, but numeric scores and mode-specific
 /// summaries are validated before the result is persisted.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct EvaluatorRunResult {
     pub status: EvaluatorRunStatus,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode: Option<ScoringMode>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub rank_score: Option<f64>,
     #[serde(default)]
     pub aggregate_metrics: Vec<MetricValue>,
     #[serde(default)]
@@ -396,10 +394,6 @@ impl EvaluatorRunResult {
             return Err("result mode does not match evaluation job type".to_string());
         }
 
-        if let Some(rank_score) = self.rank_score {
-            validate_finite_number(rank_score, "rank_score")?;
-        }
-
         validate_metric_values(&self.aggregate_metrics, "aggregate_metrics")?;
 
         let mut run_names = HashSet::with_capacity(self.run_metrics.len());
@@ -445,34 +439,7 @@ impl EvaluatorRunResult {
         schema: &MetricSchemaSpec,
         mode: ScoringMode,
     ) -> Result<(), String> {
-        self.validate_for_metric_schema(schema, mode)?;
-
-        if self.rank_score.is_none() {
-            let primary_metric = schema
-                .primary_metric()
-                .ok_or_else(|| "metric schema primary metric is missing".to_string())?;
-            let Some(primary_value) =
-                self.aggregate_metric_value(&schema.ranking.primary_metric_name)
-            else {
-                if mode == ScoringMode::Validation {
-                    return Ok(());
-                }
-                return Err(format!(
-                    "aggregate_metrics missing primary metric `{}`",
-                    schema.ranking.primary_metric_name
-                ));
-            };
-            self.rank_score = Some(match primary_metric.direction {
-                MetricDirection::Maximize => primary_value,
-                MetricDirection::Minimize => -primary_value,
-            });
-        }
-
-        if mode == ScoringMode::Official && self.rank_score.is_none() {
-            return Err("rank_score is required for official evaluation results".to_string());
-        }
-
-        Ok(())
+        self.validate_for_metric_schema(schema, mode)
     }
 
     /// Validate metric names against the challenge's declared metric schema.
@@ -526,14 +493,78 @@ impl EvaluatorRunResult {
 
         Ok(())
     }
+}
 
-    /// Handles aggregate metric value for this module.
-    fn aggregate_metric_value(&self, metric_name: &MetricName) -> Option<f64> {
-        self.aggregate_metrics
-            .iter()
-            .find(|metric| &metric.metric_name == metric_name)
-            .map(|metric| metric.value)
+/// Compare two aggregate metric payloads using a challenge's ranking schema.
+///
+/// Returns `Ordering::Less` when `a_metrics` should rank before `b_metrics`.
+pub fn compare_metric_payloads_by_ranking(
+    schema: &MetricSchemaSpec,
+    a_metrics: &[MetricValue],
+    b_metrics: &[MetricValue],
+) -> Ordering {
+    let Some(primary) = schema.primary_metric() else {
+        return Ordering::Equal;
+    };
+    let primary_order = compare_metric_by_direction(
+        primary.direction,
+        metric_value_by_name(a_metrics, &schema.ranking.primary_metric_name),
+        metric_value_by_name(b_metrics, &schema.ranking.primary_metric_name),
+    );
+    if primary_order != Ordering::Equal {
+        return primary_order;
     }
+
+    for metric_name in &schema.ranking.tie_breaker_metric_names {
+        let Some(definition) = schema.metric(metric_name) else {
+            continue;
+        };
+        let ordering = compare_metric_by_direction(
+            definition.direction,
+            metric_value_by_name(a_metrics, metric_name),
+            metric_value_by_name(b_metrics, metric_name),
+        );
+        if ordering != Ordering::Equal {
+            return ordering;
+        }
+    }
+
+    Ordering::Equal
+}
+
+/// Return one metric value by name from an aggregate metric payload.
+pub fn metric_value_by_name(metrics: &[MetricValue], metric_name: &MetricName) -> Option<f64> {
+    metrics
+        .iter()
+        .find(|metric| &metric.metric_name == metric_name)
+        .map(|metric| metric.value)
+}
+
+/// Compare optional metric values according to the declared direction.
+fn compare_metric_by_direction(
+    direction: MetricDirection,
+    a: Option<f64>,
+    b: Option<f64>,
+) -> Ordering {
+    match (a, b) {
+        (Some(a), Some(b)) => match direction {
+            MetricDirection::Maximize => compare_f64_desc(a, b),
+            MetricDirection::Minimize => compare_f64_asc(a, b),
+        },
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => Ordering::Equal,
+    }
+}
+
+/// Compare finite values in descending order.
+fn compare_f64_desc(a: f64, b: f64) -> Ordering {
+    b.partial_cmp(&a).unwrap_or(Ordering::Equal)
+}
+
+/// Compare finite values in ascending order.
+fn compare_f64_asc(a: f64, b: f64) -> Ordering {
+    a.partial_cmp(&b).unwrap_or(Ordering::Equal)
 }
 
 /// Validates finite number invariants for this contract.
@@ -603,7 +634,6 @@ mod tests {
         EvaluatorRunResult {
             status: EvaluatorRunStatus::Passed,
             mode: Some(ScoringMode::Validation),
-            rank_score: None,
             aggregate_metrics: vec![],
             run_metrics: vec![],
             public_results: vec![],
@@ -648,13 +678,12 @@ mod tests {
             .complete_metric_result(&MetricSchemaSpec::default(), ScoringMode::Validation)
             .unwrap();
 
-        assert_eq!(result.rank_score, None);
         assert!(result.aggregate_metrics.is_empty());
     }
 
-    /// Verifies that missing rank score derives from minimized primary metric.
+    /// Verifies minimized primary metrics rank smaller values first.
     #[test]
-    fn missing_rank_score_derives_from_minimized_primary_metric() {
+    fn minimized_primary_metric_ranks_smaller_values_first() {
         let schema = MetricSchemaSpec {
             metrics: vec![MetricDefinitionSpec {
                 name: metric_name("latency_ms"),
@@ -669,17 +698,107 @@ mod tests {
                 tie_breaker_metric_names: vec![],
             },
         };
-        let mut result = valid_validation_result();
-        result.aggregate_metrics = vec![MetricValue {
+        let faster = vec![MetricValue {
+            metric_name: metric_name("latency_ms"),
+            value: 7.0,
+        }];
+        let slower = vec![MetricValue {
             metric_name: metric_name("latency_ms"),
             value: 42.0,
         }];
 
-        result
-            .complete_metric_result(&schema, ScoringMode::Validation)
-            .unwrap();
+        assert_eq!(
+            super::compare_metric_payloads_by_ranking(&schema, &faster, &slower),
+            std::cmp::Ordering::Less
+        );
+    }
 
-        assert_eq!(result.rank_score, Some(-42.0));
+    /// Verifies maximized primary metrics rank larger values first.
+    #[test]
+    fn maximized_primary_metric_ranks_larger_values_first() {
+        let schema = MetricSchemaSpec::default();
+        let better = vec![MetricValue {
+            metric_name: metric_name("score"),
+            value: 42.0,
+        }];
+        let worse = vec![MetricValue {
+            metric_name: metric_name("score"),
+            value: 7.0,
+        }];
+
+        assert_eq!(
+            super::compare_metric_payloads_by_ranking(&schema, &better, &worse),
+            std::cmp::Ordering::Less
+        );
+    }
+
+    /// Verifies declared tie-breakers are applied after equal primary metrics.
+    #[test]
+    fn ranking_uses_declared_tie_breakers() {
+        let schema = MetricSchemaSpec {
+            metrics: vec![
+                MetricDefinitionSpec {
+                    name: metric_name("score"),
+                    label: "Score".to_string(),
+                    unit: None,
+                    direction: MetricDirection::Maximize,
+                    visibility: MetricVisibility::Public,
+                    metric_description: None,
+                },
+                MetricDefinitionSpec {
+                    name: metric_name("passed_cases"),
+                    label: "Passed Cases".to_string(),
+                    unit: Some("cases".to_string()),
+                    direction: MetricDirection::Maximize,
+                    visibility: MetricVisibility::Public,
+                    metric_description: None,
+                },
+            ],
+            ranking: RankingSpec {
+                primary_metric_name: metric_name("score"),
+                tie_breaker_metric_names: vec![metric_name("passed_cases")],
+            },
+        };
+        let better = vec![
+            MetricValue {
+                metric_name: metric_name("score"),
+                value: 1.0,
+            },
+            MetricValue {
+                metric_name: metric_name("passed_cases"),
+                value: 3.0,
+            },
+        ];
+        let worse = vec![
+            MetricValue {
+                metric_name: metric_name("score"),
+                value: 1.0,
+            },
+            MetricValue {
+                metric_name: metric_name("passed_cases"),
+                value: 1.0,
+            },
+        ];
+
+        assert_eq!(
+            super::compare_metric_payloads_by_ranking(&schema, &better, &worse),
+            std::cmp::Ordering::Less
+        );
+    }
+
+    /// Verifies evaluator outputs cannot keep the removed rank_score field.
+    #[test]
+    fn evaluator_result_rejects_rank_score_field() {
+        let raw = serde_json::json!({
+            "status": "passed",
+            "mode": "validation",
+            "rank_score": 1.0,
+            "validation_summary": { "score": 1.0, "passed": 1, "total": 1 }
+        });
+
+        let error = serde_json::from_value::<EvaluatorRunResult>(raw)
+            .expect_err("rank_score should be rejected as an unknown field");
+        assert!(error.to_string().contains("rank_score"));
     }
 
     /// Verifies that unknown aggregate metric is rejected.

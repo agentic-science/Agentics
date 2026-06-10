@@ -323,7 +323,6 @@ async fn submissions_status_fetches_validation_run_id() {
                 "target": "linux-arm64-cpu",
                 "status": "completed",
                 "eval_type": "validation",
-                "rank_score": 1.0,
                 "aggregate_metrics": [],
                 "run_metrics": [],
                 "public_results": []
@@ -333,7 +332,6 @@ async fn submissions_status_fetches_validation_run_id() {
                 "target": "linux-arm64-cpu",
                 "status": "completed",
                 "eval_type": "validation",
-                "rank_score": 1.0,
                 "aggregate_metrics": [],
                 "run_metrics": [],
                 "public_results": []
@@ -578,9 +576,9 @@ async fn submissions_report_uses_public_result_report_without_token() {
     assert!(output.contains("logs: configure the submitter token"));
 }
 
-/// Verifies reports use validation rank score when no official evaluation exists.
+/// Verifies reports use validation primary metrics when no official evaluation exists.
 #[tokio::test]
-async fn submissions_report_uses_validation_rank_score_without_official_eval() {
+async fn submissions_report_uses_validation_primary_metric_without_official_eval() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path(
@@ -639,7 +637,7 @@ async fn submissions_report_uses_validation_rank_score_without_official_eval() {
 
     assert!(output.contains("validation_primary_metric: score=0.75"));
     assert!(output.contains("official_primary_metric: none"));
-    assert!(output.contains("rank_score: 0.75"));
+    assert!(!output.contains("rank_score"));
 }
 
 /// Verifies that reports still render when ranking context is hidden.

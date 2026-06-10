@@ -340,7 +340,6 @@ mod tests {
             target: target_name(),
             status: EvaluationStatus::Completed,
             eval_type,
-            rank_score: Some(1.0),
             aggregate_metrics: Vec::new(),
             run_metrics: Vec::new(),
             public_results: Vec::new(),

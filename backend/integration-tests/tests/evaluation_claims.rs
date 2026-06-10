@@ -589,9 +589,9 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
             .expect("late stale finish should be ignored")
     );
 
-    let final_state: (String, String, String, bool, String, Option<f64>) = sqlx::query_as(
+    let final_state: (String, String, String, bool, String) = sqlx::query_as(
         r#"
-        SELECT j.status, j.worker_id, s.status, s.visible_after_eval, e.status, e.rank_score
+        SELECT j.status, j.worker_id, s.status, s.visible_after_eval, e.status
         FROM evaluation_jobs j
         JOIN solution_submissions s ON s.id = j.solution_submission_id
         JOIN evaluations e ON e.job_id = j.id
@@ -610,7 +610,6 @@ async fn stale_worker_completion_cannot_overwrite_current_claim(pool: sqlx::PgPo
             "completed".to_string(),
             true,
             "completed".to_string(),
-            Some(1.0),
         )
     );
 }
@@ -644,9 +643,9 @@ async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata
         create_official_submission(&pool, &client, &app, token, "loser").await;
     finish_next_job_with_score(&pool, &losing_submission_id, "worker-loser", 0.25).await;
 
-    let row: (String, f64, serde_json::Value) = sqlx::query_as(
+    let row: (String, serde_json::Value) = sqlx::query_as(
         r#"
-        SELECT best_solution_submission_id::text AS best_solution_submission_id, best_rank_score, official_metrics_json
+        SELECT best_solution_submission_id::text AS best_solution_submission_id, official_metrics_json
         FROM leaderboard_entries
         WHERE challenge_name = $2
           AND target = 'linux-arm64-cpu'
@@ -664,9 +663,8 @@ async fn losing_official_submission_does_not_overwrite_leaderboard_best_metadata
     .expect("failed to query leaderboard entry");
 
     assert_eq!(row.0, winning_submission_id.as_str());
-    assert_eq!(row.1, 1.0);
     assert_eq!(
-        row.2,
+        row.1,
         serde_json::json!([{ "metric_name": "score", "value": 1.0 }])
     );
 }
@@ -722,9 +720,9 @@ async fn concurrent_official_completions_keep_best_leaderboard_result(pool: sqlx
     assert!(winning_finished.expect("winner should finish"));
     assert!(losing_finished.expect("loser should finish"));
 
-    let row: (String, f64) = sqlx::query_as(
+    let row: (String, serde_json::Value) = sqlx::query_as(
         r#"
-        SELECT best_solution_submission_id::text AS best_solution_submission_id, best_rank_score
+        SELECT best_solution_submission_id::text AS best_solution_submission_id, official_metrics_json
         FROM leaderboard_entries
         WHERE challenge_name = $2
           AND target = 'linux-arm64-cpu'
@@ -741,7 +739,10 @@ async fn concurrent_official_completions_keep_best_leaderboard_result(pool: sqlx
     .await
     .expect("failed to query leaderboard entry");
     assert_eq!(row.0, winning_submission_id.as_str());
-    assert_eq!(row.1, 1.0);
+    assert_eq!(
+        row.1,
+        serde_json::json!([{ "metric_name": "score", "value": 1.0 }])
+    );
 }
 
 /// Verifies stale visible official reruns do not erase the previous public result.
@@ -902,9 +903,9 @@ async fn assert_visible_submission_and_leaderboard(
     .expect("failed to query visible submission");
     assert_eq!(submission, ("completed".to_string(), true));
 
-    let leaderboard: (String, f64) = sqlx::query_as(
+    let leaderboard: (String, serde_json::Value) = sqlx::query_as(
         r#"
-        SELECT best_solution_submission_id::text AS best_solution_submission_id, best_rank_score
+        SELECT best_solution_submission_id::text AS best_solution_submission_id, official_metrics_json
         FROM leaderboard_entries
         WHERE best_solution_submission_id = $1::uuid
         "#,
@@ -914,7 +915,10 @@ async fn assert_visible_submission_and_leaderboard(
     .await
     .expect("failed to query leaderboard");
     assert_eq!(leaderboard.0, solution_submission_id.as_str());
-    assert_eq!(leaderboard.1, expected_score);
+    assert_eq!(
+        leaderboard.1,
+        serde_json::json!([{ "metric_name": "score", "value": expected_score }])
+    );
 }
 
 /// Handles finish next job with score for this module.
@@ -989,7 +993,6 @@ fn persisted_result(
         target: job.target.clone(),
         eval_type: ScoringMode::Official,
         status,
-        rank_score: score,
         aggregate_metrics: score
             .map(|value| {
                 vec![MetricValue {

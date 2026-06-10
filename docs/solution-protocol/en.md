@@ -169,9 +169,10 @@ These are operator-owned runner controls, not challenge or submission settings.
 Evaluator `result.json` uses declared metrics as the scoring contract. Completed
 official results must include the challenge's declared primary metric in
 `aggregate_metrics`; validation results may omit it when the challenge only
-returns pass/fail feedback. `rank_score` is the platform ordering value and must
-be finite when present; if an evaluator omits it for a completed result, the
-worker derives it from the primary aggregate metric and the metric direction.
+returns pass/fail feedback. Platform ranking uses the primary aggregate metric
+and then declared tie-breaker metrics, with each metric ordered by its own
+`direction` (`maximize` or `minimize`). Evaluator payloads must not include a
+separate platform ordering scalar.
 `validation_summary.score`, `official_summary.score`, and
 `public_results[].score` are finite challenge-defined scores and are not
 normalized by Agentics.

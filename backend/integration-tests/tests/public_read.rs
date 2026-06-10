@@ -79,7 +79,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
 
     run_worker_once(&pool, &config).await;
     assert_runner_persisted_only_intended_artifacts(&config, &first_job_id).await;
-    set_official_primary_metric_for_submission(&pool, pending_id, 42.0, 1.0, 1).await;
+    set_official_primary_metric_for_submission(&pool, pending_id, 42.0, 1).await;
 
     let second_response: serde_json::Value = client
         .post(api_url(&app, "/api/agent/solution-submissions"))
@@ -123,10 +123,13 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         public_solution_submission["evaluation"]["eval_type"],
         "official"
     );
-    assert_eq!(public_solution_submission["evaluation"]["rank_score"], 1.0);
+    assert_eq!(
+        public_solution_submission["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 42.0 })
+    );
 
-    insert_validation_evaluation_for_submission(&pool, pending_id, 0.25).await;
-    insert_running_official_evaluation_for_submission(&pool, pending_id, 999.0).await;
+    insert_validation_evaluation_for_submission(&pool, pending_id).await;
+    insert_running_official_evaluation_for_submission(&pool, pending_id).await;
 
     let public_solution_submission_after_rejudge: serde_json::Value = client
         .get(api_url(
@@ -140,7 +143,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .await
         .expect("failed to decode public solution submission during rejudge");
     assert_eq!(
-        public_solution_submission_after_rejudge["evaluation"]["rank_score"], 1.0,
+        public_solution_submission_after_rejudge["evaluation"]["eval_type"], "official",
         "public detail must keep the latest completed official result during a running rejudge"
     );
 
@@ -160,13 +163,9 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         "result reports must prefer official evaluations over validation evaluations"
     );
     assert_eq!(
-        public_result_report["solution_submission"]["evaluation"]["rank_score"],
-        1.0
-    );
-    assert_eq!(
         public_result_report["solution_submission"]["official_primary_metric"],
         serde_json::json!({ "metric_name": "score", "value": 42.0 }),
-        "official primary metric should preserve the primary metric value separately from rank_score"
+        "official primary metric should preserve the primary metric value from official metrics"
     );
     assert_eq!(
         public_result_report["solution_submission"]["note"],
@@ -214,7 +213,6 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         serde_json::json!({ "metric_name": "score", "value": 42.0 })
     );
     assert_eq!(listed_first["note"], "sample-sum smoke solution");
-    assert_eq!(listed_first["rank_score"], 1.0);
     assert!(listed_first.get("aggregate_metrics").is_none());
     assert!(listed_first.get("official_metrics").is_none());
 
@@ -339,7 +337,10 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     let leaderboard_items = leaderboard["items"].as_array().expect("items is array");
     assert_eq!(leaderboard_items.len(), 2);
     assert_eq!(leaderboard_items[0]["agent_display_name"], "leader-a");
-    assert_eq!(leaderboard_items[0]["best_rank_score"], 1.0);
+    assert_eq!(
+        leaderboard_items[0]["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 42.0 })
+    );
     assert!(
         leaderboard_items[0].get("aggregate_metrics").is_none(),
         "public leaderboard rows must not carry raw aggregate metric arrays"
@@ -349,9 +350,12 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         "public leaderboard rows must not carry raw official metric arrays"
     );
     assert_eq!(leaderboard_items[1]["agent_display_name"], "leader-b");
-    assert_eq!(leaderboard_items[1]["best_rank_score"], 0.0);
+    assert_eq!(
+        leaderboard_items[1]["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 0.0 })
+    );
 
-    set_official_primary_metric_for_submission(&pool, second_id, 7.0, 1.0, 3).await;
+    set_official_primary_metric_for_submission(&pool, second_id, 42.0, 3).await;
     let tie_break_leaderboard: serde_json::Value = client
         .get(api_url(
             &app,
@@ -367,7 +371,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .expect("failed to decode tie-break leaderboard");
     assert_eq!(
         tie_break_leaderboard["items"][0]["agent_display_name"], "leader-b",
-        "bounded SQL ordering must apply declared numeric tie-breakers before limit"
+        "bounded leaderboard ordering must apply declared numeric tie-breakers before limit"
     );
 
     let limited_leaderboard: serde_json::Value = client
@@ -406,7 +410,7 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(distribution["target"], "linux-arm64-cpu");
     assert_eq!(distribution["metric_name"], "score");
     assert_eq!(distribution["count"], 2);
-    assert_eq!(distribution["min"], 7.0);
+    assert_eq!(distribution["min"], 42.0);
     assert_eq!(distribution["max"], 42.0);
 
     let hidden_distribution = client
@@ -472,21 +476,19 @@ fn runner_temp_workspace_exists(job_id: &str) -> bool {
     })
 }
 
-/// Adjusts official metric fields so public surfaces must distinguish primary metric and rank score.
+/// Adjusts official metric fields so public surfaces use declared primary metrics.
 async fn set_official_primary_metric_for_submission(
     pool: &sqlx::PgPool,
     solution_submission_id: &str,
     primary_metric_value: f64,
-    rank_score: f64,
     passed_cases: i64,
 ) {
     sqlx::query(
         r#"
         UPDATE evaluations
-        SET rank_score = $2,
-            aggregate_metrics_json = jsonb_build_array(
-                jsonb_build_object('metric_name', 'score', 'value', $3),
-                jsonb_build_object('metric_name', 'passed_cases', 'value', $4),
+        SET aggregate_metrics_json = jsonb_build_array(
+                jsonb_build_object('metric_name', 'score', 'value', $2),
+                jsonb_build_object('metric_name', 'passed_cases', 'value', $3),
                 jsonb_build_object('metric_name', 'private_metric', 'value', 999)
             )
         WHERE solution_submission_id = $1::uuid
@@ -494,7 +496,6 @@ async fn set_official_primary_metric_for_submission(
         "#,
     )
     .bind(solution_submission_id)
-    .bind(rank_score)
     .bind(primary_metric_value)
     .bind(passed_cases)
     .execute(pool)
@@ -503,21 +504,19 @@ async fn set_official_primary_metric_for_submission(
     sqlx::query(
         r#"
         UPDATE leaderboard_entries
-        SET best_rank_score = $2,
-            aggregate_metrics_json = jsonb_build_array(
-                jsonb_build_object('metric_name', 'score', 'value', $3),
-                jsonb_build_object('metric_name', 'passed_cases', 'value', $4),
+        SET aggregate_metrics_json = jsonb_build_array(
+                jsonb_build_object('metric_name', 'score', 'value', $2),
+                jsonb_build_object('metric_name', 'passed_cases', 'value', $3),
                 jsonb_build_object('metric_name', 'private_metric', 'value', 999)
             ),
             official_metrics_json = jsonb_build_array(
-                jsonb_build_object('metric_name', 'score', 'value', $3),
+                jsonb_build_object('metric_name', 'score', 'value', $2),
                 jsonb_build_object('metric_name', 'private_metric', 'value', 999)
             )
         WHERE best_solution_submission_id = $1::uuid
         "#,
     )
     .bind(solution_submission_id)
-    .bind(rank_score)
     .bind(primary_metric_value)
     .bind(passed_cases)
     .execute(pool)
@@ -658,7 +657,6 @@ async fn seeded_challenge_summaries_are_public(pool: sqlx::PgPool) {
 async fn insert_running_official_evaluation_for_submission(
     pool: &sqlx::PgPool,
     solution_submission_id: &str,
-    rank_score: f64,
 ) {
     let job_id = uuid::Uuid::new_v4().to_string();
     let evaluation_id = uuid::Uuid::new_v4().to_string();
@@ -712,7 +710,6 @@ async fn insert_running_official_evaluation_for_submission(
             target,
             eval_type,
             status,
-            rank_score,
             aggregate_metrics_json,
             official_summary_json,
             started_at
@@ -724,7 +721,6 @@ async fn insert_running_official_evaluation_for_submission(
             'linux-arm64-cpu',
             'official',
             'running',
-            $4,
             '[{"metric_name":"score","value":999.0}]'::jsonb,
             '{"score":999.0,"passed":999,"total":999}'::jsonb,
             NOW()
@@ -734,7 +730,6 @@ async fn insert_running_official_evaluation_for_submission(
     .bind(&evaluation_id)
     .bind(solution_submission_id)
     .bind(&job_id)
-    .bind(rank_score)
     .execute(pool)
     .await
     .expect("running official evaluation should insert");
@@ -744,7 +739,6 @@ async fn insert_running_official_evaluation_for_submission(
 async fn insert_validation_evaluation_for_submission(
     pool: &sqlx::PgPool,
     solution_submission_id: &str,
-    rank_score: f64,
 ) {
     let job_id = uuid::Uuid::new_v4().to_string();
     let evaluation_id = uuid::Uuid::new_v4().to_string();
@@ -794,7 +788,6 @@ async fn insert_validation_evaluation_for_submission(
             target,
             eval_type,
             status,
-            rank_score,
             aggregate_metrics_json,
             validation_summary_json,
             finished_at
@@ -806,7 +799,6 @@ async fn insert_validation_evaluation_for_submission(
             'linux-arm64-cpu',
             'validation',
             'completed',
-            $4,
             '[{"metric_name":"score","value":0.25}]'::jsonb,
             '{"score":0.25,"passed":1,"total":4}'::jsonb,
             NOW()
@@ -816,7 +808,6 @@ async fn insert_validation_evaluation_for_submission(
     .bind(&evaluation_id)
     .bind(solution_submission_id)
     .bind(&job_id)
-    .bind(rank_score)
     .execute(pool)
     .await
     .expect("validation evaluation should insert");

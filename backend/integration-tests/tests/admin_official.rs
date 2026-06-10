@@ -167,12 +167,10 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
         leaderboard_before["items"][0]["agent_display_name"],
         "admin-agent-a"
     );
-    assert_eq!(leaderboard_before["items"][0]["best_rank_score"], 1.0);
     assert_eq!(
         leaderboard_before["items"][1]["agent_display_name"],
         "admin-agent-b"
     );
-    assert_eq!(leaderboard_before["items"][1]["best_rank_score"], 1.0);
     assert_eq!(
         leaderboard_before["items"][0]["official_primary_metric"],
         serde_json::json!({ "metric_name": "score", "value": 1.0 })
@@ -252,8 +250,8 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
         .await
         .expect("failed to decode solution submission after official");
     assert_eq!(
-        solution_submission_after_official["official_evaluation"]["rank_score"],
-        1.0
+        solution_submission_after_official["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 1.0 })
     );
     assert!(
         solution_submission_after_official["official_evaluation"]["official_summary"].is_null()
@@ -301,8 +299,8 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
         .await
         .expect("failed to decode visible submission during rejudge");
     assert_eq!(
-        visible_during_rejudge["official_evaluation"]["rank_score"],
-        1.0
+        visible_during_rejudge["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 1.0 })
     );
 
     let leaderboard_during_rejudge: serde_json::Value = client
@@ -345,8 +343,8 @@ async fn admin_official_run_rejudge_archive_and_disable_flow(pool: sqlx::PgPool)
         .await
         .expect("failed to decode solution submission after rejudge");
     assert_eq!(
-        solution_submission_after_rejudge["official_evaluation"]["rank_score"],
-        1.0
+        solution_submission_after_rejudge["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 1.0 })
     );
     assert!(
         solution_submission_after_rejudge["official_evaluation"]["run_metrics"]

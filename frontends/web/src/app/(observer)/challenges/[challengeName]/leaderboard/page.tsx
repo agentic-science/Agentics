@@ -174,7 +174,6 @@ export default async function LeaderboardPage({
                     </span>
                   ) : null}
                 </th>
-                <th>{t("leaderboard.rankScore")}</th>
                 <th className="hidden md:table-cell">
                   {t("leaderboard.updatedAt")}
                 </th>
@@ -196,7 +195,6 @@ export default async function LeaderboardPage({
                     <td className="font-mono text-[var(--accent-primary-text)]">
                       {formatDeclaredMetric(metricSchema, primary)}
                     </td>
-                    <td className="font-mono">{entry.rank_score.toFixed(4)}</td>
                     <td className="hidden md:table-cell text-[var(--text-muted)] text-caption">
                       {formatDate(entry.updated_at, locale)}
                     </td>

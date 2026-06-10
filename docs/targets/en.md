@@ -234,11 +234,11 @@ when their result basis is truncated by the platform row cap. Clients should
 display or preserve those warnings instead of treating truncated counts,
 percentiles, quantiles, or histograms as complete-population statistics.
 
-Score distributions may expose built-in ranking fields such as `rank_score`
-and `best_rank_score`. A challenge's primary metric is public in score
-distributions only when that metric is declared with `visibility: "public"` in
-the metric schema. Official-only primary metrics stay redacted from public
-distributions even when the leaderboard itself is public. Public solution and
-leaderboard DTOs expose the completed official primary metric as
+Score distributions expose declared challenge metrics only when those metrics
+are allowed by visibility policy. A challenge's primary metric is public in
+score distributions only when that metric is declared with `visibility:
+"public"` in the metric schema. Official-only primary metrics stay redacted
+from public distributions even when the leaderboard itself is public. Public
+solution and leaderboard DTOs expose the completed official primary metric as
 `official_primary_metric: { metric_name, value }` instead of an anonymous score,
 so clients can label the value as `<metric label> (Primary)`.

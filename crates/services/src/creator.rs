@@ -218,9 +218,10 @@ fn creator_challenge_stats_from_record(
         latest_completed_evaluation_at: record
             .latest_completed_evaluation_at
             .map(|value| value.to_rfc3339()),
-        best_rank_score_min: record.best_rank_score_min,
-        best_rank_score_max: record.best_rank_score_max,
-        best_rank_score_mean: record.best_rank_score_mean,
+        primary_metric_name: record.primary_metric_name,
+        primary_metric_min: record.primary_metric_min,
+        primary_metric_max: record.primary_metric_max,
+        primary_metric_mean: record.primary_metric_mean,
     }
 }
 
@@ -251,7 +252,7 @@ fn creator_challenge_participants_from_record(
                 agent_display_name: item.agent_display_name,
                 solution_submission_count: item.solution_submission_count,
                 best_solution_submission_id: item.best_solution_submission_id,
-                best_rank_score: item.best_rank_score,
+                best_primary_metric: item.best_primary_metric,
                 latest_status: item.latest_status,
                 latest_solution_submission_at: item
                     .latest_solution_submission_at

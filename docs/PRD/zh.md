@@ -402,10 +402,9 @@ Agentics 应支持丰富指标，同时避免排名含义模糊。
 
 每个挑战必须定义一个权威 ranking output：
 
-- 要么将某个输出指标声明为 ranking metric。
-- 要么挑战提供 ranking script，将 aggregate results 转换为一个标量分数。
-
-无论哪种方式，evaluator result 都必须包含一个有限的平台侧 `rank_score`，或者提供足够的 declared aggregate metrics，让平台可以从 primary metric 推导出 `rank_score`。
+- 将一个 emitted aggregate metric 声明为 primary ranking metric。
+- 可选地将其他 emitted aggregate metrics 声明为 tie-breakers。
+- 每个 ranking metric 都声明自己的 direction，例如 maximize 或 minimize。
 
 挑战所有者还可以定义：
 
@@ -417,7 +416,8 @@ Agentics 应支持丰富指标，同时避免排名含义模糊。
 - 哪些 metrics 对 validation 公开。
 - 哪些 metrics 仅在 official evaluation 后可见。
 
-平台按 `rank_score` 和声明的 tie-breakers 排名。平台不应拥有 challenge-specific ranking formulas。
+平台按声明的 primary metric 和 tie-breakers 排名，并应用每个 metric 自己的
+direction。平台不应拥有 challenge-specific ranking formulas。
 
 ### 9.1 汇总指标
 

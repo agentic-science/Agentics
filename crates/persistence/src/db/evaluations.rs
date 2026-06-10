@@ -71,7 +71,6 @@ pub struct PersistedEvaluationResult {
     pub target: TargetName,
     pub eval_type: ScoringMode,
     pub status: EvaluationStatus,
-    pub rank_score: Option<f64>,
     pub aggregate_metrics: Vec<MetricValue>,
     pub run_metrics: Vec<RunMetricResult>,
     pub public_results: Vec<PublicCaseResult>,
@@ -130,17 +129,16 @@ pub async fn mark_evaluation_finished(
     let evaluation_update = sqlx::query(
         r#"
         UPDATE evaluations
-        SET status = $2, rank_score = $3,
-            aggregate_metrics_json = $4, run_metrics_json = $5,
-            public_results_json = $6, validation_summary_json = $7,
-            official_summary_json = $8, runner_log_storage_key = $9, finished_at = NOW()
+        SET status = $2,
+            aggregate_metrics_json = $3, run_metrics_json = $4,
+            public_results_json = $5, validation_summary_json = $6,
+            official_summary_json = $7, runner_log_storage_key = $8, finished_at = NOW()
         WHERE job_id = $1::uuid
           AND status = 'running'
         "#,
     )
     .bind(result.job_id.as_str())
     .bind(status_str)
-    .bind(result.rank_score)
     .bind(&aggregate_metrics_json)
     .bind(&run_metrics_json)
     .bind(&public_results_json)
@@ -198,14 +196,11 @@ pub async fn mark_evaluation_finished(
             .execute(&mut *tx)
             .await?;
 
-            if result.status == EvaluationStatus::Completed
-                && let Some(rank_score) = result.rank_score
-            {
+            if result.status == EvaluationStatus::Completed {
                 let became_best = upsert_leaderboard_entry_for_solution_submission_tx(
                     &mut tx,
                     &result.solution_submission_id,
                     &result.target,
-                    rank_score,
                     &result.public_results,
                     &result.aggregate_metrics,
                 )

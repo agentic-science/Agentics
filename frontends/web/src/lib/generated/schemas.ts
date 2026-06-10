@@ -774,7 +774,6 @@ export const adminSolutionSubmissionListResponseSchema = z
               "Persistent lifecycle state for an evaluation job/result.",
             )
             .optional(),
-          rank_score: z.number().optional(),
           created_at: z.string(),
           updated_at: z.string(),
         })
@@ -2615,7 +2614,17 @@ export const creatorChallengeParticipantsResponseSchema = z
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             )
             .optional(),
-          best_rank_score: z.number().optional(),
+          best_primary_metric: z
+            .object({
+              metric_name: z
+                .string()
+                .regex(/^[A-Za-z0-9_.-]+$/)
+                .min(1),
+              value: z.number(),
+            })
+            .strict()
+            .describe("Numeric value for one declared metric.")
+            .optional(),
           latest_status: z
             .enum(["pending", "queued", "running", "completed", "failed"])
             .describe("Persistent lifecycle state for a solution submission.")
@@ -2907,9 +2916,13 @@ export const creatorChallengeStatsResponseSchema = z
     official_run_count: z.number().int(),
     latest_solution_submission_at: z.string().optional(),
     latest_completed_evaluation_at: z.string().optional(),
-    best_rank_score_min: z.number().optional(),
-    best_rank_score_max: z.number().optional(),
-    best_rank_score_mean: z.number().optional(),
+    primary_metric_name: z
+      .string()
+      .regex(/^[A-Za-z0-9_.-]+$/)
+      .min(1),
+    primary_metric_min: z.number().optional(),
+    primary_metric_max: z.number().optional(),
+    primary_metric_mean: z.number().optional(),
   })
   .strict()
   .describe(
@@ -3145,8 +3158,6 @@ export const leaderboardResponseSchema = z
             .regex(
               /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
             ),
-          best_rank_score: z.number(),
-          rank_score: z.number(),
           official_primary_metric: z
             .object({
               metric_name: z
@@ -3303,7 +3314,6 @@ export const publicSolutionSubmissionListResponseSchema = z
             )
             .optional(),
           credit_text: z.string(),
-          rank_score: z.number().optional(),
           official_primary_metric: z
             .object({
               metric_name: z
@@ -3400,8 +3410,6 @@ export const rankingContextResponseSchema = z
           .regex(
             /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
           ),
-        best_rank_score: z.number(),
-        rank_score: z.number(),
         official_primary_metric: z
           .object({
             metric_name: z
@@ -3441,8 +3449,6 @@ export const rankingContextResponseSchema = z
                 .regex(
                   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
                 ),
-              best_rank_score: z.number(),
-              rank_score: z.number(),
               official_primary_metric: z
                 .object({
                   metric_name: z
@@ -3864,7 +3870,6 @@ export const solutionSubmissionResponseSchema = z
             }
           })
           .describe("Evaluation surface requested for a solution submission."),
-        rank_score: z.number().optional(),
         aggregate_metrics: z.array(
           z
             .object({
@@ -4047,7 +4052,6 @@ export const solutionSubmissionResponseSchema = z
             }
           })
           .describe("Evaluation surface requested for a solution submission."),
-        rank_score: z.number().optional(),
         aggregate_metrics: z.array(
           z
             .object({
@@ -4230,7 +4234,6 @@ export const solutionSubmissionResponseSchema = z
             }
           })
           .describe("Evaluation surface requested for a solution submission."),
-        rank_score: z.number().optional(),
         aggregate_metrics: z.array(
           z
             .object({
@@ -4504,7 +4507,6 @@ export const solutionSubmissionResultReportResponseSchema = z
               .describe(
                 "Evaluation surface requested for a solution submission.",
               ),
-            rank_score: z.number().optional(),
             aggregate_metrics: z.array(
               z
                 .object({
@@ -4692,7 +4694,6 @@ export const solutionSubmissionResultReportResponseSchema = z
               .describe(
                 "Evaluation surface requested for a solution submission.",
               ),
-            rank_score: z.number().optional(),
             aggregate_metrics: z.array(
               z
                 .object({
@@ -4880,7 +4881,6 @@ export const solutionSubmissionResultReportResponseSchema = z
               .describe(
                 "Evaluation surface requested for a solution submission.",
               ),
-            rank_score: z.number().optional(),
             aggregate_metrics: z.array(
               z
                 .object({
