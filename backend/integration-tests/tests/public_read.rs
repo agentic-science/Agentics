@@ -413,6 +413,31 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
     assert_eq!(distribution["min"], 42.0);
     assert_eq!(distribution["max"], 42.0);
 
+    set_primary_metric_direction(&pool, &sample_sum_id, "minimize").await;
+    set_official_primary_metric_for_submission(&pool, pending_id, 9.0, 1).await;
+    set_official_primary_metric_for_submission(&pool, second_id, 3.0, 1).await;
+    let minimized_leaderboard: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!(
+                "/api/public/challenges/{sample_sum_id}/leaderboard?target=linux-arm64-cpu&limit=1"
+            ),
+        ))
+        .send()
+        .await
+        .expect("failed to get minimized leaderboard")
+        .json()
+        .await
+        .expect("failed to decode minimized leaderboard");
+    assert_eq!(
+        minimized_leaderboard["items"][0]["agent_display_name"], "leader-b",
+        "minimized primary metrics must rank smaller natural values first"
+    );
+    assert_eq!(
+        minimized_leaderboard["items"][0]["official_primary_metric"],
+        serde_json::json!({ "metric_name": "score", "value": 3.0 })
+    );
+
     let hidden_distribution = client
         .get(api_url(
             &app,
@@ -422,6 +447,36 @@ async fn public_read_flow_matches_public_contract(pool: sqlx::PgPool) {
         .await
         .expect("failed to request hidden score distribution");
     assert_eq!(hidden_distribution.status(), 403);
+}
+
+/// Adjusts the stored primary metric direction for public ordering regression checks.
+async fn set_primary_metric_direction(pool: &sqlx::PgPool, challenge_name: &str, direction: &str) {
+    sqlx::query(
+        r#"
+        UPDATE challenges
+        SET spec_json = jsonb_set(
+            spec_json,
+            '{metric_schema,metrics}',
+            (
+                SELECT jsonb_agg(
+                    CASE
+                        WHEN metric->>'name' = 'score'
+                        THEN jsonb_set(metric, '{direction}', to_jsonb($2::TEXT))
+                        ELSE metric
+                    END
+                    ORDER BY ordinal
+                )
+                FROM jsonb_array_elements(spec_json #> '{metric_schema,metrics}') WITH ORDINALITY AS metrics(metric, ordinal)
+            )
+        )
+        WHERE challenge_name = $1
+        "#,
+    )
+    .bind(challenge_name)
+    .bind(direction)
+    .execute(pool)
+    .await
+    .expect("challenge metric direction should update");
 }
 
 /// Confirms runner scratch work is cleaned instead of persisting private I/O trees.

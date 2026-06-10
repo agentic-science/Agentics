@@ -1,6 +1,10 @@
+use std::cmp::Ordering;
+
+use serde_json::Value;
 use sqlx::{PgPool, Row};
 
-use agentics_domain::models::evaluation::MetricValue;
+use agentics_domain::models::challenge::ChallengeBundleSpec;
+use agentics_domain::models::evaluation::{MetricValue, compare_metric_payloads_by_ranking};
 use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
 use agentics_error::{Result, ServiceError};
 
@@ -11,6 +15,7 @@ use super::records::{
     CreatorChallengeStatsRecord,
 };
 use crate::db::ids::{agent_id_from_row, optional_solution_submission_id_from_row};
+use crate::db::json::decode_optional_json;
 
 /// Challenge-owner statistics for one challenge and optional target.
 pub async fn get_creator_challenge_stats(
@@ -140,23 +145,14 @@ pub async fn list_creator_challenge_participants(
     let challenge = get_public_challenge(pool, challenge_name)
         .await?
         .ok_or(ServiceError::NotFound)?;
+    let spec: ChallengeBundleSpec =
+        serde_json::from_value(challenge.spec_json.clone()).map_err(|error| {
+            ServiceError::Internal(format!("stored challenge spec is invalid: {error}"))
+        })?;
     let target_raw = target.map(TargetName::as_str);
     let rows = sqlx::query(
         r#"
-        WITH challenge_scope AS (
-            SELECT
-                challenge_name,
-                spec_json #>> '{metric_schema,ranking,primary_metric_name}' AS primary_metric_name,
-                (
-                    SELECT metric->>'direction'
-                    FROM jsonb_array_elements(spec_json #> '{metric_schema,metrics}') AS metric
-                    WHERE metric->>'name' = spec_json #>> '{metric_schema,ranking,primary_metric_name}'
-                    LIMIT 1
-                ) AS primary_metric_direction
-            FROM challenges
-            WHERE challenge_name = $1
-        ),
-        latest AS (
+        WITH latest AS (
             SELECT DISTINCT ON (s.agent_id)
                 s.agent_id, s.status AS latest_status, s.created_at AS latest_solution_submission_at
             FROM solution_submissions s
@@ -170,53 +166,25 @@ pub async fn list_creator_challenge_participants(
             WHERE s.challenge_name = $1
               AND ($2::TEXT IS NULL OR s.target = $2)
             GROUP BY s.agent_id
-        ),
-        best_candidates AS (
-            SELECT
-                le.agent_id,
-                le.best_solution_submission_id,
-                cs.primary_metric_name,
-                cs.primary_metric_direction,
-                pm.value AS best_primary_metric_value,
-                le.updated_at
-            FROM leaderboard_entries le
-            JOIN challenge_scope cs ON cs.challenge_name = le.challenge_name
-            LEFT JOIN LATERAL (
-                SELECT (metric->>'value')::DOUBLE PRECISION AS value
-                FROM jsonb_array_elements(COALESCE(le.official_metrics_json, '[]'::jsonb)) AS metric
-                WHERE metric->>'metric_name' = cs.primary_metric_name
-                LIMIT 1
-            ) pm ON TRUE
-            WHERE le.challenge_name = $1
-              AND ($2::TEXT IS NULL OR le.target = $2)
-        ),
-        best AS (
-            SELECT DISTINCT ON (le.agent_id)
-                le.agent_id,
-                le.best_solution_submission_id,
-                le.primary_metric_name,
-                le.best_primary_metric_value
-            FROM best_candidates le
-            ORDER BY
-                le.agent_id,
-                CASE WHEN le.primary_metric_direction = 'minimize' THEN le.best_primary_metric_value END ASC NULLS LAST,
-                CASE WHEN le.primary_metric_direction = 'maximize' THEN le.best_primary_metric_value END DESC NULLS LAST,
-                le.updated_at ASC
         )
         SELECT
             a.id::text AS agent_id,
             a.display_name AS agent_display_name,
             c.solution_submission_count,
-            b.best_solution_submission_id,
-            b.primary_metric_name,
-            b.best_primary_metric_value,
+            le.best_solution_submission_id,
+            le.aggregate_metrics_json,
+            le.official_metrics_json,
+            le.updated_at AS best_updated_at,
             l.latest_status,
             l.latest_solution_submission_at
         FROM counts c
         JOIN agents a ON a.id = c.agent_id
-        LEFT JOIN best b ON b.agent_id = c.agent_id
+        LEFT JOIN leaderboard_entries le
+          ON le.challenge_name = $1
+         AND le.agent_id = c.agent_id
+         AND ($2::TEXT IS NULL OR le.target = $2)
         LEFT JOIN latest l ON l.agent_id = c.agent_id
-        ORDER BY c.solution_submission_count DESC, a.display_name ASC
+        ORDER BY a.display_name ASC
         "#,
     )
     .bind(challenge_name.as_str())
@@ -224,39 +192,106 @@ pub async fn list_creator_challenge_participants(
     .fetch_all(pool)
     .await?;
 
-    let items = rows
-        .into_iter()
-        .map(|row| {
-            let primary_metric_name = row
-                .try_get::<Option<String>, _>("primary_metric_name")?
-                .map(MetricName::try_new)
-                .transpose()
-                .map_err(|error| {
-                    ServiceError::Internal(format!("stored invalid metric name: {error}"))
-                })?;
-            let primary_metric_value =
-                row.try_get::<Option<f64>, _>("best_primary_metric_value")?;
-            let best_primary_metric = primary_metric_name
-                .zip(primary_metric_value)
-                .map(|(metric_name, value)| MetricValue { metric_name, value });
-            Ok(CreatorChallengeParticipantRecord {
-                agent_id: agent_id_from_row(&row, "agent_id")?,
-                agent_display_name: row.try_get("agent_display_name")?,
-                solution_submission_count: row.try_get("solution_submission_count")?,
-                best_solution_submission_id: optional_solution_submission_id_from_row(
-                    &row,
-                    "best_solution_submission_id",
-                )?,
-                best_primary_metric,
-                latest_status: optional_solution_submission_status_from_row(&row, "latest_status")?,
-                latest_solution_submission_at: row.try_get("latest_solution_submission_at")?,
-            })
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let mut items = Vec::new();
+    for row in rows {
+        let agent_id = agent_id_from_row(&row, "agent_id")?;
+        let aggregate_metrics = decode_metric_payload(
+            &row,
+            "aggregate_metrics_json",
+            "participant aggregate metrics",
+        )?;
+        let official_metrics = decode_metric_payload(
+            &row,
+            "official_metrics_json",
+            "participant official metrics",
+        )?;
+        let candidate = CreatorChallengeParticipantRecord {
+            agent_id: agent_id.clone(),
+            agent_display_name: row.try_get("agent_display_name")?,
+            solution_submission_count: row.try_get("solution_submission_count")?,
+            best_solution_submission_id: optional_solution_submission_id_from_row(
+                &row,
+                "best_solution_submission_id",
+            )?,
+            best_primary_metric: MetricValue::find_by_name(
+                official_metrics.as_deref().unwrap_or_default(),
+                &spec.metric_schema.ranking.primary_metric_name,
+            ),
+            best_aggregate_metrics: aggregate_metrics,
+            best_updated_at: row.try_get("best_updated_at")?,
+            latest_status: optional_solution_submission_status_from_row(&row, "latest_status")?,
+            latest_solution_submission_at: row.try_get("latest_solution_submission_at")?,
+        };
+        upsert_participant_candidate(&mut items, candidate, &spec);
+    }
+    items.sort_by(|a, b| compare_creator_participants(&spec, a, b));
 
     Ok(CreatorChallengeParticipantsRecord {
         challenge_name: challenge.challenge_name,
         target: target.cloned(),
         items,
     })
+}
+
+fn decode_metric_payload(
+    row: &sqlx::postgres::PgRow,
+    column: &str,
+    label: &str,
+) -> Result<Option<Vec<MetricValue>>> {
+    decode_optional_json(row.try_get::<Option<Value>, _>(column)?, label)
+}
+
+fn upsert_participant_candidate(
+    items: &mut Vec<CreatorChallengeParticipantRecord>,
+    candidate: CreatorChallengeParticipantRecord,
+    spec: &ChallengeBundleSpec,
+) {
+    let Some(existing) = items
+        .iter_mut()
+        .find(|item| item.agent_id == candidate.agent_id)
+    else {
+        items.push(candidate);
+        return;
+    };
+
+    if compare_participant_best(spec, &candidate, existing) == Ordering::Less {
+        *existing = candidate;
+    }
+}
+
+fn compare_creator_participants(
+    spec: &ChallengeBundleSpec,
+    a: &CreatorChallengeParticipantRecord,
+    b: &CreatorChallengeParticipantRecord,
+) -> Ordering {
+    compare_participant_best(spec, a, b)
+        .then_with(|| {
+            b.solution_submission_count
+                .cmp(&a.solution_submission_count)
+        })
+        .then_with(|| a.agent_display_name.cmp(&b.agent_display_name))
+        .then_with(|| a.agent_id.cmp(&b.agent_id))
+}
+
+fn compare_participant_best(
+    spec: &ChallengeBundleSpec,
+    a: &CreatorChallengeParticipantRecord,
+    b: &CreatorChallengeParticipantRecord,
+) -> Ordering {
+    match (
+        a.best_aggregate_metrics.as_deref(),
+        b.best_aggregate_metrics.as_deref(),
+    ) {
+        (Some(a_metrics), Some(b_metrics)) => {
+            compare_metric_payloads_by_ranking(&spec.metric_schema, a_metrics, b_metrics)
+                .then_with(|| a.best_updated_at.cmp(&b.best_updated_at))
+                .then_with(|| {
+                    a.best_solution_submission_id
+                        .cmp(&b.best_solution_submission_id)
+                })
+        }
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => Ordering::Equal,
+    }
 }

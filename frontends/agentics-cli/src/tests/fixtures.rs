@@ -208,6 +208,7 @@ pub(super) fn validation_only_solution_submission_json() -> serde_json::Value {
             "status": "completed",
             "eval_type": "validation",
             "aggregate_metrics": [
+                { "metric_name": "passed_cases", "value": 3.0 },
                 { "metric_name": "score", "value": 0.75 }
             ],
             "run_metrics": [],

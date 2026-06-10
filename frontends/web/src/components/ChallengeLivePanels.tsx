@@ -4,7 +4,12 @@ import { BarChart3, GitCommit } from "lucide-react";
 import Link from "next/link";
 import { RankBadge } from "@/components/RankBadge";
 import { formatDate } from "@/lib/format";
-import { formatDeclaredMetric, type MetricSchema } from "@/lib/metrics";
+import {
+  formatDeclaredMetric,
+  type MetricSchema,
+  metricDefinition,
+  metricDirectionLabel,
+} from "@/lib/metrics";
 import {
   type LeaderboardResponse,
   leaderboardResponseSchema,
@@ -17,6 +22,7 @@ type ChallengeLivePanelLabels = {
   empty: string;
   hidden: string;
   latestSubmissions: string;
+  metricDirection: { maximize: string; minimize: string };
   topLeaderboard: string;
   viewAll: string;
 };
@@ -92,6 +98,13 @@ export function ChallengeLivePanels({
     });
   const submissions = submissionsData ?? initialSubmissions;
   const leaderboard = leaderboardData ?? initialLeaderboard;
+  const primaryDefinition = metricDefinition(
+    metricSchema,
+    metricSchema.ranking.primary_metric_name,
+  );
+  const primaryDirectionLabel = primaryDefinition
+    ? metricDirectionLabel(primaryDefinition.direction, labels.metricDirection)
+    : null;
 
   return (
     <>
@@ -141,11 +154,18 @@ export function ChallengeLivePanels({
                     {formatDate(submission.created_at, locale)}
                   </span>
                 </div>
-                <span className="text-body-sm font-mono text-[var(--accent-primary-text)]">
-                  {formatDeclaredMetric(
-                    metricSchema,
-                    submission.official_primary_metric,
-                  )}
+                <span className="flex flex-col items-end gap-0.5 text-right">
+                  <span className="text-body-sm font-mono text-[var(--accent-primary-text)]">
+                    {formatDeclaredMetric(
+                      metricSchema,
+                      submission.official_primary_metric,
+                    )}
+                  </span>
+                  {primaryDirectionLabel ? (
+                    <span className="text-caption text-[var(--text-muted)]">
+                      {primaryDirectionLabel}
+                    </span>
+                  ) : null}
                 </span>
               </Link>
             ))
@@ -199,11 +219,18 @@ export function ChallengeLivePanels({
                     {entry.agent_display_name}
                   </span>
                 </div>
-                <span className="text-body-sm font-mono text-[var(--accent-primary-text)]">
-                  {formatDeclaredMetric(
-                    metricSchema,
-                    entry.official_primary_metric,
-                  )}
+                <span className="flex flex-col items-end gap-0.5 text-right">
+                  <span className="text-body-sm font-mono text-[var(--accent-primary-text)]">
+                    {formatDeclaredMetric(
+                      metricSchema,
+                      entry.official_primary_metric,
+                    )}
+                  </span>
+                  {primaryDirectionLabel ? (
+                    <span className="text-caption text-[var(--text-muted)]">
+                      {primaryDirectionLabel}
+                    </span>
+                  ) : null}
                 </span>
               </div>
             ))

@@ -164,6 +164,8 @@ pub struct CreatorChallengeParticipantRecord {
     pub solution_submission_count: i64,
     pub best_solution_submission_id: Option<SolutionSubmissionId>,
     pub best_primary_metric: Option<MetricValue>,
+    pub best_aggregate_metrics: Option<Vec<MetricValue>>,
+    pub best_updated_at: Option<DateTime<Utc>>,
     pub latest_status: Option<SolutionSubmissionStatus>,
     pub latest_solution_submission_at: Option<DateTime<Utc>>,
 }

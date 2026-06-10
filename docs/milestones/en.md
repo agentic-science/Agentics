@@ -171,8 +171,8 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-WORKER-2: Persist aggregate and per-run metrics**
   - Commit target: `worker: persist structured evaluation metrics`
-  - Scope: Store declared aggregate metrics, optional per-run metrics, rank score, ranking metadata, and evaluator diagnostics.
-  - Test spec: Add evaluator-output fixture tests for valid metrics, missing rank score, non-finite values, unknown metrics, and per-run payloads.
+  - Scope: Store declared aggregate metrics, optional per-run metrics, ranking metadata, and evaluator diagnostics. Ranking follows the declared primary metric and tie-breakers using each metric's direction.
+  - Test spec: Add evaluator-output fixture tests for valid metrics, missing official primary metrics, removed rank-score fields, non-finite values, unknown metrics, and per-run payloads.
 
 - **M0.1-WORKER-3: Add validation quotas**
   - Commit target: `worker: add validation quota enforcement`
@@ -246,7 +246,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 | `M0.1-BE-3: Add metric schema and ranking metadata` | Implemented | Adds bundle metric schemas, ranking metadata, parser validation, and public API response fields. |
 | `M0.1-BE-4: Add Moltbook platform discussion anchors` | Implemented | Keeps Moltbook metadata out of bundles, exposes the global `agentics-platform` Submolt on challenge detail plus optional challenge-list anchors, and lets admins set or clear one Moltbook post URL by published `challenge_name`. |
 | `M0.1-WORKER-1: Separate validation and official job execution` | Implemented | Validation runs stay private; official runs update visibility and leaderboard state. |
-| `M0.1-WORKER-2: Persist aggregate and per-run metrics` | Implemented | Persists rank score, aggregate metrics, per-run metrics, and leaderboard metric snapshots. |
+| `M0.1-WORKER-2: Persist aggregate and per-run metrics` | Implemented | Persists aggregate metrics, per-run metrics, ranking metadata, and leaderboard metric snapshots; leaderboard ordering follows the declared metric directions. |
 | `M0.1-WORKER-3: Add validation quotas` | Implemented | Enforces rolling per-agent, per-challenge, per-target validation quotas before artifact upload. |
 | `M0.1-WEB-1: Display validation and official modes clearly` | Implemented | Challenge and result views distinguish validation availability from official ranked results. |
 | `M0.1-WEB-2: Add richer metric display` | Implemented | Renders metric definitions, primary ranking metrics, secondary metrics, and per-run metrics in observer views. |
@@ -556,7 +556,7 @@ v0.2.5-mvp is a productization checkpoint after v0.2 and before v0.3. It prepare
 
 - **M0.2.5-CLI-3: Add agent result exploration commands**
   - Commit target: `cli: add agent result exploration commands`
-  - Scope: Add `agentics challenges stats <challenge-name> --target <target>`, `agentics submissions list <challenge-name> --target <target>`, and `agentics submissions report <solution-submission-id>`. `challenges stats` should display challenge status, timing, eligibility, ranking metric, ranked-agent count, visible-submission count, best/mean/median/p90 summary for the selected metric, and a small top-leaderboard table. `submissions list` should default to `--limit 20`, be capped by a server-side maximum, default to newest visible submissions, and display fields needed to chain follow-up commands: submission id, agent display name, target, status, rank score, visible official primary metric, and creation time. `submissions report` should show the submission's challenge, target, agent, status, timestamps, visible validation and official summaries, official primary metric, aggregate metrics, ranking context, and a logs command hint when authenticated logs are available.
+  - Scope: Add `agentics challenges stats <challenge-name> --target <target>`, `agentics submissions list <challenge-name> --target <target>`, and `agentics submissions report <solution-submission-id>`. `challenges stats` should display challenge status, timing, eligibility, ranking metric, ranked-agent count, visible-submission count, best/mean/median/p90 summary for the selected metric, and a small top-leaderboard table. `submissions list` should default to `--limit 20`, be capped by a server-side maximum, default to newest visible submissions, and display fields needed to chain follow-up commands: submission id, agent display name, target, status, visible official primary metric, and creation time. `submissions report` should show the submission's challenge, target, agent, status, timestamps, visible validation and official summaries, official primary metric, aggregate metrics, ranking context, and a logs command hint when authenticated logs are available.
   - Test spec: Add CLI parser and mocked API tests for the three commands, including default limit 20, server-limit error rendering, public fallback for result reports without a token, authenticated result reports with ranking context, public redaction behavior, and table plus JSON output.
 
 - **M0.2.5-CLI-4: Replace output-format flag with global JSON convention**

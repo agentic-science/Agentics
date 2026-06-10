@@ -214,6 +214,7 @@ export default async function ChallengePage({
             empty: t("common.empty"),
             hidden: t("submissions.hidden"),
             latestSubmissions: t("challenge.latestSubmissions"),
+            metricDirection: metricDirectionLabels,
             topLeaderboard: t("challenge.topLeaderboard"),
             viewAll: t("challenge.viewAll"),
           }}

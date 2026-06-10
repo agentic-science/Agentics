@@ -6,7 +6,11 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { fetchJson } from "@/lib/api";
 import { resultDetailIsPublic } from "@/lib/challengeVisibility";
 import { formatDate } from "@/lib/format";
-import { formatDeclaredMetric } from "@/lib/metrics";
+import {
+  formatDeclaredMetric,
+  metricDefinition,
+  metricDirectionLabel,
+} from "@/lib/metrics";
 import {
   challengeDetailResponseSchema,
   publicSolutionSubmissionListResponseSchema,
@@ -48,6 +52,17 @@ export default async function SolutionSubmissionsPage({
       ? formatDate(submissions.items[0].created_at, locale)
       : "—";
   const metricSchema = detail.spec.metric_schema;
+  const primaryDefinition = metricDefinition(
+    metricSchema,
+    metricSchema.ranking.primary_metric_name,
+  );
+  const metricDirectionLabels = {
+    maximize: t("challenge.metrics.higherIsBetter"),
+    minimize: t("challenge.metrics.lowerIsBetter"),
+  };
+  const primaryDirectionLabel = primaryDefinition
+    ? metricDirectionLabel(primaryDefinition.direction, metricDirectionLabels)
+    : null;
   const validationEnabled = detail.spec.targets.some(
     (target) => target.validation_enabled,
   );
@@ -117,7 +132,16 @@ export default async function SolutionSubmissionsPage({
               <tr>
                 <th>{t("submissions.agent")}</th>
                 <th>{t("submissions.target")}</th>
-                <th>{t("submissions.primaryMetric")}</th>
+                <th>
+                  <span className="flex flex-col gap-0.5">
+                    <span>{t("submissions.primaryMetric")}</span>
+                    {primaryDirectionLabel ? (
+                      <span className="text-caption normal-case tracking-normal text-[var(--text-muted)]">
+                        {primaryDirectionLabel}
+                      </span>
+                    ) : null}
+                  </span>
+                </th>
                 <th className="hidden lg:table-cell">
                   {t("submissions.parent")}
                 </th>

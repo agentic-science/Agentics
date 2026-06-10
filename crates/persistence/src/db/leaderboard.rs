@@ -2,14 +2,14 @@ use std::cmp::Ordering;
 
 use chrono::{DateTime, Utc};
 use serde_json::Value;
-use sqlx::{PgPool, Postgres, Row, Transaction};
+use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
 
-use agentics_domain::models::challenge::ChallengeBundleSpec;
+use agentics_domain::models::challenge::{ChallengeBundleSpec, MetricDirection};
 use agentics_domain::models::evaluation::{
     MetricValue, PublicCaseResult, compare_metric_payloads_by_ranking,
 };
 use agentics_domain::models::ids::{AgentId, SolutionSubmissionId};
-use agentics_domain::models::names::{ChallengeName, TargetName};
+use agentics_domain::models::names::{ChallengeName, MetricName, TargetName};
 use agentics_error::{Result, ServiceError};
 
 use super::ids::{
@@ -302,7 +302,7 @@ async fn list_leaderboard_rows(
     spec: &ChallengeBundleSpec,
 ) -> Result<Vec<LeaderboardRecord>> {
     let requested_limit = limit.max(1);
-    let rows = sqlx::query(
+    let mut query = QueryBuilder::<Postgres>::new(
         r#"
         SELECT
             le.target, le.agent_id, a.display_name AS agent_display_name, le.best_solution_submission_id,
@@ -312,18 +312,28 @@ async fn list_leaderboard_rows(
         JOIN solution_submissions s ON s.id = le.best_solution_submission_id
         JOIN agents a ON a.id = le.agent_id
         JOIN challenges p ON p.challenge_name = le.challenge_name
-        WHERE p.challenge_name = $1
-          AND le.target = $2
+        WHERE p.challenge_name =
+        "#,
+    );
+    query.push_bind(challenge_name.as_str());
+    query.push(
+        r#"
+          AND le.target =
+        "#,
+    );
+    query.push_bind(target.as_str());
+    query.push(
+        r#"
           AND s.visible_after_eval = TRUE
           AND s.status = 'completed'
-        "#
-    )
-    .bind(challenge_name.as_str())
-    .bind(target.as_str())
-    .fetch_all(pool)
-    .await?;
+        "#,
+    );
+    push_metric_ranking_order(&mut query, spec);
+    query.push(" LIMIT ");
+    query.push_bind(requested_limit);
+    let rows = query.build().fetch_all(pool).await?;
 
-    let mut entries = rows
+    let entries = rows
         .into_iter()
         .map(|r| {
             let aggregate_metrics = decode_optional_json(
@@ -351,25 +361,53 @@ async fn list_leaderboard_rows(
             })
         })
         .collect::<Result<Vec<_>>>()?;
-    entries.sort_by(|a, b| {
-        compare_metric_payloads_by_ranking(
-            &spec.metric_schema,
-            &a.aggregate_metrics,
-            &b.aggregate_metrics,
-        )
-        .then_with(|| a.updated_at.cmp(&b.updated_at))
-        .then_with(|| a.agent_display_name.cmp(&b.agent_display_name))
-        .then_with(|| {
-            a.best_solution_submission_id
-                .cmp(&b.best_solution_submission_id)
-        })
-    });
-    let requested_limit = usize::try_from(requested_limit).map_err(|_| {
-        ServiceError::Validation("leaderboard limit exceeds supported range".to_string())
-    })?;
-    entries.truncate(requested_limit);
-
     Ok(entries)
+}
+
+fn push_metric_ranking_order(query: &mut QueryBuilder<Postgres>, spec: &ChallengeBundleSpec) {
+    query.push(" ORDER BY ");
+    let mut has_metric_order = false;
+    for (metric_name, direction) in ranking_order_metrics(spec) {
+        if has_metric_order {
+            query.push(", ");
+        }
+        push_metric_order_expression(query, metric_name, direction);
+        has_metric_order = true;
+    }
+    if has_metric_order {
+        query.push(", ");
+    }
+    query.push("le.updated_at ASC, a.display_name ASC, le.best_solution_submission_id ASC");
+}
+
+fn ranking_order_metrics(spec: &ChallengeBundleSpec) -> Vec<(&MetricName, MetricDirection)> {
+    let schema = &spec.metric_schema;
+    std::iter::once(&schema.ranking.primary_metric_name)
+        .chain(schema.ranking.tie_breaker_metric_names.iter())
+        .filter_map(|metric_name| {
+            schema
+                .metric(metric_name)
+                .map(|definition| (&definition.name, definition.direction))
+        })
+        .collect()
+}
+
+fn push_metric_order_expression(
+    query: &mut QueryBuilder<Postgres>,
+    metric_name: &MetricName,
+    direction: MetricDirection,
+) {
+    query.push(
+        "(SELECT (metric->>'value')::DOUBLE PRECISION \
+         FROM jsonb_array_elements(COALESCE(le.aggregate_metrics_json, '[]'::jsonb)) AS metric \
+         WHERE metric->>'metric_name' = ",
+    );
+    query.push_bind(metric_name.as_str());
+    query.push(" LIMIT 1) ");
+    match direction {
+        MetricDirection::Minimize => query.push("ASC NULLS LAST"),
+        MetricDirection::Maximize => query.push("DESC NULLS LAST"),
+    };
 }
 
 /// Handles upsert leaderboard entry for solution submission tx for this module.

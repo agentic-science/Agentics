@@ -110,6 +110,10 @@ pub(crate) async fn solution_submission_report(
         )
     };
     let solution_submission = &report.solution_submission;
+    let challenge = client
+        .get_challenge(&solution_submission.challenge_name)
+        .await?;
+    let primary_metric_name = &challenge.spec.metric_schema.ranking.primary_metric_name;
     let ranking_context = if settings.token_configured() {
         match client
             .get_solution_submission_ranking_context(
@@ -145,6 +149,7 @@ pub(crate) async fn solution_submission_report(
         ranking_context.as_ref(),
         owner_visible_report,
         output_format,
+        Some(primary_metric_name),
     )
 }
 
@@ -303,13 +308,18 @@ async fn validate_remote(
                 return Err(batch_status_error(
                     &final_responses,
                     output_format,
+                    &challenge.spec.metric_schema.ranking.primary_metric_name,
                     &response.target,
                     error,
                 ));
             }
         }
     }
-    output::render_validation_run_status_batch(&final_responses, output_format)
+    output::render_validation_run_status_batch(
+        &final_responses,
+        output_format,
+        Some(&challenge.spec.metric_schema.ranking.primary_metric_name),
+    )
 }
 
 async fn validate_parent_submission_scope(
@@ -374,11 +384,16 @@ fn batch_error_with_created_ids(
 fn batch_status_error(
     responses: &[agentics_domain::models::request::SolutionSubmissionResponse],
     output_format: cli::OutputFormat,
+    primary_metric_name: &MetricName,
     failed_target: &TargetName,
     error: anyhow::Error,
 ) -> anyhow::Error {
-    let completed =
-        output::render_validation_run_status_batch(responses, output_format).unwrap_or_default();
+    let completed = output::render_validation_run_status_batch(
+        responses,
+        output_format,
+        Some(primary_metric_name),
+    )
+    .unwrap_or_default();
     if completed.is_empty() {
         anyhow::anyhow!("validation polling failed for target `{failed_target}`: {error}")
     } else {

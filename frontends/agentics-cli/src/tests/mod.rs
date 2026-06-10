@@ -545,6 +545,11 @@ async fn submissions_report_uses_public_result_report_without_token() {
         .mount(&server)
         .await;
     Mock::given(method("GET"))
+        .and(path("/api/public/challenges/sample-sum"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
         .and(path(
             "/api/public/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
         ))
@@ -591,6 +596,11 @@ async fn submissions_report_uses_validation_primary_metric_without_official_eval
         .mount(&server)
         .await;
     Mock::given(method("GET"))
+        .and(path("/api/public/challenges/sample-sum"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
         .and(path(
             "/api/agent/solution-submissions/11111111-1111-4111-8111-111111111111/ranking-context",
         ))
@@ -601,6 +611,11 @@ async fn submissions_report_uses_validation_primary_metric_without_official_eval
                 "message": "leaderboard is hidden"
             }
         })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/public/challenges/sample-sum"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
         .mount(&server)
         .await;
     Mock::given(method("GET"))
@@ -651,6 +666,11 @@ async fn submissions_report_tolerates_hidden_public_ranking_context() {
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "solution_submission": solution_submission_json()
         })))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/api/public/challenges/sample-sum"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(challenge_detail_json(true)))
         .mount(&server)
         .await;
     Mock::given(method("GET"))

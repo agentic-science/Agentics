@@ -1,4 +1,5 @@
 use agentics_domain::models::evaluation::EvaluationDto;
+use agentics_domain::models::names::MetricName;
 use agentics_domain::models::names::{ChallengeName, TargetName};
 use agentics_domain::models::request::{
     CreateSolutionSubmissionResponse, PublicSolutionSubmissionListResponse, RankingContextResponse,
@@ -10,7 +11,7 @@ use serde_json::{Map, Value, json};
 
 use super::OutputFormat;
 use super::format::{
-    first_aggregate_metric, format_optional_metric, format_score, format_warnings, pretty_json,
+    aggregate_metric_by_name, format_optional_metric, format_score, format_warnings, pretty_json,
     render_table, status_label,
 };
 use crate::package::SolutionPackage;
@@ -157,6 +158,7 @@ fn select_submission_display_evaluation(
 fn render_validation_run_status(
     response: &SolutionSubmissionResponse,
     format: OutputFormat,
+    primary_metric_name: Option<&MetricName>,
 ) -> Result<String> {
     match format {
         OutputFormat::Json => pretty_json(response),
@@ -173,8 +175,10 @@ fn render_validation_run_status(
             let validation_status = validation_eval
                 .map(|eval| status_label(&eval.status))
                 .unwrap_or_else(|| "none".to_string());
-            let primary_metric =
-                format_optional_metric(validation_eval.and_then(first_aggregate_metric));
+            let primary_metric = format_optional_metric(validation_eval.and_then(|evaluation| {
+                primary_metric_name
+                    .and_then(|metric_name| aggregate_metric_by_name(evaluation, metric_name))
+            }));
 
             Ok(format!(
                 "validation_run: {}\nchallenge: {}\ntarget: {}\nstatus: {}\nevaluation_job: {}\nvalidation: {}\nprimary_metric: {}\nvisible_after_eval: {}",
@@ -195,9 +199,10 @@ fn render_validation_run_status(
 pub(crate) fn render_validation_run_status_batch(
     responses: &[SolutionSubmissionResponse],
     format: OutputFormat,
+    primary_metric_name: Option<&MetricName>,
 ) -> Result<String> {
     match responses {
-        [response] => render_validation_run_status(response, format),
+        [response] => render_validation_run_status(response, format, primary_metric_name),
         _ => match format {
             OutputFormat::Json => pretty_json(&json!({ "validation_runs": responses })),
             OutputFormat::Table => {
@@ -216,9 +221,12 @@ pub(crate) fn render_validation_run_status_batch(
                         let validation_status = validation_eval
                             .map(|eval| status_label(&eval.status))
                             .unwrap_or_else(|| "none".to_string());
-                        let primary_metric = format_optional_metric(
-                            validation_eval.and_then(first_aggregate_metric),
-                        );
+                        let primary_metric =
+                            format_optional_metric(validation_eval.and_then(|evaluation| {
+                                primary_metric_name.and_then(|metric_name| {
+                                    aggregate_metric_by_name(evaluation, metric_name)
+                                })
+                            }));
                         vec![
                             response.target.to_string(),
                             response.id.to_string(),
@@ -361,6 +369,7 @@ pub(crate) fn render_solution_submission_report(
     ranking_context: Option<&RankingContextResponse>,
     authenticated_logs_available: bool,
     format: OutputFormat,
+    primary_metric_name: Option<&MetricName>,
 ) -> Result<String> {
     match format {
         OutputFormat::Json => pretty_json(&json!({
@@ -370,12 +379,14 @@ pub(crate) fn render_solution_submission_report(
         })),
         OutputFormat::Table => {
             let submission = &response.solution_submission;
-            let validation_primary_metric = format_optional_metric(
-                submission
-                    .validation_evaluation
-                    .as_ref()
-                    .and_then(first_aggregate_metric),
-            );
+            let validation_primary_metric =
+                format_optional_metric(submission.validation_evaluation.as_ref().and_then(
+                    |evaluation| {
+                        primary_metric_name.and_then(|metric_name| {
+                            aggregate_metric_by_name(evaluation, metric_name)
+                        })
+                    },
+                ));
             let official_primary_metric =
                 format_optional_metric(submission.official_primary_metric.as_ref());
             let metrics = select_submission_display_evaluation(submission)

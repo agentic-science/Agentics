@@ -17,7 +17,6 @@
 
 mod auth;
 mod db;
-pub mod leaderboard_rules;
 pub mod repositories;
 
 pub mod pool {

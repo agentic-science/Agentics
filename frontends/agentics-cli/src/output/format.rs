@@ -1,4 +1,5 @@
 use agentics_domain::models::evaluation::{EvaluationDto, MetricValue};
+use agentics_domain::models::names::MetricName;
 use agentics_domain::models::request::ScoreDistributionResponse;
 use anyhow::Result;
 use serde::Serialize;
@@ -43,8 +44,14 @@ pub(super) fn format_warnings(warnings: &[String]) -> String {
         .join("\n")
 }
 
-pub(super) fn first_aggregate_metric(evaluation: &EvaluationDto) -> Option<&MetricValue> {
-    evaluation.aggregate_metrics.first()
+pub(super) fn aggregate_metric_by_name<'a>(
+    evaluation: &'a EvaluationDto,
+    metric_name: &MetricName,
+) -> Option<&'a MetricValue> {
+    evaluation
+        .aggregate_metrics
+        .iter()
+        .find(|metric| &metric.metric_name == metric_name)
 }
 
 pub(super) fn quantile_value(response: &ScoreDistributionResponse, expected: f64) -> Option<f64> {
