@@ -153,6 +153,12 @@ the full GPU/CUDA Compose integration suite.
   visible.
 - [ ] Clean temp install verifies `cargo install agentics --version 0.3.0`.
 
+Publish execution status: `just publish --dry-run` used the crates.io HTTP API
+and found all allowlisted `0.3.0` packages missing, then Cargo successfully
+packaged and verified every selected crate/binary. Actual upload is blocked in
+this environment because neither `CARGO_REGISTRY_TOKEN` nor a local Cargo
+credentials file is present.
+
 ## Challenge Breakages Found
 
 Record any challenge-specific issues discovered during validation, dev smoke, or
