@@ -64,15 +64,15 @@ deferred, or blocked.
 
 ## Publish Tooling Checklist
 
-- [ ] Add `agentics-publish` ops binary.
-- [ ] Add root `just publish`.
-- [ ] Use crates.io HTTP APIs with a proper `User-Agent`; do not use
+- [x] Add `agentics-publish` ops binary.
+- [x] Add root `just publish`.
+- [x] Use crates.io HTTP APIs with a proper `User-Agent`; do not use
   `cargo info` for availability checks.
-- [ ] Respect `429` and `Retry-After`.
-- [ ] Poll crates.io after publishing until each version is visible.
-- [ ] Support `--dry-run` and `--execute`.
-- [ ] Require `CARGO_REGISTRY_TOKEN` only for `--execute`.
-- [ ] Publish allowlist:
+- [x] Respect `429` and `Retry-After`.
+- [x] Poll crates.io after publishing until each version is visible.
+- [x] Support `--dry-run` and `--execute`.
+- [x] Require `CARGO_REGISTRY_TOKEN` only for `--execute`.
+- [x] Publish allowlist:
   - `agentics-error`
   - `agentics-domain`
   - `agentics-contracts`
@@ -84,12 +84,12 @@ deferred, or blocked.
   - `agentics`
   - `agentics-api-server`
   - `agentics-worker`
-- [ ] Exclude or mark non-publishable:
+- [x] Exclude or mark non-publishable:
   - `agentics-ops`
   - `agentics-pre-commit`
   - `agentics-dev-checks`
   - `integration-tests`
-- [ ] Use Cargo workspace publish flow, with filtering for already-published
+- [x] Use Cargo workspace publish flow, with filtering for already-published
   packages based on API visibility.
 
 ## Production Backup And Restart Checklist
@@ -114,14 +114,14 @@ deferred, or blocked.
 - [ ] `cargo clippy --workspace --all-targets -- -D warnings`
 - [ ] `cargo test --workspace --exclude integration-tests`
 - [ ] Targeted `cargo test -p agentics`
-- [ ] Publish-tool unit tests
+- [x] Publish-tool unit tests
 - [ ] `cd frontends/web && bun run generate:schemas:check`
 - [ ] `cd frontends/web && bunx biome check`
 - [ ] `cd frontends/web && bunx tsc --noEmit`
 - [ ] `cd frontends/web && bun test`
 - [ ] `just test-env-status`
 - [ ] `just test-all`
-- [ ] `just publish --dry-run`
+- [x] `just publish --dry-run`
 - [ ] After publish, crates.io API confirms all selected `0.3.0` packages are
   visible.
 - [ ] Clean temp install verifies `cargo install agentics --version 0.3.0`.

@@ -57,3 +57,7 @@ test-env-status:
 # Remove persistent Cargo cache volumes used by the Compose test harness
 test-purge-cargo-cache:
     @just test::purge-cargo-cache
+
+# Publish workspace packages through crates.io-aware checks
+publish *args:
+    @cargo run -p agentics-ops --bin agentics-publish -- {{args}}

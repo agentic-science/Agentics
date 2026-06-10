@@ -245,6 +245,20 @@ Build the web frontend:
   bun run build)
 ```
 
+## Publish Release Packages
+
+Use the root publish helper instead of ad hoc `cargo publish` commands:
+
+```bash
+just publish --dry-run
+CARGO_REGISTRY_TOKEN=... just publish --execute
+```
+
+The helper checks crates.io availability through the HTTP API with a release
+User-Agent, respects `429`/`Retry-After`, excludes non-publishable helper
+crates, and then uses Cargo workspace publish filtering. Do not use `cargo info`
+as the availability check.
+
 ## Checks Before Commit
 
 Install the repository hook once with `just maintenance::setup-hooks`. The hook delegates to

@@ -28,4 +28,5 @@ pub mod local_dev;
 pub mod migrate;
 pub mod private_bundle_backups;
 pub mod production_rehearsal;
+pub mod publish;
 pub mod support;

@@ -228,6 +228,19 @@ test -x target/release/agentics-check-dgx-spark-profile
   bun run build)
 ```
 
+## 发布 Release Packages
+
+请使用根目录 publish helper，不要临时手写一串 `cargo publish`：
+
+```bash
+just publish --dry-run
+CARGO_REGISTRY_TOKEN=... just publish --execute
+```
+
+该 helper 会通过 crates.io HTTP API 和 release User-Agent 检查 crate/version
+可见性，遵守 `429`/`Retry-After`，排除不可发布的 helper crates，然后使用 Cargo
+workspace publish filtering。不要用 `cargo info` 作为可用性判断。
+
 ## 提交前检查
 
 先运行一次 `just maintenance::setup-hooks` 安装 repository hook。该 hook 会委托给独立的

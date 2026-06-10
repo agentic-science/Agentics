@@ -236,6 +236,21 @@ just prod::down --runner keep
 Do not use production database, object storage, runner roots, or Docker sockets
 for rehearsal.
 
+## Release Publishing
+
+Release publishing is handled by the Rust ops helper behind `just publish`. It
+checks crate/version availability through the crates.io HTTP API, respects
+crates.io rate limits, filters the workspace to the publish allowlist, and uses
+Cargo's workspace publish mode.
+
+```bash
+just publish --dry-run
+CARGO_REGISTRY_TOKEN=... just publish --execute
+```
+
+Do not use `cargo info` to decide whether a crate or version is available;
+crates.io API visibility is the release source of truth.
+
 ## Documentation
 
 Role guides:
