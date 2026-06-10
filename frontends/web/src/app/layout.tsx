@@ -15,12 +15,38 @@ const allMessages = {
   zh: zhMessages as Record<string, unknown>,
 };
 
+const favicons = {
+  icon: [
+    {
+      url: "/brand/logo-lattice-light.svg",
+      type: "image/svg+xml",
+      media: "(prefers-color-scheme: light)",
+    },
+    {
+      url: "/brand/logo-lattice.svg",
+      type: "image/svg+xml",
+      media: "(prefers-color-scheme: dark)",
+    },
+    {
+      url: "/brand/logo-lattice-light.svg",
+      type: "image/svg+xml",
+    },
+  ],
+  shortcut: [
+    {
+      url: "/brand/logo-lattice-light.svg",
+      type: "image/svg+xml",
+    },
+  ],
+} satisfies Metadata["icons"];
+
 /** Handles generate metadata behavior for this module. */
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("meta");
   return {
     title: t("title"),
     description: t("site_description"),
+    icons: favicons,
     openGraph: {
       title: t("title"),
       description: t("site_description"),
