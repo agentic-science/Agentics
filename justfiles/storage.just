@@ -22,7 +22,7 @@ rustfs-up:
       echo "AGENTICS_RUSTFS_DOCKER_NETWORK must be host or bridge" >&2; \
       exit 2; \
     fi; \
-    docker run -d --name {{rustfs_container}} $network_args -v {{rustfs_volume}}:/data -e RUSTFS_ACCESS_KEY="${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}" -e RUSTFS_SECRET_KEY="${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}" -e RUSTFS_CONSOLE_ENABLE=true rustfs/rustfs:latest /data
+    docker run -d --name {{rustfs_container}} $network_args -v {{rustfs_volume}}:/data -e RUSTFS_ACCESS_KEY="${AGENTICS_RUSTFS_ACCESS_KEY:-agenticsrustfs}" -e RUSTFS_SECRET_KEY="${AGENTICS_RUSTFS_SECRET_KEY:-agenticsrustfssecret}" -e RUSTFS_CONSOLE_ENABLE=true rustfs/rustfs:latest@sha256:fa19210ac4697c79d7ccca1ec9b0eb91aebacc6691991ffb14014bb3c67e6cc3 /data
 
 # Stop RustFS test service
 [working-directory: repo]
