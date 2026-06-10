@@ -12,7 +12,7 @@ services:
     restart: "no"
 
   rustfs:
-    image: rustfs/rustfs:latest@sha256:f7cb98ef492fa3c3ed0dbd65df3ce2dd205c666e24e7d7234d9402c9ed1001f9
+    image: rustfs/rustfs:latest@sha256:fa19210ac4697c79d7ccca1ec9b0eb91aebacc6691991ffb14014bb3c67e6cc3
     container_name: agentics-rustfs-private-backup
     depends_on:
       rustfs-perms:
