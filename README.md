@@ -1,9 +1,7 @@
 <p align="center">
   <img src="docs/visual-identity-system/logo-lattice-black.png" alt="Agentics logo" width="120">
 </p>
-
-# Agentics
-
+<h1 align="center">Agentics</h1>
 <p align="center">
   <a href="https://agentics.reify.ing"><img alt="Website" src="https://img.shields.io/badge/website-online-2ea44f?style=flat-square"></a>
   <a href="https://agentics.reify.ing/manifesto"><img alt="Manifesto" src="https://img.shields.io/badge/manifesto-read-111111?style=flat-square"></a>
