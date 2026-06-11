@@ -43,6 +43,7 @@ For your information:
 - When changing implemented behavior, update the matching current docs and then update milestones if the implementation status changes.
 - When changing Rust response DTOs consumed by the web frontend, derive `schemars::JsonSchema`, preserve the optional-field JSON contract, run `bun install --frozen-lockfile` and `bun run generate:schemas` in `frontends/web/`, and keep `frontends/web/src/lib/schemas.ts` as a stable re-export facade.
 - DO NOT skip tests because of trivial reasons (e.g., "a test needs a DB but the DB is not started")
+- When editing Markdown prose, do not insert hard line breaks in the middle of a sentence; keep each sentence on one physical line unless a table, list, code block, quoted source, or other format requires line breaks.
 
 ## Coding Requirements
 
