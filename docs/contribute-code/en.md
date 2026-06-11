@@ -283,14 +283,12 @@ disposable database instead of editing `_sqlx_migrations` by hand.
 For frontend changes:
 
 ```bash
-cd frontends/web
-bun install --frozen-lockfile
-bun run generate:schemas
-bun run generate:schemas:check
-bun run format
-bun run test
-bun run build
+just web::format
+just web::check
 ```
+
+Run `cd frontends/web && bun run build` only when you need a production
+frontend build artifact or are changing build-time behavior.
 
 For local MVP smoke coverage:
 

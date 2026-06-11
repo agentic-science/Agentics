@@ -16,7 +16,8 @@ The DGX Spark hosted target is Linux-only and supports the MVP hosted targets:
 Linux deployment capacity exists.
 
 The production service graph lives in `deploy/compose/compose.prod.yml` and is
-operated through `agentics-compose-prod` or the `just prod ...` recipes.
+operated through `agentics-compose-prod` or the namespaced `just prod::...`
+recipes.
 
 ## Host Inventory
 

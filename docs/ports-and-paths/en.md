@@ -75,7 +75,7 @@ reset before starting the PostgreSQL 18 dev/test/rehearsal services.
 | Rehearsal runner runtime root | `/srv/agentics-rehearsal/runtime` |
 | Rehearsal phase mount root | `/srv/agentics-rehearsal/phase-mounts` |
 | Rehearsal challenge review checkout | `/srv/agentics-rehearsal/review-checkouts/agentics-challenges` |
-| Persistent private-bundle backup RustFS data root | `/srv/agentics/private-bundle-backups/rustfs-data` |
+| Persistent private-bundle backup RustFS data root | `/srv/agentics-private-bundle-backups/rustfs-data` |
 | Production rehearsal report output | `rehearsals/<run-id>/` unless `--output-dir` is supplied |
 
 Default DGX quota slot classes are `64`, `256`, `1024`, and `4096` MiB, with
@@ -179,11 +179,11 @@ storage bucket used by a production rehearsal when you want to reuse backed-up
 private challenge bundles:
 
 ```bash
-just prod::restore-private-bundles
+just rehearsal::restore-private-bundles --overwrite
 ```
 
-The restore service writes into the production bucket under the configured
-`AGENTICS_S3_PREFIX` and `private-bundle-backups/` logical prefix.
+The restore service writes into the selected environment bucket under the
+configured `AGENTICS_S3_PREFIX` and `private-bundle-backups/` logical prefix.
 
 Production deployment uses the Compose prod stack. Local development uses the
 Compose dev stack.

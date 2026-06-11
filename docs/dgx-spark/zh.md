@@ -16,7 +16,7 @@ DGX Spark hosted target 仅适用于 Linux，并支持 MVP hosted targets：
 前仍是 post-MVP targets。
 
 Production service graph 位于 `deploy/compose/compose.prod.yml`，并通过
-`agentics-compose-prod` 或 `just prod ...` recipes 运维。
+`agentics-compose-prod` 或 namespaced `just prod::...` recipes 运维。
 
 ## Host Inventory
 

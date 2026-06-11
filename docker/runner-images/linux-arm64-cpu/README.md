@@ -1,8 +1,14 @@
 # Agentics Linux ARM64 CPU Base Image
 
 This directory defines the first-party Agentics CPU base image for solution and
-evaluator containers. It is intentionally not published from this checkout yet.
-Publish only from a stable network and pin challenge specs to immutable digests.
+evaluator containers. The current published ARM64 CPU image is:
+
+```text
+ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.2.5@sha256:7ba1dbfb4de62ce7c8716fbdf6fa9e840004cc2d231ac9c0adfd655cd275a537
+```
+
+Publish only from a stable network and pin hosted challenge specs to immutable
+digests.
 
 ## Image Contract
 
@@ -44,13 +50,13 @@ docker run --rm --network none \
   /opt/agentics/smoke.sh
 ```
 
-Prepare an MVP ARM64 OCI archive without publishing:
+Prepare an MVP ARM64 OCI archive as a local release candidate:
 
 ```bash
 docker buildx build \
   --platform linux/arm64 \
   --output type=oci,dest=/tmp/agentics-linux-arm64-cpu-ubuntu26.04.oci \
-  -t ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0 \
+  -t ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.2.5 \
   docker/runner-images/linux-arm64-cpu
 ```
 
@@ -62,19 +68,19 @@ and record the resulting `/opt/agentics/image-info.json` in release notes:
 ```bash
 docker buildx build \
   --platform linux/arm64 \
-  --build-arg AGENTICS_IMAGE_VERSION=0.1.0 \
+  --build-arg AGENTICS_IMAGE_VERSION=0.2.5 \
   --build-arg UBUNTU_VERSION=26.04 \
   --build-arg NODE_VERSION=<concrete-node-version> \
   --build-arg BUN_VERSION=<concrete-bun-version> \
-  -t ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.1.0 \
+  -t ghcr.io/agentic-science/agentics-linux-arm64-cpu:ubuntu26.04-v0.2.5 \
   docker/runner-images/linux-arm64-cpu
 ```
 
 Challenge specs may use `source: "local"` for the local tag above during
 development. Hosted challenge specs must use `source: "registry"` with the
-published `ghcr.io/agentic-science/agentics-linux-arm64-cpu` repository, an
-`ubuntu26.04-*` tag, and digest-pinned `solution_image` and `evaluator_image`
-references after the image is published.
+published `ghcr.io/agentic-science/agentics-linux-arm64-cpu` repository, the
+current `ubuntu26.04-v0.2.5` tag or a later released tag, and digest-pinned
+`solution_image` and `evaluator_image` references.
 
 Do not publish `linux-amd64-cpu` variants until the platform has AMD64 Linux
 deployment capacity. Add a separate target-named image directory when that

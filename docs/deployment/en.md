@@ -92,7 +92,7 @@ Rust services validate environment values at startup. Malformed
 `AGENTICS_POSTGRES_PORT`, `AGENTICS_API_PORT`, `AGENTICS_API_HOST_PORT`,
 `AGENTICS_WEB_PORT`, and `AGENTICS_WEB_HOST_PORT` fail startup instead of
 falling back to local defaults. The dev launcher also refuses to use production
-or rehearsal host ports. When host probing is enabled,
+or rehearsal API/web host ports (`3100`, `3001`, `13100`, and `13001`). When host probing is enabled,
 `AGENTICS_HOST_PROBE_COMMAND` must be non-empty.
 
 Environment variables in the stage env examples are part of the startup
@@ -388,20 +388,23 @@ not the Agentics durable storage backend and intentionally lives outside
 `/srv/agentics`, so disposable production or rehearsal purges do not delete the
 backup copy. When a production rehearsal starts with its own RustFS or S3
 bucket, copy the needed private bundle objects from this backup store into the
-rehearsal storage before reusing previously migrated challenge metadata:
+selected production or rehearsal storage before reusing previously migrated
+challenge metadata:
 
 ```bash
 just prod::restore-private-bundles
+# or, for the disposable rehearsal stack:
+just rehearsal::restore-private-bundles --overwrite
 ```
 
 The restore command temporarily joins the backup RustFS container to the
-production Compose network, then runs a one-shot production Compose service
-with access to both private RustFS endpoints. It copies objects into the
-production bucket under `AGENTICS_S3_PREFIX` and the logical
+selected Compose network, then runs a one-shot service with access to both
+private RustFS endpoints. It copies objects into that environment's bucket under
+`AGENTICS_S3_PREFIX` and the logical
 `private-bundle-backups/` prefix, skips existing byte-identical objects, and
-verifies SHA-256 after each upload. Use `just prod::restore-private-bundles
---overwrite` only for a disposable rehearsal or another explicitly approved
-refresh window where differing destination objects should be replaced.
+verifies SHA-256 after each upload. Use `--overwrite` only for a disposable
+rehearsal or another explicitly approved refresh window where differing
+destination objects should be replaced.
 `just storage::backup-down` stops the backup container without deleting objects.
 
 For the migrated Frontier-CS algorithmic refresh batch, use the dedicated ops

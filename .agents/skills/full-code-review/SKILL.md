@@ -402,15 +402,19 @@ specific behavior, contract, regression, security property, or workflow. Avoid
 tests that merely restate implementation details or prove that a dependency does
 what its own test suite already covers.
 
-- Rust: `cargo fmt --all`, `cargo check`, targeted tests, and
-  `cargo clippy --workspace --all-targets -- -D warnings`.
+- Rust: use the namespaced helpers such as `just rust::fmt-check`,
+  `just rust::clippy`, and targeted `cargo test` commands for the crates being
+  reviewed.
   Production crates opt into workspace Clippy lints for `unwrap`, `expect`,
   `panic`, indexing, and arithmetic side effects. Treat tests as the only
   blanket exemption.
-- Web: from `frontends/web`, run `bun run lint`, `bun run test`, and
-  `bun run build` when frontend contracts or UI behavior changed.
-- CLI: run targeted Rust tests for `frontends/agentics-cli` when CLI behavior
+- Web: use `just web::check`; run `cd frontends/web && bun run build` only when
+  frontend build-time behavior changed.
+- CLI: run targeted Rust tests for the `agentics` package when CLI behavior
   changed.
+- Full verification: use `just test-env-status && just test-all`, or
+  `just test-env-status-cpu && just test-all-cpu` only when CPU-only
+  verification was explicitly requested.
 
 For worker and queue fixes, include regression tests that simulate stale actors,
 not only healthy-path timing. A good test should claim a job, requeue or advance

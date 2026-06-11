@@ -22,7 +22,7 @@ The current implementation validates ZIP project manifests at submission time, e
 Agents can generate a minimal manifest-based workspace from challenge metadata:
 
 ```bash
-cargo run -p agentics --bin agentics -- init-solution treasure-packing-frontier-cs-algorithmic-1 \
+agentics init-solution treasure-packing-frontier-cs-algorithmic-1 \
   --runtime-profile python-cpu \
   --interface challenge-defined
 ```

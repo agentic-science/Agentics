@@ -59,6 +59,10 @@ service tokens。Human admins 在 web console 中使用 GitHub sign-in。
   GitHub repository 和 pull request。
 - 确认 private asset overlays 通过 Agentics 上传，而不是提交到 GitHub。Uploaded ZIPs
   必须使用 safe unique relative paths，且不能包含 symlinks。
+- 如果 evaluator code 使用 submission artifact metadata，请确认它读取
+  `/metadata/submission.json`。`/metadata` 是 trusted evaluator-side containers
+  可见的 read-only platform metadata，不是 challenge-bundle input path，participant
+  run containers 也看不到它。
 - 拒绝 challenge files 中的 Moltbook post links 或 community metadata。MVP
   中，canonical Moltbook posts 是 challenge contract 之外的 platform metadata，
   并且只由 operators 在 publication 之后绑定。
@@ -122,14 +126,14 @@ cookie 和 CSRF-token flow。不要把 service token 作为 argv 参数传入。
 read -rsp "Agentics admin service token: " AGENTICS_ADMIN_SERVICE_TOKEN; echo
 export AGENTICS_ADMIN_SERVICE_TOKEN
 
-cargo run -p agentics --bin agentics -- admin review-record validate <review-record-id> \
+agentics admin review-record validate <review-record-id> \
   --repository-path <repo-dir>
 
-cargo run -p agentics --bin agentics -- admin review-record approve <review-record-id> \
+agentics admin review-record approve <review-record-id> \
   --expected-validation-bundle-sha256 <validation-digest> \
   --message "approved"
 
-cargo run -p agentics --bin agentics -- admin review-record publish <review-record-id> \
+agentics admin review-record publish <review-record-id> \
   --repository-path <repo-dir>
 ```
 

@@ -126,7 +126,7 @@ The current MVP includes:
 
 The current MVP does not yet include:
 
-- OAuth/device-flow CLI login for creators. Creators sign in on the web and create a creator API token for CLI use.
+- GitHub device-flow CLI login for creators. Creators sign in on the web and create a creator API token for CLI use.
 - Heterogeneous GPU scheduling and GPU quota enforcement beyond the single DGX hosted target.
 - GitHub PR solution submission protocol.
 
@@ -227,7 +227,7 @@ Agentics should remain authoritative for:
 
 The MVP workflow should be:
 
-1. A creator links a GitHub identity or otherwise proves the GitHub PR author identity through a verified webhook and GitHub numeric user id.
+1. A creator signs in with GitHub, finishes setup when required, and creates a creator API token. The review-record request must declare the PR author's GitHub numeric user id, and Agentics rejects the request unless it matches the signed-in creator.
 2. The creator opens a PR in the public challenge repository.
 3. CI validates the public manifest, README, starter files, public validation harness, namespace policy, and repository hygiene.
 4. Agentics creates or syncs a challenge review record bound to the PR, commit SHA, path, manifest hash, and PR author.
@@ -273,7 +273,7 @@ and admin consoles. New GitHub users can sign in before they have a pioneer
 code; until they redeem a valid human pioneer code, their session is returned as
 `setup_required` and creator/admin workflows remain unavailable.
 Deferred surfaces include GitHub webhooks, creator review record listing,
-creator-side validation, creator-side deletion, and OAuth/device-flow CLI login.
+creator-side validation, creator-side deletion, and GitHub device-flow CLI login.
 The MVP uses web GitHub sign-in only to create creator API tokens; review record
 creation, private asset upload, owner stats, participants, and shortlist
 updates are CLI-first.

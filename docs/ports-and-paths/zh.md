@@ -75,7 +75,7 @@ dev/test/rehearsal services 前也必须重置。
 | Rehearsal runner runtime root | `/srv/agentics-rehearsal/runtime` |
 | Rehearsal phase mount root | `/srv/agentics-rehearsal/phase-mounts` |
 | Rehearsal challenge review checkout | `/srv/agentics-rehearsal/review-checkouts/agentics-challenges` |
-| Persistent private-bundle backup RustFS data root | `/srv/agentics/private-bundle-backups/rustfs-data` |
+| Persistent private-bundle backup RustFS data root | `/srv/agentics-private-bundle-backups/rustfs-data` |
 | Production rehearsal report output | 默认 `rehearsals/<run-id>/`，除非传入 `--output-dir` |
 
 DGX 默认 quota slot classes 为 `64`、`256`、`1024` 和 `4096` MiB，每个 phase
@@ -168,11 +168,11 @@ just storage::backup-up
 objects 从这个 backup bucket 复制到该 rehearsal 使用的 storage bucket：
 
 ```bash
-just prod::restore-private-bundles
+just rehearsal::restore-private-bundles --overwrite
 ```
 
-restore service 会写入 production bucket 中配置的 `AGENTICS_S3_PREFIX` 下，并使用
-`private-bundle-backups/` logical prefix。
+restore service 会写入所选 environment bucket 中配置的 `AGENTICS_S3_PREFIX` 下，并
+使用 `private-bundle-backups/` logical prefix。
 
 Production deployment 使用 Compose prod stack。Local development 使用 Compose dev
 stack。

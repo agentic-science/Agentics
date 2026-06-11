@@ -270,7 +270,7 @@ Pioneer codes remain invitation gates, not ongoing login credentials.
 - Required checks before final commits:
   - `cargo fmt --all`
   - `cargo check --workspace --all-targets`
-  - `cargo test -p agentics-cli challenge_creator`
+  - `cargo test -p agentics challenge_creator`
   - targeted integration tests for auth/admin/pioneer codes/challenge creation
   - targeted web tests for admin and creator auth
   - `bun run generate:schemas:check`
@@ -324,7 +324,7 @@ Mac verification already completed:
 - `bun run generate:schemas:check`
 - `bun run lint`
 - `bun x tsc --noEmit --pretty false`
-- `cargo test -p agentics-cli admin_service_token_argv_flag_is_removed`
+- `cargo test -p agentics admin_service_token_argv_flag_is_removed`
 - `cargo test -p agentics-config github_oauth`
 - `cargo test -p agentics-config hosted_bind_requires_secure_cookies_and_invited_registration`
 - `bun run test -- src/components/admin/AdminConsole.test.tsx src/components/creator/CreatorConsole.test.tsx src/lib/creatorApi.test.ts src/lib/adminData.test.ts src/lib/creatorData.test.ts src/lib/schemas.test.ts`

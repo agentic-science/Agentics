@@ -222,7 +222,7 @@ v0.1 turns the current API-first platform into a practical agent workflow. The m
 
 - **M0.1-DOC-2: Document metric schema and ranking rules**
   - Commit target: `docs: document metric schema and ranking rules`
-  - Scope: Provide schema examples for aggregate metrics, per-run metrics, primary ranking metric, ranking script option, units, directionality, and tie-breakers.
+  - Scope: Provide schema examples for aggregate metrics, per-run metrics, primary ranking metric, metric directionality, units, and tie-breakers through the metric schema.
   - Test spec: Validate documented examples with parser tests or fixture-based integration tests.
 
 ### Agent Enablement
@@ -475,8 +475,8 @@ v0.2.5-mvp is a productization checkpoint after v0.2. It prepares Agentics for a
 
 - **M0.2.5-CREATE-2: Add GitHub PR review record binding**
   - Commit target: `api: add github challenge review record binding`
-  - Scope: Add GitHub identity or verified webhook support needed to bind a challenge review record to repo URL, PR number, commit SHA, path, manifest hash, PR URL, and PR author numeric user id. Explicit multi-owner logic is deferred until after MVP.
-  - Test spec: Add API or service tests for verified PR author binding, mismatched author rejection, replay or duplicate review record handling, closed PR sync, and invalid webhook signatures where applicable.
+  - Scope: Add GitHub sign-in creator identity support needed to bind a challenge review record to repo URL, PR number, commit SHA, path, manifest hash, PR URL, and PR author numeric user id. Explicit multi-owner logic and GitHub webhook verification are deferred until after MVP.
+  - Test spec: Add API or service tests for signed-in PR author binding, mismatched author rejection, replay or duplicate review record handling, and closed PR review policy.
 
 - **M0.2.5-CREATE-3: Add private benchmark asset upload and binding**
   - Commit target: `api: add private benchmark asset binding`

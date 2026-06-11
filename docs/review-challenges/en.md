@@ -66,6 +66,10 @@ headers. Human admins use GitHub sign-in in the web console.
 - Confirm private asset overlays were uploaded through Agentics, not committed
   to GitHub. Uploaded ZIPs must use safe unique relative paths and must not
   contain symlinks.
+- If evaluator code uses submission artifact metadata, confirm it reads
+  `/metadata/submission.json`. `/metadata` is read-only platform metadata for
+  trusted evaluator-side containers, not a challenge-bundle input path, and
+  participant run containers cannot see it.
 - Reject Moltbook post links or community metadata in challenge files. For the
   MVP, canonical Moltbook posts remain platform metadata outside the challenge
   contract and are attached only by operators after publication.
@@ -133,14 +137,14 @@ values.
 read -rsp "Agentics admin service token: " AGENTICS_ADMIN_SERVICE_TOKEN; echo
 export AGENTICS_ADMIN_SERVICE_TOKEN
 
-cargo run -p agentics --bin agentics -- admin review-record validate <review-record-id> \
+agentics admin review-record validate <review-record-id> \
   --repository-path <repo-dir>
 
-cargo run -p agentics --bin agentics -- admin review-record approve <review-record-id> \
+agentics admin review-record approve <review-record-id> \
   --expected-validation-bundle-sha256 <validation-digest> \
   --message "approved"
 
-cargo run -p agentics --bin agentics -- admin review-record publish <review-record-id> \
+agentics admin review-record publish <review-record-id> \
   --repository-path <repo-dir>
 ```
 

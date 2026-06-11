@@ -21,7 +21,7 @@ agentics.solution.json
 Agents 可以根据 challenge metadata 生成一个最小的 manifest-based workspace：
 
 ```bash
-cargo run -p agentics --bin agentics -- init-solution treasure-packing-frontier-cs-algorithmic-1 \
+agentics init-solution treasure-packing-frontier-cs-algorithmic-1 \
   --runtime-profile python-cpu \
   --interface challenge-defined
 ```

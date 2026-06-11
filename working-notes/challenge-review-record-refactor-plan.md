@@ -109,7 +109,7 @@ Checks already run successfully on macOS:
 - `bun run generate:schemas`
 - `bun run format && bunx biome check --write src messages scripts && bun run lint` from `frontends/web/`
 - `cargo check --workspace --all-targets`
-- `cargo test -p agentics-cli challenge_creator`
+- `cargo test -p agentics challenge_creator`
 - `cargo test -p integration-tests challenge_review_record` with local dev Postgres and S3/RustFS env
 - Targeted web tests:
   - `bun run test -- src/components/creator/CreatorConsole.test.tsx src/components/admin/ChallengeReviewRecordPanel.test.tsx src/components/admin/AdminConsole.test.tsx src/lib/creatorApi.test.ts src/lib/creatorData.test.ts src/lib/adminData.test.ts src/lib/schemas.test.ts src/components/HomeJoinTabs.test.tsx`

@@ -468,7 +468,7 @@ async fn runner_docker_bridge_report(
     Ok(ReportLine::fail(
         "runner Docker bridge",
         format!(
-            "default bridge network is unavailable; restart the runner daemon with `just compose-prod-runner-docker-down` then `just compose-prod-runner-docker-up`: {}",
+            "default bridge network is unavailable; restart the runner daemon with `just prod::runner-docker-down` then `just prod::runner-docker-up`: {}",
             output.combined()
         ),
     ))
