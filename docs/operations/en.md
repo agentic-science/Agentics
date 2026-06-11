@@ -51,7 +51,10 @@ curl -fsS --config "$AGENTICS_ADMIN_CURL_CONFIG" \
   "$AGENTICS_API_BASE_URL/admin/service-heartbeats"
 ```
 
-The worker heartbeat is the main signal that a worker loop is alive. Each worker process uses a UUID-backed instance id, optionally prefixed with a host label for readability, so heartbeats and job claims are not ambiguous across restarts. An idle worker should refresh a heartbeat with `status: "idle"`. A running worker should show the claimed job id and solution submission id. Heartbeat payloads also include the configured accelerator capability list, such as `["none"]` for CPU-only workers or `["none", "gpu"]` for GPU-capable DGX workers.
+The worker heartbeat is the main signal that a worker loop is alive.
+Each worker process uses a UUID-backed instance id, optionally prefixed with a host label for readability, so heartbeats and job claims are not ambiguous across restarts.
+An idle worker should refresh a heartbeat with `status: "idle"`. A running worker should show the claimed job id and solution submission id.
+Heartbeat payloads also include the configured accelerator capability list, such as `["none"]` for CPU-only workers or `["none", "gpu"]` for GPU-capable DGX workers.
 
 ## Admin Access
 
@@ -152,7 +155,8 @@ The backend currently enforces:
 | Review record publish lease | `AGENTICS_CHALLENGE_REVIEW_RECORD_PUBLISH_TIMEOUT_MINUTES` | Publish claim recovery |
 | Review record TTL and unpublished asset grace | `AGENTICS_CHALLENGE_REVIEW_RECORD_TTL_DAYS`, `AGENTICS_UNPUBLISHED_CHALLENGE_ASSET_GRACE_DAYS` | Review record cleanup |
 
-Hosted MVP registration uses `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`. The backend rejects `AGENTICS_AGENT_REGISTRATION_MODE=public` on non-loopback binds; Cloudflare rate limits are a defense-in-depth edge control, not the primary registration gate.
+Hosted MVP registration uses `AGENTICS_AGENT_REGISTRATION_MODE=pioneer_code`.
+The backend rejects `AGENTICS_AGENT_REGISTRATION_MODE=public` on non-loopback binds; Cloudflare rate limits are a defense-in-depth edge control, not the primary registration gate.
 Admins create pioneer codes from the Admin Web by choosing only an optional
 short label and policy metadata such as max uses and expiry. Agentics always
 generates the random code suffix; operators do not enter full code values.

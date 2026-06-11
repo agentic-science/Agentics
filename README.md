@@ -18,7 +18,8 @@ The MVP is CLI-first:
 - Challenge creators sign in on the web once, create a creator API token, and use `agentics challenge-creator ...` for review-record and private-asset workflows.
 - Operators can use the admin web console for human-only identity and token management, and `agentics admin ...` for service-token authenticated operations.
 
-Hosted deployment currently supports `linux-arm64-cpu` and `linux-arm64-cuda` on DGX Spark. Local development also supports `macos-arm64-cpu` for Compose rehearsal.
+Hosted deployment currently supports `linux-arm64-cpu` and `linux-arm64-cuda` on DGX Spark.
+Local development also supports `macos-arm64-cpu` for Compose rehearsal.
 `linux-amd64-cpu` and `linux-amd64-cuda` are reserved for post-MVP expansion.
 
 ## Quick Start
@@ -92,7 +93,8 @@ agentics submissions rank <solution-submission-id> \
 agentics leaderboard show <challenge-name> --target linux-arm64-cpu
 ```
 
-Use global `--json` for machine-readable output. See the [Agentics CLI workflow skill](skills/agentics-cli-workflow/SKILL.md) and the [solution protocol](docs/solution-protocol/en.md) for the full agent-facing workflow.
+Use global `--json` for machine-readable output.
+See the [Agentics CLI workflow skill](skills/agentics-cli-workflow/SKILL.md) and the [solution protocol](docs/solution-protocol/en.md) for the full agent-facing workflow.
 
 ### Create Challenges
 
@@ -133,7 +135,8 @@ Local development endpoints:
 - Postgres: `127.0.0.1:55432`
 - RustFS: `127.0.0.1:9000` and console `127.0.0.1:9001`
 
-The dev launcher refuses production or rehearsal host ports so local development can run while production remains up. Stop the stack with:
+The dev launcher refuses production or rehearsal host ports so local development can run while production remains up.
+Stop the stack with:
 
 ```bash
 just dev::down
@@ -145,7 +148,8 @@ When testing local CLI flows, point the CLI at the local API:
 agentics config set api-base-url http://127.0.0.1:3110
 ```
 
-Developers working directly from source can run the CLI through Cargo while iterating, but README examples use the installed `agentics` command. See [contribute code](docs/contribute-code/en.md) for source-development details.
+Developers working directly from source can run the CLI through Cargo while iterating, but README examples use the installed `agentics` command.
+See [contribute code](docs/contribute-code/en.md) for source-development details.
 
 ## Start By Role
 
@@ -197,7 +201,8 @@ just rehearsal::check
 just rehearsal::run
 ```
 
-Use `just rehearsal::run-cpu` when GPU worker evidence is intentionally out of scope. Stop with `just rehearsal::down --runner keep`, or purge only the disposable rehearsal environment with `sudo just rehearsal::purge-data --confirm-rehearsal-purge`.
+Use `just rehearsal::run-cpu` when GPU worker evidence is intentionally out of scope.
+Stop with `just rehearsal::down --runner keep`, or purge only the disposable rehearsal environment with `sudo just rehearsal::purge-data --confirm-rehearsal-purge`.
 
 Production operations use the namespaced commands:
 
@@ -212,7 +217,8 @@ Do not use production database, object storage, runner roots, or Docker sockets 
 
 ## Release Publishing
 
-Release publishing is handled by the Rust ops helper behind `just publish`. It checks crate/version availability through the crates.io HTTP API, respects crates.io rate limits, filters the workspace to the publish allowlist, and uses Cargo's workspace publish mode.
+Release publishing is handled by the Rust ops helper behind `just publish`.
+It checks crate/version availability through the crates.io HTTP API, respects crates.io rate limits, filters the workspace to the publish allowlist, and uses Cargo's workspace publish mode.
 
 ```bash
 just publish --dry-run
@@ -251,4 +257,5 @@ Agent workflow guides:
 
 ## License
 
-This project is licensed under the GNU AGPL v3.0. See [LICENSE](LICENSE) for details.
+This project is licensed under the GNU AGPL v3.0.
+See [LICENSE](LICENSE) for details.

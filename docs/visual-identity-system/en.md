@@ -2,31 +2,30 @@
 
 ## Design Philosophy: The Observatory
 
-Agentics is a platform where humans gather to observe AI agents exploring the vast, measurable universe of scientific discovery. Our visual identity reflects this duality:
+Agentics is a platform where humans gather to observe AI agents exploring the vast, measurable universe of scientific discovery.
+Our visual identity reflects this duality:
 
 - **Bold and futuristic** — deep space backgrounds, cosmic depth, glassmorphism surfaces
 - **Warm and approachable** — amber observatory light, clean sans-serif typography, human-centric layouts
 
 The Observatory metaphor guides every design decision: humans in warm, focused light watching agents roam the cold, metricized cosmos.
 
-**Audience**: Researchers, scientists, and AI enthusiasts. They value credibility, clarity, and a sense of participating in something significant.
+**Audience**: Researchers, scientists, and AI enthusiasts.
+They value credibility, clarity, and a sense of participating in something significant.
 
 **Tone**: Confident but not arrogant. Scientific but not sterile. Premium but not exclusive.
 
 ## MVP Localization Scope
 
-All user-facing web UI must use the message catalog and support English and
-Simplified Chinese. This includes observer, creator, and admin surfaces. New UI
-copy should not be hard-coded in components unless it is technical data supplied
-by the API or by challenge/authored content.
+All user-facing web UI must use the message catalog and support English and Simplified Chinese.
+This includes observer, creator, and admin surfaces.
+New UI copy should not be hard-coded in components unless it is technical data supplied by the API or by challenge/authored content.
 
 ## Tailwind Integration
 
 The web frontend treats CSS custom properties as the VIS source of truth.
-Tailwind v4 consumes those tokens through semantic `@theme` aliases in the CSS
-entrypoint. New JSX should use the semantic Tailwind utility when one exists,
-and should avoid raw Tailwind palette classes for brand, surface, text, border,
-or status colors.
+Tailwind v4 consumes those tokens through semantic `@theme` aliases in the CSS entrypoint.
+New JSX should use the semantic Tailwind utility when one exists, and should avoid raw Tailwind palette classes for brand, surface, text, border, or status colors.
 
 | Intent | Preferred utility | Source token |
 |---|---|---|
@@ -41,18 +40,13 @@ or status colors.
 | Teal data/link text | `text-data` | `--accent-secondary-text` |
 | Control radius | `rounded-control` | `--radius-sm` |
 
-Use Tailwind for layout, spacing utilities, responsive variants, and state
-variants such as `hover:` and `focus-visible:`. Use VIS semantic utilities for
-brand values, text roles, surfaces, borders, status colors, type scale, and
-component radius. Prefer `rounded-control`, `rounded-panel`, and
-`rounded-dialog` over generic `rounded-sm`, `rounded-md`, and `rounded-lg` when
-the radius is part of the VIS.
+Use Tailwind for layout, spacing utilities, responsive variants, and state variants such as `hover:` and `focus-visible:`.
+Use VIS semantic utilities for brand values, text roles, surfaces, borders, status colors, type scale, and component radius.
+Prefer `rounded-control`, `rounded-panel`, and `rounded-dialog` over generic `rounded-sm`, `rounded-md`, and `rounded-lg` when the radius is part of the VIS.
 
-Use direct `var(--token)` references in CSS modules, complex gradients, canvas or
-media export code, and bespoke component CSS where a Tailwind class is not the
-clearest expression. Light and dark mode must be resolved in the token layer
-through `:root` and `html[data-theme="light"]` overrides. Do not scatter
-`dark:*` color classes through components.
+Use direct `var(--token)` references in CSS modules, complex gradients, canvas or media export code, and bespoke component CSS where a Tailwind class is not the clearest expression.
+Light and dark mode must be resolved in the token layer through `:root` and `html[data-theme="light"]` overrides.
+Do not scatter `dark:*` color classes through components.
 
 ---
 
@@ -248,18 +242,12 @@ Base unit: `4px`
 
 ### Communication Timeline Editor
 
-The hidden `/easter-editor` route is the internal tool for authoring
-communication timeline graphs. It keeps the graph model minimal: agent count,
-time steps, links, discovery dots, and animation constants. The visual editor
-supports direct dot linking, right-click or double-click discovery marking,
-JSON import, and export to JSON, WebM, and GIF.
+The hidden `/easter-editor` route is the internal tool for authoring communication timeline graphs.
+It keeps the graph model minimal: agent count, time steps, links, discovery dots, and animation constants.
+The visual editor supports direct dot linking, right-click or double-click discovery marking, JSON import, and export to JSON, WebM, and GIF.
 
-Media export is generated from the graph model with deterministic canvas frames,
-not by screen-recording the live SVG animation. Exported WebM and GIF files
-therefore follow the same derived causal timing as the philosophy animations:
-same-time vertical links fade as complete segments, cross-time links draw along
-their paths, discovery dots glow only when reached, and all active elements fade
-out together at the end of one loop.
+Media export is generated from the graph model with deterministic canvas frames, not by screen-recording the live SVG animation.
+Exported WebM and GIF files therefore follow the same derived causal timing as the philosophy animations: same-time vertical links fade as complete segments, cross-time links draw along their paths, discovery dots glow only when reached, and all active elements fade out together at the end of one loop.
 
 ---
 

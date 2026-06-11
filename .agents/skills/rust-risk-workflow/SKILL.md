@@ -5,10 +5,9 @@ description: Run and interpret Agentics Rust change-risk analysis with cargo llv
 
 # Rust Risk Workflow
 
-Use this skill to produce coverage-informed CRAP reports for the Agentics Rust
-workspace. Prefer the checked-in `just` recipes because they encode the local
-LCOV paths and `.cargo-crap.toml` filters. Do not skip tests when running the
-integration workflow, including tests marked `#[ignore]`.
+Use this skill to produce coverage-informed CRAP reports for the Agentics Rust workspace.
+Prefer the checked-in `just` recipes because they encode the local LCOV paths and `.cargo-crap.toml` filters.
+Do not skip tests when running the integration workflow, including tests marked `#[ignore]`.
 
 ## Quick Workflow
 
@@ -19,22 +18,18 @@ integration workflow, including tests marked `#[ignore]`.
    just risk::unit
    ```
 
-   The LCOV output is `target/llvm-cov/agentics-workspace.lcov`.
+The LCOV output is `target/llvm-cov/agentics-workspace.lcov`.
 
-3. For the better signal that includes DB-backed integration coverage, provide
-   an explicit disposable PostgreSQL database URL, then run the full integration
-   workflow, including ignored hardware tests:
+3. For the better signal that includes DB-backed integration coverage, provide an explicit disposable PostgreSQL database URL, then run the full integration workflow, including ignored hardware tests:
 
    ```bash
    AGENTICS_DATABASE_URL='postgres://agentics:agentics@127.0.0.1:5432/agentics_test' \
      just risk::integration
    ```
 
-   If the user or environment already provides `DATABASE_URL` or
-   `AGENTICS_DATABASE_URL`, use that instead of inventing one. The LCOV output
-   is `target/llvm-cov/agentics-workspace-with-integration.lcov`. If the test
-   run fails, stop and report the failing tests; do not run `cargo crap` against
-   an older LCOV file.
+If the user or environment already provides `DATABASE_URL` or `AGENTICS_DATABASE_URL`, use that instead of inventing one.
+The LCOV output is `target/llvm-cov/agentics-workspace-with-integration.lcov`.
+If the test run fails, stop and report the failing tests; do not run `cargo crap` against an older LCOV file.
 
 4. Use `AGENTICS_CRAP_TOP=<n>` to limit or expand the ranked report:
 
@@ -67,36 +62,25 @@ cargo crap --workspace \
   --top "${AGENTICS_CRAP_TOP:-30}"
 ```
 
-Quota-sensitive integration tests require a prepared Linux DGX XFS quota root
-from `agentics-prepare-dgx-spark-test-storage` and the matching
-`AGENTICS_TEST_RUNNER_*` environment variables. If that root is unavailable,
-report the failure or ask the user to prepare the test root; do not hide it with
-`--skip`.
+Quota-sensitive integration tests require a prepared Linux DGX XFS quota root from `agentics-prepare-dgx-spark-test-storage` and the matching `AGENTICS_TEST_RUNNER_*` environment variables.
+If that root is unavailable, report the failure or ask the user to prepare the test root; do not hide it with `--skip`.
 
-Ignored hardware tests, such as DGX CUDA smoke coverage, are part of this
-workflow. If the host lacks the required hardware or published images, report
-that failure directly instead of dropping `--include-ignored`.
+Ignored hardware tests, such as DGX CUDA smoke coverage, are part of this workflow.
+If the host lacks the required hardware or published images, report that failure directly instead of dropping `--include-ignored`.
 
 ## Interpretation
 
-- Prefer `just risk::integration` for API, DB, worker, and runner decisions. The
-  unit-only report can mark integration-covered production code as 0% covered.
-- Report the top offenders with CRAP score, cyclomatic complexity, coverage
-  percentage, function name, and file/line.
-- Treat 0% coverage as a prompt to verify whether a function is untested,
-  requires external infrastructure, or is only exercised through a path excluded
-  from the selected workflow.
-- Do not fail or block work on legacy CRAP findings unless the user asked for a
-  gate. For mature code, prefer a baseline or no-regression policy.
-- High CRAP usually calls for one of three actions: add meaningful tests,
-  decompose the function, or explicitly document why the path needs manual
-  validation.
+- Prefer `just risk::integration` for API, DB, worker, and runner decisions.
+  The unit-only report can mark integration-covered production code as 0% covered.
+- Report the top offenders with CRAP score, cyclomatic complexity, coverage percentage, function name, and file/line.
+- Treat 0% coverage as a prompt to verify whether a function is untested, requires external infrastructure, or is only exercised through a path excluded from the selected workflow.
+- Do not fail or block work on legacy CRAP findings unless the user asked for a gate.
+  For mature code, prefer a baseline or no-regression policy.
+- High CRAP usually calls for one of three actions: add meaningful tests, decompose the function, or explicitly document why the path needs manual validation.
 
 ## Troubleshooting
 
-- If `cargo llvm-cov` or `cargo crap` is missing, report that the cargo
-  subcommand is not installed and stop unless the user asks you to install it.
-- If integration coverage fails because `DATABASE_URL` is missing, ask the user
-  for the intended disposable test database URL. Do not resurrect the removed
-  legacy platform database helper.
+- If `cargo llvm-cov` or `cargo crap` is missing, report that the cargo subcommand is not installed and stop unless the user asks you to install it.
+- If integration coverage fails because `DATABASE_URL` is missing, ask the user for the intended disposable test database URL.
+  Do not resurrect the removed legacy platform database helper.
 - `target/llvm-cov/` is build output and should remain untracked.

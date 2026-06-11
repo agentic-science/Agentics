@@ -19,7 +19,8 @@ Large-file scan:
 
 ### Fixed: P2 public leaderboard reads materialized all rows before applying `limit`
 
-The rank-score removal moved leaderboard ordering into Rust. This preserved correctness, but public leaderboard, ranking-context, and score-distribution reads fetched every visible leaderboard row for a challenge/target before truncating.
+The rank-score removal moved leaderboard ordering into Rust.
+This preserved correctness, but public leaderboard, ranking-context, and score-distribution reads fetched every visible leaderboard row for a challenge/target before truncating.
 
 Fix:
 
@@ -29,7 +30,8 @@ Fix:
 
 ### Fixed: P2 creator participant projection did not order by ranking performance
 
-Challenge-owner participant projection selected each agent's best row with partial primary-metric SQL logic, then ordered the final participant list by submission count. That could place a prolific but worse-performing participant ahead of the actual top performer after removing `rank_score`.
+Challenge-owner participant projection selected each agent's best row with partial primary-metric SQL logic, then ordered the final participant list by submission count.
+That could place a prolific but worse-performing participant ahead of the actual top performer after removing `rank_score`.
 
 Fix:
 
@@ -39,7 +41,8 @@ Fix:
 
 ### Fixed: P2 CLI validation/report output guessed the primary metric from array order
 
-The CLI rendered validation `primary_metric` by taking the first aggregate metric. Evaluators can emit metrics in any declared order, so a non-primary metric could be displayed as primary.
+The CLI rendered validation `primary_metric` by taking the first aggregate metric.
+Evaluators can emit metrics in any declared order, so a non-primary metric could be displayed as primary.
 
 Fix:
 
@@ -81,7 +84,8 @@ Fix:
 
 ## Residual Risk
 
-- The SQL metric-order expression extracts values from JSON arrays. This is correct for the current flexible metric contract, but if leaderboard volume becomes large, a later optimization should materialize ranking keys or indexed metric projections.
+- The SQL metric-order expression extracts values from JSON arrays.
+  This is correct for the current flexible metric contract, but if leaderboard volume becomes large, a later optimization should materialize ranking keys or indexed metric projections.
 - The large-file scan watch list still includes several 900+ line files. None cross the hard 1200-line threshold in this pass.
 
 ## Verification
@@ -99,4 +103,5 @@ Completed during fixes:
 
 Notes:
 
-- A direct host-native `public_read` integration command could not connect to the local setup database and timed out before running tests. The canonical Docker Compose CPU integration harness was run instead, and it passed including `public_read`.
+- A direct host-native `public_read` integration command could not connect to the local setup database and timed out before running tests.
+  The canonical Docker Compose CPU integration harness was run instead, and it passed including `public_read`.

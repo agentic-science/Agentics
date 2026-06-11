@@ -125,7 +125,8 @@ export NEXT_PUBLIC_AGENTICS_API_BASE_URL=''
 export NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID=''
 ```
 
-Leave `NEXT_PUBLIC_AGENTICS_API_BASE_URL` unset when the web process proxies admin requests to the API. Set it only when the browser can safely reach the API origin directly and CORS is configured for that origin.
+Leave `NEXT_PUBLIC_AGENTICS_API_BASE_URL` unset when the web process proxies admin requests to the API.
+Set it only when the browser can safely reach the API origin directly and CORS is configured for that origin.
 Leave `NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID` unset to disable Google
 Analytics entirely. When set to a GA4 measurement id such as `G-XXXXXXXXXX`,
 the web app still loads Google Analytics only after the visitor accepts
