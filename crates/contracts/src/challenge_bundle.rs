@@ -31,6 +31,9 @@ pub use filesystem::{
 /// Hard maximum number of solution invocations in one evaluation.
 pub const MAX_CHALLENGE_RUNS_PER_EVALUATION: u64 = 100;
 
+/// Evaluator-visible generated manifest name reserved under the runner output root.
+const GENERATED_EVALUATOR_RUNS_FILE: &str = "agentics-runs.json";
+
 /// Read `spec.json` from a bundle directory and validate its contract fields.
 pub async fn read_challenge_bundle_spec(bundle_dir: &Path) -> Result<ChallengeBundleSpec> {
     let spec_path = bundle_dir.join("spec.json");
@@ -810,6 +813,11 @@ fn validate_challenge_run_manifest(manifest: &ChallengeRunManifest) -> Result<()
 
 /// Validates challenge run invariants for this contract.
 fn validate_challenge_run(run: &ChallengeRunSpec) -> Result<()> {
+    if run.run_name.as_str() == GENERATED_EVALUATOR_RUNS_FILE {
+        return Err(ServiceError::Validation(format!(
+            "runs[].run_name `{GENERATED_EVALUATOR_RUNS_FILE}` is reserved for runner metadata"
+        )));
+    }
     if run.stdin_json.is_some() && run.stdin_text.is_some() {
         return Err(ServiceError::Validation(
             "runs[].stdin_json and runs[].stdin_text cannot both be present".to_string(),

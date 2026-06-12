@@ -229,6 +229,29 @@ async fn run_manifest_metadata_cannot_shadow_reserved_fields() {
     assert!(error.to_string().contains("run_name"));
 }
 
+/// Verifies run names cannot collide with the runner-generated evaluator manifest.
+#[tokio::test]
+async fn run_manifest_rejects_generated_evaluator_manifest_name() {
+    let root = std::env::temp_dir().join(format!(
+        "agentics-bundle-reserved-run-name-{}",
+        uuid::Uuid::new_v4()
+    ));
+    let mut spec = base_spec();
+    spec.datasets.private_benchmark_enabled = false;
+    create_bundle(&root, &spec);
+    std::fs::write(
+        root.join("public/runs.json"),
+        r#"{"runs":[{"run_name":"agentics-runs.json","interface":"stdio","stdin_json":null,"stdin_text":"1","input_files":null,"output_files":null,"metadata":null}]}"#,
+    )
+    .expect("failed to write reserved run name");
+
+    let result = validate_challenge_bundle(&root).await;
+    drop(std::fs::remove_dir_all(root));
+
+    let error = result.expect_err("reserved run_name should fail");
+    assert!(error.to_string().contains("runner metadata"));
+}
+
 /// Verifies session metadata must be an object when present.
 #[tokio::test]
 async fn session_manifest_rejects_non_object_metadata() {

@@ -63,7 +63,7 @@ def score_runs(runs_file: Path, solution_runs_dir: Path, logs: list[str]) -> lis
             continue
 
         stdout = stdout_path.read_text(encoding="utf-8").strip()
-        expected = str(run["expected"])
+        expected = str(run["metadata"]["expected"])
         if stdout == expected:
             results.append({"case_name": run_name, "status": "passed", "score": 1})
         else:

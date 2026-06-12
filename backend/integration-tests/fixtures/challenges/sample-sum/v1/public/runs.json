@@ -4,19 +4,28 @@
       "run_name": "public-1",
       "interface": "stdio",
       "stdin_json": { "a": 1, "b": 2 },
-      "expected": "3"
+      "stdin_text": null,
+      "input_files": null,
+      "output_files": null,
+      "metadata": { "expected": "3" }
     },
     {
       "run_name": "public-2",
       "interface": "stdio",
       "stdin_json": { "a": -5, "b": 12 },
-      "expected": "7"
+      "stdin_text": null,
+      "input_files": null,
+      "output_files": null,
+      "metadata": { "expected": "7" }
     },
     {
       "run_name": "public-3",
       "interface": "stdio",
       "stdin_json": { "a": 4, "b": 6 },
-      "expected": "10"
+      "stdin_text": null,
+      "input_files": null,
+      "output_files": null,
+      "metadata": { "expected": "10" }
     }
   ]
 }

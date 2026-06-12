@@ -302,6 +302,16 @@ describe("frontend API schemas", () => {
     ).not.toThrow();
   });
 
+  it("rejects public challenge details missing metric schema", () => {
+    const value = structuredClone(challengeDetailResponseFixture) as Record<
+      string,
+      unknown
+    >;
+    delete (value.spec as Record<string, unknown>).metric_schema;
+
+    expect(() => challengeDetailResponseSchema.parse(value)).toThrow();
+  });
+
   it("rejects impossible coexecuted target run profiles", () => {
     expect(() =>
       challengeDetailResponseSchema.parse({

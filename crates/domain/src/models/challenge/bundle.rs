@@ -123,7 +123,6 @@ pub struct PublicChallengeBundleSpec {
     pub execution: PublicChallengeExecutionSpec,
     pub datasets: PublicDatasetsSpec,
     /// Metric definitions and ranking metadata used to interpret evaluator output.
-    #[serde(default)]
     #[schemars(required)]
     pub metric_schema: MetricSchemaSpec,
 }

@@ -95,7 +95,7 @@ def score_run(run: dict[str, Any], solution_runs_dir: Path, logs: list[str]) -> 
 
     grid = load_json(case_file)["grid"]
     candidate_path = candidate_path_file.read_text(encoding="utf-8").strip()
-    benchmark_metrics = analyze_path(grid, run["benchmark_path"])
+    benchmark_metrics = analyze_path(grid, run["metadata"]["benchmark_path"])
     if benchmark_metrics["status"] != "passed":
         raise ValueError(f"invalid benchmark for {run_name}: {benchmark_metrics['message']}")
 

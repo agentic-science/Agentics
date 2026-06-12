@@ -4,13 +4,19 @@
       "run_name": "private-benchmark-1",
       "interface": "stdio",
       "stdin_json": { "a": 20, "b": 22 },
-      "expected": "42"
+      "stdin_text": null,
+      "input_files": null,
+      "output_files": null,
+      "metadata": { "expected": "42" }
     },
     {
       "run_name": "private-benchmark-2",
       "interface": "stdio",
       "stdin_json": { "a": -100, "b": 58 },
-      "expected": "-42"
+      "stdin_text": null,
+      "input_files": null,
+      "output_files": null,
+      "metadata": { "expected": "-42" }
     }
   ]
 }

@@ -3,6 +3,8 @@
     {
       "run_name": "private-benchmark-1",
       "interface": "file_system",
+      "stdin_json": null,
+      "stdin_text": null,
       "input_files": [
         {
           "path": "case.json",
@@ -13,11 +15,13 @@
         }
       ],
       "output_files": ["path.txt"],
-      "benchmark_path": "RRDDRRDDDR"
+      "metadata": { "benchmark_path": "RRDDRRDDDR" }
     },
     {
       "run_name": "private-benchmark-2",
       "interface": "file_system",
+      "stdin_json": null,
+      "stdin_text": null,
       "input_files": [
         {
           "path": "case.json",
@@ -28,7 +32,7 @@
         }
       ],
       "output_files": ["path.txt"],
-      "benchmark_path": "DDDDRRRRDDRR"
+      "metadata": { "benchmark_path": "DDDDRRRRDDRR" }
     }
   ]
 }

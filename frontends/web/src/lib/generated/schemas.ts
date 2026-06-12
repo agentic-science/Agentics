@@ -2528,23 +2528,7 @@ export const challengeDetailResponseSchema = z
           .strict()
           .describe(
             "Metric definitions and ranking metadata used to interpret evaluator output.",
-          )
-          .default({
-            metrics: [
-              {
-                name: "score",
-                label: "Score",
-                unit: null,
-                direction: "maximize",
-                visibility: "public",
-                metric_description: "Challenge-defined compatibility score.",
-              },
-            ],
-            ranking: {
-              primary_metric_name: "score",
-              tie_breaker_metric_names: null,
-            },
-          }),
+          ),
       })
       .strict()
       .describe(

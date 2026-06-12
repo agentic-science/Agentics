@@ -68,14 +68,22 @@
         },
         "resource_description": "Single CPU worker profile for protocol fixtures.",
         "hardware_metadata": {
-          "kind": "cpu"
+          "kind": "cpu",
+          "gpu_model": null,
+          "gpu_count": null,
+          "gpu_memory_gb": null,
+          "cuda_variant": null,
+          "cuda_version": null,
+          "driver_minimum": null
         }
       }
     }
   ],
   "starts_at": "2026-01-01T00:00:00Z",
+  "closes_at": null,
   "eligibility": { "type": "open" },
   "validation_submission_limit": 20,
+  "official_submission_limit": null,
   "visibility": {
     "leaderboard": "public_live",
     "score_distribution": "public_live",
@@ -89,7 +97,9 @@
       "result_file": "result.json"
     },
     "validation_runs": "public/runs.json",
-    "official_runs": "private-benchmark/runs.json"
+    "validation_setup": null,
+    "official_runs": "private-benchmark/runs.json",
+    "official_evaluation_setup": null
   },
   "datasets": {
     "public_dir": "public",
@@ -103,6 +113,7 @@
       {
         "name": "score",
         "label": "Score",
+        "unit": null,
         "direction": "maximize",
         "visibility": "public",
         "metric_description": "Fraction of runs whose output exactly matches the expected value."

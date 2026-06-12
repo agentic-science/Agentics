@@ -107,8 +107,10 @@ fn private_benchmark_asset_zip_base64_with_nonce(nonce: i32) -> String {
                     "run_name": format!("official-case-{nonce}"),
                     "interface": "stdio",
                     "stdin_json": { "a": 1, "b": 2 },
-                    "expected": "3",
-                    "output_files": []
+                    "stdin_text": null,
+                    "input_files": null,
+                    "output_files": null,
+                    "metadata": { "expected": "3" }
                 }
             ]
         })

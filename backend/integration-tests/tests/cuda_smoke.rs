@@ -347,7 +347,7 @@ fn write_cuda_smoke_bundles(root: &std::path::Path) -> (std::path::PathBuf, std:
         .expect("failed to write statement");
         std::fs::write(
             bundle.join("public/runs.json"),
-            r#"{"runs":[{"run_name":"public-gpu","interface":"stdio"}]}"#,
+            r#"{"runs":[{"run_name":"public-gpu","interface":"stdio","stdin_json":null,"stdin_text":null,"input_files":null,"output_files":null,"metadata":null}]}"#,
         )
         .expect("failed to write public runs");
         std::fs::write(
@@ -405,7 +405,7 @@ Path(args.output_path).write_text(json.dumps(payload))
         .expect("failed to create private benchmark dir");
     std::fs::write(
         private_bundle.join("private-benchmark/runs.json"),
-        r#"{"runs":[{"run_name":"official-gpu","interface":"stdio"}]}"#,
+        r#"{"runs":[{"run_name":"official-gpu","interface":"stdio","stdin_json":null,"stdin_text":null,"input_files":null,"output_files":null,"metadata":null}]}"#,
     )
     .expect("failed to write official runs");
 
@@ -440,19 +440,23 @@ Path(args.output_path).write_text(json.dumps(payload))
                         "setup": {"timeout_sec": 30, "memory_limit_mb": 1024, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"},
                         "run": {"timeout_sec": 30, "memory_limit_mb": 1024, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"}
                     },
+                    "resource_description": "Single GPU worker profile for CUDA integration smoke.",
                     "hardware_metadata": {
                         "kind": "cuda",
                         "gpu_model": "NVIDIA GB10",
                         "gpu_count": 1,
                         "gpu_memory_gb": 128,
                         "cuda_variant": "cu130",
-                        "cuda_version": "13.0"
+                        "cuda_version": "13.0",
+                        "driver_minimum": null
                     }
                 }
             }],
             "starts_at": "2026-01-01T00:00:00Z",
+            "closes_at": null,
             "eligibility": {"type": "open"},
             "validation_submission_limit": 20,
+            "official_submission_limit": null,
             "visibility": {
                 "leaderboard": "public_live",
                 "score_distribution": "public_live",
@@ -466,7 +470,9 @@ Path(args.output_path).write_text(json.dumps(payload))
                     "result_file": "result.json"
                 },
                 "validation_runs": "public/runs.json",
-                "official_runs": "private-benchmark/runs.json"
+                "validation_setup": null,
+                "official_runs": "private-benchmark/runs.json",
+                "official_evaluation_setup": null
             },
             "datasets": {
                 "public_dir": "public",
@@ -477,8 +483,8 @@ Path(args.output_path).write_text(json.dumps(payload))
             },
             "metric_schema": {
                 "metrics": [
-                    {"name": "score", "label": "Score", "direction": "maximize", "visibility": "public"},
-                    {"name": "passed_cases", "label": "Passed Cases", "direction": "maximize", "visibility": "public"}
+                    {"name": "score", "label": "Score", "unit": null, "direction": "maximize", "visibility": "public", "metric_description": "Fraction of CUDA runs that returned the expected value."},
+                    {"name": "passed_cases", "label": "Passed Cases", "unit": "cases", "direction": "maximize", "visibility": "public", "metric_description": "Number of CUDA runs that passed."}
                 ],
                 "ranking": {
                     "primary_metric_name": "score",

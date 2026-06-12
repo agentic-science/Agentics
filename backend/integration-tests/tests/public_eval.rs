@@ -199,6 +199,7 @@ fn create_piped_stdio_challenge(root: &Path) {
         bundle_dir.join("public/session.json"),
         serde_json::json!({
             "session_name": "public-1",
+            "input_files": null,
             "metadata": { "a": 2, "b": 3 }
         })
         .to_string(),
@@ -208,6 +209,7 @@ fn create_piped_stdio_challenge(root: &Path) {
         bundle_dir.join("private-benchmark/session.json"),
         serde_json::json!({
             "session_name": "official-1",
+            "input_files": null,
             "metadata": { "a": 11, "b": 31 }
         })
         .to_string(),
@@ -296,12 +298,24 @@ Path(args.output_path).write_text(json.dumps({
                     "evaluator": {
                         "setup": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 256, "network_access": "disabled"},
                         "run": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 256, "network_access": "disabled"}
+                    },
+                    "resource_description": "Single CPU worker profile for piped-stdio integration fixtures.",
+                    "hardware_metadata": {
+                        "kind": "cpu",
+                        "gpu_model": null,
+                        "gpu_count": null,
+                        "gpu_memory_gb": null,
+                        "cuda_variant": null,
+                        "cuda_version": null,
+                        "driver_minimum": null
                     }
                 }
             }],
             "starts_at": "2026-01-01T00:00:00Z",
+            "closes_at": null,
             "eligibility": { "type": "open" },
             "validation_submission_limit": 20,
+            "official_submission_limit": null,
             "visibility": {
                 "leaderboard": "public_live",
                 "score_distribution": "public_live",
@@ -316,7 +330,9 @@ Path(args.output_path).write_text(json.dumps({
                     "result_file": "result.json"
                 },
                 "validation_session": "public/session.json",
-                "official_session": "private-benchmark/session.json"
+                "validation_setup": null,
+                "official_session": "private-benchmark/session.json",
+                "official_evaluation_setup": null
             },
             "datasets": {
                 "public_dir": "public",
@@ -330,14 +346,18 @@ Path(args.output_path).write_text(json.dumps({
                     {
                         "name": "score",
                         "label": "Score",
+                        "unit": null,
                         "direction": "maximize",
-                        "visibility": "public"
+                        "visibility": "public",
+                        "metric_description": "Fraction of interactive sessions that returned the expected sum."
                     },
                     {
                         "name": "passed_cases",
                         "label": "Passed Cases",
+                        "unit": "cases",
                         "direction": "maximize",
-                        "visibility": "public"
+                        "visibility": "public",
+                        "metric_description": "Number of interactive sessions that passed."
                     }
                 ],
                 "ranking": {
@@ -456,17 +476,30 @@ Path(args.output_path).write_text(json.dumps(payload))
                 },
                 "solution": {
                     "setup": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 256, "network_access": "disabled"},
-                    "build": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 256, "network_access": "disabled"}
+                    "build": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 256, "network_access": "disabled"},
+                    "run": null
                 },
                 "evaluator": {
                     "setup": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 256, "network_access": "disabled"},
                     "run": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 256, "network_access": "disabled"}
+                },
+                "resource_description": "Single CPU worker profile for coexecuted integration fixtures.",
+                "hardware_metadata": {
+                    "kind": "cpu",
+                    "gpu_model": null,
+                    "gpu_count": null,
+                    "gpu_memory_gb": null,
+                    "cuda_variant": null,
+                    "cuda_version": null,
+                    "driver_minimum": null
                 }
             }
         }],
         "starts_at": "2026-01-01T00:00:00Z",
+        "closes_at": null,
         "eligibility": { "type": "open" },
         "validation_submission_limit": 20,
+        "official_submission_limit": null,
         "visibility": {
             "leaderboard": "public_live",
             "score_distribution": "public_live",
@@ -479,7 +512,9 @@ Path(args.output_path).write_text(json.dumps(payload))
                 "command": ["python", "coexecuted-evaluator/run.py"],
                 "result_file": "result.json"
             },
-            "acknowledge_danger": true
+            "acknowledge_danger": true,
+            "validation_setup": null,
+            "official_evaluation_setup": null
         },
         "datasets": {
             "public_dir": "public",
@@ -493,14 +528,18 @@ Path(args.output_path).write_text(json.dumps(payload))
                 {
                     "name": "score",
                     "label": "Score",
+                    "unit": null,
                     "direction": "maximize",
-                    "visibility": "public"
+                    "visibility": "public",
+                    "metric_description": "Fraction of coexecuted sessions that returned the expected sum."
                 },
                 {
                     "name": "passed_cases",
                     "label": "Passed Cases",
+                    "unit": "cases",
                     "direction": "maximize",
-                    "visibility": "public"
+                    "visibility": "public",
+                    "metric_description": "Number of coexecuted sessions that passed."
                 }
             ],
             "ranking": {

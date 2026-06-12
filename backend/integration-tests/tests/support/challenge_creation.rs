@@ -226,8 +226,10 @@ pub fn write_public_challenge(repo: &Path) -> String {
                     "run_name": "case-1",
                     "interface": "stdio",
                     "stdin_json": { "a": 1, "b": 2 },
-                    "expected": "3",
-                    "output_files": []
+                    "stdin_text": null,
+                    "input_files": null,
+                    "output_files": null,
+                    "metadata": { "expected": "3" }
                 }
             ]
         })
@@ -255,11 +257,12 @@ pub fn write_public_challenge(repo: &Path) -> String {
                     "docker_platform": "linux/arm64",
                     "accelerator": null,
                     "validation_enabled": true,
-                    "resource_profile": {
-                        "name": "agentics-cpu-small",
-                        "solution_image": {
-                            "source": "local",
-                            "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
+                        "resource_profile": {
+                            "name": "agentics-cpu-small",
+                            "resource_description": "Small CPU profile for integration tests.",
+                            "solution_image": {
+                                "source": "local",
+                                "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
                         },
                         "evaluator_image": {
                             "source": "local",
@@ -273,13 +276,24 @@ pub fn write_public_challenge(repo: &Path) -> String {
                         "evaluator": {
                             "setup": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "enabled"},
                             "run": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"}
+                        },
+                        "hardware_metadata": {
+                            "kind": "cpu",
+                            "gpu_model": null,
+                            "gpu_count": null,
+                            "gpu_memory_gb": null,
+                            "cuda_variant": null,
+                            "cuda_version": null,
+                            "driver_minimum": null
                         }
                     }
                 }
             ],
             "starts_at": "2026-01-01T00:00:00Z",
+            "closes_at": null,
             "eligibility": { "type": "open" },
             "validation_submission_limit": 20,
+            "official_submission_limit": null,
             "visibility": {
                 "leaderboard": "public_live",
                 "score_distribution": "public_live",
@@ -293,7 +307,9 @@ pub fn write_public_challenge(repo: &Path) -> String {
                     "result_file": "result.json"
                 },
                 "validation_runs": "public/runs.json",
-                "official_runs": "private-benchmark/runs.json"
+                "validation_setup": null,
+                "official_runs": "private-benchmark/runs.json",
+                "official_evaluation_setup": null
             },
             "datasets": {
                 "public_dir": "public",
@@ -307,12 +323,15 @@ pub fn write_public_challenge(repo: &Path) -> String {
                     {
                         "name": "score",
                         "label": "Score",
+                        "unit": null,
                         "direction": "maximize",
-                        "visibility": "public"
+                        "visibility": "public",
+                        "metric_description": null
                     }
                 ],
                 "ranking": {
-                    "primary_metric_name": "score"
+                    "primary_metric_name": "score",
+                    "tie_breaker_metric_names": null
                 }
             }
         })
@@ -419,8 +438,10 @@ pub fn private_benchmark_asset_zip_base64() -> String {
                         "run_name": "private-benchmark-1",
                         "interface": "stdio",
                         "stdin_json": { "a": 20, "b": 22 },
-                        "expected": "42",
-                        "output_files": []
+                        "stdin_text": null,
+                        "input_files": null,
+                        "output_files": null,
+                        "metadata": { "expected": "42" }
                     }
                 ]
             })
@@ -456,7 +477,7 @@ def main() -> int:
     results = []
     for run in runs:
         stdout = (Path(args.solution_runs_dir) / run["run_name"] / "stdout.txt").read_text(encoding="utf-8").strip()
-        passed = stdout == str(run["expected"])
+        passed = stdout == str(run["metadata"]["expected"])
         results.append({"case_name": run["run_name"], "status": "passed" if passed else "failed", "score": 1 if passed else 0})
     passed_count = sum(1 for result in results if result["status"] == "passed")
     total = len(results)
