@@ -235,6 +235,8 @@ agentics challenge-creator review-record upload-private-asset <review-record-id>
 agentics challenge-creator review-record status <review-record-id>
 ```
 
+`agentics challenge-creator check` fails on contract violations and may also emit warnings for accepted MVP risks, such as official private-material stages that run with network access.
+
 ## Review Record Lifecycle
 
 1. A creator opens a PR in the challenge repository.

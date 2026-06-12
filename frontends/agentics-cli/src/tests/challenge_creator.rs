@@ -90,6 +90,50 @@ async fn challenge_creator_check_rejects_missing_required_nullable_field() {
     assert!(error.to_string().contains("hardware_metadata"));
 }
 
+/// Verifies JSON check failures still produce a machine-readable report.
+#[tokio::test]
+async fn challenge_creator_check_json_failure_carries_report_output() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let proposal = temp.path().join("sample-sum");
+    write_valid_check_proposal(&proposal, "sample-sum");
+    let spec_path = proposal.join("v1/spec.json");
+    let mut spec: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&spec_path).expect("spec file"))
+            .expect("spec should be JSON");
+    spec["targets"][0]["resource_profile"]
+        .as_object_mut()
+        .expect("resource profile should be an object")
+        .remove("hardware_metadata");
+    std::fs::write(&spec_path, spec.to_string()).expect("spec update");
+    let config_path = temp.path().join("config.toml");
+    let cli = Cli::parse_from([
+        "agentics",
+        "--config",
+        config_path.to_str().expect("utf8 path"),
+        "--json",
+        "challenge-creator",
+        "check",
+        proposal.to_str().expect("utf8 path"),
+    ]);
+
+    let error = execute(cli, Environment::default())
+        .await
+        .expect_err("missing required nullable field should fail check");
+    let failure = error
+        .downcast_ref::<crate::CommandFailureWithOutput>()
+        .expect("JSON check failure should carry structured output");
+    let value: serde_json::Value =
+        serde_json::from_str(failure.output()).expect("failure output should be JSON");
+
+    assert_eq!(value["failed_count"], 1);
+    assert!(
+        value["results"][0]["error"]
+            .as_str()
+            .expect("error string")
+            .contains("hardware_metadata")
+    );
+}
+
 /// Verifies local challenge proposal checks reject directories that are not recognizable proposals.
 #[tokio::test]
 async fn challenge_creator_check_rejects_invalid_path_shape() {

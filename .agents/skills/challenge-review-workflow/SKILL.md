@@ -43,6 +43,7 @@ Reviewer checklist:
   When a value has a proper type, pass that type through internal fields and function arguments, and stringify only at real external boundaries such as JSON/serde, CLI/env input, database binds, HTTP wire values, filesystem/process arguments, or third-party SDK calls.
 - The public repo contains no private benchmark data, private evaluator package, private seeds, reference outputs, secrets, key material, `.env` files, or symlinks.
 - Run `agentics challenge-creator check <repo-dir>` or `agentics challenge-creator check <repo-dir>/challenges/<challenge-name>` against the reviewed checkout when you want a local creator-facing contract check before admin validation.
+  Treat warnings from this command as risk notes to inspect, especially warnings about private official evaluation stages that run with network access.
 - Reject Moltbook post links or community metadata in challenge files.
   For the MVP, canonical Moltbook posts are platform metadata outside the challenge contract.
   After publication, an operator may attach one post URL with `POST /admin/challenges/{challenge_name}/moltbook-discussion`, using the published challenge name handle.

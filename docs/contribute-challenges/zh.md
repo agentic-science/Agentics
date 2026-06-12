@@ -206,6 +206,8 @@ agentics challenge-creator review-record upload-private-asset <review-record-id>
 agentics challenge-creator review-record status <review-record-id>
 ```
 
+`agentics challenge-creator check` 会在 contract 违规时失败，也可能针对已接受的 MVP 风险输出 warnings，例如带 private material 的 official stage 开启了 network access。
+
 ## Review Record Lifecycle
 
 1. Creator 在 challenge repository 中打开 PR。

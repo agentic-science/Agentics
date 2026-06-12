@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use agentics_domain::models::auth::GithubUserId;
+use agentics_domain::models::challenge::{ChallengeBundleSpec, ChallengeExecutionMode};
 use agentics_domain::models::challenge_creation::AGENTICS_CHALLENGE_MANIFEST_FILE;
 use agentics_domain::models::challenge_creation::{
     ChallengePrivateAssetKind, CreateChallengeReviewRecordRequest,
@@ -10,12 +11,12 @@ use agentics_domain::models::names::ChallengeName;
 use agentics_domain::models::paths::RepoRelativePath;
 use agentics_domain::models::request::CreateChallengeShortlistRevisionRequest;
 use agentics_domain::models::urls::{GithubPullRequestUrl, GithubRepoRemote};
+use agentics_domain::zip_project::ZipProjectNetworkAccess;
 use anyhow::{Context, Result, anyhow, bail};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use secrecy::{ExposeSecret, SecretString};
 use serde::Serialize;
 
-use crate::CommandInput;
 use crate::api::ApiClient;
 use crate::cli::{
     self, ChallengePrivateAssetKindArg, ChallengeReviewRecordCommand, ChallengeShortlistCommand,
@@ -23,12 +24,14 @@ use crate::cli::{
 };
 use crate::config::ResolvedSettings;
 use crate::output;
+use crate::{CommandFailureWithOutput, CommandInput};
 
 #[derive(Debug, Serialize)]
 struct ChallengeCheckReport {
     checked_count: usize,
     passed_count: usize,
     failed_count: usize,
+    warning_count: usize,
     results: Vec<ChallengeCheckResult>,
 }
 
@@ -37,6 +40,7 @@ struct ChallengeCheckResult {
     path: String,
     challenge_name: Option<ChallengeName>,
     status: ChallengeCheckStatus,
+    warnings: Vec<String>,
     error: Option<String>,
 }
 
@@ -59,16 +63,18 @@ pub(crate) async fn challenge_creator_check(
         let path = root.display().to_string();
         let validation = validate_challenge_proposal_root(&root).await;
         match validation {
-            Ok(challenge_name) => results.push(ChallengeCheckResult {
+            Ok((challenge_name, warnings)) => results.push(ChallengeCheckResult {
                 path,
                 challenge_name: Some(challenge_name),
                 status: ChallengeCheckStatus::Passed,
+                warnings,
                 error: None,
             }),
             Err(error) => results.push(ChallengeCheckResult {
                 path,
                 challenge_name: None,
                 status: ChallengeCheckStatus::Failed,
+                warnings: Vec::new(),
                 error: Some(format!("{error:#}")),
             }),
         }
@@ -80,14 +86,21 @@ pub(crate) async fn challenge_creator_check(
         .count();
     let checked_count = results.len();
     let failed_count = checked_count.saturating_sub(passed_count);
+    let warning_count = results.iter().map(|result| result.warnings.len()).sum();
     let report = ChallengeCheckReport {
         checked_count,
         passed_count,
         failed_count,
+        warning_count,
         results,
     };
     let rendered = render_challenge_check_report(&report, output_format)?;
     if report.failed_count > 0 {
+        if output_format == cli::OutputFormat::Json {
+            return Err(
+                CommandFailureWithOutput::new("challenge proposal check failed", rendered).into(),
+            );
+        }
         bail!("{rendered}");
     }
     Ok(rendered)
@@ -131,7 +144,7 @@ fn proposal_children(path: &Path) -> Result<Vec<PathBuf>> {
     Ok(children)
 }
 
-async fn validate_challenge_proposal_root(root: &Path) -> Result<ChallengeName> {
+async fn validate_challenge_proposal_root(root: &Path) -> Result<(ChallengeName, Vec<String>)> {
     let manifest =
         agentics_contracts::challenge_creation::validate_challenge_creation_repository(root)
             .await
@@ -146,7 +159,51 @@ async fn validate_challenge_proposal_root(root: &Path) -> Result<ChallengeName> 
             manifest.challenge_name
         );
     }
-    Ok(manifest.challenge_name)
+    let warnings = if let Some(bundle_path) = manifest.bundle_path.as_ref() {
+        let spec = agentics_contracts::challenge_bundle::read_challenge_bundle_spec(
+            &root.join(bundle_path.as_path()),
+        )
+        .await?;
+        challenge_contract_warnings(&spec)
+    } else {
+        Vec::new()
+    };
+    Ok((manifest.challenge_name, warnings))
+}
+
+fn challenge_contract_warnings(spec: &ChallengeBundleSpec) -> Vec<String> {
+    if !spec.official_evaluation_may_expose_private_material() {
+        return Vec::new();
+    }
+
+    let mut warnings = Vec::new();
+    match spec.execution.mode() {
+        ChallengeExecutionMode::SeparatedEvaluator | ChallengeExecutionMode::PipedStdio => {
+            for target in &spec.targets {
+                if let Some(run) = &target.resource_profile.solution.run
+                    && run.network_access != ZipProjectNetworkAccess::Disabled
+                {
+                    warnings.push(format!(
+                        "target `{}` enables {:?} network for participant official runs while official evaluation may expose private material",
+                        target.name, run.network_access
+                    ));
+                }
+            }
+        }
+        ChallengeExecutionMode::CoexecutedBenchmark => {
+            for target in &spec.targets {
+                let run = &target.resource_profile.evaluator.run;
+                if run.network_access != ZipProjectNetworkAccess::Disabled {
+                    warnings.push(format!(
+                        "target `{}` enables {:?} network for coexecuted official benchmark runs where participant code shares the evaluator container",
+                        target.name, run.network_access
+                    ));
+                }
+            }
+        }
+    }
+
+    warnings
 }
 
 fn render_challenge_check_report(
@@ -155,8 +212,8 @@ fn render_challenge_check_report(
 ) -> Result<String> {
     let mut lines = Vec::new();
     lines.push(format!(
-        "checked: {}  passed: {}  failed: {}",
-        report.checked_count, report.passed_count, report.failed_count
+        "checked: {}  passed: {}  failed: {}  warnings: {}",
+        report.checked_count, report.passed_count, report.failed_count, report.warning_count
     ));
     for result in &report.results {
         let status = match result.status {
@@ -171,6 +228,9 @@ fn render_challenge_check_report(
         lines.push(format!("{status}\t{name}\t{}", result.path));
         if let Some(error) = &result.error {
             lines.push(format!("  {error}"));
+        }
+        for warning in &result.warnings {
+            lines.push(format!("  warning: {warning}"));
         }
     }
     output::render_json_or_text(report, lines.join("\n"), output_format)

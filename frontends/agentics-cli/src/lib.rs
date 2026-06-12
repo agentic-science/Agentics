@@ -41,11 +41,42 @@ use crate::config::{ConfigStore, Environment, ResolvedSettings};
 pub async fn run_from_env() -> Result<()> {
     let cli = Cli::parse();
     let env = Environment::from_process()?;
-    let output = execute(cli, env).await?;
-    if !output.is_empty() {
-        println!("{output}");
+    match execute(cli, env).await {
+        Ok(output) => {
+            if !output.is_empty() {
+                println!("{output}");
+            }
+            Ok(())
+        }
+        Err(error) => {
+            if let Some(failure) = error.downcast_ref::<CommandFailureWithOutput>()
+                && !failure.output().is_empty()
+            {
+                println!("{}", failure.output());
+            }
+            Err(error)
+        }
     }
-    Ok(())
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
+pub(crate) struct CommandFailureWithOutput {
+    message: String,
+    output: String,
+}
+
+impl CommandFailureWithOutput {
+    pub(crate) fn new(message: impl Into<String>, output: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            output: output.into(),
+        }
+    }
+
+    pub(crate) fn output(&self) -> &str {
+        &self.output
+    }
 }
 
 #[derive(Clone, Default)]
