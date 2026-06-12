@@ -94,6 +94,16 @@ pub(super) async fn check_runner_docker_pypi_egress(
 ) -> Result<Vec<ReportLine>, ComposeProdError> {
     let config = RunnerDockerConfig::from_context(context)?;
     config.validate_dedicated_socket()?;
+    if !context
+        .compose_profiles
+        .iter()
+        .any(|profile| profile == "gpu")
+    {
+        return Ok(vec![ReportLine::skip(
+            "runner Docker PyPI egress",
+            "GPU Compose profile is not active; skipping GPU probe-image PyPI check",
+        )]);
+    }
     let Some(image) = context.string_value(|env| env.worker_gpu_probe_image.as_ref(), "") else {
         return Ok(vec![ReportLine::skip(
             "runner Docker PyPI egress",

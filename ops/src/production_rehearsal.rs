@@ -15,7 +15,7 @@ use agentics_persistence::Repositories;
 use agentics_storage::build_storage;
 use clap::{Parser, Subcommand, ValueEnum};
 use reqwest::{Client, Url};
-use secrecy::ExposeSecret;
+use secrecy::{ExposeSecret, SecretString};
 use sqlx::postgres::PgPoolOptions;
 
 use crate::support::run_with_ctrl_c;
@@ -274,7 +274,7 @@ async fn run(args: RunArgs) -> Result<RehearsalReport, ProductionRehearsalError>
 
 #[derive(Debug, Default)]
 struct RehearsalState {
-    agent_token: Option<String>,
+    agent_token: Option<SecretString>,
     pioneer_code_id: Option<String>,
 }
 
@@ -394,12 +394,15 @@ fn heartbeat_check(value: serde_json::Value, gpu_mode: GpuMode) -> CheckEvidence
 }
 
 fn worker_advertises_gpu(worker: &serde_json::Value) -> bool {
-    worker.get("payload").is_some_and(|payload| {
-        payload
-            .to_string()
-            .split(|ch: char| !ch.is_ascii_alphanumeric())
-            .any(|part| part == "gpu")
-    })
+    worker
+        .get("payload")
+        .and_then(|payload| payload.get("accelerators"))
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|accelerators| {
+            accelerators
+                .iter()
+                .any(|accelerator| accelerator.as_str() == Some("gpu"))
+        })
 }
 
 async fn run_identity_phase(
@@ -468,7 +471,7 @@ async fn run_identity_phase(
                 state.agent_token = value
                     .get("token")
                     .and_then(serde_json::Value::as_str)
-                    .map(ToOwned::to_owned);
+                    .map(|value| SecretString::from(value.to_string()));
                 checks.push(CheckEvidence::passed(
                     "register rehearsal agent",
                     "registered agent and received bearer token",
@@ -570,7 +573,7 @@ async fn run_happy_path_phase(
 ) -> PhaseEvidence {
     let start = Instant::now();
     let mut checks = Vec::new();
-    let Some(token) = state.agent_token.as_deref() else {
+    let Some(token) = state.agent_token.as_ref() else {
         return PhaseEvidence::from_checks(
             "happy-path",
             start.elapsed(),
@@ -602,7 +605,7 @@ async fn run_happy_path_phase(
         let validation = create_agent_submission(
             client,
             api_base_url,
-            token,
+            token.expose_secret(),
             "api/agent/validation-runs",
             challenge,
             &artifact,
@@ -616,7 +619,7 @@ async fn run_happy_path_phase(
                     wait_for_submission(
                         client,
                         api_base_url,
-                        token,
+                        token.expose_secret(),
                         &format!("api/agent/validation-runs/{id}"),
                         &format!("{} validation", challenge.mode),
                         wait_timeout,
@@ -633,7 +636,7 @@ async fn run_happy_path_phase(
         let official = create_agent_submission(
             client,
             api_base_url,
-            token,
+            token.expose_secret(),
             "api/agent/solution-submissions",
             challenge,
             &artifact,
@@ -647,7 +650,7 @@ async fn run_happy_path_phase(
                     wait_for_submission(
                         client,
                         api_base_url,
-                        token,
+                        token.expose_secret(),
                         &format!("api/agent/solution-submissions/{id}"),
                         &format!("{} official", challenge.mode),
                         wait_timeout,
@@ -696,7 +699,7 @@ async fn run_adversarial_phase(
 ) -> PhaseEvidence {
     let start = Instant::now();
     let mut checks = Vec::new();
-    let Some(token) = state.agent_token.as_deref() else {
+    let Some(token) = state.agent_token.as_ref() else {
         return PhaseEvidence::from_checks(
             "adversarial",
             start.elapsed(),
@@ -730,7 +733,7 @@ async fn run_adversarial_phase(
                     expect_submission_rejected(
                         client,
                         api_base_url,
-                        token,
+                        token.expose_secret(),
                         separated,
                         &artifact,
                         name,
@@ -747,7 +750,7 @@ async fn run_adversarial_phase(
             match create_agent_submission(
                 client,
                 api_base_url,
-                token,
+                token.expose_secret(),
                 "api/agent/validation-runs",
                 separated,
                 &artifact,
@@ -759,7 +762,7 @@ async fn run_adversarial_phase(
                     let check = wait_for_submission(
                         client,
                         api_base_url,
-                        token,
+                        token.expose_secret(),
                         &format!("api/agent/validation-runs/{id}"),
                         "run-stage network probe",
                         wait_timeout,
@@ -784,7 +787,7 @@ async fn run_adversarial_phase(
             match create_agent_submission(
                 client,
                 api_base_url,
-                token,
+                token.expose_secret(),
                 "api/agent/solution-submissions",
                 separated,
                 &artifact,
@@ -797,7 +800,7 @@ async fn run_adversarial_phase(
                         wait_for_submission(
                             client,
                             api_base_url,
-                            token,
+                            token.expose_secret(),
                             &format!("api/agent/solution-submissions/{id}"),
                             "participant private-data probe",
                             wait_timeout,
@@ -1145,46 +1148,4 @@ async fn public_projection_check(
 }
 
 #[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    use super::{GpuMode, RehearsalStatus, heartbeat_check};
-
-    /// Verifies GPU-required rehearsal accepts a GPU heartbeat even when CPU worker appears first.
-    #[test]
-    fn heartbeat_check_scans_all_workers_for_gpu_capability() {
-        let check = heartbeat_check(
-            json!({
-                "items": [
-                    {
-                        "service_name": "worker-cpu",
-                        "payload": { "accelerators": "none" }
-                    },
-                    {
-                        "service_name": "worker-gpu",
-                        "payload": { "accelerators": "gpu" }
-                    }
-                ]
-            }),
-            GpuMode::Require,
-        );
-        assert_eq!(check.status, RehearsalStatus::Passed);
-    }
-
-    /// Verifies GPU-required rehearsal fails when only CPU worker heartbeats are present.
-    #[test]
-    fn heartbeat_check_requires_gpu_when_requested() {
-        let check = heartbeat_check(
-            json!({
-                "items": [
-                    {
-                        "service_name": "worker-cpu",
-                        "payload": { "accelerators": "none" }
-                    }
-                ]
-            }),
-            GpuMode::Require,
-        );
-        assert_eq!(check.status, RehearsalStatus::Failed);
-    }
-}
+mod tests;

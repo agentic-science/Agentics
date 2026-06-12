@@ -1088,28 +1088,26 @@ fn resolve_compose_profiles(
     process_value: Option<&str>,
     file_value: Option<&str>,
 ) -> Result<Vec<String>, ComposeProdError> {
-    let raw = process_value
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .or_else(|| file_value.map(str::trim).filter(|value| !value.is_empty()));
-    let Some(raw) = raw else {
-        return Ok(Vec::new());
-    };
     let mut profiles = BTreeSet::new();
-    for part in raw.split(|ch: char| ch == ',' || ch.is_ascii_whitespace()) {
-        let profile = part.trim();
-        if profile.is_empty() {
+    for raw in [file_value, process_value] {
+        let Some(raw) = raw.map(str::trim).filter(|value| !value.is_empty()) else {
             continue;
+        };
+        for part in raw.split(|ch: char| ch == ',' || ch.is_ascii_whitespace()) {
+            let profile = part.trim();
+            if profile.is_empty() {
+                continue;
+            }
+            if !profile
+                .chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
+            {
+                return Err(ComposeProdError::InvalidConfig(format!(
+                    "COMPOSE_PROFILES contains invalid profile `{profile}`"
+                )));
+            }
+            profiles.insert(profile.to_string());
         }
-        if !profile
-            .chars()
-            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
-        {
-            return Err(ComposeProdError::InvalidConfig(format!(
-                "COMPOSE_PROFILES contains invalid profile `{profile}`"
-            )));
-        }
-        profiles.insert(profile.to_string());
     }
     Ok(profiles.into_iter().collect())
 }

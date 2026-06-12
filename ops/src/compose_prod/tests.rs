@@ -72,17 +72,17 @@ fn project_resolves_from_env_file_or_default() {
     );
 }
 
-/// Verifies COMPOSE_PROFILES is parsed from process or env-file values and normalized.
+/// Verifies COMPOSE_PROFILES is parsed from process and env-file values and normalized.
 #[test]
-fn compose_profiles_parse_and_prefer_process_env() {
+fn compose_profiles_parse_and_merge_process_env_with_file_env() {
     assert_eq!(
         resolve_compose_profiles(None, Some("gpu,check gpu")).expect("profiles parse"),
         vec!["check".to_string(), "gpu".to_string()]
     );
     assert_eq!(
         resolve_compose_profiles(Some("private-bundle-restore"), Some("gpu"))
-            .expect("process value wins"),
-        vec!["private-bundle-restore".to_string()]
+            .expect("profiles merge"),
+        vec!["gpu".to_string(), "private-bundle-restore".to_string()]
     );
     let error =
         resolve_compose_profiles(Some("gpu:$bad"), None).expect_err("bad profile should fail");

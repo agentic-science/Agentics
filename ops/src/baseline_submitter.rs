@@ -249,6 +249,7 @@ pub async fn run_from_process() -> std::process::ExitCode {
 
 async fn run(args: SubmitBaselinesArgs) -> Result<()> {
     let api_base_url = Url::parse(&args.api_base_url).context("parse API base URL")?;
+    validate_api_base_url(&api_base_url)?;
     let token = if args.dry_run {
         None
     } else {
@@ -318,6 +319,81 @@ async fn run(args: SubmitBaselinesArgs) -> Result<()> {
             {
                 println!("skip {challenge_name}/{target}: already completed in state file");
                 summary.increment_skipped()?;
+                continue;
+            }
+            if let Some(existing_submission_id) =
+                resumable_submission_id(state.get(&key), args.resubmit)
+            {
+                if args.dry_run {
+                    println!(
+                        "dry-run resume {challenge_name}/{target}: existing submission {existing_submission_id}"
+                    );
+                    summary.increment_planned()?;
+                    submitted_count = checked_increment(submitted_count)?;
+                    continue;
+                }
+                let token = token
+                    .as_ref()
+                    .context("internal error: token must be present outside dry-run")?;
+                println!(
+                    "resume {challenge_name}/{target}: waiting for existing submission {existing_submission_id}"
+                );
+                let final_response = match wait_submission(
+                    &client,
+                    &api_base_url,
+                    token,
+                    &existing_submission_id,
+                    Duration::from_secs(args.wait_timeout_secs),
+                    Duration::from_secs(args.poll_secs),
+                )
+                .await
+                {
+                    Ok(response) => response,
+                    Err(error) => {
+                        let note = error.to_string();
+                        println!("failed wait {challenge_name}/{target}: {note}");
+                        let record = BaselineStateRecord {
+                            challenge_name: challenge_name.clone(),
+                            target: target.clone(),
+                            solution_path: solution_dir.clone(),
+                            submission_id: Some(existing_submission_id),
+                            status: "failed_to_wait".to_string(),
+                            note,
+                            recorded_at_unix_secs: now_unix_secs()?,
+                        };
+                        append_state(&args.state_file, &record)?;
+                        state.insert(key, record);
+                        summary.increment_failed()?;
+                        submitted_count = checked_increment(submitted_count)?;
+                        sleep(Duration::from_secs(args.delay_secs)).await;
+                        continue;
+                    }
+                };
+                println!(
+                    "finished {challenge_name}/{target}: {} ({})",
+                    final_response.id, final_response.status
+                );
+                let final_record = BaselineStateRecord {
+                    challenge_name: challenge_name.clone(),
+                    target: target.clone(),
+                    solution_path: solution_dir.clone(),
+                    submission_id: Some(final_response.id.clone()),
+                    status: final_response.status.as_str().to_string(),
+                    note: final_response.note.clone(),
+                    recorded_at_unix_secs: now_unix_secs()?,
+                };
+                append_state(&args.state_file, &final_record)?;
+                state.insert(key, final_record);
+                if matches!(
+                    final_response.status,
+                    agentics_domain::models::evaluation::SolutionSubmissionStatus::Completed
+                ) {
+                    summary.increment_completed()?;
+                } else {
+                    summary.increment_failed()?;
+                }
+                submitted_count = checked_increment(submitted_count)?;
+                sleep(Duration::from_secs(args.delay_secs)).await;
                 continue;
             }
             if args.dry_run {
@@ -448,6 +524,47 @@ fn checked_increment(value: usize) -> Result<usize> {
     value
         .checked_add(1)
         .context("submission counter overflowed")
+}
+
+fn validate_api_base_url(api_base_url: &Url) -> Result<()> {
+    match api_base_url.scheme() {
+        "https" => Ok(()),
+        "http" if is_loopback_url(api_base_url) => Ok(()),
+        "http" if insecure_remote_http_allowed() => Ok(()),
+        "http" => bail!(
+            "HTTP API base URLs are allowed only for localhost/loopback; use HTTPS or set AGENTICS_ALLOW_INSECURE_REMOTE_HTTP=true"
+        ),
+        scheme => bail!("API base URL must use http or https, got `{scheme}`"),
+    }
+}
+
+fn is_loopback_url(url: &Url) -> bool {
+    url.host_str().is_some_and(|host| {
+        host.eq_ignore_ascii_case("localhost")
+            || host == "127.0.0.1"
+            || host == "::1"
+            || host.starts_with("127.")
+    })
+}
+
+fn insecure_remote_http_allowed() -> bool {
+    std::env::var("AGENTICS_ALLOW_INSECURE_REMOTE_HTTP")
+        .map(|value| matches!(value.trim(), "1" | "true" | "TRUE" | "yes" | "YES"))
+        .unwrap_or(false)
+}
+
+fn resumable_submission_id(
+    record: Option<&BaselineStateRecord>,
+    resubmit: bool,
+) -> Option<SolutionSubmissionId> {
+    if resubmit {
+        return None;
+    }
+    let record = record?;
+    if record.status == "completed" {
+        return None;
+    }
+    record.submission_id.clone()
 }
 
 fn resolve_token(token_stdin: bool) -> Result<SecretString> {
@@ -1001,56 +1118,4 @@ fn unix_permissions(_metadata: &std::fs::Metadata) -> u32 {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::fs;
-
-    use super::{build_deferlist, name_set_from_args, solution_defer_marker};
-
-    #[test]
-    fn default_deferlist_is_disabled_when_requested() {
-        let deferlist = build_deferlist(true, None).expect("deferlist");
-
-        assert!(deferlist.is_empty());
-    }
-
-    #[test]
-    fn default_deferlist_keeps_public_smoke_and_allows_upgraded_baselines() {
-        let deferlist = build_deferlist(false, None).expect("deferlist");
-
-        assert!(deferlist.contains(&"world-map-frontier-cs-algorithmic-6".parse().expect("name")));
-        assert!(
-            !deferlist.contains(
-                &"functional-cycle-reach-frontier-cs-algorithmic-252"
-                    .parse()
-                    .expect("name")
-            )
-        );
-    }
-
-    #[test]
-    fn name_set_accepts_explicit_names() {
-        let name = "hello-world-rs".parse().expect("challenge name");
-        let set = name_set_from_args(&[name], None).expect("name set");
-
-        assert!(set.contains(&"hello-world-rs".parse().expect("challenge name")));
-    }
-
-    #[test]
-    fn solution_defer_marker_detects_smoke_metadata() {
-        let temp = tempfile::tempdir().expect("tempdir");
-        fs::write(
-            temp.path().join("agentics.solution.json"),
-            serde_json::json!({
-                "protocol": "zip_project",
-                "protocol_version": 1,
-                "note": "Public smoke solution"
-            })
-            .to_string(),
-        )
-        .expect("manifest");
-
-        let marker = solution_defer_marker(temp.path()).expect("marker");
-
-        assert!(marker.is_some());
-    }
-}
+mod tests;

@@ -264,8 +264,8 @@ fn write_separated_bundle(
         bundle.join("public/runs.json"),
         json!({
             "runs": [
-                {"run_name": "public-1", "interface": "stdio", "stdin_json": {"a": 1, "b": 2}, "expected": "3"},
-                {"run_name": "public-2", "interface": "stdio", "stdin_json": {"a": -5, "b": 12}, "expected": "7"}
+                {"run_name": "public-1", "interface": "stdio", "stdin_json": {"a": 1, "b": 2}, "stdin_text": null, "input_files": null, "output_files": null, "metadata": {"expected": "3"}},
+                {"run_name": "public-2", "interface": "stdio", "stdin_json": {"a": -5, "b": 12}, "stdin_text": null, "input_files": null, "output_files": null, "metadata": {"expected": "7"}}
             ]
         })
         .to_string(),
@@ -274,8 +274,8 @@ fn write_separated_bundle(
         bundle.join("private-benchmark/runs.json"),
         json!({
             "runs": [
-                {"run_name": "official-1", "interface": "stdio", "stdin_json": {"a": 20, "b": 22}, "expected": "42"},
-                {"run_name": "official-2", "interface": "stdio", "stdin_json": {"a": -100, "b": 58}, "expected": "-42"}
+                {"run_name": "official-1", "interface": "stdio", "stdin_json": {"a": 20, "b": 22}, "stdin_text": null, "input_files": null, "output_files": null, "metadata": {"expected": "42"}},
+                {"run_name": "official-2", "interface": "stdio", "stdin_json": {"a": -100, "b": 58}, "stdin_text": null, "input_files": null, "output_files": null, "metadata": {"expected": "-42"}}
             ]
         })
         .to_string(),
@@ -296,7 +296,9 @@ fn write_separated_bundle(
                     "result_file": "result.json"
                 },
                 "validation_runs": "public/runs.json",
-                "official_runs": "private-benchmark/runs.json"
+                "validation_setup": null,
+                "official_runs": "private-benchmark/runs.json",
+                "official_evaluation_setup": null
             }),
             true,
             true,
@@ -320,11 +322,13 @@ fn write_piped_stdio_bundle(
     )?;
     fs::write(
         bundle.join("public/session.json"),
-        json!({"session_name": "public-1", "metadata": {"a": 2, "b": 3}}).to_string(),
+        json!({"session_name": "public-1", "input_files": null, "metadata": {"a": 2, "b": 3}})
+            .to_string(),
     )?;
     fs::write(
         bundle.join("private-benchmark/session.json"),
-        json!({"session_name": "official-1", "metadata": {"a": 11, "b": 31}}).to_string(),
+        json!({"session_name": "official-1", "input_files": null, "metadata": {"a": 11, "b": 31}})
+            .to_string(),
     )?;
     fs::write(
         bundle.join("interactive-evaluator/run.py"),
@@ -343,7 +347,9 @@ fn write_piped_stdio_bundle(
                 },
                 "acknowledge_stdio_protocol_framing": true,
                 "validation_session": "public/session.json",
-                "official_session": "private-benchmark/session.json"
+                "validation_setup": null,
+                "official_session": "private-benchmark/session.json",
+                "official_evaluation_setup": null
             }),
             true,
             true,
@@ -385,7 +391,9 @@ fn write_coexecuted_bundle(
                     "command": ["python", "coexecuted-evaluator/run.py"],
                     "result_file": "result.json"
                 },
-                "acknowledge_danger": true
+                "acknowledge_danger": true,
+                "validation_setup": null,
+                "official_evaluation_setup": null
             }),
             true,
             false,
@@ -410,7 +418,8 @@ fn base_spec_json(
     } else {
         json!({
             "setup": stage_profile(),
-            "build": stage_profile()
+            "build": stage_profile(),
+            "run": null
         })
     };
     json!({
@@ -441,11 +450,22 @@ fn base_spec_json(
                     "run": stage_profile()
                 },
                 "resource_description": "Small CPU profile for production rehearsal fixtures.",
-                "hardware_metadata": {"kind": "cpu"}
+                "hardware_metadata": {
+                    "kind": "cpu",
+                    "gpu_model": null,
+                    "gpu_count": null,
+                    "gpu_memory_gb": null,
+                    "cuda_variant": null,
+                    "cuda_version": null,
+                    "driver_minimum": null
+                }
             }
         }],
         "starts_at": "2026-01-01T00:00:00Z",
+        "closes_at": null,
         "eligibility": { "type": "open" },
+        "validation_submission_limit": 20,
+        "official_submission_limit": null,
         "visibility": {
             "leaderboard": "public_live",
             "score_distribution": "public_live",
@@ -462,8 +482,8 @@ fn base_spec_json(
         },
         "metric_schema": {
             "metrics": [
-                {"name": "score", "label": "Score", "direction": "maximize", "visibility": "public"},
-                {"name": "passed_cases", "label": "Passed Cases", "unit": "cases", "direction": "maximize", "visibility": "public"}
+                {"name": "score", "label": "Score", "unit": null, "direction": "maximize", "visibility": "public", "metric_description": null},
+                {"name": "passed_cases", "label": "Passed Cases", "unit": "cases", "direction": "maximize", "visibility": "public", "metric_description": null}
             ],
             "ranking": {
                 "primary_metric_name": "score",
@@ -507,7 +527,7 @@ for run in runs:
         results.append({"case_name": run["run_name"], "status": "error", "score": 0, "message": "missing stdout.txt"})
         continue
     actual = stdout_path.read_text().strip()
-    expected = str(run["expected"])
+    expected = str(run["metadata"]["expected"])
     if actual == expected:
         results.append({"case_name": run["run_name"], "status": "passed", "score": 1})
     else:

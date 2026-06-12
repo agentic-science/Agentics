@@ -237,6 +237,6 @@ check:
       case ",$profiles," in \
         *,gpu,*) printf '%s\n' "$services" | grep -qx worker-gpu || { echo "FAIL dev gpu profile is enabled but worker-gpu is not running" >&2; exit 1; } ;; \
       esac; \
-      cargo run -p agentics-ops --bin agentics-check-local-mvp -- \
+      DOCKER_HOST="$host" AGENTICS_DOCKER_HOST="$host" AGENTICS_DOCKER_SOCKET_PATH="$socket" cargo run -p agentics-ops --bin agentics-check-local-mvp -- \
         --api-base-url "http://127.0.0.1:${AGENTICS_API_HOST_PORT:-3110}" \
         --web-base-url "http://127.0.0.1:${AGENTICS_WEB_HOST_PORT:-3010}"
