@@ -97,8 +97,8 @@ fn generate_separated_overlay(
     match problem_id {
         1 => generate_treasure_packing_runs(cases),
         6 => generate_world_map_runs(cases),
-        _ if public_run.contains_key("input_path")
-            || public_run.contains_key("answer_path")
+        _ if run_metadata_contains(public_run, "input_path")
+            || run_metadata_contains(public_run, "answer_path")
             || public_run.contains_key("input_files") =>
         {
             generate_template_separated_runs(public_run, cases)
@@ -155,31 +155,23 @@ fn generate_template_separated_runs(
                 Value::String(read_utf8(&case.input_path)?),
             );
         }
-        if run.contains_key("answer_text") {
-            run.insert(
-                "answer_text".to_string(),
-                Value::String(read_utf8(&case.answer_path)?),
-            );
+        if normalize_run_metadata_field(&mut run, "answer_text")? {
+            set_run_metadata_string(&mut run, "answer_text", read_utf8(&case.answer_path)?)?;
         }
-        if run.contains_key("input_path") {
-            run.insert(
-                "input_path".to_string(),
-                Value::String(input_private_path.clone()),
-            );
+        if normalize_run_metadata_field(&mut run, "input_path")? {
+            set_run_metadata_string(&mut run, "input_path", input_private_path.clone())?;
             entries.insert(input_private_path.clone(), fs::read(&case.input_path)?);
         }
-        if run.contains_key("answer_path") {
-            run.insert(
-                "answer_path".to_string(),
-                Value::String(answer_private_path.clone()),
-            );
+        if normalize_run_metadata_field(&mut run, "answer_path")? {
+            set_run_metadata_string(&mut run, "answer_path", answer_private_path.clone())?;
             entries.insert(answer_private_path.clone(), fs::read(&case.answer_path)?);
         }
-        if run.contains_key("expected_output_source_path") {
-            run.insert(
-                "expected_output_source_path".to_string(),
-                Value::String(answer_private_path.clone()),
-            );
+        if normalize_run_metadata_field(&mut run, "expected_output_source_path")? {
+            set_run_metadata_string(
+                &mut run,
+                "expected_output_source_path",
+                answer_private_path.clone(),
+            )?;
             entries.insert(answer_private_path.clone(), fs::read(&case.answer_path)?);
         }
         if let Some(input_files) = run.get_mut("input_files").and_then(Value::as_array_mut) {
@@ -231,11 +223,8 @@ fn generate_stdin_text_runs(
                 "stdin_text".to_string(),
                 Value::String(read_utf8(&case.input_path)?),
             );
-            if run.contains_key("answer_text") {
-                run.insert(
-                    "answer_text".to_string(),
-                    Value::String(read_utf8(&case.answer_path)?),
-                );
+            if normalize_run_metadata_field(&mut run, "answer_text")? {
+                set_run_metadata_string(&mut run, "answer_text", read_utf8(&case.answer_path)?)?;
             }
             anyhow::Ok(Value::Object(run))
         })
@@ -251,6 +240,46 @@ fn generate_stdin_text_runs(
         selection_note: selected.note,
         entries,
     })
+}
+
+fn run_metadata_contains(run: &Map<String, Value>, key: &str) -> bool {
+    run.contains_key(key)
+        || run
+            .get("metadata")
+            .and_then(Value::as_object)
+            .is_some_and(|metadata| metadata.contains_key(key))
+}
+
+fn normalize_run_metadata_field(run: &mut Map<String, Value>, key: &str) -> anyhow::Result<bool> {
+    let legacy_value = run.remove(key);
+    let metadata_has_key = run
+        .get("metadata")
+        .and_then(Value::as_object)
+        .is_some_and(|metadata| metadata.contains_key(key));
+    if let Some(value) = legacy_value {
+        run_metadata_mut(run)?.insert(key.to_string(), value);
+        Ok(true)
+    } else {
+        Ok(metadata_has_key)
+    }
+}
+
+fn set_run_metadata_string(
+    run: &mut Map<String, Value>,
+    key: &str,
+    value: String,
+) -> anyhow::Result<()> {
+    run_metadata_mut(run)?.insert(key.to_string(), Value::String(value));
+    Ok(())
+}
+
+fn run_metadata_mut(run: &mut Map<String, Value>) -> anyhow::Result<&mut Map<String, Value>> {
+    if !run.get("metadata").is_some_and(Value::is_object) {
+        run.insert("metadata".to_string(), Value::Object(Map::new()));
+    }
+    run.get_mut("metadata")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| anyhow!("failed to materialize run metadata object"))
 }
 
 fn generate_treasure_packing_runs(cases: &[CaseFile]) -> anyhow::Result<GeneratedOverlay> {
@@ -275,8 +304,13 @@ fn generate_treasure_packing_runs(cases: &[CaseFile]) -> anyhow::Result<Generate
             "run_name": format!("official-{}", safe_case_stem(&case.stem)),
             "interface": "stdio",
             "stdin_json": stdin_json,
-            "baseline_value": baseline_value,
-            "best_value": best_value
+            "stdin_text": null,
+            "input_files": null,
+            "output_files": null,
+            "metadata": {
+                "baseline_value": baseline_value,
+                "best_value": best_value
+            }
         }));
     }
     let mut entries = BTreeMap::new();
@@ -316,7 +350,11 @@ fn generate_world_map_runs(cases: &[CaseFile]) -> anyhow::Result<GeneratedOverla
             json!({
                 "run_name": format!("official-{name}"),
                 "interface": "stdio",
-                "stdin_text": stdin_text
+                "stdin_json": null,
+                "stdin_text": stdin_text,
+                "input_files": null,
+                "output_files": null,
+                "metadata": null
             })
         })
         .collect::<Vec<_>>();
@@ -633,9 +671,17 @@ fn generate_treasure_hunt_runtime_session(cases: &[CaseFile]) -> anyhow::Result<
 
 fn single_session_overlay(
     adapter_label: &'static str,
-    session: Value,
+    mut session: Value,
 ) -> anyhow::Result<GeneratedOverlay> {
     let case_count = session_case_count(&session);
+    if let Value::Object(session_object) = &mut session {
+        session_object
+            .entry("input_files".to_string())
+            .or_insert(Value::Null);
+        session_object
+            .entry("metadata".to_string())
+            .or_insert(Value::Null);
+    }
     let mut entries = BTreeMap::new();
     entries.insert(PRIVATE_SESSION_PATH.to_string(), json_bytes(session)?);
     Ok(GeneratedOverlay {

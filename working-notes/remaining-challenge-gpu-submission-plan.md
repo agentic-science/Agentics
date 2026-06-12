@@ -29,6 +29,9 @@ After strict required-nullable challenge contracts are fixed, finish the remaini
 - [x] Start dev with GPU workers, run `just dev::check`, and bring dev down.
 - [x] Start rehearsal with GPU workers, run `just rehearsal::check`, and bring rehearsal down.
 - [x] Restart production with GPU profile active and verify `worker-gpu`.
+- [x] Update migrated Frontier-CS separated evaluators to read challenge-specific run data from `metadata`, matching the strict required-nullable source manifests.
+- [x] Update the Frontier-CS private asset refresh generator so regenerated private overlays emit strict run/session manifests.
+- [x] Normalize stale persistent private-bundle backup objects and restore the repaired overlays into production object storage.
 - [ ] Submit one GPU challenge solution with `agentics-official` and inspect result surfaces.
 - [ ] Clean stale solution wording where the solution is already meaningful.
 - [ ] Replace cheap/public-only baseline solutions with meaningful baselines.
@@ -47,7 +50,12 @@ The GPU-dependent solution set for smoke and production scheduling checks is `cr
 - Dev GPU stack rendered correctly in CPU/GPU modes, then started with `worker-cpu` and `worker-gpu` through the dedicated dev runner Docker daemon. `just dev::check` passed, then dev and the dev runner daemon were brought down.
 - Rehearsal GPU stack rendered correctly in CPU/GPU modes, then started with `worker-cpu` and `worker-gpu`. `just rehearsal::check` passed after API warmup, then rehearsal and the rehearsal runner daemon were brought down.
 - Production was restarted with `COMPOSE_PROFILES=gpu` in the ignored production env, and `just prod::check` passed with both `worker-cpu` and `worker-gpu` running.
-- The first production GPU submission attempt for `vector-addition-frontier-cs-vector-addition-2-20` did not reach runner scheduling because the production API still returned an older published challenge spec that the current CLI rejects as missing the required `solution.run` profile. The next step is to rebuild/restart production so startup seeding refreshes the published challenge catalog from the current checkout before retrying the GPU submission.
+- The first production GPU submission attempt for `vector-addition-frontier-cs-vector-addition-2-20` did not reach runner scheduling because the production API still returned an older published challenge spec that the current CLI rejects as missing the required `solution.run` profile.
+- Production API startup then exposed a second strict-contract gap: stale private-bundle backup objects still contained pre-refactor top-level run metadata such as `answer_text`, and later some older run manifests missed required nullable keys such as `stdin_json`.
+- The persistent private-bundle backup store was mirrored into `target/private-bundle-backup-scan`, normalized locally, synced back to the backup RustFS store, restored into production with `just prod::restore-private-bundles --overwrite`, and verified with `just prod::check`.
+- The production repair normalized 24 stale private overlay ZIPs in the object store. No private ZIP files were committed.
+- After the object-store repair, production API health, public challenge catalog, web frontend, `worker-cpu`, `worker-gpu`, and GitHub egress checks all passed.
+- Migrated Frontier-CS separated evaluators now read challenge-specific case data only from `run.metadata`, and `agentics challenge-creator check` passes for the published and dev challenge corpora.
 
 ## Track 1: Make GPU Workers Reliable In Dev, Rehearsal, And Production
 
