@@ -28,15 +28,19 @@ These GPU-oriented solutions now use baseline wording instead of smoke wording i
 - `vector-add-2-28-frontier-cs-vector-add-2-28`
 - `vector-addition-frontier-cs-vector-addition-2-20`
 
+These algorithmic baselines were upgraded after the first audit and are now ready for broad baseline submission:
+
+- `cube-sphere-packing-frontier-cs-algorithmic-48`
+- `functional-cycle-reach-frontier-cs-algorithmic-252`
+- `hamiltonian-path-frontier-cs-algorithmic-5`
+- `signed-rooted-tree-frontier-cs-algorithmic-57`
+
 ## Keep Out Of Broad Production Submission For Now
 
 These solutions are deliberately cheap, public-only, tiny-fixture, or incomplete. They should not be added to the production baseline submitter allowlist until they have a meaningful official-capable baseline:
 
-- `cube-sphere-packing-frontier-cs-algorithmic-48`: tiny public fixture output.
 - `distinct-bakery-types-frontier-cs-algorithmic-141`: token-flood interactive fallback.
 - `editor-width-discovery-frontier-cs-algorithmic-122`: public-only baseline from the earlier audit.
-- `functional-cycle-reach-frontier-cs-algorithmic-252`: public teleporter-map reconstruction only.
-- `hamiltonian-path-frontier-cs-algorithmic-5`: one-vertex fallback.
 - `heap-tree-sum-frontier-cs-algorithmic-209`: token-flood interactive fallback.
 - `imagenet-200k-frontier-cs-imagenet-200k`: cheap public-validation model path.
 - `imagenet-500k-frontier-cs-imagenet-500k`: cheap public-validation model path.
@@ -50,7 +54,6 @@ These solutions are deliberately cheap, public-only, tiny-fixture, or incomplete
 - `palindromic-grid-paths-frontier-cs-algorithmic-256`: tiny-grid exhaustive public baseline.
 - `poker-action-seeds-frontier-cs-algorithmic-143`: token-flood interactive fallback.
 - `repaired-road-set-frontier-cs-algorithmic-253`: token-flood interactive fallback.
-- `signed-rooted-tree-frontier-cs-algorithmic-57`: tiny public interactive session.
 - `snake-path-minima-frontier-cs-algorithmic-233`: token-flood interactive fallback.
 - `sorted-mode-array-frontier-cs-algorithmic-257`: token-flood interactive fallback.
 - `symreg-sincos-frontier-cs-symreg-sincos`: cheap public-validation baseline.
