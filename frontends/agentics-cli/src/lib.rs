@@ -217,6 +217,9 @@ async fn dispatch_challenge_creator(
 ) -> Result<String> {
     let creator = args.creator;
     match args.command {
+        ChallengeCreatorCommand::Check { path } => {
+            commands::challenge_creator_check(path, output_format).await
+        }
         ChallengeCreatorCommand::ReviewRecord { command } => {
             commands::challenge_review_record(command, &creator, output_format, settings, input)
                 .await

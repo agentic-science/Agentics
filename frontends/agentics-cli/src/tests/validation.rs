@@ -218,7 +218,14 @@ async fn validate_local_rejects_disabled_target_before_packaging() {
         .get("spec")
         .expect("spec")
         .clone();
+    spec["closes_at"] = json!(null);
+    spec["validation_submission_limit"] = json!(null);
+    spec["official_submission_limit"] = json!(null);
+    spec["execution"]["validation_setup"] = json!(null);
+    spec["execution"]["official_runs"] = json!(null);
+    spec["execution"]["official_evaluation_setup"] = json!(null);
     spec["datasets"]["private_benchmark_enabled"] = json!(false);
+    spec["datasets"]["private_benchmark_dir"] = json!(null);
     std::fs::write(bundle_dir.join("spec.json"), spec.to_string()).expect("spec");
 
     let config_path = temp.path().join("config.toml");

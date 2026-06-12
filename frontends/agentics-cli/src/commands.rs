@@ -16,7 +16,8 @@ mod submissions;
 
 pub(crate) use admin::admin_command;
 pub(crate) use creator::{
-    challenge_review_record, challenge_shortlist, creator_participants, creator_stats,
+    challenge_creator_check, challenge_review_record, challenge_shortlist, creator_participants,
+    creator_stats,
 };
 pub(crate) use submissions::{
     challenge_stats, list_public_solution_submissions, solution_submission_report, submit,

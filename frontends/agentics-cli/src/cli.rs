@@ -176,6 +176,11 @@ pub(crate) struct ChallengeCreatorArgs {
 #[derive(Debug, Clone, Subcommand)]
 /// Enumerates challenge creator command variants supported by this module.
 pub(crate) enum ChallengeCreatorCommand {
+    /// Check one or more local challenge proposals with the Rust contract validator.
+    Check {
+        #[arg(value_name = "PATH")]
+        path: PathBuf,
+    },
     /// Create or inspect a challenge review record.
     ReviewRecord {
         #[command(subcommand)]

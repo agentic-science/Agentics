@@ -38,6 +38,7 @@ pub(super) fn challenge_detail_json(validation_enabled: bool) -> serde_json::Val
                     "validation_enabled": validation_enabled,
                     "resource_profile": {
                         "name": "python-cpu-small",
+                        "resource_description": null,
                         "solution_image": {
                             "source": "local",
                             "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
@@ -54,7 +55,8 @@ pub(super) fn challenge_detail_json(validation_enabled: bool) -> serde_json::Val
                         "evaluator": {
                             "setup": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "enabled"},
                             "run": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"}
-                        }
+                        },
+                        "hardware_metadata": null
                     }
                 }
             ],
@@ -77,15 +79,18 @@ pub(super) fn challenge_detail_json(validation_enabled: bool) -> serde_json::Val
                     {
                         "name": "score",
                         "label": "Score",
+                        "unit": null,
                         "direction": "maximize",
-                        "visibility": "public"
+                        "visibility": "public",
+                        "metric_description": null
                     },
                     {
                         "name": "passed_cases",
                         "label": "Passed Cases",
                         "unit": "cases",
                         "direction": "maximize",
-                        "visibility": "public"
+                        "visibility": "public",
+                        "metric_description": null
                     }
                 ],
                 "ranking": {
