@@ -8,12 +8,13 @@ use uuid::Uuid;
 use agentics_config::Config;
 use agentics_contracts::challenge_creation;
 use agentics_contracts::validation::archive::{
-    ArchiveEnvelopePolicy, extract_zip_bytes_to_dir, inspect_zip_bytes,
+    ArchiveEnvelope, ArchiveEnvelopePolicy, extract_zip_bytes_to_dir, inspect_zip_bytes,
 };
 use agentics_domain::models::challenge_creation::{
     ChallengePrivateAssetResponse, ChallengeReviewRecordStatus,
 };
 use agentics_domain::models::ids::{ChallengePrivateAssetId, ChallengeReviewAuditEventId};
+use agentics_domain::models::paths::BundleRelativePath;
 use agentics_error::{Result, ServiceError};
 use agentics_persistence::{self as persistence, Repositories};
 use agentics_storage::{Storage, StorageKey, StorageWriteIntent};
@@ -98,6 +99,7 @@ pub async fn upload_challenge_private_asset(
     validate_private_asset_zip_upload(
         &asset_bytes,
         body.asset_name.as_str(),
+        &requirement.required_paths,
         config
             .quotas
             .challenge_private_asset_bytes_per_review_record,
@@ -242,12 +244,19 @@ async fn cleanup_unreferenced_private_asset_object(
 pub(super) async fn validate_private_asset_zip_upload(
     bytes: &[u8],
     asset_name: &str,
+    required_paths: &[BundleRelativePath],
     max_uncompressed_bytes: u64,
 ) -> Result<()> {
     let bytes = bytes.to_vec();
     let asset_name = asset_name.to_string();
+    let required_paths = required_paths.to_vec();
     tokio::task::spawn_blocking(move || {
-        validate_private_asset_zip_upload_blocking(&bytes, &asset_name, max_uncompressed_bytes)
+        validate_private_asset_zip_upload_blocking(
+            &bytes,
+            &asset_name,
+            &required_paths,
+            max_uncompressed_bytes,
+        )
     })
     .await
     .map_err(|e| ServiceError::Internal(format!("private asset validation task failed: {e}")))?
@@ -257,6 +266,7 @@ pub(super) async fn validate_private_asset_zip_upload(
 fn validate_private_asset_zip_upload_blocking(
     bytes: &[u8],
     asset_name: &str,
+    required_paths: &[BundleRelativePath],
     max_uncompressed_bytes: u64,
 ) -> Result<()> {
     let policy = ArchiveEnvelopePolicy::new(
@@ -265,7 +275,29 @@ fn validate_private_asset_zip_upload_blocking(
         MAX_PRIVATE_ASSET_FILE_COUNT,
         max_uncompressed_bytes,
     );
-    inspect_zip_bytes(bytes, &policy)?;
+    let envelope = inspect_zip_bytes(bytes, &policy)?;
+    validate_private_asset_required_paths_in_envelope(asset_name, required_paths, &envelope)?;
+    Ok(())
+}
+
+fn validate_private_asset_required_paths_in_envelope(
+    asset_name: &str,
+    required_paths: &[BundleRelativePath],
+    envelope: &ArchiveEnvelope,
+) -> Result<()> {
+    for required_path in required_paths {
+        let required = required_path.as_str();
+        let required_prefix = format!("{required}/");
+        let provided = envelope.entries().iter().any(|entry| {
+            let path = entry.path().as_str();
+            path == required || path.starts_with(&required_prefix)
+        });
+        if !provided {
+            return Err(ServiceError::BadRequest(format!(
+                "private asset `{asset_name}` ZIP does not contain required runtime path `{required_path}`"
+            )));
+        }
+    }
     Ok(())
 }
 

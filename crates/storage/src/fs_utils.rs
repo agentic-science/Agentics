@@ -4,7 +4,7 @@ use tokio::io::AsyncWriteExt as _;
 
 use crate::{Result, StorageError};
 
-pub(crate) async fn ensure_private_directory(path: &Path) -> Result<()> {
+pub async fn ensure_private_directory(path: &Path) -> Result<()> {
     let path = path.to_path_buf();
     tokio::task::spawn_blocking(move || ensure_private_directory_sync(&path))
         .await

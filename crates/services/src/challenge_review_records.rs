@@ -14,7 +14,7 @@ use agentics_domain::models::challenge_creation::{
 };
 use agentics_domain::models::ids::ChallengeReviewPublishClaimId;
 use agentics_error::{Result, ServiceError};
-use agentics_storage::{Storage, StorageWriteIntent};
+use agentics_storage::{Storage, StorageWriteIntent, ensure_private_directory};
 
 use crate::storage_errors::storage_error_to_service_error;
 
@@ -33,8 +33,8 @@ mod validation;
 
 pub use cleanup::cleanup_challenge_review_records;
 pub use create::create_challenge_review_record;
-use private_assets::extract_private_asset_overlay;
 pub use private_assets::upload_challenge_private_asset;
+use private_assets::{extract_private_asset_overlay, validate_private_asset_zip_upload};
 pub use publishing::publish_challenge_review_record;
 pub use read::{
     get_challenge_review_record, list_admin_challenge_review_record_private_assets,
@@ -71,10 +71,31 @@ pub(super) async fn assemble_runtime_bundle(
     let public_spec = challenge_bundle::read_challenge_bundle_spec(&public_bundle_path).await?;
     validate_private_assets_for_publish(review_record, manifest, &public_spec)?;
 
+    let work_root = config
+        .storage_work_root()
+        .map_err(storage_error_to_service_error)?;
+    ensure_private_directory(&work_root)
+        .await
+        .map_err(storage_error_to_service_error)?;
+    if let Some(parent) = runtime_bundle_path.parent() {
+        ensure_private_directory(parent)
+            .await
+            .map_err(storage_error_to_service_error)?;
+    }
     challenge_bundle::copy_challenge_bundle_dir(&public_bundle_path, runtime_bundle_path, true)
         .await?;
 
     for asset in &review_record.private_assets {
+        let requirement = manifest
+            .private_assets
+            .iter()
+            .find(|requirement| requirement.asset_name == asset.asset_name)
+            .ok_or_else(|| {
+                ServiceError::BadRequest(format!(
+                    "private asset `{}` is not declared in the challenge manifest",
+                    asset.asset_name
+                ))
+            })?;
         let bytes = storage
             .get(
                 &asset.storage_key,
@@ -87,6 +108,15 @@ pub(super) async fn assemble_runtime_bundle(
             )
             .await
             .map_err(storage_error_to_service_error)?;
+        validate_private_asset_zip_upload(
+            &bytes,
+            asset.asset_name.as_str(),
+            &requirement.required_paths,
+            config
+                .quotas
+                .challenge_private_asset_bytes_per_review_record,
+        )
+        .await?;
         extract_private_asset_overlay(
             &bytes,
             runtime_bundle_path,
@@ -104,6 +134,7 @@ pub(super) async fn assemble_runtime_bundle(
 
 /// Builds the managed public-only bundle from the reviewed public challenge checkout.
 pub(super) async fn assemble_public_bundle(
+    config: &Config,
     proposal_root: &Path,
     manifest: &ChallengeCreationManifest,
     public_runtime_bundle_path: &Path,
@@ -113,6 +144,17 @@ pub(super) async fn assemble_public_bundle(
             "bundle_path is required for publishable review_records".to_string(),
         )
     })?;
+    let work_root = config
+        .storage_work_root()
+        .map_err(storage_error_to_service_error)?;
+    ensure_private_directory(&work_root)
+        .await
+        .map_err(storage_error_to_service_error)?;
+    if let Some(parent) = public_runtime_bundle_path.parent() {
+        ensure_private_directory(parent)
+            .await
+            .map_err(storage_error_to_service_error)?;
+    }
     let public_bundle_path = proposal_root.join(bundle_path.as_path());
     challenge_bundle::copy_challenge_bundle_dir(
         &public_bundle_path,

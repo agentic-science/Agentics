@@ -190,6 +190,7 @@ async fn prepare_and_publish_new_challenge_review_record(
     )
     .await?;
     assemble_public_bundle(
+        config,
         ctx.proposal_root,
         ctx.manifest,
         ctx.temporary_public_bundle_path,

@@ -90,13 +90,10 @@ fn pack_directory_to_tar_blocking(
 ) -> Result<()> {
     validate_tar_source_limits(source_dir, intent)?;
     if let Some(parent) = archive_path.parent() {
-        fs::create_dir_all(parent)?;
+        create_private_dir_all(parent)?;
     }
     let temporary = archive_path.with_extension(format!("agentics-tar-{}", uuid::Uuid::new_v4()));
-    let file = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temporary)?;
+    let file = create_private_file_sync(&temporary)?;
     let result = (|| {
         let mut builder = tar::Builder::new(file);
         append_bundle_dir(&mut builder, source_dir, source_dir)?;
@@ -249,7 +246,7 @@ fn unpack_tar_to_directory_blocking(
     destination_dir: &Path,
     limits: TarUnpackLimits,
 ) -> Result<()> {
-    fs::create_dir_all(destination_dir)?;
+    create_private_dir_all(destination_dir)?;
     let file = fs::File::open(archive_path)?;
     let mut archive = tar::Archive::new(file);
     let mut entry_count = 0u64;
@@ -271,15 +268,12 @@ fn unpack_tar_to_directory_blocking(
         let target = destination_dir.join(&relative);
         let entry_type = entry.header().entry_type();
         if entry_type.is_dir() {
-            fs::create_dir_all(&target)?;
+            create_private_dir_all(&target)?;
         } else if entry_type == tar::EntryType::Regular {
             if let Some(parent) = target.parent() {
-                fs::create_dir_all(parent)?;
+                create_private_dir_all(parent)?;
             }
-            let mut file = fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&target)?;
+            let mut file = create_private_file_sync(&target)?;
             copy_tar_file_with_limit(&mut entry, &mut file, limits.intent, &mut copied_bytes)?;
             file.flush()?;
         } else {
@@ -290,6 +284,53 @@ fn unpack_tar_to_directory_blocking(
         }
     }
     Ok(())
+}
+
+#[cfg(unix)]
+fn create_private_dir_all(path: &Path) -> Result<()> {
+    use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+
+    fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(path)?;
+    let metadata = fs::metadata(path)?;
+    if !metadata.is_dir() {
+        return Err(StorageError::InvalidKey(format!(
+            "bundle archive path is not a directory: {}",
+            path.display()
+        )));
+    }
+    let mode = metadata.permissions().mode();
+    if mode & 0o077 != 0 {
+        fs::set_permissions(path, fs::Permissions::from_mode(mode & !0o077))?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn create_private_dir_all(path: &Path) -> Result<()> {
+    fs::create_dir_all(path)?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn create_private_file_sync(path: &Path) -> Result<fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+
+    Ok(fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)?)
+}
+
+#[cfg(not(unix))]
+fn create_private_file_sync(path: &Path) -> Result<fs::File> {
+    Ok(fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)?)
 }
 
 fn copy_tar_file_with_limit<R: Read, W: Write>(
