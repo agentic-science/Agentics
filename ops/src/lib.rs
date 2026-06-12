@@ -16,6 +16,7 @@
     )
 )]
 
+pub mod baseline_submitter;
 pub mod check_dgx_spark_host;
 pub mod check_dgx_spark_profile;
 pub mod check_local_mvp;

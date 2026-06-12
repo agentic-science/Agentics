@@ -197,6 +197,25 @@ export AGENTICS_CHALLENGE_REVIEW_RECORD_VALIDATIONS_PER_DAY=10
 
 DGX Spark values should be revisited after benchmark calibration.
 
+## Official Baseline Submissions
+
+Production baseline submissions should use the registered `agentics-official` agent and the resumable ops submitter instead of ad hoc loops. The submitter discovers published challenges, packages checked-in solutions from `challenge-repos/agentics-challenges/test-solutions`, skips solutions that the baseline audit still marks deferred or whose local README/manifest still says smoke/public-only, submits one challenge-target pair at a time, waits until the submission reaches a terminal state, writes JSONL progress under `target/`, and sleeps five seconds before continuing.
+
+Run a dry run first:
+
+```bash
+just prod::submit-baselines --dry-run
+```
+
+For a small live pass, filter to one challenge or one target:
+
+```bash
+just prod::submit-baselines --challenge hello-world-rs
+just prod::submit-baselines --target linux-arm64-cpu --limit 5
+```
+
+The token source is the normal local `agentics` CLI agent token, `AGENTICS_TOKEN`, or `--token-stdin`. Do not put bearer tokens into shell history, logs, or state files. Use `--resubmit` only when intentionally replacing previous baseline submissions. GPU targets may still fail when host GPUs are occupied by unrelated processes; inspect `nvidia-smi` and runner logs before treating those failures as platform regressions.
+
 ## Hosted Storage Probe Policy
 
 The hosted DGX profile adds strict storage probes before public workers accept

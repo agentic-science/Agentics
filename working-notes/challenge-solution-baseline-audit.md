@@ -39,6 +39,8 @@ These algorithmic baselines were upgraded after the first audit and are now read
 
 These solutions are deliberately cheap, public-only, tiny-fixture, or incomplete. They should not be added to the production baseline submitter allowlist until they have a meaningful official-capable baseline:
 
+- `adaptive-impostor-search-frontier-cs-algorithmic-245`: live production official run failed during bounded CPU baseline smoke.
+- `average-permutation-frontier-cs-algorithmic-124`: live production official run failed during bounded CPU baseline smoke.
 - `distinct-bakery-types-frontier-cs-algorithmic-141`: token-flood interactive fallback.
 - `editor-width-discovery-frontier-cs-algorithmic-122`: public-only baseline from the earlier audit.
 - `heap-tree-sum-frontier-cs-algorithmic-209`: token-flood interactive fallback.

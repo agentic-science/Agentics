@@ -55,6 +55,11 @@ rehearse *args:
 restore-private-bundles *args:
     {{compose_prod}} restore-private-bundles {{args}}
 
+# Submit checked-in challenge baseline solutions to production
+[working-directory: repo]
+submit-baselines *args:
+    cargo run -p agentics-ops --bin agentics-submit-baselines -- {{args}}
+
 # Clean production runner containers by exact namespace labels
 [working-directory: repo]
 clean-runners *args:
