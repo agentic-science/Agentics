@@ -34,7 +34,8 @@ After strict required-nullable challenge contracts are fixed, finish the remaini
 - [x] Normalize stale persistent private-bundle backup objects and restore the repaired overlays into production object storage.
 - [x] Verify production GPU worker scheduling by submitting GPU challenges with `agentics-official`.
 - [ ] Get a successful GPU challenge result after the host GPU is no longer saturated by non-Agentics processes.
-- [ ] Clean stale solution wording where the solution is already meaningful.
+- [x] Clean stale solution wording where the solution is already meaningful.
+- [x] Record a production-submission solution audit checklist.
 - [ ] Replace cheap/public-only baseline solutions with meaningful baselines.
 - [ ] Add the resumable production baseline submitter.
 
@@ -62,6 +63,8 @@ The GPU-dependent solution set for smoke and production scheduling checks is `cr
 - The runner Docker egress fix now verifies scoped forwarding for the dedicated runner bridge during `prod::up`, `prod::check`, `rehearsal::up`, and `rehearsal::check`. `prod::check` also runs a real TLS probe from a runner container to `pypi.org:443`, which catches network-enabled evaluator setup failures before challenge jobs are claimed.
 - The Triton/Python fix restored uv-managed evaluator Python for coexecuted GPU setup scripts after runner egress was repaired. `agentics challenge-creator check` passes for both the main and dev challenge corpora after the restore.
 - The remaining GPU blocker is host-level contention, not Agentics scheduling. `nvidia-smi` showed six long-running `python3` processes owned by user `tengteng`, each using roughly 15 to 17 GiB of GPU memory, while the dedicated runner Docker daemon had no live containers. Agentics should not kill those external jobs. A future scheduler improvement could add a minimum-free-GPU-memory admission probe before claiming GPU jobs.
+- GPU baseline solution README and manifest notes were cleaned where the implementation is an honest PyTorch, FlashInfer, or Triton baseline. Public-only and token-flood solutions intentionally keep honest smoke/public-only wording.
+- `working-notes/challenge-solution-baseline-audit.md` now tracks ready baselines and solutions that should stay out of broad production submission until they are replaced.
 
 ## Track 1: Make GPU Workers Reliable In Dev, Rehearsal, And Production
 
