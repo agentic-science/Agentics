@@ -7,12 +7,47 @@ After strict required-nullable challenge contracts are fixed, finish the remaini
 ## Current Known State
 
 - Production has an `agentics-official` agent registered and a completed `hello-world-rs` CPU submission.
-- Production currently showed only the CPU worker container during inspection; the GPU worker was not running even though GPU challenge targets exist.
-- Dev and rehearsal must also run GPU workers when GPU smoke is requested, otherwise production becomes the first environment that exercises scheduler and device-request behavior.
+- Strict required-nullable challenge contracts have landed, and the corpus validates with `agentics challenge-creator check`.
+- Production previously showed only the CPU worker container during inspection; the GPU worker was not running even though GPU challenge targets exist.
+- Dev and rehearsal must also run GPU workers by default on this NVIDIA host, otherwise production becomes the first environment that exercises scheduler and device-request behavior.
 - `compose.prod.yml` defines `worker-gpu` behind the `gpu` Compose profile.
-- The production env has GPU worker variables and a digest-pinned CUDA probe image, but profile propagation needs to be checked and fixed so `worker-gpu` reliably starts. Dev and rehearsal envs should use equivalent GPU profile and probe-image wiring against their own projects, ports, storage roots, and runner Docker daemons.
+- The production bug is profile propagation, not worker config alone: `AGENTICS_WORKER_ACCELERATORS=gpu` does not create `worker-gpu`; Compose needs `COMPOSE_PROFILES=gpu` or an explicit `--profile gpu`.
+- Dev now needs the same dedicated runner Docker boundary as rehearsal and production so GPU runner behavior is tested before production.
 - A scan found 26 challenge test-solution directories tagged as `cheap smoke` or `cheap public smoke`; some may truly be cheap public-only baselines, while others may only have stale wording.
 - Challenge detail responses expose target data under `spec.targets`; do not use missing top-level `.targets` as evidence that challenge files contain `targets: null`.
+
+## Implementation Checklist
+
+- [x] Spawn subagents to audit solution quality and GPU/profile plumbing.
+- [x] Add dev `worker-cpu` and `worker-gpu` services, with `worker-gpu` behind the `gpu` Compose profile.
+- [x] Add a dedicated dev runner Docker daemon lifecycle so dev workers do not use production Docker or the system socket by accident.
+- [x] Pass Compose profiles explicitly through the production/rehearsal wrapper, derived from `COMPOSE_PROFILES` in the process or env file.
+- [x] Fail production/rehearsal wrapper startup when legacy `AGENTICS_WORKER_ACCELERATORS=gpu` is set without activating the `gpu` Compose profile.
+- [x] Make `just dev::check` and `just prod::check`/`just rehearsal::check` fail when the expected GPU worker service is missing.
+- [x] Make the rehearsal heartbeat check scan all worker heartbeats instead of only the first worker.
+- [x] Render dev, rehearsal, and production Compose service sets in CPU and GPU modes.
+- [x] Start dev with GPU workers, run `just dev::check`, and bring dev down.
+- [x] Start rehearsal with GPU workers, run `just rehearsal::check`, and bring rehearsal down.
+- [x] Restart production with GPU profile active and verify `worker-gpu`.
+- [ ] Submit one GPU challenge solution with `agentics-official` and inspect result surfaces.
+- [ ] Clean stale solution wording where the solution is already meaningful.
+- [ ] Replace cheap/public-only baseline solutions with meaningful baselines.
+- [ ] Add the resumable production baseline submitter.
+
+## Solution Audit Snapshot
+
+The first audit classified these as truly cheap or public-only and not yet ready for broad production submission: `cube-sphere-packing-frontier-cs-algorithmic-48`, `editor-width-discovery-frontier-cs-algorithmic-122`, `hamiltonian-path-frontier-cs-algorithmic-5`, `heap-tree-sum-frontier-cs-algorithmic-209`, `imagenet-200k`, `imagenet-500k`, `imagenet-1m`, `imagenet-2-5m`, `imagenet-5m`, `limited-shuffle-restore-frontier-cs-algorithmic-59`, `line-recovery-frontier-cs-algorithmic-117`, `llm-sql-small`, `llm-sql-large`, `palindromic-grid-paths-frontier-cs-algorithmic-256`, `symreg-sincos`, `symreg-mccormick`, `symreg-mixed-polyexp`, `symreg-peaks`, `symreg-ripple`, and `uniform-cave-explorer-frontier-cs-algorithmic-80`.
+
+The first audit found stale wording only, not behavior problems, in `distinct-bakery-types-frontier-cs-algorithmic-151`, `functional-cycle-reach-frontier-cs-algorithmic-128`, `poker-action-seeds-frontier-cs-algorithmic-115`, `repaired-road-set-frontier-cs-algorithmic-34`, `snake-path-minima-frontier-cs-algorithmic-148`, `sorted-mode-array-frontier-cs-algorithmic-183`, `world-map`, the `cant-late-*` family, and several GPU baseline READMEs.
+
+The GPU-dependent solution set for smoke and production scheduling checks is `cross-entropy-kernel`, `decoding-attn-kernel`, `flash-attn-kernel`, `fused-linear-ce-kernel`, `fused-linear-jsd-kernel`, `gdpa-attention-kernel`, `gemm-annoying`, `gemm-k-skewed`, `gemm-near-tile`, `gemm-rectangles`, `gemm-squares`, `gemm-transformer`, `group-gemm`, `mamba2-scan`, `mixed-gemm`, `qknorm`, `quant-dot-int4`, `ragged-attention`, `vector-add-2-24`, `vector-add-2-28`, and `vector-addition`.
+
+## Live Verification Notes
+
+- Dev GPU stack rendered correctly in CPU/GPU modes, then started with `worker-cpu` and `worker-gpu` through the dedicated dev runner Docker daemon. `just dev::check` passed, then dev and the dev runner daemon were brought down.
+- Rehearsal GPU stack rendered correctly in CPU/GPU modes, then started with `worker-cpu` and `worker-gpu`. `just rehearsal::check` passed after API warmup, then rehearsal and the rehearsal runner daemon were brought down.
+- Production was restarted with `COMPOSE_PROFILES=gpu` in the ignored production env, and `just prod::check` passed with both `worker-cpu` and `worker-gpu` running.
+- The first production GPU submission attempt for `vector-addition-frontier-cs-vector-addition-2-20` did not reach runner scheduling because the production API still returned an older published challenge spec that the current CLI rejects as missing the required `solution.run` profile. The next step is to rebuild/restart production so startup seeding refreshes the published challenge catalog from the current checkout before retrying the GPU submission.
 
 ## Track 1: Make GPU Workers Reliable In Dev, Rehearsal, And Production
 

@@ -32,6 +32,7 @@ Use `bun` for JS and TS dependency management. Use `uv` for Python environments 
 The easiest way to run the platform for development is the Compose dev stack:
 
 ```bash
+sudo env AGENTICS_DEV_USER=$USER just dev::runner-docker-up
 just dev::up
 ```
 
@@ -62,10 +63,11 @@ Local dev uses `AGENTICS_OFFICIAL_LOG_REDACTION=contract_based`.
 Official evaluations for public-only dev challenges keep runner diagnostics, so failures such as missing declared output files should produce actionable logs.
 Challenges with private benchmark data or official setup-generated inputs are still redacted.
 
-The worker uses the host Docker socket so it can create sibling runner containers.
+The worker uses the dedicated dev runner Docker socket under `.agentics-compose/dev/docker.sock` so it can create sibling runner containers without using the production runner daemon or the system Docker socket.
 Those containers are labeled with `AGENTICS_RUNNER_NAMESPACE`; override it only when you intentionally want a different cleanup namespace:
 
 ```bash
+sudo env AGENTICS_DEV_USER=$USER just dev::runner-docker-up
 AGENTICS_RUNNER_NAMESPACE=agentics-dev-$USER just dev::up
 ```
 
@@ -75,7 +77,7 @@ The dev launcher also checks its host-published API and web ports before startin
 It refuses production and rehearsal ports, so local development can run while production remains up.
 
 The Compose project name isolates Compose-owned containers, networks, and volumes.
-It does not isolate runner containers created through the host Docker socket, so runner cleanup and reconciliation depend on `AGENTICS_RUNNER_NAMESPACE`.
+The dedicated dev runner Docker daemon isolates local runner containers from production and rehearsal runner daemons, while runner cleanup and reconciliation still depend on `AGENTICS_RUNNER_NAMESPACE`.
 
 The project is still pre-MVP, so database migration history can be squashed when the team intentionally resets the baseline schema.
 After a migration history reset, recreate local dev and test databases or Compose Postgres volumes before running migrations again; old `_sqlx_migrations` rows will not match the new baseline checksums.
@@ -97,6 +99,7 @@ Stop the dev stack with:
 
 ```bash
 just dev::down
+sudo env AGENTICS_DEV_USER=$USER just dev::runner-docker-down
 ```
 
 Follow logs with:
@@ -305,6 +308,7 @@ When adding a new document, create a folder with at least `en.md` and `zh.md`. K
 
 ```bash
 just dev::down
+sudo env AGENTICS_DEV_USER=$USER just dev::runner-docker-down
 ```
 
 ## References

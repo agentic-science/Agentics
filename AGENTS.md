@@ -184,6 +184,7 @@ Narrow docs/client/test-only commits may stay one-line if the subject is self-ex
   Use commands such as `just dev::up`, `just prod::check`, `just storage::s3-test`, `just rust::clippy`, `just web::schema-check`, and `just maintenance::setup-hooks` instead of old flat recipe names.
 - When Docker access requires sudo for dev services, do not let the Compose project default to `agentics-dev-root`.
   The `just dev::*` recipes infer the invoking user from `SUDO_USER`; if that is unavailable, set `AGENTICS_DEV_USER` or `AGENTICS_COMPOSE_DEV_PROJECT` explicitly before running the command.
+- Start the dedicated dev runner Docker daemon with `sudo env AGENTICS_DEV_USER=$USER just dev::runner-docker-up` before `just dev::up`, and stop it with `sudo env AGENTICS_DEV_USER=$USER just dev::runner-docker-down` after the dev stack is down when you no longer need local runner containers.
 - Production rehearsals use the disposable `agentics-rehearsal` environment through `just rehearsal::prepare-storage`, `just rehearsal::runner-docker-up`, `just rehearsal::up`, `just rehearsal::check`, and `just rehearsal::run` or `just rehearsal::run-cpu`.
   Purge only with `sudo just rehearsal::purge-data --confirm-rehearsal-purge`. Do not point rehearsal env files at real production data.
 - NO unsafe fixes should be applied even if a linter provides them.

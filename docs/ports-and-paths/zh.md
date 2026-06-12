@@ -88,6 +88,7 @@ slots，并使用 Docker `storage_opt.size` 约束 container-layer writes。Slot
 `8192` 个 files、`1024` 个 directories 和 `32` 层 depth。
 Production runner containers 使用由 `just prod::runner-docker-up` 启动的
 dedicated Docker daemon；它的默认 bridge network 由 host bridge `agentics0` 支撑。
+Local development runner containers 使用由 `sudo env AGENTICS_DEV_USER=$USER just dev::runner-docker-up` 启动的另一套专用 daemon，socket 为 `.agentics-compose/dev/docker.sock`，data root 为 `.agentics-compose/dev/docker-data-root`，exec root 为 `.agentics-compose/dev/docker-exec`，bridge 为 `agenticsdv0`。
 
 `/srv/agentics-test` 用于开发者运行 quota-sensitive integration tests。它必须用
 `agentics-prepare-dgx-spark-test-storage` 单独准备，且 hosted workers 不应使用。

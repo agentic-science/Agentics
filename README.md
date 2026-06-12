@@ -134,6 +134,7 @@ The full authoring workflow is in [contribute challenges](docs/contribute-challe
 Start the containerized development stack when you need a local API, worker, database, object store, and web UI:
 
 ```bash
+sudo env AGENTICS_DEV_USER=$USER just dev::runner-docker-up
 just dev::up
 ```
 
@@ -145,10 +146,12 @@ Local development endpoints:
 - RustFS: `127.0.0.1:9000` and console `127.0.0.1:9001`
 
 The dev launcher refuses production or rehearsal host ports so local development can run while production remains up.
+On GPU-capable hosts, dev starts both `worker-cpu` and `worker-gpu`; set `COMPOSE_PROFILES=` only when you intentionally want CPU-only dev.
 Stop the stack with:
 
 ```bash
 just dev::down
+sudo env AGENTICS_DEV_USER=$USER just dev::runner-docker-down
 ```
 
 When testing local CLI flows, point the CLI at the local API:

@@ -556,10 +556,19 @@ mod tests {
                 "gpu_count": 1,
                 "gpu_memory_gb": 1,
                 "cuda_variant": "cu126",
-                "cuda_version": "12.6"
+                "cuda_version": "12.6",
+                "driver_minimum": null
             })
         } else {
-            json!({"kind": "cpu"})
+            json!({
+                "kind": "cpu",
+                "gpu_model": null,
+                "gpu_count": null,
+                "gpu_memory_gb": null,
+                "cuda_variant": null,
+                "cuda_version": null,
+                "driver_minimum": null
+            })
         };
         let image_reference = if accelerator == json!("gpu") {
             "agentics-linux-arm64-cuda:cu126-ubuntu24.04-local"
@@ -617,6 +626,7 @@ mod tests {
                     "validation_enabled": true,
                     "resource_profile": {
                         "name": "agentics-small",
+                        "resource_description": null,
                         "solution_image": {"source": "local", "reference": image_reference},
                         "evaluator_image": {"source": "local", "reference": image_reference},
                         "solution": {
@@ -632,8 +642,10 @@ mod tests {
                     }
                 }],
                 "starts_at": "2026-01-01T00:00:00Z",
+                "closes_at": null,
                 "eligibility": {"type": "open"},
                 "validation_submission_limit": 2,
+                "official_submission_limit": null,
                 "visibility": {
                     "leaderboard": "public_live",
                     "score_distribution": "public_live",
@@ -643,18 +655,28 @@ mod tests {
                 "execution": {
                     "mode": "separated_evaluator",
                     "separated_evaluator": {"command": ["python", "separated-evaluator/run.py"], "result_file": "result.json"},
+                    "validation_setup": null,
                     "validation_runs": "public/validation-runs.json",
+                    "official_evaluation_setup": null,
                     "official_runs": "public/official-runs.json"
                 },
                 "datasets": {
                     "public_dir": "public",
                     "public_policy": "full",
                     "private_benchmark_policy": "score_only",
-                    "private_benchmark_enabled": false
+                    "private_benchmark_enabled": false,
+                    "private_benchmark_dir": null
                 },
                 "metric_schema": {
-                    "metrics": [{"name": "score", "label": "Score", "direction": "maximize", "visibility": "public"}],
-                    "ranking": {"primary_metric_name": "score"}
+                    "metrics": [{
+                        "name": "score",
+                        "label": "Score",
+                        "unit": null,
+                        "direction": "maximize",
+                        "visibility": "public",
+                        "metric_description": null
+                    }],
+                    "ranking": {"primary_metric_name": "score", "tie_breaker_metric_names": null}
                 }
             }))
             .expect("spec JSON"),

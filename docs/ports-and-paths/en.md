@@ -90,6 +90,7 @@ directories, and depth `32`.
 Production runner containers use a dedicated Docker daemon started by
 `just prod::runner-docker-up`; its default bridge network is backed by
 the host bridge `agentics0`.
+Local development runner containers use a separate dedicated daemon started by `sudo env AGENTICS_DEV_USER=$USER just dev::runner-docker-up`, with socket `.agentics-compose/dev/docker.sock`, data root `.agentics-compose/dev/docker-data-root`, exec root `.agentics-compose/dev/docker-exec`, and bridge `agenticsdv0`.
 
 The `/srv/agentics-test` root is for developer-run quota-sensitive integration
 tests. It must be prepared separately with

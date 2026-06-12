@@ -159,6 +159,7 @@ struct RawComposeProdEnv {
     compose_prod_project: Option<String>,
     compose_prod_env_file: Option<String>,
     deployment_stage: Option<String>,
+    worker_accelerators: Option<String>,
     runner_namespace: Option<String>,
     database_url: Option<String>,
     docker_host: Option<String>,
@@ -230,6 +231,10 @@ async fn run(cli: Cli) -> Result<ExitCode, ComposeProdError> {
             if compose_code != ExitCode::SUCCESS {
                 return Ok(compose_code);
             }
+            let worker_code = print_reports(PREFIX, &context.require_expected_workers().await?);
+            if worker_code != ExitCode::SUCCESS {
+                return Ok(worker_code);
+            }
             let reports = ensure_compose_bridge_egress(&context).await?;
             Ok(print_reports(PREFIX, &reports))
         }
@@ -247,6 +252,10 @@ async fn run(cli: Cli) -> Result<ExitCode, ComposeProdError> {
                 .await?;
             if compose_code != ExitCode::SUCCESS {
                 return Ok(compose_code);
+            }
+            let worker_code = print_reports(PREFIX, &context.require_expected_workers().await?);
+            if worker_code != ExitCode::SUCCESS {
+                return Ok(worker_code);
             }
             let reports = check_api_github_egress(&context).await?;
             Ok(print_reports(PREFIX, &reports))
@@ -777,6 +786,7 @@ struct ComposeContext {
     process_env: RawComposeProdEnv,
     file_env: RawComposeProdEnv,
     project: String,
+    compose_profiles: Vec<String>,
 }
 
 impl ComposeContext {
@@ -793,12 +803,18 @@ impl ComposeContext {
         print_env_policy_warnings(&env_report);
         let file_env = RawComposeProdEnv::from_map(&env_values)?;
         let project = resolve_project(cli.project.as_deref(), &process_env, &file_env);
+        let compose_profiles = resolve_compose_profiles(
+            std::env::var("COMPOSE_PROFILES").ok().as_deref(),
+            env_values.get("COMPOSE_PROFILES").map(String::as_str),
+        )?;
+        validate_worker_profile_intent(&process_env, &file_env, &compose_profiles)?;
         let context = Self {
             repo_root,
             env_file,
             process_env,
             file_env,
             project,
+            compose_profiles,
         };
         Ok(context)
     }
@@ -808,8 +824,12 @@ impl ComposeContext {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
-        let mut output = vec![
-            OsString::from("compose"),
+        let mut output = vec![OsString::from("compose")];
+        for profile in &self.compose_profiles {
+            output.push(OsString::from("--profile"));
+            output.push(OsString::from(profile));
+        }
+        output.extend([
             OsString::from("--env-file"),
             self.env_file.as_os_str().to_os_string(),
             OsString::from("-f"),
@@ -820,7 +840,7 @@ impl ComposeContext {
             self.repo_root
                 .join("deploy/compose/compose.prod.yml")
                 .into_os_string(),
-        ];
+        ]);
         if self.is_rehearsal_environment() {
             output.push(OsString::from("-f"));
             output.push(
@@ -836,6 +856,44 @@ impl ComposeContext {
                 .collect::<Vec<_>>(),
         );
         output
+    }
+
+    async fn require_expected_workers(&self) -> Result<Vec<ReportLine>, ComposeProdError> {
+        let services = self
+            .compose_output(["ps", "--services", "--status", "running"])
+            .await?;
+        let running = services
+            .stdout
+            .lines()
+            .map(str::trim)
+            .filter(|service| !service.is_empty())
+            .collect::<BTreeSet<_>>();
+        let mut reports = Vec::new();
+        if running.contains("worker-cpu") {
+            reports.push(ReportLine::pass(
+                "compose worker-cpu",
+                "worker-cpu service is running",
+            ));
+        } else {
+            reports.push(ReportLine::fail(
+                "compose worker-cpu",
+                "worker-cpu service is not running",
+            ));
+        }
+        if self.compose_profiles.iter().any(|profile| profile == "gpu") {
+            if running.contains("worker-gpu") {
+                reports.push(ReportLine::pass(
+                    "compose worker-gpu",
+                    "gpu profile is enabled and worker-gpu service is running",
+                ));
+            } else {
+                reports.push(ReportLine::fail(
+                    "compose worker-gpu",
+                    "gpu profile is enabled but worker-gpu service is not running",
+                ));
+            }
+        }
+        Ok(reports)
     }
 
     async fn run_compose_passthrough<I, S>(&self, args: I) -> Result<ExitCode, ComposeProdError>
@@ -1046,6 +1104,55 @@ fn resolve_project(
             )
         })
         .unwrap_or_else(|| DEFAULT_PROJECT.to_string())
+}
+
+fn resolve_compose_profiles(
+    process_value: Option<&str>,
+    file_value: Option<&str>,
+) -> Result<Vec<String>, ComposeProdError> {
+    let raw = process_value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .or_else(|| file_value.map(str::trim).filter(|value| !value.is_empty()));
+    let Some(raw) = raw else {
+        return Ok(Vec::new());
+    };
+    let mut profiles = BTreeSet::new();
+    for part in raw.split(|ch: char| ch == ',' || ch.is_ascii_whitespace()) {
+        let profile = part.trim();
+        if profile.is_empty() {
+            continue;
+        }
+        if !profile
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.'))
+        {
+            return Err(ComposeProdError::InvalidConfig(format!(
+                "COMPOSE_PROFILES contains invalid profile `{profile}`"
+            )));
+        }
+        profiles.insert(profile.to_string());
+    }
+    Ok(profiles.into_iter().collect())
+}
+
+fn validate_worker_profile_intent(
+    process_env: &RawComposeProdEnv,
+    file_env: &RawComposeProdEnv,
+    compose_profiles: &[String],
+) -> Result<(), ComposeProdError> {
+    let worker_accelerators = env_value(
+        process_env.worker_accelerators.as_ref(),
+        file_env.worker_accelerators.as_ref(),
+    );
+    if worker_accelerators.as_deref() == Some("gpu")
+        && !compose_profiles.iter().any(|profile| profile == "gpu")
+    {
+        return Err(ComposeProdError::InvalidConfig(
+            "AGENTICS_WORKER_ACCELERATORS=gpu does not start the GPU worker service; set COMPOSE_PROFILES=gpu in the Compose env file or process environment".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn load_env_file(path: &Path) -> Result<HashMap<String, String>, ComposeProdError> {

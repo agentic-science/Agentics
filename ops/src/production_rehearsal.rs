@@ -370,29 +370,36 @@ fn heartbeat_check(value: serde_json::Value, gpu_mode: GpuMode) -> CheckEvidence
     let Some(items) = value.get("items").and_then(serde_json::Value::as_array) else {
         return CheckEvidence::failed("service heartbeats", "response did not contain items array");
     };
-    let worker = items.iter().find(|item| {
-        item.get("service_name")
-            .and_then(serde_json::Value::as_str)
-            .is_some_and(|name| name.contains("worker"))
-    });
-    let Some(worker) = worker else {
+    let workers = items
+        .iter()
+        .filter(|item| {
+            item.get("service_name")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|name| name.contains("worker"))
+        })
+        .collect::<Vec<_>>();
+    if workers.is_empty() {
         return CheckEvidence::failed("service heartbeats", "no worker heartbeat found");
-    };
-    if gpu_mode == GpuMode::Require {
-        let has_gpu = worker.get("payload").is_some_and(|payload| {
-            payload
-                .to_string()
-                .split(|c: char| !c.is_ascii_alphanumeric())
-                .any(|part| part == "gpu")
-        });
-        if !has_gpu {
-            return CheckEvidence::failed(
-                "service heartbeats",
-                "GPU mode is required but no worker heartbeat advertised gpu capability",
-            );
-        }
     }
-    CheckEvidence::passed("service heartbeats", "worker heartbeat is present")
+    if gpu_mode == GpuMode::Require && !workers.iter().any(|worker| worker_advertises_gpu(worker)) {
+        return CheckEvidence::failed(
+            "service heartbeats",
+            "GPU mode is required but no worker heartbeat advertised gpu capability",
+        );
+    }
+    CheckEvidence::passed(
+        "service heartbeats",
+        format!("{} worker heartbeat(s) present", workers.len()),
+    )
+}
+
+fn worker_advertises_gpu(worker: &serde_json::Value) -> bool {
+    worker.get("payload").is_some_and(|payload| {
+        payload
+            .to_string()
+            .split(|ch: char| !ch.is_ascii_alphanumeric())
+            .any(|part| part == "gpu")
+    })
 }
 
 async fn run_identity_phase(
@@ -1134,5 +1141,50 @@ async fn public_projection_check(
             format!("{} public projection", challenge.mode),
             error.to_string(),
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::{GpuMode, RehearsalStatus, heartbeat_check};
+
+    /// Verifies GPU-required rehearsal accepts a GPU heartbeat even when CPU worker appears first.
+    #[test]
+    fn heartbeat_check_scans_all_workers_for_gpu_capability() {
+        let check = heartbeat_check(
+            json!({
+                "items": [
+                    {
+                        "service_name": "worker-cpu",
+                        "payload": { "accelerators": "none" }
+                    },
+                    {
+                        "service_name": "worker-gpu",
+                        "payload": { "accelerators": "gpu" }
+                    }
+                ]
+            }),
+            GpuMode::Require,
+        );
+        assert_eq!(check.status, RehearsalStatus::Passed);
+    }
+
+    /// Verifies GPU-required rehearsal fails when only CPU worker heartbeats are present.
+    #[test]
+    fn heartbeat_check_requires_gpu_when_requested() {
+        let check = heartbeat_check(
+            json!({
+                "items": [
+                    {
+                        "service_name": "worker-cpu",
+                        "payload": { "accelerators": "none" }
+                    }
+                ]
+            }),
+            GpuMode::Require,
+        );
+        assert_eq!(check.status, RehearsalStatus::Failed);
     }
 }

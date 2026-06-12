@@ -15,6 +15,7 @@ It also includes the public migrated challenge catalog from `challenge-repos/age
 Copy `compose/env/rehearsal.env.example` to ignored `compose/env/rehearsal.env`, replace placeholders, prepare `/srv/agentics-rehearsal`, then use the `just rehearsal::*` lifecycle commands.
 The rehearsal Compose override exposes Postgres and RustFS only on loopback so the host-side rehearsal harness can exercise disposable fixture workflows without touching production namespaces.
 The committed source of truth is `compose/env/rehearsal.env.example` plus `compose/compose.rehearsal.yml`; `compose/env/rehearsal.env` is ignored.
+GPU workers are regular Compose services behind the `gpu` profile. Dev, rehearsal, and production env examples enable `COMPOSE_PROFILES=gpu` on this NVIDIA host; remove that profile only for an intentional CPU-only run.
 
 All Compose environments use `postgres:18-alpine`, mount Postgres data at `/var/lib/postgresql`, and run `io_method=io_uring`.
 The Postgres service uses `seccomp=unconfined` because the current Docker default seccomp profile blocks PG 18 `io_uring`.

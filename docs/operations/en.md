@@ -390,11 +390,8 @@ Compose project name as the deployed stack:
 just prod::check
 ```
 
-`just prod::check` also verifies the production Compose bridge forwarding guard
-and opens a TLS connection from the API container to GitHub. If GitHub sign-in
-fails with an internal server error during the callback, run this check before
-debugging application credentials; Docker forwarding state can otherwise leave
-the API container unable to reach GitHub even when DNS works.
+`just prod::check` also verifies the production Compose bridge forwarding guard, expected worker services, and a TLS connection from the API container to GitHub. If GitHub sign-in fails with an internal server error during the callback, run this check before debugging application credentials; Docker forwarding state can otherwise leave the API container unable to reach GitHub even when DNS works.
+When `COMPOSE_PROFILES=gpu` is active, the production and rehearsal checks fail if `worker-gpu` is not running.
 
 The check service mounts the host Docker socket intentionally. API, web,
 Postgres, and RustFS do not mount it.
@@ -429,9 +426,7 @@ RustFS namespace. The rehearsal run harness also creates temporary fixture
 challenges, creates a one-use pioneer code, registers a rehearsal agent, runs
 validation and official submissions across the three execution modes, verifies
 public projection/redaction surfaces, runs hostile ZIP/network/private-data
-probes, and writes JSON/Markdown evidence under `rehearsals/<run-id>/`. Use
-`just rehearsal::run-cpu` when GPU worker evidence is intentionally out of
-scope.
+probes, and writes JSON/Markdown evidence under `rehearsals/<run-id>/`. Use `just rehearsal::run-cpu` when GPU worker evidence is intentionally out of scope.
 
 Inspect destructive cleanup first:
 

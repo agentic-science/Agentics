@@ -22,9 +22,6 @@ const DEFAULT_RUNNER_DOCKER_PIDFILE: &str = "/srv/agentics/docker.pid";
 const DEFAULT_RUNNER_DOCKER_LOG: &str = "/srv/agentics/dockerd.log";
 const DEFAULT_RUNNER_DOCKER_BRIDGE: &str = "agentics0";
 const DEFAULT_RUNNER_DOCKER_BRIDGE_CIDR: &str = "172.30.0.1/16";
-const DEFAULT_RUNNER_DOCKER_CONTAINERD_NAMESPACE: &str = "agentics-prod";
-const DEFAULT_RUNNER_DOCKER_CONTAINERD_PLUGINS_NAMESPACE: &str = "agentics-prod-plugins";
-
 pub(super) async fn runner_docker_up(
     context: &ComposeContext,
     dry_run: bool,
@@ -141,6 +138,8 @@ struct RunnerDockerConfig {
     logfile: PathBuf,
     bridge_name: String,
     bridge_cidr: String,
+    containerd_namespace: String,
+    containerd_plugins_namespace: String,
     socket_gid: Option<u32>,
 }
 
@@ -159,6 +158,8 @@ impl RunnerDockerConfig {
                 socket_path.display()
             )));
         }
+        let containerd_namespace = context.resolve_namespace(None)?.as_str().to_string();
+        let containerd_plugins_namespace = format!("{containerd_namespace}-plugins");
         Ok(Self {
             socket_path,
             docker_host,
@@ -198,6 +199,8 @@ impl RunnerDockerConfig {
                         "runner Docker bridge CIDR cannot be empty".to_string(),
                     )
                 })?,
+            containerd_namespace,
+            containerd_plugins_namespace,
             socket_gid: context
                 .process_env
                 .docker_socket_gid
@@ -341,9 +344,9 @@ fn spawn_runner_dockerd(config: &RunnerDockerConfig) -> Result<(), ComposeProdEr
         .arg("--log-opt")
         .arg("max-size=10m")
         .arg("--containerd-namespace")
-        .arg(DEFAULT_RUNNER_DOCKER_CONTAINERD_NAMESPACE)
+        .arg(&config.containerd_namespace)
         .arg("--containerd-plugins-namespace")
-        .arg(DEFAULT_RUNNER_DOCKER_CONTAINERD_PLUGINS_NAMESPACE)
+        .arg(&config.containerd_plugins_namespace)
         .stdin(Stdio::null())
         .stdout(Stdio::from(log))
         .stderr(Stdio::from(log_for_stderr))

@@ -52,7 +52,7 @@ Ports 和 paths 记录在 `docs/ports-and-paths/zh.md`。
 | --- | --- | --- |
 | Postgres | `just dev::up` service `postgres` | `dev.env.example` 中的 host port `55432` |
 | API | `just dev::up` service `api` | `${AGENTICS_API_HOST_PORT:-3110}` |
-| Worker | `just dev::up` service `worker` | 无 |
+| Worker | `just dev::up` services `worker-cpu`，以及 `COMPOSE_PROFILES=gpu` 时的 `worker-gpu` | 无 |
 | Web | `just dev::up` service `web` | `${AGENTICS_WEB_HOST_PORT:-3010}` |
 | RustFS | `just dev::up` 和 `just prod::up` service `rustfs` | dev host ports `9000`/`9001`；production internal `9000`/`9001` |
 
@@ -130,13 +130,15 @@ Local development：
 1. 启动 Compose dev stack：
 
    ```bash
+   sudo env AGENTICS_DEV_USER=$USER just dev::runner-docker-up
    just dev::up
    ```
 
-   这个 recipe 会启动本地 Postgres、RustFS、API、worker 和 web services，从
+   这个 recipe 会启动本地 Postgres、RustFS、API、CPU worker、启用 GPU Compose profile 时的 GPU worker，以及 web services，从
    `challenge-repos/agentics-challenges/dev/challenges` 准备 dev challenge
    catalog，并写入匹配的 public test solutions。它不会启动，也不要求 persistent
    private-bundle backup RustFS service。
+   Dev worker services 使用 `.agentics-compose/dev/docker.sock` 上的专用 dev runner Docker daemon，因此 local runner containers 会与 production 和 rehearsal runner daemons 隔离。
 
    Dev database 名称是 `agentics_dev`。如果旧的 Compose volume 里仍然有
    `agentics_demo`，请先重置这个 disposable local dev volume，再启动 stack。
@@ -262,6 +264,7 @@ Production Compose：
    `agentics-rehearsal`，并且所有 mutable roots 都必须位于
    `/srv/agentics-rehearsal` 下。Rehearsal stack 使用 loopback ports：API
    `13100`、web `13001`、Postgres `15432`、RustFS `19000`/`19001`。
+   在这台 NVIDIA host 上，rehearsal env example 默认启用 `COMPOSE_PROFILES=gpu`，所以 `just rehearsal::check` 会在缺少 `worker-gpu` 时失败；只有明确做 CPU-only rehearsal 时才移除这个 profile。
    因为 rehearsal 使用 HTTP loopback web origin，env example 设置
    `AGENTICS_WEB_SESSION_COOKIE_SECURE=false`；不要把这个 cookie 设置复制到公开的
    production origin。

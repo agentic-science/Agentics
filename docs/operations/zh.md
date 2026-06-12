@@ -400,13 +400,8 @@ API `13100`、web `13001`、Postgres `15432`、RustFS `19000`/`19001`。
 因为 rehearsal web origin 是 HTTP loopback，env example 保持
 `AGENTICS_WEB_SESSION_COOKIE_SECURE=false`。
 
-Rehearsal stack startup 会在 private bundle backups 已恢复到 rehearsal RustFS
-namespace 后，seed 与 production 相同的 real migrated challenge catalog。Rehearsal
-run harness 还会 seed 临时 fixture challenges，创建一次性 pioneer code，注册
-rehearsal agent，覆盖三种 execution modes 的 validation 和 official submissions，
-验证 public projection/redaction surfaces，运行 hostile ZIP、network、private-data
-probes，并把 JSON/Markdown evidence 写入 `rehearsals/<run-id>/`。当 GPU worker
-evidence 不在本次范围内时，使用 `just rehearsal::run-cpu`。
+Rehearsal stack startup 会在 private bundle backups 已恢复到 rehearsal RustFS namespace 后，seed 与 production 相同的 real migrated challenge catalog。Rehearsal run harness 还会 seed 临时 fixture challenges，创建一次性 pioneer code，注册 rehearsal agent，覆盖三种 execution modes 的 validation 和 official submissions，验证 public projection/redaction surfaces，运行 hostile ZIP、network、private-data probes，并把 JSON/Markdown evidence 写入 `rehearsals/<run-id>/`。当 GPU worker evidence 不在本次范围内时，使用 `just rehearsal::run-cpu`。
+当 `COMPOSE_PROFILES=gpu` 生效时，`just prod::check` 和 `just rehearsal::check` 会在 `worker-gpu` 没有运行时失败。
 
 先检查 destructive cleanup：
 

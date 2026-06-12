@@ -1,7 +1,8 @@
 use super::{
     Cli, ComposeContext, ComposeProdError, DEFAULT_PROJECT, ProdCommand, REHEARSAL_PROJECT,
     RawComposeProdEnv, RunnerDownPolicy, build_rehearsal_purge_plan, down, env_value,
-    private_bundle_restore_args, resolve_project, run, unavailable_runner_cleanup_reports,
+    private_bundle_restore_args, resolve_compose_profiles, resolve_project, run,
+    unavailable_runner_cleanup_reports, validate_worker_profile_intent,
 };
 use agentics_config::RunnerNamespace;
 use clap::ValueEnum;
@@ -69,6 +70,55 @@ fn project_resolves_from_env_file_or_default() {
         env_value(None, file_env.compose_prod_project.as_ref()).as_deref(),
         Some("custom-prod")
     );
+}
+
+/// Verifies COMPOSE_PROFILES is parsed from process or env-file values and normalized.
+#[test]
+fn compose_profiles_parse_and_prefer_process_env() {
+    assert_eq!(
+        resolve_compose_profiles(None, Some("gpu,check gpu")).expect("profiles parse"),
+        vec!["check".to_string(), "gpu".to_string()]
+    );
+    assert_eq!(
+        resolve_compose_profiles(Some("private-bundle-restore"), Some("gpu"))
+            .expect("process value wins"),
+        vec!["private-bundle-restore".to_string()]
+    );
+    let error =
+        resolve_compose_profiles(Some("gpu:$bad"), None).expect_err("bad profile should fail");
+    assert!(
+        matches!(error, ComposeProdError::InvalidConfig(message) if message.contains("COMPOSE_PROFILES"))
+    );
+}
+
+/// Verifies a legacy AGENTICS_WORKER_ACCELERATORS=gpu setting cannot silently omit worker-gpu.
+#[test]
+fn gpu_worker_intent_requires_gpu_compose_profile() {
+    let file_env = RawComposeProdEnv {
+        worker_accelerators: Some("gpu".to_string()),
+        ..Default::default()
+    };
+    let error = validate_worker_profile_intent(&RawComposeProdEnv::default(), &file_env, &[])
+        .expect_err("missing gpu profile should fail");
+    assert!(
+        matches!(error, ComposeProdError::InvalidConfig(message) if message.contains("COMPOSE_PROFILES=gpu"))
+    );
+    validate_worker_profile_intent(
+        &RawComposeProdEnv::default(),
+        &file_env,
+        &[String::from("gpu")],
+    )
+    .expect("gpu profile satisfies legacy intent");
+}
+
+/// Verifies production Compose commands pass active profiles explicitly.
+#[test]
+fn compose_args_include_active_profiles() {
+    let mut context = fake_context();
+    context.compose_profiles = vec![String::from("gpu"), String::from("check")];
+    let args = compose_args_text(&context);
+    assert!(args.contains("--profile gpu"));
+    assert!(args.contains("--profile check"));
 }
 
 /// Verifies rehearsal purge dry-run still requires the explicit rehearsal stage marker.
@@ -246,5 +296,6 @@ fn fake_context() -> ComposeContext {
         process_env: RawComposeProdEnv::default(),
         file_env: RawComposeProdEnv::default(),
         project: DEFAULT_PROJECT.to_string(),
+        compose_profiles: Vec::new(),
     }
 }

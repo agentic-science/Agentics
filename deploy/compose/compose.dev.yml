@@ -36,6 +36,9 @@ x-rust-dev: &rust-dev
     AGENTICS_GITHUB_APP_CLIENT_ID: ${AGENTICS_GITHUB_APP_CLIENT_ID:-agentics-dev-placeholder-client-id}
     AGENTICS_GITHUB_APP_CLIENT_SECRET: ${AGENTICS_GITHUB_APP_CLIENT_SECRET:-agentics-dev-placeholder-client-secret}
     AGENTICS_GITHUB_APP_REDIRECT_URL: ${AGENTICS_GITHUB_APP_REDIRECT_URL:-http://127.0.0.1:3010/auth/github/callback}
+    AGENTICS_DOCKER_SOCKET_PATH: ${AGENTICS_DOCKER_SOCKET_PATH:?set AGENTICS_DOCKER_SOCKET_PATH}
+    AGENTICS_DOCKER_HOST: ${AGENTICS_DOCKER_HOST:?set AGENTICS_DOCKER_HOST}
+    AGENTICS_WORKER_GPU_PROBE_IMAGE: ${AGENTICS_WORKER_GPU_PROBE_IMAGE:-ghcr.io/agentic-science/agentics-linux-arm64-cuda:cu130-ubuntu24.04-v0.2.5@sha256:8e3da4a65e297e3b1e9800da001fa2bbac9ed48453a6972117a0c3ad1d1eef13}
     TMPDIR: ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}/tmp
   volumes:
     - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics
@@ -59,6 +62,14 @@ x-web-dev: &web-dev
     - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics
     - web_node_modules:/workspace/Agentics/frontends/web/node_modules
     - web_next:/workspace/Agentics/frontends/web/.next
+
+x-dev-worker-volumes: &dev-worker-volumes
+  - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics
+  - ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}:${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}
+  - ${AGENTICS_DOCKER_SOCKET_PATH:?set AGENTICS_DOCKER_SOCKET_PATH}:${AGENTICS_DOCKER_SOCKET_PATH:?set AGENTICS_DOCKER_SOCKET_PATH}
+  - cargo_registry:/opt/cargo/registry
+  - cargo_git:/opt/cargo/git
+  - cargo_target:/workspace/Agentics/target
 
 services:
   postgres:
@@ -217,20 +228,37 @@ services:
       - seed
     restart: "no"
 
-  worker:
+  worker-cpu:
     <<: *rust-dev
     depends_on:
       migrate:
         condition: service_completed_successfully
       rustfs-bucket-init:
         condition: service_completed_successfully
-    volumes:
-      - ${AGENTICS_REPO_ROOT:?set AGENTICS_REPO_ROOT}:/workspace/Agentics
-      - ${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}:${AGENTICS_DEV_ROOT:?set AGENTICS_DEV_ROOT}
-      - /var/run/docker.sock:/var/run/docker.sock
-      - cargo_registry:/opt/cargo/registry
-      - cargo_git:/opt/cargo/git
-      - cargo_target:/workspace/Agentics/target
+    environment:
+      <<: *dev-env
+      AGENTICS_WORKER_ACCELERATORS: none
+    volumes: *dev-worker-volumes
+    command:
+      - cargo
+      - run
+      - -p
+      - agentics-worker
+      - --bin
+      - worker
+
+  worker-gpu:
+    <<: *rust-dev
+    profiles: ["gpu"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      rustfs-bucket-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *dev-env
+      AGENTICS_WORKER_ACCELERATORS: gpu
+    volumes: *dev-worker-volumes
     command:
       - cargo
       - run

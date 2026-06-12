@@ -58,7 +58,7 @@ Production Compose defaults and placeholders live in
 | --- | --- | --- |
 | Postgres | `just dev::up` service `postgres` | `55432` host port in `dev.env.example` |
 | API | `just dev::up` service `api` | `${AGENTICS_API_HOST_PORT:-3110}` |
-| Worker | `just dev::up` service `worker` | none |
+| Worker | `just dev::up` services `worker-cpu` and, when `COMPOSE_PROFILES=gpu`, `worker-gpu` | none |
 | Web | `just dev::up` service `web` | `${AGENTICS_WEB_HOST_PORT:-3010}` |
 | RustFS | `just dev::up` and `just prod::up` service `rustfs` | dev host ports `9000`/`9001`; production internal `9000`/`9001` |
 
@@ -141,14 +141,16 @@ For local development:
 1. Start the Compose dev stack:
 
    ```bash
+   sudo env AGENTICS_DEV_USER=$USER just dev::runner-docker-up
    just dev::up
    ```
 
-   The recipe starts the local Postgres, RustFS, API, worker, and web services,
+   The recipe starts the local Postgres, RustFS, API, CPU worker, GPU worker when the GPU Compose profile is enabled, and web services,
    prepares the dev challenge catalog from
    `challenge-repos/agentics-challenges/dev/challenges`, and stages matching
    public test solutions. It does not start or require the persistent
    private-bundle backup RustFS service.
+   The dev worker services use the dedicated dev runner Docker daemon at `.agentics-compose/dev/docker.sock`, so local runner containers stay separate from production and rehearsal runner daemons.
 
    The dev database name is `agentics_dev`. If an older Compose volume still
    contains `agentics_demo`, reset the disposable local dev volume before
@@ -279,6 +281,7 @@ For production Compose:
    `agentics-rehearsal`, and all mutable roots under `/srv/agentics-rehearsal`.
    The rehearsal stack uses loopback ports `13100` for API, `13001` for web,
    `15432` for Postgres, and `19000`/`19001` for RustFS.
+   The rehearsal env example enables `COMPOSE_PROFILES=gpu` by default on this NVIDIA host, so `just rehearsal::check` fails if `worker-gpu` is missing; remove the profile only for an intentional CPU-only rehearsal.
    Because rehearsal uses an HTTP loopback web origin, its env example sets
    `AGENTICS_WEB_SESSION_COOKIE_SECURE=false`; do not copy that cookie setting
    to a public production origin.
