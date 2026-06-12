@@ -25,17 +25,32 @@ const GITHUB_EGRESS_PORT: u16 = 443;
 pub(super) async fn ensure_compose_bridge_egress(
     context: &ComposeContext,
 ) -> Result<Vec<ReportLine>, ComposeProdError> {
+    let network_name = context.default_network_name();
+    let bridge_name = compose_network_bridge_name(context, &network_name).await?;
+    ensure_bridge_egress(
+        context,
+        "compose bridge egress",
+        &format!("{network_name} ({bridge_name})"),
+        &bridge_name,
+    )
+    .await
+}
+
+pub(super) async fn ensure_bridge_egress(
+    context: &ComposeContext,
+    report_name: &'static str,
+    bridge_label: &str,
+    bridge_name: &str,
+) -> Result<Vec<ReportLine>, ComposeProdError> {
     if !cfg!(target_os = "linux") {
         return Ok(vec![ReportLine::skip(
-            "compose bridge egress",
+            report_name,
             "iptables bridge forwarding guard is Linux-only",
         )]);
     }
 
-    let network_name = context.default_network_name();
-    let bridge_name = compose_network_bridge_name(context, &network_name).await?;
     let outbound_interface = host_default_route_interface(context).await?;
-    let rule_specs = compose_bridge_egress_rules(&bridge_name, &outbound_interface);
+    let rule_specs = bridge_egress_rules(bridge_name, &outbound_interface);
     let mut inserted_rules = Vec::new();
     for rule in &rule_specs {
         if ensure_iptables_rule(context, rule).await? == RuleState::Inserted {
@@ -48,9 +63,9 @@ pub(super) async fn ensure_compose_bridge_egress(
         "installed"
     };
     Ok(vec![ReportLine::pass(
-        "compose bridge egress",
+        report_name,
         format!(
-            "{action} DOCKER-USER forwarding between {network_name} ({bridge_name}) and default interface {outbound_interface}"
+            "{action} DOCKER-USER forwarding between {bridge_label} and default interface {outbound_interface}"
         ),
     )])
 }
@@ -170,10 +185,10 @@ fn select_default_route_interface(routes: &[IpRoute]) -> Option<String> {
         .map(str::to_string)
 }
 
-fn compose_bridge_egress_rules(bridge_name: &str, outbound_interface: &str) -> Vec<IptablesRule> {
+fn bridge_egress_rules(bridge_name: &str, outbound_interface: &str) -> Vec<IptablesRule> {
     vec![
         IptablesRule {
-            name: "compose bridge outbound",
+            name: "bridge outbound",
             check_args: vec![
                 "-C".into(),
                 "DOCKER-USER".into(),
@@ -197,7 +212,7 @@ fn compose_bridge_egress_rules(bridge_name: &str, outbound_interface: &str) -> V
             ],
         },
         IptablesRule {
-            name: "compose bridge established return",
+            name: "bridge established return",
             check_args: vec![
                 "-C".into(),
                 "DOCKER-USER".into(),
@@ -246,7 +261,7 @@ async fn ensure_iptables_rule(
     }
     Err(ComposeProdError::Process(format!(
         "failed to install iptables rule `{}` with `{}`: {}; \
-         production containers need this DOCKER-USER rule for GitHub/OAuth egress",
+         containers need this DOCKER-USER rule for egress",
         rule.name,
         iptables_command_text(&rule.insert_args),
         insert.combined()
@@ -378,7 +393,7 @@ mod tests {
     use std::ffi::OsString;
 
     use super::{
-        DockerNetworkInspect, IpRoute, bridge_name_from_network, compose_bridge_egress_rules,
+        DockerNetworkInspect, IpRoute, bridge_egress_rules, bridge_name_from_network,
         select_default_route_interface,
     };
 
@@ -435,10 +450,10 @@ mod tests {
         );
     }
 
-    /// Verifies the production egress guard allows only the Compose bridge and default interface.
+    /// Verifies the egress guard allows only the selected bridge and default interface.
     #[test]
     fn bridge_egress_rules_are_scoped_to_default_interface() {
-        let rules = compose_bridge_egress_rules("br-prod", "en0");
+        let rules = bridge_egress_rules("br-prod", "en0");
         let rendered = rules
             .iter()
             .map(|rule| {
@@ -453,7 +468,7 @@ mod tests {
             rendered,
             vec![
                 (
-                    "compose bridge outbound",
+                    "bridge outbound",
                     vec![
                         "-C",
                         "DOCKER-USER",
@@ -477,7 +492,7 @@ mod tests {
                     ],
                 ),
                 (
-                    "compose bridge established return",
+                    "bridge established return",
                     vec![
                         "-C",
                         "DOCKER-USER",

@@ -20,7 +20,6 @@ use std::time::Duration;
 use agentics_config::{DeploymentStage, EnvPolicyReport, EnvServiceRole, RunnerNamespace};
 use agentics_runner::RUNNER_SCOPE_HOSTED_WORKER;
 use clap::{Parser, Subcommand, ValueEnum};
-use serde::Deserialize;
 use tokio::process::Command;
 
 use crate::support::{
@@ -29,15 +28,19 @@ use crate::support::{
 };
 
 mod bridge_egress;
+mod raw_env;
 mod runner_cleanup;
 mod runner_docker;
 
 use bridge_egress::{check_api_github_egress, ensure_compose_bridge_egress};
+use raw_env::RawComposeProdEnv;
 use runner_cleanup::clean_runners;
-use runner_docker::{runner_docker_down, runner_docker_up};
+use runner_docker::{
+    check_runner_docker_pypi_egress, ensure_runner_docker_bridge_egress, runner_docker_down,
+    runner_docker_up,
+};
 
 const PREFIX: &str = "agentics-compose-prod";
-const ENV_PREFIX: &str = "AGENTICS_";
 const DEFAULT_PROJECT: &str = "agentics-prod";
 const DEFAULT_ENV_FILE: &str = "deploy/compose/env/prod.env";
 const DEFAULT_PRIVATE_BUNDLE_BACKUP_CONTAINER: &str = "agentics-rustfs-private-backup";
@@ -154,46 +157,6 @@ pub enum RunnerCleanupScope {
     HostedWorker,
 }
 
-#[derive(Debug, Clone, Default, Deserialize)]
-struct RawComposeProdEnv {
-    compose_prod_project: Option<String>,
-    compose_prod_env_file: Option<String>,
-    deployment_stage: Option<String>,
-    worker_accelerators: Option<String>,
-    runner_namespace: Option<String>,
-    database_url: Option<String>,
-    docker_host: Option<String>,
-    docker_socket_path: Option<String>,
-    docker_socket_gid: Option<u32>,
-    dgx_state_root: Option<String>,
-    storage_work_root: Option<String>,
-    challenge_review_repository_host_root: Option<String>,
-    runner_runtime_root: Option<String>,
-    runner_phase_mount_root: Option<String>,
-    dgx_phase_mount_root: Option<String>,
-    dgx_docker_data_root: Option<String>,
-    dgx_runner_docker_exec_root: Option<String>,
-    dgx_runner_docker_pidfile: Option<String>,
-    dgx_runner_docker_log: Option<String>,
-    dgx_runner_docker_bridge: Option<String>,
-    dgx_runner_docker_bridge_cidr: Option<String>,
-    rustfs_backup_container: Option<String>,
-}
-
-impl RawComposeProdEnv {
-    fn from_process() -> Result<Self, ComposeProdError> {
-        envy::prefixed(ENV_PREFIX)
-            .from_env::<Self>()
-            .map_err(|error| ComposeProdError::InvalidConfig(error.to_string()))
-    }
-
-    fn from_map(values: &HashMap<String, String>) -> Result<Self, ComposeProdError> {
-        envy::prefixed(ENV_PREFIX)
-            .from_iter(values.clone())
-            .map_err(|error| ComposeProdError::InvalidConfig(error.to_string()))
-    }
-}
-
 impl RunnerCleanupScope {
     fn as_label(self) -> &'static str {
         match self {
@@ -236,6 +199,11 @@ async fn run(cli: Cli) -> Result<ExitCode, ComposeProdError> {
                 return Ok(worker_code);
             }
             let reports = ensure_compose_bridge_egress(&context).await?;
+            let compose_egress_code = print_reports(PREFIX, &reports);
+            if compose_egress_code != ExitCode::SUCCESS {
+                return Ok(compose_egress_code);
+            }
+            let reports = ensure_runner_docker_bridge_egress(&context).await?;
             Ok(print_reports(PREFIX, &reports))
         }
         ProdCommand::Down { runner, dry_run } => down(&context, runner, dry_run).await,
@@ -258,6 +226,16 @@ async fn run(cli: Cli) -> Result<ExitCode, ComposeProdError> {
                 return Ok(worker_code);
             }
             let reports = check_api_github_egress(&context).await?;
+            let api_code = print_reports(PREFIX, &reports);
+            if api_code != ExitCode::SUCCESS {
+                return Ok(api_code);
+            }
+            let reports = ensure_runner_docker_bridge_egress(&context).await?;
+            let runner_bridge_code = print_reports(PREFIX, &reports);
+            if runner_bridge_code != ExitCode::SUCCESS {
+                return Ok(runner_bridge_code);
+            }
+            let reports = check_runner_docker_pypi_egress(&context).await?;
             Ok(print_reports(PREFIX, &reports))
         }
         ProdCommand::RestorePrivateBundles { overwrite, dry_run } => {

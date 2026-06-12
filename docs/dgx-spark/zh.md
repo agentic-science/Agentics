@@ -141,11 +141,7 @@ preparation 后、`just prod::up` 前，用 production ops wrapper 启动它：
 sudo just prod::runner-docker-up
 ```
 
-Wrapper 会用 `/srv/agentics/docker-data-root`、dedicated
-`/srv/agentics/docker.sock` socket、overlay2、Docker `storage_opt.size`
-支持，以及由 host bridge `agentics0` 支撑的默认 Docker `bridge` network 启动
-`dockerd`。该 bridge 是声明 `network_access: enabled` 的 challenge setup
-phases 所必需的，例如 CUDA 或 PyTorch/Triton dependency setup。需要时显式停止：
+Wrapper 会用 `/srv/agentics/docker-data-root`、dedicated `/srv/agentics/docker.sock` socket、overlay2、Docker `storage_opt.size` 支持，以及由 host bridge `agentics0` 支撑的默认 Docker `bridge` network 启动 `dockerd`。它还会验证 `agentics0` 和 host 默认 outbound interface 之间的 scoped `DOCKER-USER` forwarding。该 bridge 是声明 `network_access: enabled` 的 challenge setup phases 所必需的，例如 CUDA 或 PyTorch/Triton dependency setup。需要时显式停止：
 
 ```bash
 sudo just prod::runner-docker-down
@@ -189,9 +185,7 @@ agentics-check-dgx-spark-profile
 
 当 `AGENTICS_HOST_PROBE_MODE=warn` 或 `require` 时，worker 会在 startup
 期间运行同一个 profile checker。在 production security 和 require mode 下，如果
-bounded runner storage、Docker quota behavior、默认 Docker bridge network、
-digest-pinned images 或 GPU probing 无法证明，worker 会 fail closed。在 worker
-container 内，`xfs_quota` 可能无法读取
+bounded runner storage、Docker quota behavior、默认 Docker bridge network、digest-pinned images 或 GPU probing 无法证明，worker 会 fail closed。Startup 之后使用 `just prod::check` 分别验证 API egress 和 runner-container egress。在 worker container 内，`xfs_quota` 可能无法读取
 bind-mounted loop devices 的 host project quota rows；遇到这种情况时，checker 会把
 row inspection 视为 inconclusive，并依赖 slot metadata 和 required mutating
 quota-exhaustion probes。

@@ -145,12 +145,7 @@ with the production ops wrapper after storage preparation and before
 sudo just prod::runner-docker-up
 ```
 
-The wrapper starts `dockerd` with `/srv/agentics/docker-data-root`, the
-dedicated `/srv/agentics/docker.sock` socket, overlay2, Docker
-`storage_opt.size` support, and a default Docker `bridge` network backed by the
-`agentics0` host bridge. That bridge is required for challenge setup phases that
-declare `network_access: enabled`, such as CUDA or PyTorch/Triton dependency
-setup. Stop it explicitly when needed:
+The wrapper starts `dockerd` with `/srv/agentics/docker-data-root`, the dedicated `/srv/agentics/docker.sock` socket, overlay2, Docker `storage_opt.size` support, and a default Docker `bridge` network backed by the `agentics0` host bridge. It also verifies scoped `DOCKER-USER` forwarding between `agentics0` and the host default outbound interface. That bridge is required for challenge setup phases that declare `network_access: enabled`, such as CUDA or PyTorch/Triton dependency setup. Stop it explicitly when needed:
 
 ```bash
 sudo just prod::runner-docker-down
@@ -194,9 +189,7 @@ agentics-check-dgx-spark-profile
 
 The worker runs the same profile checker during startup when
 `AGENTICS_HOST_PROBE_MODE=warn` or `require`. With production security and
-require mode, the worker fails closed if bounded runner storage, Docker quota
-behavior, the default Docker bridge network, digest-pinned images, or GPU
-probing are not proven.
+require mode, the worker fails closed if bounded runner storage, Docker quota behavior, the default Docker bridge network, digest-pinned images, or GPU probing are not proven. Use `just prod::check` after startup to verify API egress and runner-container egress separately.
 Inside the worker container, `xfs_quota` may be unable to read host project
 quota rows for bind-mounted loop devices; in that case the checker treats row
 inspection as inconclusive and relies on slot metadata plus the required

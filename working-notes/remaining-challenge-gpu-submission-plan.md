@@ -32,7 +32,8 @@ After strict required-nullable challenge contracts are fixed, finish the remaini
 - [x] Update migrated Frontier-CS separated evaluators to read challenge-specific run data from `metadata`, matching the strict required-nullable source manifests.
 - [x] Update the Frontier-CS private asset refresh generator so regenerated private overlays emit strict run/session manifests.
 - [x] Normalize stale persistent private-bundle backup objects and restore the repaired overlays into production object storage.
-- [ ] Submit one GPU challenge solution with `agentics-official` and inspect result surfaces.
+- [x] Verify production GPU worker scheduling by submitting GPU challenges with `agentics-official`.
+- [ ] Get a successful GPU challenge result after the host GPU is no longer saturated by non-Agentics processes.
 - [ ] Clean stale solution wording where the solution is already meaningful.
 - [ ] Replace cheap/public-only baseline solutions with meaningful baselines.
 - [ ] Add the resumable production baseline submitter.
@@ -56,6 +57,11 @@ The GPU-dependent solution set for smoke and production scheduling checks is `cr
 - The production repair normalized 24 stale private overlay ZIPs in the object store. No private ZIP files were committed.
 - After the object-store repair, production API health, public challenge catalog, web frontend, `worker-cpu`, `worker-gpu`, and GitHub egress checks all passed.
 - Migrated Frontier-CS separated evaluators now read challenge-specific case data only from `run.metadata`, and `agentics challenge-creator check` passes for the published and dev challenge corpora.
+- Production GPU jobs now reach the GPU worker and runner. Submissions for `vector-addition-frontier-cs-vector-addition-2-20`, `cross-entropy-kernel-frontier-cs-cross-entropy`, and validations for `vector-add-2-24-frontier-cs-vector-add-2-24` showed that scheduling and device requests are functioning, but results failed or scored zero because the host GPU was saturated.
+- The first GPU validation failures exposed two separate setup/runtime issues. The dedicated runner Docker bridge lacked `DOCKER-USER` egress rules, so dependency installation timed out, and an interim system-Python workaround broke Triton compilation because `Python.h` was missing.
+- The runner Docker egress fix now verifies scoped forwarding for the dedicated runner bridge during `prod::up`, `prod::check`, `rehearsal::up`, and `rehearsal::check`. `prod::check` also runs a real TLS probe from a runner container to `pypi.org:443`, which catches network-enabled evaluator setup failures before challenge jobs are claimed.
+- The Triton/Python fix restored uv-managed evaluator Python for coexecuted GPU setup scripts after runner egress was repaired. `agentics challenge-creator check` passes for both the main and dev challenge corpora after the restore.
+- The remaining GPU blocker is host-level contention, not Agentics scheduling. `nvidia-smi` showed six long-running `python3` processes owned by user `tengteng`, each using roughly 15 to 17 GiB of GPU memory, while the dedicated runner Docker daemon had no live containers. Agentics should not kill those external jobs. A future scheduler improvement could add a minimum-free-GPU-memory admission probe before claiming GPU jobs.
 
 ## Track 1: Make GPU Workers Reliable In Dev, Rehearsal, And Production
 
@@ -69,6 +75,7 @@ The GPU-dependent solution set for smoke and production scheduling checks is `cr
 - Verify GPU startup probes in all three environments use the configured digest-pinned CUDA probe image and fail closed when the NVIDIA runtime/device request is unavailable.
 - Restart production services only after dev and rehearsal GPU worker wiring has been rendered and smoked.
 - Submit one GPU challenge solution with `agentics-official` after production `worker-gpu` is running, wait for completion, and inspect logs, metrics, and leaderboard output.
+- If GPU submissions fail with CUDA out-of-memory while `worker-gpu` is healthy, inspect `nvidia-smi` and distinguish Agentics-owned runner containers from unrelated host processes before treating the failure as a platform bug.
 
 ## Track 2: Audit Solution Quality And Clean Stale Wording
 

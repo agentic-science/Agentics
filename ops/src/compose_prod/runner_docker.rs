@@ -13,6 +13,7 @@ use crate::support::{
     DEFAULT_DOCKER_SOCKET_PATH, DEFAULT_OUTPUT_LIMIT_BYTES, ReportLine, print_reports,
 };
 
+use super::bridge_egress::ensure_bridge_egress;
 use super::{ComposeContext, ComposeProdError, PREFIX};
 
 const DEFAULT_RUNNER_DOCKER_SOCKET_PATH: &str = "/srv/agentics/docker.sock";
@@ -35,16 +36,15 @@ pub(super) async fn runner_docker_up(
 
     if runner_docker_ready(&config).await? {
         let bridge_report = runner_docker_bridge_report(&config).await?;
-        return Ok(print_reports(
-            PREFIX,
-            &[
-                ReportLine::pass(
-                    "runner Docker daemon",
-                    format!("already reachable at {}", config.docker_host),
-                ),
-                bridge_report,
-            ],
-        ));
+        let mut reports = vec![
+            ReportLine::pass(
+                "runner Docker daemon",
+                format!("already reachable at {}", config.docker_host),
+            ),
+            bridge_report,
+        ];
+        reports.extend(ensure_runner_docker_bridge_egress(context).await?);
+        return Ok(print_reports(PREFIX, &reports));
     }
 
     if !config.data_root.is_dir() {
@@ -61,19 +61,83 @@ pub(super) async fn runner_docker_up(
     wait_for_runner_docker(&config).await?;
     repair_runner_docker_socket_permissions(&config)?;
     let bridge_report = runner_docker_bridge_report(&config).await?;
-    Ok(print_reports(
-        PREFIX,
-        &[
-            ReportLine::pass(
-                "runner Docker daemon",
-                format!(
-                    "ready at {} using bridge {} ({})",
-                    config.docker_host, config.bridge_name, config.bridge_cidr
-                ),
+    let mut reports = vec![
+        ReportLine::pass(
+            "runner Docker daemon",
+            format!(
+                "ready at {} using bridge {} ({})",
+                config.docker_host, config.bridge_name, config.bridge_cidr
             ),
-            bridge_report,
+        ),
+        bridge_report,
+    ];
+    reports.extend(ensure_runner_docker_bridge_egress(context).await?);
+    Ok(print_reports(PREFIX, &reports))
+}
+
+pub(super) async fn ensure_runner_docker_bridge_egress(
+    context: &ComposeContext,
+) -> Result<Vec<ReportLine>, ComposeProdError> {
+    let config = RunnerDockerConfig::from_context(context)?;
+    config.validate_dedicated_socket()?;
+    ensure_bridge_egress(
+        context,
+        "runner Docker bridge egress",
+        &format!("runner Docker bridge {}", config.bridge_name),
+        &config.bridge_name,
+    )
+    .await
+}
+
+pub(super) async fn check_runner_docker_pypi_egress(
+    context: &ComposeContext,
+) -> Result<Vec<ReportLine>, ComposeProdError> {
+    let config = RunnerDockerConfig::from_context(context)?;
+    config.validate_dedicated_socket()?;
+    let Some(image) = context.string_value(|env| env.worker_gpu_probe_image.as_ref(), "") else {
+        return Ok(vec![ReportLine::skip(
+            "runner Docker PyPI egress",
+            "AGENTICS_WORKER_GPU_PROBE_IMAGE is not configured",
+        )]);
+    };
+
+    let output = docker_with_host_output(
+        &config.docker_host,
+        [
+            "run",
+            "--rm",
+            "--network",
+            "bridge",
+            "--pull",
+            "never",
+            image.as_str(),
+            "python3",
+            "-c",
+            r#"import socket, ssl
+host = "pypi.org"
+raw = socket.create_connection((host, 443), timeout=10)
+with ssl.create_default_context().wrap_socket(raw, server_hostname=host) as sock:
+    sock.version()
+print("ok")
+"#,
         ],
-    ))
+        Duration::from_secs(30),
+    )
+    .await?;
+    if output.success() {
+        return Ok(vec![ReportLine::pass(
+            "runner Docker PyPI egress",
+            "runner container can open TLS to pypi.org:443",
+        )]);
+    }
+    Ok(vec![ReportLine::fail(
+        "runner Docker PyPI egress",
+        format!(
+            "runner container cannot open TLS to pypi.org:443 through bridge {}: {}",
+            config.bridge_name,
+            output.combined()
+        ),
+    )])
 }
 
 pub(super) async fn runner_docker_down(

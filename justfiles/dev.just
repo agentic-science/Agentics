@@ -20,7 +20,19 @@ runner-docker-up:
       logfile="${AGENTICS_DEV_DOCKER_LOG:-$root/dockerd.log}"; \
       bridge="${AGENTICS_DEV_DOCKER_BRIDGE:-agenticsdv0}"; \
       bridge_cidr="${AGENTICS_DEV_DOCKER_BRIDGE_CIDR:-172.29.0.1/16}"; \
+      ensure_bridge_egress() { \
+        out_if="$(ip route show default 2>/dev/null | awk 'NR == 1 { for (i = 1; i <= NF; i++) if ($i == "dev") { print $(i + 1); exit } }')"; \
+        if [ -z "$out_if" ]; then \
+          printf 'Cannot determine default route interface for dev runner Docker bridge egress.\n' >&2; \
+          exit 1; \
+        fi; \
+        iptables -C DOCKER-USER -i "$bridge" -o "$out_if" -j ACCEPT 2>/dev/null || iptables -I DOCKER-USER 1 -i "$bridge" -o "$out_if" -j ACCEPT; \
+        iptables -C DOCKER-USER -i "$out_if" -o "$bridge" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || iptables -I DOCKER-USER 1 -i "$out_if" -o "$bridge" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT; \
+      }; \
       if docker --host "$host" info >/dev/null 2>&1; then \
+        if [ "$(id -u)" -eq 0 ]; then \
+          ensure_bridge_egress; \
+        fi; \
         printf 'Dedicated dev Docker daemon is already reachable at %s.\n' "$host"; \
         exit 0; \
       fi; \
@@ -39,6 +51,7 @@ runner-docker-up:
         ip addr add "$bridge_cidr" dev "$bridge"; \
       fi; \
       ip link set dev "$bridge" up; \
+      ensure_bridge_egress; \
       nohup dockerd \
         --data-root "$data_root" \
         --exec-root "$exec_root" \

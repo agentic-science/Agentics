@@ -313,8 +313,7 @@ AGENTICS_RUNNER_SECURITY_PROFILE=production \
   agentics-check-dgx-spark-profile
 ```
 
-完成 storage preparation 后，启动 dedicated runner Docker daemon。Ops wrapper 会配置
-默认 Docker `bridge` network，供 network-enabled setup phases 使用：
+完成 storage preparation 后，启动 dedicated runner Docker daemon。Ops wrapper 会配置默认 Docker `bridge` network，供 network-enabled setup phases 使用，并验证该 bridge 的 scoped host forwarding rules：
 
 ```bash
 sudo just prod::runner-docker-up
@@ -340,10 +339,7 @@ env \
   agentics-check-dgx-spark-profile
 ```
 
-Strict profile check 会验证默认 Docker bridge network、Docker writable-layer quota
-probe、per-phase mount writeability、root-prepared quota slot metadata、configured
-inode hard limits，以及使用 64 MiB slot class 的 per-phase bind-mount quota
-exhaustion probe。
+Strict profile check 会验证默认 Docker bridge network、Docker writable-layer quota probe、per-phase mount writeability、root-prepared quota slot metadata、configured inode hard limits，以及使用 64 MiB slot class 的 per-phase bind-mount quota exhaustion probe。
 
 在 Linux 上做本地验证时，使用由测试用户拥有的独立 test quota root：
 
@@ -371,10 +367,7 @@ Production Compose 下，请通过 wrapper 运行检查，这样 check 会使用
 just prod::check
 ```
 
-`just prod::check` 也会验证 production Compose bridge forwarding guard，并从 API
-container 对 GitHub 发起 TLS connection。若 GitHub sign-in 在 callback 阶段返回
-internal server error，请先运行这个 check，再排查 application credentials；否则即使
-DNS 正常，Docker forwarding state 也可能让 API container 无法访问 GitHub。
+`just prod::check` 也会验证 production Compose bridge forwarding guard、dedicated runner Docker bridge forwarding guard、expected worker services、从 API container 到 GitHub 的 TLS connection，以及从 runner container 到 PyPI 的 TLS connection。若 GitHub sign-in 在 callback 阶段返回 internal server error，请先运行这个 check，再排查 application credentials；否则即使 DNS 正常，Docker forwarding state 也可能让 API container 无法访问 GitHub。若 evaluator setup 在 fetching dependencies 时卡住或超时，runner-container PyPI probe 是第一个需要检查的项目。
 
 Check service 会有意挂载 host Docker socket。API、web、Postgres 和 RustFS 不挂载它。
 

@@ -329,9 +329,7 @@ AGENTICS_RUNNER_SECURITY_PROFILE=production \
   agentics-check-dgx-spark-profile
 ```
 
-After storage preparation, start the dedicated runner Docker daemon. The ops
-wrapper configures a default Docker `bridge` network for network-enabled setup
-phases:
+After storage preparation, start the dedicated runner Docker daemon. The ops wrapper configures a default Docker `bridge` network for network-enabled setup phases and verifies scoped host forwarding for that bridge:
 
 ```bash
 sudo just prod::runner-docker-up
@@ -357,10 +355,7 @@ env \
   agentics-check-dgx-spark-profile
 ```
 
-The strict profile check validates the default Docker bridge network, Docker
-writable-layer quota probe, per-phase mount writeability, root-prepared quota
-slot metadata, configured inode hard limits, and a per-phase bind-mount quota
-exhaustion probe using the 64 MiB slot class.
+The strict profile check validates the default Docker bridge network, Docker writable-layer quota probe, per-phase mount writeability, root-prepared quota slot metadata, configured inode hard limits, and a per-phase bind-mount quota exhaustion probe using the 64 MiB slot class.
 
 For local verification on Linux, use a separate test quota root owned by the
 test user:
@@ -390,7 +385,7 @@ Compose project name as the deployed stack:
 just prod::check
 ```
 
-`just prod::check` also verifies the production Compose bridge forwarding guard, expected worker services, and a TLS connection from the API container to GitHub. If GitHub sign-in fails with an internal server error during the callback, run this check before debugging application credentials; Docker forwarding state can otherwise leave the API container unable to reach GitHub even when DNS works.
+`just prod::check` also verifies the production Compose bridge forwarding guard, the dedicated runner Docker bridge forwarding guard, expected worker services, a TLS connection from the API container to GitHub, and a TLS connection from a runner container to PyPI. If GitHub sign-in fails with an internal server error during the callback, run this check before debugging application credentials; Docker forwarding state can otherwise leave the API container unable to reach GitHub even when DNS works. If evaluator setup stalls or times out while fetching dependencies, the runner-container PyPI probe is the first check to inspect.
 When `COMPOSE_PROFILES=gpu` is active, the production and rehearsal checks fail if `worker-gpu` is not running.
 
 The check service mounts the host Docker socket intentionally. API, web,

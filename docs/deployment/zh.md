@@ -199,11 +199,7 @@ Production Compose：
    just prod::up
    ```
 
-   `just prod::up` 会在 Docker 创建默认 network 后检查 production Compose bridge 的
-   forwarding rules。在 Linux host 上，它会安装幂等的 `DOCKER-USER` rules，允许
-   Compose bridge 访问 host 的默认 outbound interface，并允许 established return
-   traffic。这样 GitHub sign-in 和其他 API egress 不会依赖已经过期的 Docker
-   forwarding state。
+   `just prod::up` 会在 Docker 创建默认 network 后检查 production Compose bridge forwarding rules，然后检查 dedicated runner Docker bridge forwarding rules。在 Linux host 上，它会安装幂等的 `DOCKER-USER` rules，允许 Compose 和 runner bridges 访问 host 的默认 outbound interface，并允许 established return traffic。这样 GitHub sign-in、API egress，以及需要网络的 evaluator setup phases 都不会依赖已经过期的 Docker forwarding state。
 
    Pre-MVP 阶段可能会 squash migration history。Deployment 拉到新的 migration
    baseline 时，请先重建 disposable dev/test databases，并在 production rehearsal
@@ -499,8 +495,7 @@ Production Compose 使用：
 just prod::check
 ```
 
-Production check 会验证同一组 Compose bridge forwarding rules，并从 API container
-探测到 GitHub 的 HTTPS egress；browser sign-in 依赖这个 egress path。
+Production check 会验证同一组 Compose 和 runner bridge forwarding rules，从 API container 探测到 GitHub 的 HTTPS egress，并从 runner-container bridge 探测到 PyPI 的 HTTPS egress。GitHub egress 支撑 browser sign-in，runner egress 支撑需要网络的 setup phases，例如 evaluator dependency installation。
 
 然后使用根目录 `README.md` 中的 submitter flow 或
 `skills/agentics-cli-workflow/SKILL.md` 执行 CLI smoke path。

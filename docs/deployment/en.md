@@ -212,12 +212,7 @@ For production Compose:
    just prod::up
    ```
 
-   `just prod::up` also verifies the production Compose bridge forwarding
-   rules after Docker creates the default network. On Linux hosts it installs
-   idempotent `DOCKER-USER` rules that allow the Compose bridge to reach the
-   host default outbound interface and accept established return traffic. This
-   keeps GitHub sign-in and other API egress from depending on stale Docker
-   forwarding state.
+   `just prod::up` also verifies the production Compose bridge forwarding rules after Docker creates the default network, then verifies the dedicated runner Docker bridge forwarding rules. On Linux hosts it installs idempotent `DOCKER-USER` rules that allow the Compose and runner bridges to reach the host default outbound interface and accept established return traffic. This keeps GitHub sign-in, API egress, and network-enabled evaluator setup phases from depending on stale Docker forwarding state.
 
    Pre-MVP migration history may be squashed. When a deployment picks up a new
    migration baseline, recreate disposable dev/test databases and reset
@@ -536,9 +531,7 @@ For production Compose, run:
 just prod::check
 ```
 
-The production check verifies the same Compose bridge forwarding rules and then
-probes HTTPS egress from the API container to GitHub, which is required for
-browser sign-in.
+The production check verifies the same Compose and runner bridge forwarding rules, probes HTTPS egress from the API container to GitHub, and probes HTTPS egress from a runner-container bridge to PyPI. GitHub egress is required for browser sign-in, and runner egress is required for network-enabled setup phases such as evaluator dependency installation.
 
 Then perform a CLI smoke path using the root `README.md` submitter flow or
 `skills/agentics-cli-workflow/SKILL.md`.
