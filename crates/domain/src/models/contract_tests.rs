@@ -107,7 +107,7 @@ fn assert_serializes_to_fixture(
 fn ensure_no_explicit_nulls(value: &Value, path: &str) -> Result<(), Box<dyn std::error::Error>> {
     match value {
         Value::Null => {
-            if path.ends_with(".accelerator") {
+            if path.starts_with("$.spec.") || path.ends_with(".accelerator") {
                 return Ok(());
             }
             return Err(std::io::Error::other(format!(

@@ -232,7 +232,7 @@ pub(crate) async fn execute_evaluation_job(
                         profile,
                         docker_platform: job_requirement.docker_platform,
                         accelerator: job_requirement.accelerator,
-                        run_manifest_container_path: &run_plan.run_manifest_container_path,
+                        run_manifest: &run_plan.manifest,
                         bundle_dir,
                         setup_root: run_plan.setup_root.as_ref().map(RetainedRunnerTree::path),
                         runs_root: &runs_root,

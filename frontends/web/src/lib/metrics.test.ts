@@ -11,6 +11,7 @@ const metricSchema = {
     {
       name: "score",
       label: "Score",
+      unit: null,
       direction: "maximize",
       visibility: "public",
       metric_description: "Primary score.",
@@ -18,7 +19,7 @@ const metricSchema = {
   ],
   ranking: {
     primary_metric_name: "score",
-    tie_breaker_metric_names: [],
+    tie_breaker_metric_names: null,
   },
 } satisfies MetricSchema;
 

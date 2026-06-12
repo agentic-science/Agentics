@@ -126,7 +126,45 @@ export const adminChallengeListResponseSchema = z
                         .string()
                         .regex(/^[A-Za-z0-9_.-]+$/)
                         .min(1),
-                      resource_description: z.string().optional(),
+                      resource_description: z.any().superRefine((x, ctx) => {
+                        const schemas = [z.null(), z.string()];
+                        const { errors, failed } = schemas.reduce<{
+                          errors: z.core.$ZodIssue[];
+                          failed: number;
+                        }>(
+                          ({ errors, failed }, schema) =>
+                            ((result) =>
+                              result.error
+                                ? {
+                                    errors: [...errors, ...result.error.issues],
+                                    failed: failed + 1,
+                                  }
+                                : { errors, failed })(schema.safeParse(x)),
+                          { errors: [], failed: 0 },
+                        );
+                        const passed = schemas.length - failed;
+                        if (passed !== 1) {
+                          ctx.addIssue(
+                            errors.length
+                              ? {
+                                  path: [],
+                                  code: "invalid_union",
+                                  errors: [errors],
+                                  message:
+                                    "Invalid input: Should pass single schema. Passed " +
+                                    passed,
+                                }
+                              : {
+                                  path: [],
+                                  code: "custom",
+                                  errors: [errors],
+                                  message:
+                                    "Invalid input: Should pass single schema. Passed " +
+                                    passed,
+                                },
+                          );
+                        }
+                      }),
                       solution_image: z
                         .any()
                         .superRefine((x, ctx) => {
@@ -297,23 +335,66 @@ export const adminChallengeListResponseSchema = z
                             .describe(
                               "Resource envelope for one Docker-executed stage.",
                             ),
-                          run: z
-                            .object({
-                              timeout_sec: z.number().int().gte(1),
-                              memory_limit_mb: z.number().int().gte(1),
-                              cpu_limit_millis: z.number().int().gte(1),
-                              disk_limit_mb: z.number().int().gte(1),
-                              network_access: z
-                                .enum(["disabled", "loopback", "enabled"])
+                          run: z.any().superRefine((x, ctx) => {
+                            const schemas = [
+                              z.null(),
+                              z
+                                .object({
+                                  timeout_sec: z.number().int().gte(1),
+                                  memory_limit_mb: z.number().int().gte(1),
+                                  cpu_limit_millis: z.number().int().gte(1),
+                                  disk_limit_mb: z.number().int().gte(1),
+                                  network_access: z
+                                    .enum(["disabled", "loopback", "enabled"])
+                                    .describe(
+                                      "Network access policy requested for a phase.",
+                                    ),
+                                })
+                                .strict()
                                 .describe(
-                                  "Network access policy requested for a phase.",
+                                  "Resource envelope for one Docker-executed stage.",
                                 ),
-                            })
-                            .strict()
-                            .describe(
-                              "Resource envelope for one Docker-executed stage.",
-                            )
-                            .optional(),
+                            ];
+                            const { errors, failed } = schemas.reduce<{
+                              errors: z.core.$ZodIssue[];
+                              failed: number;
+                            }>(
+                              ({ errors, failed }, schema) =>
+                                ((result) =>
+                                  result.error
+                                    ? {
+                                        errors: [
+                                          ...errors,
+                                          ...result.error.issues,
+                                        ],
+                                        failed: failed + 1,
+                                      }
+                                    : { errors, failed })(schema.safeParse(x)),
+                              { errors: [], failed: 0 },
+                            );
+                            const passed = schemas.length - failed;
+                            if (passed !== 1) {
+                              ctx.addIssue(
+                                errors.length
+                                  ? {
+                                      path: [],
+                                      code: "invalid_union",
+                                      errors: [errors],
+                                      message:
+                                        "Invalid input: Should pass single schema. Passed " +
+                                        passed,
+                                    }
+                                  : {
+                                      path: [],
+                                      code: "custom",
+                                      errors: [errors],
+                                      message:
+                                        "Invalid input: Should pass single schema. Passed " +
+                                        passed,
+                                    },
+                              );
+                            }
+                          }),
                         })
                         .strict()
                         .describe(
@@ -358,21 +439,325 @@ export const adminChallengeListResponseSchema = z
                         .describe(
                           "Resource limits for trusted challenge-owned evaluator stages.",
                         ),
-                      hardware_metadata: z
-                        .object({
-                          kind: z.string(),
-                          gpu_model: z.string().optional(),
-                          gpu_count: z.number().int().gte(1).optional(),
-                          gpu_memory_gb: z.number().int().gte(1).optional(),
-                          cuda_variant: z.string().optional(),
-                          cuda_version: z.string().optional(),
-                          driver_minimum: z.string().optional(),
-                        })
-                        .strict()
-                        .describe(
-                          "Optional hardware metadata advertised with a resource profile.",
-                        )
-                        .optional(),
+                      hardware_metadata: z.any().superRefine((x, ctx) => {
+                        const schemas = [
+                          z.null(),
+                          z
+                            .object({
+                              kind: z.string(),
+                              gpu_model: z.any().superRefine((x, ctx) => {
+                                const schemas = [z.null(), z.string()];
+                                const { errors, failed } = schemas.reduce<{
+                                  errors: z.core.$ZodIssue[];
+                                  failed: number;
+                                }>(
+                                  ({ errors, failed }, schema) =>
+                                    ((result) =>
+                                      result.error
+                                        ? {
+                                            errors: [
+                                              ...errors,
+                                              ...result.error.issues,
+                                            ],
+                                            failed: failed + 1,
+                                          }
+                                        : { errors, failed })(
+                                      schema.safeParse(x),
+                                    ),
+                                  { errors: [], failed: 0 },
+                                );
+                                const passed = schemas.length - failed;
+                                if (passed !== 1) {
+                                  ctx.addIssue(
+                                    errors.length
+                                      ? {
+                                          path: [],
+                                          code: "invalid_union",
+                                          errors: [errors],
+                                          message:
+                                            "Invalid input: Should pass single schema. Passed " +
+                                            passed,
+                                        }
+                                      : {
+                                          path: [],
+                                          code: "custom",
+                                          errors: [errors],
+                                          message:
+                                            "Invalid input: Should pass single schema. Passed " +
+                                            passed,
+                                        },
+                                  );
+                                }
+                              }),
+                              gpu_count: z.any().superRefine((x, ctx) => {
+                                const schemas = [
+                                  z.null(),
+                                  z.number().int().gte(0),
+                                ];
+                                const { errors, failed } = schemas.reduce<{
+                                  errors: z.core.$ZodIssue[];
+                                  failed: number;
+                                }>(
+                                  ({ errors, failed }, schema) =>
+                                    ((result) =>
+                                      result.error
+                                        ? {
+                                            errors: [
+                                              ...errors,
+                                              ...result.error.issues,
+                                            ],
+                                            failed: failed + 1,
+                                          }
+                                        : { errors, failed })(
+                                      schema.safeParse(x),
+                                    ),
+                                  { errors: [], failed: 0 },
+                                );
+                                const passed = schemas.length - failed;
+                                if (passed !== 1) {
+                                  ctx.addIssue(
+                                    errors.length
+                                      ? {
+                                          path: [],
+                                          code: "invalid_union",
+                                          errors: [errors],
+                                          message:
+                                            "Invalid input: Should pass single schema. Passed " +
+                                            passed,
+                                        }
+                                      : {
+                                          path: [],
+                                          code: "custom",
+                                          errors: [errors],
+                                          message:
+                                            "Invalid input: Should pass single schema. Passed " +
+                                            passed,
+                                        },
+                                  );
+                                }
+                              }),
+                              gpu_memory_gb: z.any().superRefine((x, ctx) => {
+                                const schemas = [
+                                  z.null(),
+                                  z.number().int().gte(0),
+                                ];
+                                const { errors, failed } = schemas.reduce<{
+                                  errors: z.core.$ZodIssue[];
+                                  failed: number;
+                                }>(
+                                  ({ errors, failed }, schema) =>
+                                    ((result) =>
+                                      result.error
+                                        ? {
+                                            errors: [
+                                              ...errors,
+                                              ...result.error.issues,
+                                            ],
+                                            failed: failed + 1,
+                                          }
+                                        : { errors, failed })(
+                                      schema.safeParse(x),
+                                    ),
+                                  { errors: [], failed: 0 },
+                                );
+                                const passed = schemas.length - failed;
+                                if (passed !== 1) {
+                                  ctx.addIssue(
+                                    errors.length
+                                      ? {
+                                          path: [],
+                                          code: "invalid_union",
+                                          errors: [errors],
+                                          message:
+                                            "Invalid input: Should pass single schema. Passed " +
+                                            passed,
+                                        }
+                                      : {
+                                          path: [],
+                                          code: "custom",
+                                          errors: [errors],
+                                          message:
+                                            "Invalid input: Should pass single schema. Passed " +
+                                            passed,
+                                        },
+                                  );
+                                }
+                              }),
+                              cuda_variant: z.any().superRefine((x, ctx) => {
+                                const schemas = [z.null(), z.string()];
+                                const { errors, failed } = schemas.reduce<{
+                                  errors: z.core.$ZodIssue[];
+                                  failed: number;
+                                }>(
+                                  ({ errors, failed }, schema) =>
+                                    ((result) =>
+                                      result.error
+                                        ? {
+                                            errors: [
+                                              ...errors,
+                                              ...result.error.issues,
+                                            ],
+                                            failed: failed + 1,
+                                          }
+                                        : { errors, failed })(
+                                      schema.safeParse(x),
+                                    ),
+                                  { errors: [], failed: 0 },
+                                );
+                                const passed = schemas.length - failed;
+                                if (passed !== 1) {
+                                  ctx.addIssue(
+                                    errors.length
+                                      ? {
+                                          path: [],
+                                          code: "invalid_union",
+                                          errors: [errors],
+                                          message:
+                                            "Invalid input: Should pass single schema. Passed " +
+                                            passed,
+                                        }
+                                      : {
+                                          path: [],
+                                          code: "custom",
+                                          errors: [errors],
+                                          message:
+                                            "Invalid input: Should pass single schema. Passed " +
+                                            passed,
+                                        },
+                                  );
+                                }
+                              }),
+                              cuda_version: z.any().superRefine((x, ctx) => {
+                                const schemas = [z.null(), z.string()];
+                                const { errors, failed } = schemas.reduce<{
+                                  errors: z.core.$ZodIssue[];
+                                  failed: number;
+                                }>(
+                                  ({ errors, failed }, schema) =>
+                                    ((result) =>
+                                      result.error
+                                        ? {
+                                            errors: [
+                                              ...errors,
+                                              ...result.error.issues,
+                                            ],
+                                            failed: failed + 1,
+                                          }
+                                        : { errors, failed })(
+                                      schema.safeParse(x),
+                                    ),
+                                  { errors: [], failed: 0 },
+                                );
+                                const passed = schemas.length - failed;
+                                if (passed !== 1) {
+                                  ctx.addIssue(
+                                    errors.length
+                                      ? {
+                                          path: [],
+                                          code: "invalid_union",
+                                          errors: [errors],
+                                          message:
+                                            "Invalid input: Should pass single schema. Passed " +
+                                            passed,
+                                        }
+                                      : {
+                                          path: [],
+                                          code: "custom",
+                                          errors: [errors],
+                                          message:
+                                            "Invalid input: Should pass single schema. Passed " +
+                                            passed,
+                                        },
+                                  );
+                                }
+                              }),
+                              driver_minimum: z.any().superRefine((x, ctx) => {
+                                const schemas = [z.null(), z.string()];
+                                const { errors, failed } = schemas.reduce<{
+                                  errors: z.core.$ZodIssue[];
+                                  failed: number;
+                                }>(
+                                  ({ errors, failed }, schema) =>
+                                    ((result) =>
+                                      result.error
+                                        ? {
+                                            errors: [
+                                              ...errors,
+                                              ...result.error.issues,
+                                            ],
+                                            failed: failed + 1,
+                                          }
+                                        : { errors, failed })(
+                                      schema.safeParse(x),
+                                    ),
+                                  { errors: [], failed: 0 },
+                                );
+                                const passed = schemas.length - failed;
+                                if (passed !== 1) {
+                                  ctx.addIssue(
+                                    errors.length
+                                      ? {
+                                          path: [],
+                                          code: "invalid_union",
+                                          errors: [errors],
+                                          message:
+                                            "Invalid input: Should pass single schema. Passed " +
+                                            passed,
+                                        }
+                                      : {
+                                          path: [],
+                                          code: "custom",
+                                          errors: [errors],
+                                          message:
+                                            "Invalid input: Should pass single schema. Passed " +
+                                            passed,
+                                        },
+                                  );
+                                }
+                              }),
+                            })
+                            .strict()
+                            .describe(
+                              "Optional hardware metadata advertised with a resource profile.",
+                            ),
+                        ];
+                        const { errors, failed } = schemas.reduce<{
+                          errors: z.core.$ZodIssue[];
+                          failed: number;
+                        }>(
+                          ({ errors, failed }, schema) =>
+                            ((result) =>
+                              result.error
+                                ? {
+                                    errors: [...errors, ...result.error.issues],
+                                    failed: failed + 1,
+                                  }
+                                : { errors, failed })(schema.safeParse(x)),
+                          { errors: [], failed: 0 },
+                        );
+                        const passed = schemas.length - failed;
+                        if (passed !== 1) {
+                          ctx.addIssue(
+                            errors.length
+                              ? {
+                                  path: [],
+                                  code: "invalid_union",
+                                  errors: [errors],
+                                  message:
+                                    "Invalid input: Should pass single schema. Passed " +
+                                    passed,
+                                }
+                              : {
+                                  path: [],
+                                  code: "custom",
+                                  errors: [errors],
+                                  message:
+                                    "Invalid input: Should pass single schema. Passed " +
+                                    passed,
+                                },
+                          );
+                        }
+                      }),
                     })
                     .strict()
                     .describe(
@@ -946,7 +1331,45 @@ export const challengeDetailResponseSchema = z
                     .string()
                     .regex(/^[A-Za-z0-9_.-]+$/)
                     .min(1),
-                  resource_description: z.string().optional(),
+                  resource_description: z.any().superRefine((x, ctx) => {
+                    const schemas = [z.null(), z.string()];
+                    const { errors, failed } = schemas.reduce<{
+                      errors: z.core.$ZodIssue[];
+                      failed: number;
+                    }>(
+                      ({ errors, failed }, schema) =>
+                        ((result) =>
+                          result.error
+                            ? {
+                                errors: [...errors, ...result.error.issues],
+                                failed: failed + 1,
+                              }
+                            : { errors, failed })(schema.safeParse(x)),
+                      { errors: [], failed: 0 },
+                    );
+                    const passed = schemas.length - failed;
+                    if (passed !== 1) {
+                      ctx.addIssue(
+                        errors.length
+                          ? {
+                              path: [],
+                              code: "invalid_union",
+                              errors: [errors],
+                              message:
+                                "Invalid input: Should pass single schema. Passed " +
+                                passed,
+                            }
+                          : {
+                              path: [],
+                              code: "custom",
+                              errors: [errors],
+                              message:
+                                "Invalid input: Should pass single schema. Passed " +
+                                passed,
+                            },
+                      );
+                    }
+                  }),
                   solution_image: z
                     .any()
                     .superRefine((x, ctx) => {
@@ -1111,23 +1534,63 @@ export const challengeDetailResponseSchema = z
                         .describe(
                           "Resource envelope for one Docker-executed stage.",
                         ),
-                      run: z
-                        .object({
-                          timeout_sec: z.number().int().gte(1),
-                          memory_limit_mb: z.number().int().gte(1),
-                          cpu_limit_millis: z.number().int().gte(1),
-                          disk_limit_mb: z.number().int().gte(1),
-                          network_access: z
-                            .enum(["disabled", "loopback", "enabled"])
+                      run: z.any().superRefine((x, ctx) => {
+                        const schemas = [
+                          z.null(),
+                          z
+                            .object({
+                              timeout_sec: z.number().int().gte(1),
+                              memory_limit_mb: z.number().int().gte(1),
+                              cpu_limit_millis: z.number().int().gte(1),
+                              disk_limit_mb: z.number().int().gte(1),
+                              network_access: z
+                                .enum(["disabled", "loopback", "enabled"])
+                                .describe(
+                                  "Network access policy requested for a phase.",
+                                ),
+                            })
+                            .strict()
                             .describe(
-                              "Network access policy requested for a phase.",
+                              "Resource envelope for one Docker-executed stage.",
                             ),
-                        })
-                        .strict()
-                        .describe(
-                          "Resource envelope for one Docker-executed stage.",
-                        )
-                        .optional(),
+                        ];
+                        const { errors, failed } = schemas.reduce<{
+                          errors: z.core.$ZodIssue[];
+                          failed: number;
+                        }>(
+                          ({ errors, failed }, schema) =>
+                            ((result) =>
+                              result.error
+                                ? {
+                                    errors: [...errors, ...result.error.issues],
+                                    failed: failed + 1,
+                                  }
+                                : { errors, failed })(schema.safeParse(x)),
+                          { errors: [], failed: 0 },
+                        );
+                        const passed = schemas.length - failed;
+                        if (passed !== 1) {
+                          ctx.addIssue(
+                            errors.length
+                              ? {
+                                  path: [],
+                                  code: "invalid_union",
+                                  errors: [errors],
+                                  message:
+                                    "Invalid input: Should pass single schema. Passed " +
+                                    passed,
+                                }
+                              : {
+                                  path: [],
+                                  code: "custom",
+                                  errors: [errors],
+                                  message:
+                                    "Invalid input: Should pass single schema. Passed " +
+                                    passed,
+                                },
+                          );
+                        }
+                      }),
                     })
                     .strict()
                     .describe(
@@ -1172,21 +1635,307 @@ export const challengeDetailResponseSchema = z
                     .describe(
                       "Resource limits for trusted challenge-owned evaluator stages.",
                     ),
-                  hardware_metadata: z
-                    .object({
-                      kind: z.string(),
-                      gpu_model: z.string().optional(),
-                      gpu_count: z.number().int().gte(1).optional(),
-                      gpu_memory_gb: z.number().int().gte(1).optional(),
-                      cuda_variant: z.string().optional(),
-                      cuda_version: z.string().optional(),
-                      driver_minimum: z.string().optional(),
-                    })
-                    .strict()
-                    .describe(
-                      "Optional hardware metadata advertised with a resource profile.",
-                    )
-                    .optional(),
+                  hardware_metadata: z.any().superRefine((x, ctx) => {
+                    const schemas = [
+                      z.null(),
+                      z
+                        .object({
+                          kind: z.string(),
+                          gpu_model: z.any().superRefine((x, ctx) => {
+                            const schemas = [z.null(), z.string()];
+                            const { errors, failed } = schemas.reduce<{
+                              errors: z.core.$ZodIssue[];
+                              failed: number;
+                            }>(
+                              ({ errors, failed }, schema) =>
+                                ((result) =>
+                                  result.error
+                                    ? {
+                                        errors: [
+                                          ...errors,
+                                          ...result.error.issues,
+                                        ],
+                                        failed: failed + 1,
+                                      }
+                                    : { errors, failed })(schema.safeParse(x)),
+                              { errors: [], failed: 0 },
+                            );
+                            const passed = schemas.length - failed;
+                            if (passed !== 1) {
+                              ctx.addIssue(
+                                errors.length
+                                  ? {
+                                      path: [],
+                                      code: "invalid_union",
+                                      errors: [errors],
+                                      message:
+                                        "Invalid input: Should pass single schema. Passed " +
+                                        passed,
+                                    }
+                                  : {
+                                      path: [],
+                                      code: "custom",
+                                      errors: [errors],
+                                      message:
+                                        "Invalid input: Should pass single schema. Passed " +
+                                        passed,
+                                    },
+                              );
+                            }
+                          }),
+                          gpu_count: z.any().superRefine((x, ctx) => {
+                            const schemas = [z.null(), z.number().int().gte(0)];
+                            const { errors, failed } = schemas.reduce<{
+                              errors: z.core.$ZodIssue[];
+                              failed: number;
+                            }>(
+                              ({ errors, failed }, schema) =>
+                                ((result) =>
+                                  result.error
+                                    ? {
+                                        errors: [
+                                          ...errors,
+                                          ...result.error.issues,
+                                        ],
+                                        failed: failed + 1,
+                                      }
+                                    : { errors, failed })(schema.safeParse(x)),
+                              { errors: [], failed: 0 },
+                            );
+                            const passed = schemas.length - failed;
+                            if (passed !== 1) {
+                              ctx.addIssue(
+                                errors.length
+                                  ? {
+                                      path: [],
+                                      code: "invalid_union",
+                                      errors: [errors],
+                                      message:
+                                        "Invalid input: Should pass single schema. Passed " +
+                                        passed,
+                                    }
+                                  : {
+                                      path: [],
+                                      code: "custom",
+                                      errors: [errors],
+                                      message:
+                                        "Invalid input: Should pass single schema. Passed " +
+                                        passed,
+                                    },
+                              );
+                            }
+                          }),
+                          gpu_memory_gb: z.any().superRefine((x, ctx) => {
+                            const schemas = [z.null(), z.number().int().gte(0)];
+                            const { errors, failed } = schemas.reduce<{
+                              errors: z.core.$ZodIssue[];
+                              failed: number;
+                            }>(
+                              ({ errors, failed }, schema) =>
+                                ((result) =>
+                                  result.error
+                                    ? {
+                                        errors: [
+                                          ...errors,
+                                          ...result.error.issues,
+                                        ],
+                                        failed: failed + 1,
+                                      }
+                                    : { errors, failed })(schema.safeParse(x)),
+                              { errors: [], failed: 0 },
+                            );
+                            const passed = schemas.length - failed;
+                            if (passed !== 1) {
+                              ctx.addIssue(
+                                errors.length
+                                  ? {
+                                      path: [],
+                                      code: "invalid_union",
+                                      errors: [errors],
+                                      message:
+                                        "Invalid input: Should pass single schema. Passed " +
+                                        passed,
+                                    }
+                                  : {
+                                      path: [],
+                                      code: "custom",
+                                      errors: [errors],
+                                      message:
+                                        "Invalid input: Should pass single schema. Passed " +
+                                        passed,
+                                    },
+                              );
+                            }
+                          }),
+                          cuda_variant: z.any().superRefine((x, ctx) => {
+                            const schemas = [z.null(), z.string()];
+                            const { errors, failed } = schemas.reduce<{
+                              errors: z.core.$ZodIssue[];
+                              failed: number;
+                            }>(
+                              ({ errors, failed }, schema) =>
+                                ((result) =>
+                                  result.error
+                                    ? {
+                                        errors: [
+                                          ...errors,
+                                          ...result.error.issues,
+                                        ],
+                                        failed: failed + 1,
+                                      }
+                                    : { errors, failed })(schema.safeParse(x)),
+                              { errors: [], failed: 0 },
+                            );
+                            const passed = schemas.length - failed;
+                            if (passed !== 1) {
+                              ctx.addIssue(
+                                errors.length
+                                  ? {
+                                      path: [],
+                                      code: "invalid_union",
+                                      errors: [errors],
+                                      message:
+                                        "Invalid input: Should pass single schema. Passed " +
+                                        passed,
+                                    }
+                                  : {
+                                      path: [],
+                                      code: "custom",
+                                      errors: [errors],
+                                      message:
+                                        "Invalid input: Should pass single schema. Passed " +
+                                        passed,
+                                    },
+                              );
+                            }
+                          }),
+                          cuda_version: z.any().superRefine((x, ctx) => {
+                            const schemas = [z.null(), z.string()];
+                            const { errors, failed } = schemas.reduce<{
+                              errors: z.core.$ZodIssue[];
+                              failed: number;
+                            }>(
+                              ({ errors, failed }, schema) =>
+                                ((result) =>
+                                  result.error
+                                    ? {
+                                        errors: [
+                                          ...errors,
+                                          ...result.error.issues,
+                                        ],
+                                        failed: failed + 1,
+                                      }
+                                    : { errors, failed })(schema.safeParse(x)),
+                              { errors: [], failed: 0 },
+                            );
+                            const passed = schemas.length - failed;
+                            if (passed !== 1) {
+                              ctx.addIssue(
+                                errors.length
+                                  ? {
+                                      path: [],
+                                      code: "invalid_union",
+                                      errors: [errors],
+                                      message:
+                                        "Invalid input: Should pass single schema. Passed " +
+                                        passed,
+                                    }
+                                  : {
+                                      path: [],
+                                      code: "custom",
+                                      errors: [errors],
+                                      message:
+                                        "Invalid input: Should pass single schema. Passed " +
+                                        passed,
+                                    },
+                              );
+                            }
+                          }),
+                          driver_minimum: z.any().superRefine((x, ctx) => {
+                            const schemas = [z.null(), z.string()];
+                            const { errors, failed } = schemas.reduce<{
+                              errors: z.core.$ZodIssue[];
+                              failed: number;
+                            }>(
+                              ({ errors, failed }, schema) =>
+                                ((result) =>
+                                  result.error
+                                    ? {
+                                        errors: [
+                                          ...errors,
+                                          ...result.error.issues,
+                                        ],
+                                        failed: failed + 1,
+                                      }
+                                    : { errors, failed })(schema.safeParse(x)),
+                              { errors: [], failed: 0 },
+                            );
+                            const passed = schemas.length - failed;
+                            if (passed !== 1) {
+                              ctx.addIssue(
+                                errors.length
+                                  ? {
+                                      path: [],
+                                      code: "invalid_union",
+                                      errors: [errors],
+                                      message:
+                                        "Invalid input: Should pass single schema. Passed " +
+                                        passed,
+                                    }
+                                  : {
+                                      path: [],
+                                      code: "custom",
+                                      errors: [errors],
+                                      message:
+                                        "Invalid input: Should pass single schema. Passed " +
+                                        passed,
+                                    },
+                              );
+                            }
+                          }),
+                        })
+                        .strict()
+                        .describe(
+                          "Optional hardware metadata advertised with a resource profile.",
+                        ),
+                    ];
+                    const { errors, failed } = schemas.reduce<{
+                      errors: z.core.$ZodIssue[];
+                      failed: number;
+                    }>(
+                      ({ errors, failed }, schema) =>
+                        ((result) =>
+                          result.error
+                            ? {
+                                errors: [...errors, ...result.error.issues],
+                                failed: failed + 1,
+                              }
+                            : { errors, failed })(schema.safeParse(x)),
+                      { errors: [], failed: 0 },
+                    );
+                    const passed = schemas.length - failed;
+                    if (passed !== 1) {
+                      ctx.addIssue(
+                        errors.length
+                          ? {
+                              path: [],
+                              code: "invalid_union",
+                              errors: [errors],
+                              message:
+                                "Invalid input: Should pass single schema. Passed " +
+                                passed,
+                            }
+                          : {
+                              path: [],
+                              code: "custom",
+                              errors: [errors],
+                              message:
+                                "Invalid input: Should pass single schema. Passed " +
+                                passed,
+                            },
+                      );
+                    }
+                  }),
                 })
                 .strict()
                 .describe(
@@ -1270,11 +2019,52 @@ export const challengeDetailResponseSchema = z
                           "Relative path, under the setup workspace, to the generated run manifest.",
                         ),
                       reproducibility_notes: z
-                        .string()
+                        .any()
+                        .superRefine((x, ctx) => {
+                          const schemas = [z.null(), z.string()];
+                          const { errors, failed } = schemas.reduce<{
+                            errors: z.core.$ZodIssue[];
+                            failed: number;
+                          }>(
+                            ({ errors, failed }, schema) =>
+                              ((result) =>
+                                result.error
+                                  ? {
+                                      errors: [
+                                        ...errors,
+                                        ...result.error.issues,
+                                      ],
+                                      failed: failed + 1,
+                                    }
+                                  : { errors, failed })(schema.safeParse(x)),
+                            { errors: [], failed: 0 },
+                          );
+                          const passed = schemas.length - failed;
+                          if (passed !== 1) {
+                            ctx.addIssue(
+                              errors.length
+                                ? {
+                                    path: [],
+                                    code: "invalid_union",
+                                    errors: [errors],
+                                    message:
+                                      "Invalid input: Should pass single schema. Passed " +
+                                      passed,
+                                  }
+                                : {
+                                    path: [],
+                                    code: "custom",
+                                    errors: [errors],
+                                    message:
+                                      "Invalid input: Should pass single schema. Passed " +
+                                      passed,
+                                  },
+                            );
+                          }
+                        })
                         .describe(
                           "Challenge-owner notes about seeds, versions, or external data provenance.",
-                        )
-                        .optional(),
+                        ),
                     })
                     .strict()
                     .describe(
@@ -1319,11 +2109,52 @@ export const challengeDetailResponseSchema = z
                           "Relative path, under the setup workspace, to the generated session manifest.",
                         ),
                       reproducibility_notes: z
-                        .string()
+                        .any()
+                        .superRefine((x, ctx) => {
+                          const schemas = [z.null(), z.string()];
+                          const { errors, failed } = schemas.reduce<{
+                            errors: z.core.$ZodIssue[];
+                            failed: number;
+                          }>(
+                            ({ errors, failed }, schema) =>
+                              ((result) =>
+                                result.error
+                                  ? {
+                                      errors: [
+                                        ...errors,
+                                        ...result.error.issues,
+                                      ],
+                                      failed: failed + 1,
+                                    }
+                                  : { errors, failed })(schema.safeParse(x)),
+                            { errors: [], failed: 0 },
+                          );
+                          const passed = schemas.length - failed;
+                          if (passed !== 1) {
+                            ctx.addIssue(
+                              errors.length
+                                ? {
+                                    path: [],
+                                    code: "invalid_union",
+                                    errors: [errors],
+                                    message:
+                                      "Invalid input: Should pass single schema. Passed " +
+                                      passed,
+                                  }
+                                : {
+                                    path: [],
+                                    code: "custom",
+                                    errors: [errors],
+                                    message:
+                                      "Invalid input: Should pass single schema. Passed " +
+                                      passed,
+                                  },
+                            );
+                          }
+                        })
                         .describe(
                           "Challenge-owner notes about seeds, versions, or external data provenance.",
-                        )
-                        .optional(),
+                        ),
                     })
                     .strict()
                     .describe(
@@ -1354,11 +2185,52 @@ export const challengeDetailResponseSchema = z
                     .object({
                       command: z.array(z.string()).min(1),
                       reproducibility_notes: z
-                        .string()
+                        .any()
+                        .superRefine((x, ctx) => {
+                          const schemas = [z.null(), z.string()];
+                          const { errors, failed } = schemas.reduce<{
+                            errors: z.core.$ZodIssue[];
+                            failed: number;
+                          }>(
+                            ({ errors, failed }, schema) =>
+                              ((result) =>
+                                result.error
+                                  ? {
+                                      errors: [
+                                        ...errors,
+                                        ...result.error.issues,
+                                      ],
+                                      failed: failed + 1,
+                                    }
+                                  : { errors, failed })(schema.safeParse(x)),
+                            { errors: [], failed: 0 },
+                          );
+                          const passed = schemas.length - failed;
+                          if (passed !== 1) {
+                            ctx.addIssue(
+                              errors.length
+                                ? {
+                                    path: [],
+                                    code: "invalid_union",
+                                    errors: [errors],
+                                    message:
+                                      "Invalid input: Should pass single schema. Passed " +
+                                      passed,
+                                  }
+                                : {
+                                    path: [],
+                                    code: "custom",
+                                    errors: [errors],
+                                    message:
+                                      "Invalid input: Should pass single schema. Passed " +
+                                      passed,
+                                  },
+                            );
+                          }
+                        })
                         .describe(
                           "Challenge-owner notes about seeds, versions, or external data provenance.",
-                        )
-                        .optional(),
+                        ),
                     })
                     .strict()
                     .describe(
@@ -1450,7 +2322,45 @@ export const challengeDetailResponseSchema = z
                     .regex(/^[A-Za-z0-9_.-]+$/)
                     .min(1),
                   label: z.string(),
-                  unit: z.string().optional(),
+                  unit: z.any().superRefine((x, ctx) => {
+                    const schemas = [z.null(), z.string()];
+                    const { errors, failed } = schemas.reduce<{
+                      errors: z.core.$ZodIssue[];
+                      failed: number;
+                    }>(
+                      ({ errors, failed }, schema) =>
+                        ((result) =>
+                          result.error
+                            ? {
+                                errors: [...errors, ...result.error.issues],
+                                failed: failed + 1,
+                              }
+                            : { errors, failed })(schema.safeParse(x)),
+                      { errors: [], failed: 0 },
+                    );
+                    const passed = schemas.length - failed;
+                    if (passed !== 1) {
+                      ctx.addIssue(
+                        errors.length
+                          ? {
+                              path: [],
+                              code: "invalid_union",
+                              errors: [errors],
+                              message:
+                                "Invalid input: Should pass single schema. Passed " +
+                                passed,
+                            }
+                          : {
+                              path: [],
+                              code: "custom",
+                              errors: [errors],
+                              message:
+                                "Invalid input: Should pass single schema. Passed " +
+                                passed,
+                            },
+                      );
+                    }
+                  }),
                   direction: z
                     .enum(["maximize", "minimize"])
                     .describe(
@@ -1511,7 +2421,45 @@ export const challengeDetailResponseSchema = z
                     .describe(
                       "Visibility level for a metric emitted by the evaluator.",
                     ),
-                  metric_description: z.string().optional(),
+                  metric_description: z.any().superRefine((x, ctx) => {
+                    const schemas = [z.null(), z.string()];
+                    const { errors, failed } = schemas.reduce<{
+                      errors: z.core.$ZodIssue[];
+                      failed: number;
+                    }>(
+                      ({ errors, failed }, schema) =>
+                        ((result) =>
+                          result.error
+                            ? {
+                                errors: [...errors, ...result.error.issues],
+                                failed: failed + 1,
+                              }
+                            : { errors, failed })(schema.safeParse(x)),
+                      { errors: [], failed: 0 },
+                    );
+                    const passed = schemas.length - failed;
+                    if (passed !== 1) {
+                      ctx.addIssue(
+                        errors.length
+                          ? {
+                              path: [],
+                              code: "invalid_union",
+                              errors: [errors],
+                              message:
+                                "Invalid input: Should pass single schema. Passed " +
+                                passed,
+                            }
+                          : {
+                              path: [],
+                              code: "custom",
+                              errors: [errors],
+                              message:
+                                "Invalid input: Should pass single schema. Passed " +
+                                passed,
+                            },
+                      );
+                    }
+                  }),
                 })
                 .strict()
                 .describe(
@@ -1524,14 +2472,55 @@ export const challengeDetailResponseSchema = z
                   .string()
                   .regex(/^[A-Za-z0-9_.-]+$/)
                   .min(1),
-                tie_breaker_metric_names: z
-                  .array(
+                tie_breaker_metric_names: z.any().superRefine((x, ctx) => {
+                  const schemas = [
+                    z.null(),
                     z
-                      .string()
-                      .regex(/^[A-Za-z0-9_.-]+$/)
+                      .array(
+                        z
+                          .string()
+                          .regex(/^[A-Za-z0-9_.-]+$/)
+                          .min(1),
+                      )
                       .min(1),
-                  )
-                  .default([]),
+                  ];
+                  const { errors, failed } = schemas.reduce<{
+                    errors: z.core.$ZodIssue[];
+                    failed: number;
+                  }>(
+                    ({ errors, failed }, schema) =>
+                      ((result) =>
+                        result.error
+                          ? {
+                              errors: [...errors, ...result.error.issues],
+                              failed: failed + 1,
+                            }
+                          : { errors, failed })(schema.safeParse(x)),
+                    { errors: [], failed: 0 },
+                  );
+                  const passed = schemas.length - failed;
+                  if (passed !== 1) {
+                    ctx.addIssue(
+                      errors.length
+                        ? {
+                            path: [],
+                            code: "invalid_union",
+                            errors: [errors],
+                            message:
+                              "Invalid input: Should pass single schema. Passed " +
+                              passed,
+                          }
+                        : {
+                            path: [],
+                            code: "custom",
+                            errors: [errors],
+                            message:
+                              "Invalid input: Should pass single schema. Passed " +
+                              passed,
+                          },
+                    );
+                  }
+                }),
               })
               .strict()
               .describe("Ranking configuration for a challenge."),
@@ -1545,6 +2534,7 @@ export const challengeDetailResponseSchema = z
               {
                 name: "score",
                 label: "Score",
+                unit: null,
                 direction: "maximize",
                 visibility: "public",
                 metric_description: "Challenge-defined compatibility score.",
@@ -1552,7 +2542,7 @@ export const challengeDetailResponseSchema = z
             ],
             ranking: {
               primary_metric_name: "score",
-              tie_breaker_metric_names: [],
+              tie_breaker_metric_names: null,
             },
           }),
       })

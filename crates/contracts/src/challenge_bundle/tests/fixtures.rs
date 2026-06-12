@@ -247,7 +247,7 @@ pub(super) fn create_bundle(root: &Path, spec: &ChallengeBundleSpec) {
     std::fs::create_dir_all(root.join("public")).expect("failed to create public dir");
     std::fs::write(
         root.join("public/runs.json"),
-        r#"{"runs":[{"run_name":"public-1","interface":"stdio","stdin_text":"1"}]}"#,
+        r#"{"runs":[{"run_name":"public-1","interface":"stdio","stdin_json":null,"stdin_text":"1","input_files":null,"output_files":null,"metadata":null}]}"#,
     )
     .expect("failed to write public runs");
     std::fs::write(
@@ -277,7 +277,7 @@ pub(super) fn create_piped_stdio_bundle(root: &Path, spec: &ChallengeBundleSpec)
         .expect("failed to write session input");
     std::fs::write(
         root.join("private-benchmark/session.json"),
-        r#"{"session_name":"official-1"}"#,
+        r#"{"session_name":"official-1","input_files":null,"metadata":null}"#,
     )
     .expect("failed to write official session");
     std::fs::write(

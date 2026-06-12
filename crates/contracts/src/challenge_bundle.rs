@@ -833,6 +833,24 @@ fn validate_challenge_run(run: &ChallengeRunSpec) -> Result<()> {
             )));
         }
     }
+    if let Some(metadata) = &run.metadata {
+        for key in metadata.keys() {
+            if matches!(
+                key.as_str(),
+                "run_name"
+                    | "interface"
+                    | "stdin_json"
+                    | "stdin_text"
+                    | "input_files"
+                    | "output_files"
+                    | "metadata"
+            ) {
+                return Err(ServiceError::Validation(format!(
+                    "runs[].metadata must not use reserved run field `{key}`"
+                )));
+            }
+        }
+    }
 
     Ok(())
 }

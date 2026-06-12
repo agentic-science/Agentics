@@ -221,7 +221,7 @@ struct EvaluatorRequest<'a> {
     profile: &'a ResourceProfileSpec,
     docker_platform: DockerPlatform,
     accelerator: TargetAccelerator,
-    run_manifest_container_path: &'a str,
+    run_manifest: &'a ChallengeRunManifest,
     bundle_dir: &'a Path,
     setup_root: Option<&'a Path>,
     runs_root: &'a Path,
@@ -271,7 +271,6 @@ struct CoexecutedBenchmarkRequest<'a> {
 struct ResolvedRunPlan {
     manifest: ChallengeRunManifest,
     input_source_root: PathBuf,
-    run_manifest_container_path: String,
     setup_root: Option<RetainedRunnerTree>,
 }
 
@@ -537,7 +536,6 @@ async fn resolve_run_plan(
             Ok(ResolvedRunPlan {
                 manifest,
                 input_source_root: request.bundle_dir.to_path_buf(),
-                run_manifest_container_path: format!("/challenge/{manifest_path}"),
                 setup_root: None,
             })
         }
@@ -574,7 +572,6 @@ async fn resolve_run_plan(
             Ok(ResolvedRunPlan {
                 manifest,
                 input_source_root: retained_setup_root.path().to_path_buf(),
-                run_manifest_container_path: format!("/setup/{}", setup.result_runs_file),
                 setup_root: Some(retained_setup_root),
             })
         }

@@ -130,7 +130,7 @@ export const challengeDetailResponseSchema =
   generatedChallengeDetailResponseSchema.superRefine((response, ctx) => {
     const mode = response.spec.execution.mode;
     response.spec.targets.forEach((target, index) => {
-      const hasSolutionRun = target.resource_profile.solution.run !== undefined;
+      const hasSolutionRun = target.resource_profile.solution.run != null;
       if (mode === "coexecuted_benchmark" && hasSolutionRun) {
         ctx.addIssue({
           code: "custom",

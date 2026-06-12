@@ -9,6 +9,7 @@ use crate::models::paths::BundleRelativePath;
 use super::datasets::{DatasetsSpec, PublicDatasetsSpec};
 use super::execution::{ChallengeExecutionSpec, PublicChallengeExecutionSpec};
 use super::metrics::MetricSchemaSpec;
+use super::serde_helpers::{required_nullable, required_nullable_schema};
 use super::targets::ChallengeTargetSpec;
 
 /// Minimum public keywords that a challenge must declare.
@@ -34,20 +35,21 @@ pub struct ChallengeBundleSpec {
     pub solution: SolutionSpec,
     pub targets: Vec<ChallengeTargetSpec>,
     pub starts_at: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(required, schema_with = "required_nullable_schema::<String>")]
     pub closes_at: Option<String>,
     pub eligibility: ChallengeEligibilitySpec,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(required, schema_with = "required_nullable_schema::<i64>")]
     pub validation_submission_limit: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(required, schema_with = "required_nullable_schema::<i64>")]
     pub official_submission_limit: Option<i64>,
     pub visibility: ChallengeVisibilitySpec,
     pub solution_publication: ChallengeSolutionPublicationPolicy,
     pub execution: ChallengeExecutionSpec,
     pub datasets: DatasetsSpec,
     /// Metric definitions and ranking metadata used to interpret evaluator output.
-    #[serde(default)]
-    #[schemars(required)]
     pub metric_schema: MetricSchemaSpec,
 }
 
@@ -227,6 +229,7 @@ pub enum ChallengeSolutionPublicationPolicy {
 
 /// Local solution format constraints declared by a bundle.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct SolutionSpec {
     pub protocol: String,
     pub manifest_file: BundleRelativePath,

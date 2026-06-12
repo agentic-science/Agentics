@@ -792,7 +792,9 @@ mod tests {
                 "result_file": "result.json"
             },
             "validation_session": "public/session.json",
-            "official_session": "private-benchmark/session.json"
+            "validation_setup": null,
+            "official_session": "private-benchmark/session.json",
+            "official_evaluation_setup": null
         });
         write_file(&spec_path, &spec.to_string());
         write_file(
@@ -808,7 +810,8 @@ mod tests {
                         "path": "prompt.txt",
                         "source_path": "public/missing-prompt.txt"
                     }
-                ]
+                ],
+                "metadata": null
             })
             .to_string(),
         );
@@ -851,7 +854,10 @@ mod tests {
                         "run_name": "case-1",
                         "interface": "stdio",
                         "stdin_json": { "a": 1, "b": 2 },
-                        "output_files": []
+                        "stdin_text": null,
+                        "input_files": null,
+                        "output_files": null,
+                        "metadata": null
                     }
                 ]
             })
@@ -877,6 +883,7 @@ mod tests {
                         "validation_enabled": true,
                         "resource_profile": {
                             "name": "agentics-cpu-small",
+                            "resource_description": null,
                             "solution_image": {
                                 "source": "local",
                                 "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"
@@ -893,13 +900,16 @@ mod tests {
                             "evaluator": {
                                 "setup": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "enabled"},
                                 "run": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"}
-                            }
+                            },
+                            "hardware_metadata": null
                         }
                     }
                 ],
                 "starts_at": "2026-01-01T00:00:00Z",
+                "closes_at": null,
                 "eligibility": { "type": "open" },
                 "validation_submission_limit": 20,
+                "official_submission_limit": null,
                 "visibility": {
                     "leaderboard": "public_live",
                     "score_distribution": "public_live",
@@ -913,7 +923,9 @@ mod tests {
                         "result_file": "result.json"
                     },
                     "validation_runs": "public/runs.json",
-                    "official_runs": "private-benchmark/runs.json"
+                    "validation_setup": null,
+                    "official_runs": "private-benchmark/runs.json",
+                    "official_evaluation_setup": null
                 },
                 "datasets": {
                     "public_dir": "public",
@@ -927,12 +939,15 @@ mod tests {
                         {
                             "name": "score",
                             "label": "Score",
+                            "unit": null,
                             "direction": "maximize",
-                            "visibility": "public"
+                            "visibility": "public",
+                            "metric_description": "Challenge-defined compatibility score."
                         }
                     ],
                     "ranking": {
-                        "primary_metric_name": "score"
+                        "primary_metric_name": "score",
+                        "tie_breaker_metric_names": null
                     }
                 }
             })

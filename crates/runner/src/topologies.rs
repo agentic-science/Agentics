@@ -307,6 +307,8 @@ pub(super) async fn run_evaluator(
     request: EvaluatorRequest<'_>,
     logs: &mut EvaluationLogs,
 ) -> Result<()> {
+    let evaluator_runs_file =
+        write_evaluator_run_manifest_view(request.runs_root, request.run_manifest).await?;
     make_container_readable_tree(request.bundle_dir).await?;
     make_container_readable_tree(request.runs_root).await?;
     let limits = evaluator_limits(request.profile);
@@ -335,7 +337,7 @@ pub(super) async fn run_evaluator(
         "--mode".to_string(),
         request.eval_type.evaluator_mode_arg().to_string(),
         "--runs-file".to_string(),
-        request.run_manifest_container_path.to_string(),
+        format!("/solution-runs/{evaluator_runs_file}"),
     ]);
 
     let mut mounts = vec![
@@ -389,6 +391,45 @@ pub(super) async fn run_evaluator(
     replace_dir_all_if_separate(output_mount.path(), request.evaluator_output_root).await?;
 
     Ok(())
+}
+
+async fn write_evaluator_run_manifest_view(
+    runs_root: &Path,
+    manifest: &agentics_domain::models::challenge::ChallengeRunManifest,
+) -> Result<&'static str> {
+    const EVALUATOR_RUNS_FILE: &str = "agentics-runs.json";
+    let mut value = serde_json::to_value(manifest)
+        .map_err(|e| ServiceError::Internal(format!("serialize run manifest failed: {e}")))?;
+    let runs = value
+        .get_mut("runs")
+        .and_then(serde_json::Value::as_array_mut)
+        .ok_or_else(|| {
+            ServiceError::Internal("run manifest serialized without runs".to_string())
+        })?;
+    for run in runs {
+        let run = run.as_object_mut().ok_or_else(|| {
+            ServiceError::Internal("run manifest serialized a non-object run".to_string())
+        })?;
+        let metadata = run
+            .get("metadata")
+            .and_then(serde_json::Value::as_object)
+            .cloned();
+        if let Some(metadata) = metadata {
+            for (key, value) in metadata {
+                if run.contains_key(&key) {
+                    return Err(ServiceError::Runner(format!(
+                        "runs[].metadata key `{key}` conflicts with platform run fields"
+                    )));
+                }
+                run.insert(key, value);
+            }
+        }
+    }
+    let bytes = serde_json::to_vec_pretty(&value).map_err(|e| {
+        ServiceError::Internal(format!("serialize evaluator run manifest failed: {e}"))
+    })?;
+    tokio::fs::write(runs_root.join(EVALUATOR_RUNS_FILE), bytes).await?;
+    Ok(EVALUATOR_RUNS_FILE)
 }
 
 /// Run the current single-session piped-stdio topology.

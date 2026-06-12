@@ -1,6 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 use super::super::names::MetricName;
+use super::serde_helpers::{
+    required_nullable, required_nullable_non_empty_vec, required_nullable_non_empty_vec_schema,
+    required_nullable_schema, serialize_empty_vec_as_null,
+};
 
 /// Whether a metric is better when it is larger or smaller.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -22,28 +26,39 @@ pub enum MetricVisibility {
 
 /// One metric that an evaluator may emit in aggregate or per-run result payloads.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct MetricDefinitionSpec {
     pub name: MetricName,
     pub label: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(required, schema_with = "required_nullable_schema::<String>")]
     pub unit: Option<String>,
     pub direction: MetricDirection,
     pub visibility: MetricVisibility,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(required, schema_with = "required_nullable_schema::<String>")]
     pub metric_description: Option<String>,
 }
 
 /// Ranking configuration for a challenge.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct RankingSpec {
     pub primary_metric_name: MetricName,
-    #[serde(default)]
-    #[schemars(required)]
+    #[serde(
+        deserialize_with = "required_nullable_non_empty_vec",
+        serialize_with = "serialize_empty_vec_as_null"
+    )]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_non_empty_vec_schema::<MetricName>"
+    )]
     pub tie_breaker_metric_names: Vec<MetricName>,
 }
 
 /// Metric schema embedded in `spec.json`.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct MetricSchemaSpec {
     pub metrics: Vec<MetricDefinitionSpec>,
     pub ranking: RankingSpec,

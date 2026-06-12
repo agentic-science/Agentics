@@ -21,6 +21,7 @@ function targetFixture(validationEnabled: boolean) {
     validation_enabled: validationEnabled,
     resource_profile: {
       name: "python-cpu-small",
+      resource_description: null,
       solution_image: {
         source: "local",
         reference: "agentics-linux-arm64-cpu:ubuntu26.04-local",
@@ -68,6 +69,7 @@ function targetFixture(validationEnabled: boolean) {
           network_access: "disabled",
         },
       },
+      hardware_metadata: null,
     },
   };
 }
@@ -80,7 +82,7 @@ function coexecutedTargetFixture() {
     ...target,
     resource_profile: {
       ...target.resource_profile,
-      solution: { setup, build },
+      solution: { setup, build, run: null },
     },
   };
 }
@@ -149,8 +151,10 @@ describe("frontend API schemas", () => {
               {
                 name: "score",
                 label: "Score",
+                unit: null,
                 direction: "maximize",
                 visibility: "public",
+                metric_description: null,
               },
               {
                 name: "runtime_ms",
@@ -158,6 +162,7 @@ describe("frontend API schemas", () => {
                 unit: "ms",
                 direction: "minimize",
                 visibility: "official",
+                metric_description: null,
               },
             ],
             ranking: {
@@ -214,12 +219,15 @@ describe("frontend API schemas", () => {
               {
                 name: "score",
                 label: "Score",
+                unit: null,
                 direction: "maximize",
                 visibility: "public",
+                metric_description: null,
               },
             ],
             ranking: {
               primary_metric_name: "score",
+              tie_breaker_metric_names: null,
             },
           },
         },
@@ -259,6 +267,7 @@ describe("frontend API schemas", () => {
             acknowledge_danger: true,
             validation_setup: {
               command: ["python", "coexecuted-evaluator/setup.py"],
+              reproducibility_notes: null,
             },
           },
           datasets: {
@@ -272,12 +281,15 @@ describe("frontend API schemas", () => {
               {
                 name: "score",
                 label: "Score",
+                unit: null,
                 direction: "maximize",
                 visibility: "public",
+                metric_description: null,
               },
             ],
             ranking: {
               primary_metric_name: "score",
+              tie_breaker_metric_names: null,
             },
           },
         },
@@ -329,12 +341,15 @@ describe("frontend API schemas", () => {
               {
                 name: "score",
                 label: "Score",
+                unit: null,
                 direction: "maximize",
                 visibility: "public",
+                metric_description: null,
               },
             ],
             ranking: {
               primary_metric_name: "score",
+              tie_breaker_metric_names: null,
             },
           },
         },
@@ -521,7 +536,15 @@ describe("frontend API schemas", () => {
                 ...targetFixture(true),
                 resource_profile: {
                   ...targetFixture(true).resource_profile,
-                  hardware_metadata: { kind: "cpu" },
+                  hardware_metadata: {
+                    kind: "cpu",
+                    gpu_model: null,
+                    gpu_count: null,
+                    gpu_memory_gb: null,
+                    cuda_variant: null,
+                    cuda_version: null,
+                    driver_minimum: null,
+                  },
                 },
               },
             ],

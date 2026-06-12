@@ -298,6 +298,137 @@ fn starts_at_is_required() {
     assert!(error.to_string().contains("starts_at"));
 }
 
+/// Verifies source JSON must spell challenge-level nullable fields explicitly.
+#[test]
+fn challenge_nullable_fields_are_required_when_absent() {
+    for field in [
+        "closes_at",
+        "validation_submission_limit",
+        "official_submission_limit",
+        "metric_schema",
+    ] {
+        let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+        spec_json
+            .as_object_mut()
+            .expect("spec should be an object")
+            .remove(field);
+
+        let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+            .expect_err("missing required challenge field should fail");
+
+        assert!(
+            error.to_string().contains(field),
+            "unexpected error for {field}: {error}"
+        );
+    }
+}
+
+/// Verifies nested nullable source fields are required even when their value is null.
+#[test]
+fn nested_nullable_fields_are_required_when_absent() {
+    type RemoveField = Box<dyn Fn(&mut serde_json::Value)>;
+
+    let cases: Vec<(&str, RemoveField)> = vec![
+        (
+            "private_benchmark_dir",
+            Box::new(|spec_json| {
+                spec_json["datasets"]
+                    .as_object_mut()
+                    .expect("datasets should be an object")
+                    .remove("private_benchmark_dir");
+            }),
+        ),
+        (
+            "resource_description",
+            Box::new(|spec_json| {
+                spec_json["targets"][0]["resource_profile"]
+                    .as_object_mut()
+                    .expect("resource profile should be an object")
+                    .remove("resource_description");
+            }),
+        ),
+        (
+            "hardware_metadata",
+            Box::new(|spec_json| {
+                spec_json["targets"][0]["resource_profile"]
+                    .as_object_mut()
+                    .expect("resource profile should be an object")
+                    .remove("hardware_metadata");
+            }),
+        ),
+        (
+            "run",
+            Box::new(|spec_json| {
+                spec_json["targets"][0]["resource_profile"]["solution"]
+                    .as_object_mut()
+                    .expect("solution profile should be an object")
+                    .remove("run");
+            }),
+        ),
+        (
+            "validation_setup",
+            Box::new(|spec_json| {
+                spec_json["execution"]
+                    .as_object_mut()
+                    .expect("execution should be an object")
+                    .remove("validation_setup");
+            }),
+        ),
+        (
+            "unit",
+            Box::new(|spec_json| {
+                spec_json["metric_schema"]["metrics"][0]
+                    .as_object_mut()
+                    .expect("metric should be an object")
+                    .remove("unit");
+            }),
+        ),
+        (
+            "metric_description",
+            Box::new(|spec_json| {
+                spec_json["metric_schema"]["metrics"][0]
+                    .as_object_mut()
+                    .expect("metric should be an object")
+                    .remove("metric_description");
+            }),
+        ),
+        (
+            "tie_breaker_metric_names",
+            Box::new(|spec_json| {
+                spec_json["metric_schema"]["ranking"]
+                    .as_object_mut()
+                    .expect("ranking should be an object")
+                    .remove("tie_breaker_metric_names");
+            }),
+        ),
+    ];
+
+    for (field, remove_field) in cases {
+        let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+        remove_field(&mut spec_json);
+
+        let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+            .expect_err("missing nested required nullable field should fail");
+
+        assert!(
+            error.to_string().contains(field),
+            "unexpected error for {field}: {error}"
+        );
+    }
+}
+
+/// Verifies semantically absent tie breakers are written as null, not an empty array.
+#[test]
+fn empty_tie_breaker_array_is_rejected() {
+    let mut spec_json = serde_json::to_value(base_spec()).expect("spec should serialize");
+    spec_json["metric_schema"]["ranking"]["tie_breaker_metric_names"] = serde_json::json!([]);
+
+    let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
+        .expect_err("empty tie breaker arrays should fail");
+
+    assert!(error.to_string().contains("non-empty array"));
+}
+
 /// Verifies that invalid starts_at timestamps are rejected.
 #[test]
 fn starts_at_must_be_rfc3339() {

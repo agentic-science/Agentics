@@ -7,6 +7,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use super::super::images::ChallengeImageReference;
 use super::super::names::{ResourceProfileName, TargetName};
+use super::serde_helpers::{required_nullable, required_nullable_schema};
 use crate::zip_project::ZipProjectNetworkAccess;
 
 /// Supported Docker platforms for targets.
@@ -162,14 +163,19 @@ pub struct ChallengeTargetSpec {
 #[serde(deny_unknown_fields)]
 pub struct ResourceProfileSpec {
     pub name: ResourceProfileName,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(required, schema_with = "required_nullable_schema::<String>")]
     #[garde(custom(crate::validation::optional_trimmed_non_empty))]
     pub resource_description: Option<String>,
     pub solution_image: ChallengeImageReference,
     pub evaluator_image: ChallengeImageReference,
     pub solution: SolutionStageProfiles,
     pub evaluator: EvaluatorStageProfiles,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_schema::<HardwareProfileSpec>"
+    )]
     pub hardware_metadata: Option<HardwareProfileSpec>,
 }
 
@@ -179,7 +185,11 @@ pub struct ResourceProfileSpec {
 pub struct SolutionStageProfiles {
     pub setup: StageResourceProfile,
     pub build: StageResourceProfile,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_schema::<StageResourceProfile>"
+    )]
     pub run: Option<StageResourceProfile>,
 }
 
@@ -210,25 +220,32 @@ pub struct StageResourceProfile {
 /// Optional hardware metadata advertised with a resource profile.
 #[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
 #[garde(allow_unvalidated)]
+#[serde(deny_unknown_fields)]
 pub struct HardwareProfileSpec {
     #[garde(custom(crate::validation::trimmed_non_empty))]
     pub kind: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(required, schema_with = "required_nullable_schema::<String>")]
     #[garde(custom(crate::validation::optional_trimmed_non_empty))]
     pub gpu_model: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(required, schema_with = "required_nullable_schema::<u32>")]
     #[garde(range(min = 1))]
     pub gpu_count: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(required, schema_with = "required_nullable_schema::<u64>")]
     #[garde(range(min = 1))]
     pub gpu_memory_gb: Option<u64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(required, schema_with = "required_nullable_schema::<String>")]
     #[garde(custom(crate::validation::optional_trimmed_non_empty))]
     pub cuda_variant: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(required, schema_with = "required_nullable_schema::<String>")]
     #[garde(custom(crate::validation::optional_trimmed_non_empty))]
     pub cuda_version: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(required, schema_with = "required_nullable_schema::<String>")]
     #[garde(custom(crate::validation::optional_trimmed_non_empty))]
     pub driver_minimum: Option<String>,
 }

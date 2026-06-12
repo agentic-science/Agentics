@@ -2,6 +2,10 @@ use serde::{Deserialize, Serialize};
 
 use super::super::names::RunName;
 use super::super::paths::{BundleRelativePath, RunInputPath, RunOutputPath};
+use super::serde_helpers::{
+    required_nullable, required_nullable_non_empty_vec, required_nullable_non_empty_vec_schema,
+    required_nullable_schema, serialize_empty_vec_as_null,
+};
 
 /// Evaluator entrypoint and output-file contract for a bundle.
 #[derive(Debug, Clone, Serialize, Deserialize, garde::Validate, schemars::JsonSchema)]
@@ -131,13 +135,29 @@ impl ChallengeExecutionSpec {
 #[serde(deny_unknown_fields)]
 pub struct SeparatedEvaluatorExecutionSpec {
     pub separated_evaluator: EvaluatorSpec,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_schema::<BundleRelativePath>"
+    )]
     pub validation_runs: Option<BundleRelativePath>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_schema::<ChallengeSetupSpec>"
+    )]
     pub validation_setup: Option<ChallengeSetupSpec>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_schema::<BundleRelativePath>"
+    )]
     pub official_runs: Option<BundleRelativePath>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_schema::<ChallengeSetupSpec>"
+    )]
     pub official_evaluation_setup: Option<ChallengeSetupSpec>,
 }
 
@@ -147,13 +167,29 @@ pub struct SeparatedEvaluatorExecutionSpec {
 pub struct PipedStdioExecutionSpec {
     pub interactive_evaluator: EvaluatorSpec,
     pub acknowledge_stdio_protocol_framing: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_schema::<BundleRelativePath>"
+    )]
     pub validation_session: Option<BundleRelativePath>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_schema::<PipedStdioSetupSpec>"
+    )]
     pub validation_setup: Option<PipedStdioSetupSpec>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_schema::<BundleRelativePath>"
+    )]
     pub official_session: Option<BundleRelativePath>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_schema::<PipedStdioSetupSpec>"
+    )]
     pub official_evaluation_setup: Option<PipedStdioSetupSpec>,
 }
 
@@ -163,9 +199,17 @@ pub struct PipedStdioExecutionSpec {
 pub struct CoexecutedBenchmarkExecutionSpec {
     pub coexecuted_evaluator: EvaluatorSpec,
     pub acknowledge_danger: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_schema::<CoexecutedBenchmarkSetupSpec>"
+    )]
     pub validation_setup: Option<CoexecutedBenchmarkSetupSpec>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_schema::<CoexecutedBenchmarkSetupSpec>"
+    )]
     pub official_evaluation_setup: Option<CoexecutedBenchmarkSetupSpec>,
 }
 
@@ -267,7 +311,8 @@ pub struct ChallengeSetupSpec {
     /// Relative path, under the setup workspace, to the generated run manifest.
     pub result_runs_file: BundleRelativePath,
     /// Challenge-owner notes about seeds, versions, or external data provenance.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(required, schema_with = "required_nullable_schema::<String>")]
     #[garde(custom(crate::validation::optional_trimmed_non_empty))]
     pub reproducibility_notes: Option<String>,
 }
@@ -288,7 +333,8 @@ pub struct PipedStdioSetupSpec {
     /// Relative path, under the setup workspace, to the generated session manifest.
     pub result_session_file: BundleRelativePath,
     /// Challenge-owner notes about seeds, versions, or external data provenance.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(required, schema_with = "required_nullable_schema::<String>")]
     #[garde(custom(crate::validation::optional_trimmed_non_empty))]
     pub reproducibility_notes: Option<String>,
 }
@@ -307,31 +353,58 @@ pub struct CoexecutedBenchmarkSetupSpec {
     )]
     pub command: Vec<String>,
     /// Challenge-owner notes about seeds, versions, or external data provenance.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(required, schema_with = "required_nullable_schema::<String>")]
     #[garde(custom(crate::validation::optional_trimmed_non_empty))]
     pub reproducibility_notes: Option<String>,
 }
 
 /// Challenge-owned list of evaluator-controlled solution invocations.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ChallengeRunManifest {
-    #[serde(default)]
     pub runs: Vec<ChallengeRunSpec>,
 }
 
 /// One solution invocation generated by the worker and later evaluated by the evaluator.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ChallengeRunSpec {
     pub run_name: RunName,
     pub interface: ChallengeRunInterface,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_schema::<serde_json::Value>"
+    )]
     pub stdin_json: Option<serde_json::Value>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(required, schema_with = "required_nullable_schema::<String>")]
     pub stdin_text: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        deserialize_with = "required_nullable_non_empty_vec",
+        serialize_with = "serialize_empty_vec_as_null"
+    )]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_non_empty_vec_schema::<ChallengeRunInputFile>"
+    )]
     pub input_files: Vec<ChallengeRunInputFile>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        deserialize_with = "required_nullable_non_empty_vec",
+        serialize_with = "serialize_empty_vec_as_null"
+    )]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_non_empty_vec_schema::<RunOutputPath>"
+    )]
     pub output_files: Vec<RunOutputPath>,
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_schema::<serde_json::Map<String, serde_json::Value>>"
+    )]
+    pub metadata: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 /// Supported worker-managed solution input/output interfaces.
@@ -344,6 +417,7 @@ pub enum ChallengeRunInterface {
 
 /// One input file materialized into `AGENTICS_INPUT_DIR` for a file-mode run.
 #[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ChallengeRunInputFile {
     pub path: RunInputPath,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -359,8 +433,19 @@ pub struct ChallengeRunInputFile {
 #[serde(deny_unknown_fields)]
 pub struct PipedStdioSessionManifest {
     pub session_name: RunName,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        deserialize_with = "required_nullable_non_empty_vec",
+        serialize_with = "serialize_empty_vec_as_null"
+    )]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_non_empty_vec_schema::<ChallengeRunInputFile>"
+    )]
     pub input_files: Vec<ChallengeRunInputFile>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "required_nullable")]
+    #[schemars(
+        required,
+        schema_with = "required_nullable_schema::<serde_json::Map<String, serde_json::Value>>"
+    )]
     pub metadata: Option<serde_json::Map<String, serde_json::Value>>,
 }

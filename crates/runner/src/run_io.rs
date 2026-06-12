@@ -433,6 +433,7 @@ mod tests {
             stdin_text: None,
             input_files: Vec::new(),
             output_files: Vec::new(),
+            metadata: None,
         };
         let outcome = ContainerOutcome {
             exit_code: 0,

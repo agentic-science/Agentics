@@ -77,7 +77,13 @@
             }
           },
           "hardware_metadata": {
-            "kind": "cpu"
+            "kind": "cpu",
+            "gpu_model": null,
+            "gpu_count": null,
+            "gpu_memory_gb": null,
+            "cuda_variant": null,
+            "cuda_version": null,
+            "driver_minimum": null
           }
         }
       }
@@ -116,8 +122,10 @@
         {
           "name": "accuracy",
           "label": "Accuracy",
+          "unit": null,
           "direction": "maximize",
-          "visibility": "public"
+          "visibility": "public",
+          "metric_description": null
         }
       ],
       "ranking": {

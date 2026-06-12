@@ -6,6 +6,7 @@ mod execution;
 mod lifecycle;
 mod metrics;
 mod published;
+pub(crate) mod serde_helpers;
 mod targets;
 
 pub use bundle::{

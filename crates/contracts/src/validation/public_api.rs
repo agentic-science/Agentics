@@ -206,6 +206,7 @@ mod tests {
                     "validation_enabled": true,
                     "resource_profile": {
                         "name": "agentics-small",
+                        "resource_description": null,
                         "solution_image": {"source": "local", "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"},
                         "evaluator_image": {"source": "local", "reference": "agentics-linux-arm64-cpu:ubuntu26.04-local"},
                         "solution": {
@@ -216,11 +217,15 @@ mod tests {
                         "evaluator": {
                             "setup": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"},
                             "run": {"timeout_sec": 30, "memory_limit_mb": 512, "cpu_limit_millis": 1000, "disk_limit_mb": 1024, "network_access": "disabled"}
-                        }
+                        },
+                        "hardware_metadata": null
                     }
                 }],
                 "starts_at": "2026-01-01T00:00:00Z",
+                "closes_at": null,
                 "eligibility": {"type": "open"},
+                "validation_submission_limit": null,
+                "official_submission_limit": null,
                 "visibility": {
                     "leaderboard": "public_live",
                     "score_distribution": "public_live",
@@ -229,7 +234,9 @@ mod tests {
                 "solution_publication": "private",
                 "execution": {
                     "mode": "separated_evaluator",
-                    "separated_evaluator": {"command": ["python", "separated-evaluator/run.py"], "result_file": "result.json"}
+                    "separated_evaluator": {"command": ["python", "separated-evaluator/run.py"], "result_file": "result.json"},
+                    "validation_runs": null,
+                    "validation_setup": null
                 },
                 "datasets": {
                     "public_dir": "public",
@@ -238,8 +245,8 @@ mod tests {
                     "private_benchmark_enabled": false
                 },
                 "metric_schema": {
-                    "metrics": [{"name": "score", "label": "Score", "direction": "maximize", "visibility": "public"}],
-                    "ranking": {"primary_metric_name": "score"}
+                    "metrics": [{"name": "score", "label": "Score", "unit": null, "direction": "maximize", "visibility": "public", "metric_description": "Challenge-defined compatibility score."}],
+                    "ranking": {"primary_metric_name": "score", "tie_breaker_metric_names": null}
                 }
             }))
             .expect("fixture should deserialize");
