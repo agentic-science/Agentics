@@ -100,6 +100,8 @@ Each bundle `spec.json` declares challenge-level policy, not internal competitio
 - `solution_publication` controls whether solution artifacts stay private, become public immediately after evaluation, or become public after close.
   Public artifacts also require result-detail visibility to be public at the same time.
 
+Challenge-authored JSON uses explicit absence. Semantically optional source fields must be present and set to `null` when absent, including `closes_at`, submission limits, `datasets.private_benchmark_dir`, resource descriptions, optional hardware metadata, execution setup locators, metric units/descriptions, run `stdin_json`, run `stdin_text`, run `input_files`, run `output_files`, run `metadata`, and `piped_stdio` session `input_files` and `metadata`. Empty arrays do not mean absent for these fields; use `null` for none and a non-empty array when entries exist. CPU targets must explicitly write `"accelerator": null`; GPU targets write `"accelerator": "gpu"`.
+
 For `private_shortlist` challenges, the published challenge owner uploads delta-only JSON with the Agentics CLI and a creator API token:
 
 ```json
@@ -213,6 +215,8 @@ Example CLI flow:
 read -rsp "Agentics creator API token: " AGENTICS_CREATOR_API_TOKEN; echo
 export AGENTICS_CREATOR_API_TOKEN
 
+agentics challenge-creator check /path/to/agentics-challenges/challenges/sample-sum
+
 agentics challenge-creator review-record create \
   --repo-url https://github.com/agentic-science/agentics-challenges \
   --pr-number 42 \
@@ -235,11 +239,12 @@ agentics challenge-creator review-record status <review-record-id>
 
 1. A creator opens a PR in the challenge repository.
 2. The creator signs in to Agentics with GitHub sign-in and creates a creator API token.
-3. The creator creates an Agentics challenge review record from PR metadata with the Agentics CLI.
-4. The creator uploads declared private assets through Agentics with the Agentics CLI.
-5. An admin validates the review record against a checked-out repository path.
-6. An admin approves or rejects the review record.
-7. An approved new-challenge review record can be published into immutable challenge records.
+3. The creator runs `agentics challenge-creator check <path>` against the proposal checkout.
+4. The creator creates an Agentics challenge review record from PR metadata with the Agentics CLI.
+5. The creator uploads declared private assets through Agentics with the Agentics CLI.
+6. An admin validates the review record against a checked-out repository path.
+7. An admin approves or rejects the review record.
+8. An approved new-challenge review record can be published into immutable challenge records.
 
 Publishing an archive request marks the challenge archived, hides it from default browsing, keeps direct public records readable, and rejects new validation and official solution submissions.
 

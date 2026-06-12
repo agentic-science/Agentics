@@ -19,6 +19,8 @@ field?: T
 
 Response DTOs 不应为缺失值输出显式 `null`。这样可以保持 wire format 紧凑，符合 relaxed JSON contract，并减少 generated schemas 中的歧义。
 
+Challenge-authored source JSON 会采用更严格的规则。Bundle `spec.json`、separated-evaluator run manifests 和 `piped_stdio` session manifests 要求语义上 optional 的 fields 必须出现；如果不适用，就显式写成 `null`，这样 reviewers 和 validators 可以区分“有意为空”和“忘了写字段”。
+
 ## Error Responses
 
 所有 API handlers 和 extractors 都返回相同的嵌套 error envelope：
@@ -41,7 +43,7 @@ Internal failures 一律返回 `internal_error` 和 `internal server error`； s
 
 ## Exceptions
 
-只有当 API 必须区分“字段存在但有意为空”和“字段未包含在 response 中”时， 才应使用显式 `null`。任何例外都必须在 Rust DTO field 旁边注明，并由 contract fixture 覆盖。当前例外：`targets[].accelerator` 是 required nullable field，`null` 表示没有 accelerator，`"gpu"` 表示 GPU acceleration。
+只有当 API 必须区分“字段存在但有意为空”和“字段未包含在 response 中”时， 才应使用显式 `null`。任何例外都必须在 Rust DTO field 旁边注明，并由 contract fixture 覆盖。当前例外：`targets[].accelerator` 是 required nullable field，`null` 表示没有 accelerator，`"gpu"` 表示 GPU acceleration；challenge detail responses 中嵌入的 challenge source specs 也可能在 `spec` 下保留 source contract 要求的显式 `null`。
 
 ## Request DTOs
 
@@ -80,7 +82,7 @@ bun run generate:schemas:check
 Generator 必须保留以下映射：
 
 - 带有 `skip_serializing_if = "Option::is_none"` 的 `Option<T>` 映射为 `field?: T`。
-- 如果未来有意引入 explicit-null fields，则映射为 `field: T | null`， 并且必须有文档说明。
+- Explicit-null fields 映射为 `field: T | null`，并且必须有文档说明。
 
 修改 Rust response DTOs 时，应先更新 derives 和 serde attributes，再重新生成 frontend schemas。只有 API contract 有意变化时，才更新 contract fixtures 或 rendering code。shared Rust 与 frontend contract fixtures 必须覆盖有代表性的 response DTOs。
 

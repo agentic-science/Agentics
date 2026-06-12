@@ -20,6 +20,8 @@ field?: T
 Response DTOs should not emit explicit `null` for absent values.
 This keeps the wire format compact, matches the relaxed JSON contract, and reduces ambiguity in generated schemas.
 
+Challenge-authored source JSON is intentionally stricter than ordinary response DTOs. Bundle `spec.json`, separated-evaluator run manifests, and `piped_stdio` session manifests require semantically optional fields to be present and set to `null` when absent, so reviewers and validators can distinguish "not applicable" from "forgotten field".
+
 ## Error Responses
 
 All API handlers and extractors return the same nested error envelope:
@@ -45,7 +47,7 @@ Internal failures always return `internal_error` with `internal server error`; s
 
 Use explicit `null` only when the API must distinguish a field that is present but intentionally empty from a field that is not included in the response.
 Any exception must be documented next to the Rust DTO field and covered by a contract fixture.
-Current exception: `targets[].accelerator` is a required nullable field where `null` means no accelerator and `"gpu"` means GPU acceleration.
+Current exceptions: `targets[].accelerator` is a required nullable field where `null` means no accelerator and `"gpu"` means GPU acceleration; embedded challenge source specs in challenge detail responses may preserve required source-contract nulls under `spec`.
 
 ## Request DTOs
 
@@ -92,7 +94,7 @@ It should pass in normal verification and fail when Rust DTO changes have not be
 The generator must preserve this mapping:
 
 - `Option<T>` with `skip_serializing_if = "Option::is_none"` becomes `field?: T`.
-- Explicit-null fields, if any are intentionally introduced, become `field: T | null` and require documentation.
+- Explicit-null fields become `field: T | null` and require documentation.
 
 When changing Rust response DTOs, update derives and serde attributes first, regenerate the frontend schemas, then update contract fixtures or rendering code only if the API contract intentionally changed.
 Shared Rust and frontend contract fixtures must cover representative response DTOs.

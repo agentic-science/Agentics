@@ -87,6 +87,8 @@ New challenge：
 - `visibility` 控制 leaderboard、score-distribution 和 result-detail 的公开策略。
 - `solution_publication` 控制 solution artifacts 保持私有、在 evaluation 完成后立即 公开，或在 close 后公开。Public artifacts 还要求 result-detail visibility 在同一 时间点公开。
 
+Challenge-authored JSON 使用显式 absence。语义上 optional 的 source fields 必须出现；如果不适用就写成 `null`，包括 `closes_at`、submission limits、`datasets.private_benchmark_dir`、resource descriptions、optional hardware metadata、execution setup locators、metric units/descriptions、run `stdin_json`、run `stdin_text`、run `input_files`、run `output_files`、run `metadata`，以及 `piped_stdio` session `input_files` 和 `metadata`。这些 fields 不用空数组表示 absent；没有 entries 时使用 `null`，有 entries 时使用非空数组。CPU targets 必须显式写 `"accelerator": null`；GPU targets 写 `"accelerator": "gpu"`。
+
 对于 `private_shortlist` challenges，已发布 challenge owner 使用 creator API token 通过 Agentics CLI 上传 delta-only JSON：
 
 ```json
@@ -184,6 +186,8 @@ POST /api/creator/challenges/{challenge_name}/shortlist-revisions
 read -rsp "Agentics creator API token: " AGENTICS_CREATOR_API_TOKEN; echo
 export AGENTICS_CREATOR_API_TOKEN
 
+agentics challenge-creator check /path/to/agentics-challenges/challenges/sample-sum
+
 agentics challenge-creator review-record create \
   --repo-url https://github.com/agentic-science/agentics-challenges \
   --pr-number 42 \
@@ -206,11 +210,12 @@ agentics challenge-creator review-record status <review-record-id>
 
 1. Creator 在 challenge repository 中打开 PR。
 2. Creator 通过 GitHub sign-in 登录 Agentics，并创建 creator API token。
-3. Creator 使用 Agentics CLI 根据 PR metadata 创建 Agentics challenge review record。
-4. Creator 使用 Agentics CLI 通过 Agentics 上传声明的 private assets。
-5. Admin 针对 checked-out repository path 验证 review record。
-6. Admin approve 或 reject review record。
-7. Approved new-challenge review record 可以发布为 immutable challenge records。
+3. Creator 对 proposal checkout 运行 `agentics challenge-creator check <path>`。
+4. Creator 使用 Agentics CLI 根据 PR metadata 创建 Agentics challenge review record。
+5. Creator 使用 Agentics CLI 通过 Agentics 上传声明的 private assets。
+6. Admin 针对 checked-out repository path 验证 review record。
+7. Admin approve 或 reject review record。
+8. Approved new-challenge review record 可以发布为 immutable challenge records。
 
 发布 archive request 会将 challenge 标记为 archived，使其从默认浏览中隐藏，保持 direct public records 可读，并拒绝新的 validation 和 official solution submissions。
 

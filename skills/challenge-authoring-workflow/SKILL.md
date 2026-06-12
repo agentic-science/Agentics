@@ -119,6 +119,8 @@ Keep creator tokens out of argv and logs.
 Prefer `AGENTICS_CREATOR_API_TOKEN`, `printf '%s\n' "$AGENTICS_CREATOR_API_TOKEN" | agentics config set creator-api-token --stdin`, or `--creator-token-stdin`.
 
 ```bash
+agentics challenge-creator check challenges/<challenge-name>
+
 agentics challenge-creator review-record create \
   --repo-url <repo-url> \
   --pr-number <pull-request-number> \

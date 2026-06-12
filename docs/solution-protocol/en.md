@@ -224,6 +224,7 @@ See [Targets](../targets/en.md) for the target schema, target-specific validatio
 
 Run manifests are challenge-owned JSON files with a `runs` array.
 Each run has a stable `run_name`, an `interface`, optional stdin content, optional input files, and optional declared output files.
+Every run must spell `stdin_json`, `stdin_text`, `input_files`, `output_files`, and `metadata` explicitly; use `null` when a value is absent, use non-empty arrays when files are present, and place challenge-specific run metadata under the `metadata` object instead of adding ad hoc top-level run keys.
 Run names must be safe path components and cannot be `.` or `..`.
 Input files may be inline text/JSON or byte-for-byte copies from a safe `source_path` under the challenge bundle, which is how large public and private benchmark inputs are delivered without embedding them in JSON.
 `stdio` runs receive stdin through `/io/stdin.txt` and produce `/io/stdout.txt`.
@@ -232,6 +233,7 @@ Submitted solutions see opaque per-attempt values in `AGENTICS_RUN_NAME`; challe
 The built solution workspace is mounted at `/workspace` read-only during run invocations, so run scripts must write transient files under `/io`, `AGENTICS_OUTPUT_DIR`, `TMPDIR`, or another writable path declared by the runner.
 
 `piped_stdio` session manifests are challenge-owned JSON files with `session_name`, optional `input_files`, and optional object `metadata`.
+Every session manifest must spell `input_files` and `metadata` explicitly; use `null` when absent, and use a non-empty `input_files` array only when session inputs exist.
 `input_files` use the same safe `path`, `source_path`, `content`, and `content_json` rules as run manifests and are materialized under interactive-evaluator-only `/session/input`.
 Static session locators resolve under `/challenge`. Setup-generated session locators resolve under `/setup`.
 Participant run containers never receive `/challenge`, `/setup`, `/session`, private files, or session source files.

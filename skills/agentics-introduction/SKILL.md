@@ -208,7 +208,13 @@ Challenge creation uses a reviewed GitHub workflow plus the Agentics CLI once th
 2. Keep public files public-safe.
    Do not commit private benchmark data, private evaluator packages, private seeds, reference outputs, credentials, or symlinks.
 3. Add `agentics.challenge.json`, `README.md`, and a bundle directory containing `spec.json`, `statement.md`, public run manifests, resource profiles, targets, metrics, eligibility, visibility, and one to six keywords.
-4. Create a review record from the PR metadata with the CLI:
+4. Check the local proposal with the CLI:
+
+   ```bash
+   agentics challenge-creator check challenges/<challenge-name>
+   ```
+
+5. Create a review record from the PR metadata with the CLI:
 
    ```bash
    agentics challenge-creator review-record create \
@@ -221,7 +227,7 @@ Challenge creation uses a reviewed GitHub workflow plus the Agentics CLI once th
      --pr-author-github-user-id <numeric-github-user-id>
    ```
 
-5. Upload each declared private asset ZIP overlay with the CLI:
+6. Upload each declared private asset ZIP overlay with the CLI:
 
    ```bash
    agentics challenge-creator review-record upload-private-asset <review-record-id> \
@@ -231,7 +237,7 @@ Challenge creation uses a reviewed GitHub workflow plus the Agentics CLI once th
      --required
    ```
 
-6. Check the review record status:
+7. Check the review record status:
 
    ```bash
    agentics challenge-creator review-record status <review-record-id>
