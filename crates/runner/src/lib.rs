@@ -91,9 +91,8 @@ use logs::{
     append_phase_logs, append_run_logs, include_log_excerpts, phase_name, visible_log_content,
 };
 use run_io::{
-    copy_evaluator_visible_run_tree, ensure_declared_outputs_exist, make_container_readable_tree,
-    make_container_writable_tree, materialize_input_files, materialize_run_io, run_alias,
-    run_interface, write_run_metadata,
+    copy_evaluator_visible_run_tree, make_container_readable_tree, make_container_writable_tree,
+    materialize_input_files, materialize_run_io, run_alias, run_interface, write_run_metadata,
 };
 use storage::{RunnerStorage, WritablePhase};
 

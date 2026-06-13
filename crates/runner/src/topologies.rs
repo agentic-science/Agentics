@@ -6,10 +6,10 @@ use super::{
     ZipProjectManifest, ZipProjectPhaseName, append_named_logs, append_phase_logs, append_run_logs,
     bind_mount, cleanup_paths, coexecuted_benchmark_setup, container_name, copy_dir_all,
     copy_evaluator_visible_run_tree, effective_accelerator_count, effective_phase_limits,
-    ensure_container_succeeded, ensure_declared_outputs_exist, ensure_disk_limit,
-    ensure_setup_disk_limit, evaluator_limits, include_log_excerpts, make_container_readable_tree,
-    make_container_writable_tree, materialize_input_files, materialize_run_io, phase_name,
-    replace_dir_all, replace_dir_all_if_separate, resolve_piped_stdio_session_plan, run_alias,
+    ensure_container_succeeded, ensure_disk_limit, ensure_setup_disk_limit, evaluator_limits,
+    include_log_excerpts, make_container_readable_tree, make_container_writable_tree,
+    materialize_input_files, materialize_run_io, phase_name, replace_dir_all,
+    replace_dir_all_if_separate, resolve_piped_stdio_session_plan, run_alias,
     run_coexecuted_benchmark_setup_phase, run_interface, validate_evaluator_visible_output_tree,
     visible_log_content, writable_phase_for_solution_phase, write_run_metadata,
 };
@@ -265,14 +265,18 @@ pub(super) async fn run_solution_invocations(
             run_alias.as_str(),
             visible_log_content(request.log_policy, &outcome.logs),
         );
-        ensure_container_succeeded(
-            ZipProjectPhaseName::Run,
-            &outcome,
-            include_log_excerpts(request.log_policy),
-        )?;
         write_run_metadata(&io_root, run, run_alias.as_str(), &outcome).await?;
+        if outcome.timed_out || outcome.exit_code != 0 {
+            append_named_logs(
+                logs,
+                &format!("run:{}:outcome", run_alias.as_str()),
+                &format!(
+                    "[agentics] participant run completed unsuccessfully; exit_code={}, timed_out={}, wall_time_ms={}. The trusted evaluator will classify this run.",
+                    outcome.exit_code, outcome.timed_out, outcome.wall_time_ms
+                ),
+            );
+        }
         ensure_disk_limit(&io_root, limits.disk_limit_mb, ZipProjectPhaseName::Run).await?;
-        ensure_declared_outputs_exist(run, run_alias.as_str(), &output_dir).await?;
         if runner.storage.uses_bounded_slots() {
             validate_evaluator_visible_output_tree(
                 &io_root,

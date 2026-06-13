@@ -338,48 +338,7 @@ pub(super) async fn write_run_metadata(
             )
         })?;
     file.write_all(&bytes).await?;
-    Ok(())
-}
-
-/// Ensures declared outputs exist before continuing.
-pub(super) async fn ensure_declared_outputs_exist(
-    run: &ChallengeRunSpec,
-    visible_run_name: &str,
-    output_dir: &Path,
-) -> Result<()> {
-    for output in &run.output_files {
-        let output_path = output_dir.join(output.as_path());
-        let metadata = tokio::fs::symlink_metadata(&output_path)
-            .await
-            .map_err(|_| {
-                phase_error(
-                    ZipProjectPhaseName::Run,
-                    ZipProjectPhaseFailureReason::RunnerError,
-                    format!(
-                        "run `{visible_run_name}` did not produce declared output file `{output}`"
-                    ),
-                    None,
-                )
-            })?;
-        if metadata.file_type().is_symlink() {
-            return Err(phase_error(
-                ZipProjectPhaseName::Run,
-                ZipProjectPhaseFailureReason::RunnerError,
-                format!("run `{visible_run_name}` declared output file `{output}` is a symlink"),
-                None,
-            ));
-        }
-        if !metadata.is_file() {
-            return Err(phase_error(
-                ZipProjectPhaseName::Run,
-                ZipProjectPhaseFailureReason::RunnerError,
-                format!(
-                    "run `{visible_run_name}` declared output path `{output}` is not a regular file"
-                ),
-                None,
-            ));
-        }
-    }
+    file.flush().await?;
     Ok(())
 }
 
@@ -450,6 +409,44 @@ mod tests {
             "unexpected error: {error}"
         );
         assert!(!target.exists());
+
+        fs::remove_dir_all(root).expect("test root should clean up");
+    }
+
+    /// Verifies failed participant runs still produce evaluator-visible metadata.
+    #[tokio::test]
+    async fn write_run_metadata_records_failed_outcome() {
+        let root =
+            std::env::temp_dir().join(format!("agentics-run-metadata-failed-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).expect("test root should be created");
+
+        let run = ChallengeRunSpec {
+            run_name: RunName::try_new("case1").expect("run name should parse"),
+            interface: ChallengeRunInterface::Stdio,
+            stdin_json: None,
+            stdin_text: Some("input".to_string()),
+            input_files: Vec::new(),
+            output_files: Vec::new(),
+            metadata: None,
+        };
+        let outcome = ContainerOutcome {
+            exit_code: 124,
+            logs: "timed out".to_string(),
+            timed_out: true,
+            wall_time_ms: 120_000,
+        };
+
+        write_run_metadata(&root, &run, "run-0001", &outcome)
+            .await
+            .expect("metadata write should succeed for failed run outcomes");
+        let raw = fs::read_to_string(root.join("agentics-run.json"))
+            .expect("metadata file should be readable");
+        let value: serde_json::Value = serde_json::from_str(&raw).expect("metadata should be JSON");
+
+        assert_eq!(value["run_name"], "case1");
+        assert_eq!(value["exit_code"], 124);
+        assert_eq!(value["timed_out"], true);
+        assert_eq!(value["wall_time_ms"], 120_000);
 
         fs::remove_dir_all(root).expect("test root should clean up");
     }
