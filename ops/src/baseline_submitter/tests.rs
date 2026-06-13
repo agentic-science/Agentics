@@ -20,15 +20,7 @@ fn default_deferlist_keeps_known_weak_and_allows_upgraded_baselines() {
     let deferlist = build_deferlist(false, None).expect("deferlist");
 
     for challenge_name in [
-        "adaptive-impostor-search-frontier-cs-algorithmic-245",
         "colored-ball-pole-sorting-frontier-cs-algorithmic-142",
-        "disk-probing-frontier-cs-algorithmic-60",
-        "heap-tree-sum-frontier-cs-algorithmic-209",
-        "hidden-circuit-gates-frontier-cs-algorithmic-101",
-        "induced-triple-graph-frontier-cs-algorithmic-120",
-        "inversion-recovery-frontier-cs-algorithmic-73",
-        "mineral-pairing-frontier-cs-algorithmic-125",
-        "space-thief-stars-frontier-cs-algorithmic-63",
         "substring-ab-program-frontier-cs-algorithmic-23",
     ] {
         assert!(
@@ -59,6 +51,21 @@ fn default_deferlist_keeps_known_weak_and_allows_upgraded_baselines() {
                 .expect("name")
         )
     );
+    for challenge_name in [
+        "adaptive-impostor-search-frontier-cs-algorithmic-245",
+        "disk-probing-frontier-cs-algorithmic-60",
+        "heap-tree-sum-frontier-cs-algorithmic-209",
+        "hidden-circuit-gates-frontier-cs-algorithmic-101",
+        "induced-triple-graph-frontier-cs-algorithmic-120",
+        "inversion-recovery-frontier-cs-algorithmic-73",
+        "mineral-pairing-frontier-cs-algorithmic-125",
+        "space-thief-stars-frontier-cs-algorithmic-63",
+    ] {
+        assert!(
+            !deferlist.contains(&challenge_name.parse().expect("name")),
+            "{challenge_name} should be submitter-ready after official replay"
+        );
+    }
 }
 
 #[test]
