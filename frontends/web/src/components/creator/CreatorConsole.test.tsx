@@ -31,20 +31,10 @@ vi.mock("@/lib/creatorApi", () => {
 
   return {
     CreatorApiError: MockCreatorApiError,
-    createChallengeReviewRecord: vi.fn(),
-    createChallengeReviewRecordRequestSchema: passthroughSchema,
-    createChallengeShortlistRevision: vi.fn(),
-    createChallengeShortlistRevisionRequestSchema: passthroughSchema,
     createCreatorApiToken: vi.fn(),
     createCreatorApiTokenRequestSchema: passthroughSchema,
-    getChallengeReviewRecord: vi.fn(),
-    getChallengeShortlist: vi.fn(),
-    getCreatorChallengeParticipants: vi.fn(),
-    getCreatorChallengeStats: vi.fn(),
     listCreatorApiTokens: vi.fn(),
     revokeCreatorApiToken: vi.fn(),
-    uploadChallengePrivateAssetRequestSchema: passthroughSchema,
-    uploadPrivateAsset: vi.fn(),
   };
 });
 

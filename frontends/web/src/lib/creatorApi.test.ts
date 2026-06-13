@@ -3,12 +3,9 @@ import { ensureDomEnvironment } from "../test/dom";
 import {
   completeGithubLogin,
   completeHumanSetup,
-  createChallengeReviewRecord,
-  createChallengeShortlistRevision,
   createCreatorApiToken,
   revokeCreatorApiToken,
   startGithubLogin,
-  uploadPrivateAsset,
 } from "./creatorApi";
 
 const originalFetch = globalThis.fetch;
@@ -139,19 +136,10 @@ describe("creatorApi", () => {
     expect(requestedPath?.toString()).not.toContain("github-sign-in-state");
   });
 
-  it("validates creator mutation request bodies before fetch", async () => {
+  it("validates creator token request bodies before fetch", async () => {
     const fetchMock = vi.fn();
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
-    await expect(
-      createChallengeReviewRecord({} as never, "csrf"),
-    ).rejects.toThrow();
-    await expect(
-      uploadPrivateAsset("reviewRecord-id", {} as never, "csrf"),
-    ).rejects.toThrow();
-    await expect(
-      createChallengeShortlistRevision("sample-sum", {} as never, "csrf"),
-    ).rejects.toThrow();
     await expect(createCreatorApiToken({} as never, "csrf")).rejects.toThrow();
     expect(fetchMock).not.toHaveBeenCalled();
   });
