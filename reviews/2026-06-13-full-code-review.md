@@ -160,31 +160,42 @@ The following previously accepted risks still match prior decisions and were not
 - Coexecuted benchmark and writable `/io` trust-boundary limitations remain documented MVP tradeoffs.
 - Challenge publish storage cleanup remains best-effort for now.
 
-## Deferred Maintainability Items
+## Follow-Up Maintainability Items Fixed After Review
 
 ### P2: Baseline submitter duplicates solution packaging policy
 
 The ops baseline submitter has local packaging logic similar to the CLI package builder. This is maintainability debt rather than an immediate correctness bug.
 
-Status: deferred.
+Status: fixed in follow-up.
 
-Recommended follow-up: move the shared packaging policy into a crate-level helper consumed by CLI and ops.
+Fix:
+
+- `agentics-contracts` now owns the shared `zip_project` workspace packager.
+- The CLI and ops baseline submitter both consume the same packager, so `.gitignore` handling, script validation, ZIP limits, and final envelope validation cannot drift.
 
 ### P3: Stale browser creator workflow helper exports remain
 
 The web creator console is CLI-first now, but `creatorApi.ts` still exports browser helpers for older creator workflow operations.
 
-Status: deferred.
+Status: fixed in follow-up.
 
-Recommended follow-up: remove unused browser creator operation helpers after confirming no tests or pages still import them.
+Fix:
+
+- Removed stale browser helpers for challenge review records, private asset upload, owner stats, participants, and shortlist operations.
+- Kept creator API-token helpers and shared generated schemas that are still part of the typed contract.
 
 ### P3: Large files approaching refactor threshold
 
 The large-file scan still has several files above 900 lines, especially `ops/src/production_rehearsal.rs`, `ops/src/compose_prod.rs`, and persistence/service modules.
 
-Status: deferred.
+Status: fixed in follow-up for the reviewed ops and persistence files.
 
-Recommended follow-up: split rehearsal phases, compose-prod commands, and solution submission persistence by responsibility before they cross the 1200-line threshold.
+Fix:
+
+- Split baseline packaging into the contracts crate and reduced `ops/src/baseline_submitter.rs`.
+- Split production rehearsal cleanup and submission/public-projection helpers into focused modules.
+- Split rehearsal purge planning/execution out of `ops/src/compose_prod.rs`.
+- Split solution-submission row decoding and quota-admission helpers out of `crates/persistence/src/db/solution_submissions.rs`.
 
 ## Verification Notes
 
