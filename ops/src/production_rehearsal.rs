@@ -10,10 +10,9 @@ use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 use agentics_config::Config;
-use agentics_domain::models::names::ChallengeName;
-use agentics_persistence::Repositories;
 use agentics_storage::build_storage;
 use clap::{Parser, Subcommand, ValueEnum};
+use cleanup::run_cleanup_phase;
 use reqwest::{Client, Url};
 use secrecy::{ExposeSecret, SecretString};
 use sqlx::postgres::PgPoolOptions;
@@ -21,11 +20,13 @@ use sqlx::postgres::PgPoolOptions;
 use crate::support::run_with_ctrl_c;
 
 mod browser;
+mod cleanup;
 mod error;
 mod fixtures;
 mod http;
 mod report;
 mod runtime;
+mod submissions;
 
 use browser::run_browser_phase;
 pub use error::ProductionRehearsalError;
@@ -40,6 +41,10 @@ use report::{
     print_report_summary,
 };
 use runtime::{registration_code, resolve_run_config};
+use submissions::{
+    create_agent_submission, expect_submission_rejected, public_projection_check,
+    wait_for_submission,
+};
 
 const PREFIX: &str = "agentics-rehearse";
 const DEFAULT_ENV_FILE: &str = "deploy/compose/env/prod.env";
@@ -828,322 +833,6 @@ fn expect_terminal_failure(check: CheckEvidence, name: &str) -> CheckEvidence {
         CheckEvidence::passed(name, "probe was accepted and failed under runner policy")
     } else {
         check
-    }
-}
-
-async fn run_cleanup_phase(
-    client: &Client,
-    resolved: &runtime::ResolvedRunConfig,
-    args: &RunArgs,
-    report: &RehearsalReport,
-    state: &RehearsalState,
-) -> PhaseEvidence {
-    let start = Instant::now();
-    if args.keep_artifacts {
-        return PhaseEvidence::from_checks(
-            "cleanup",
-            start.elapsed(),
-            vec![CheckEvidence::skipped(
-                "fixture archival",
-                "--keep-artifacts was supplied",
-            )],
-        );
-    }
-    let mut checks = Vec::new();
-    if let Some(code_id) = state.pioneer_code_id.as_deref() {
-        checks.push(
-            match admin_post_json(
-                client,
-                &resolved.api_base_url,
-                &format!("admin/pioneer-codes/{code_id}/revoke"),
-                &resolved.admin_service_token,
-                &serde_json::json!({}),
-            )
-            .await
-            {
-                Ok(_) => CheckEvidence::passed(
-                    "revoke pioneer code",
-                    "revoked rehearsal registration code and dependent credentials",
-                ),
-                Err(error) => CheckEvidence::failed("revoke pioneer code", error.to_string()),
-            },
-        );
-    } else {
-        checks.push(CheckEvidence::skipped(
-            "revoke pioneer code",
-            "identity phase did not create a pioneer code id",
-        ));
-    }
-
-    let challenge_names = report
-        .challenges
-        .iter()
-        .map(|challenge| challenge.name.clone())
-        .collect::<Vec<_>>();
-    checks.push(
-        match archive_rehearsal_challenges(&resolved.config, &challenge_names).await {
-            Ok(count) => CheckEvidence::passed(
-                "fixture archival",
-                format!("archived {count} rehearsal challenge fixture(s)"),
-            ),
-            Err(error) => CheckEvidence::failed("fixture archival", error.to_string()),
-        },
-    );
-    PhaseEvidence::from_checks("cleanup", start.elapsed(), checks)
-}
-
-async fn archive_rehearsal_challenges(
-    config: &Config,
-    challenge_names: &[String],
-) -> Result<u64, ProductionRehearsalError> {
-    if challenge_names.is_empty() {
-        return Ok(0);
-    }
-    let pool = PgPoolOptions::new()
-        .max_connections(1)
-        .connect(config.database.url.expose_secret())
-        .await?;
-    let repos = Repositories::new(&pool);
-    let mut archived = 0u64;
-    for name in challenge_names {
-        let challenge_name = ChallengeName::try_new(name.clone()).map_err(|error| {
-            ProductionRehearsalError::InvalidResponse(format!(
-                "generated invalid challenge name `{name}`: {error}"
-            ))
-        })?;
-        repos.challenges().archive(&challenge_name).await?;
-        archived = archived.checked_add(1).ok_or_else(|| {
-            ProductionRehearsalError::InvalidResponse("archive count overflow".to_string())
-        })?;
-    }
-    Ok(archived)
-}
-
-async fn create_agent_submission(
-    client: &Client,
-    api_base_url: &Url,
-    token: &str,
-    path: &str,
-    challenge: &RehearsalChallengeEvidence,
-    artifact_base64: &str,
-    explanation: &str,
-) -> Result<String, ProductionRehearsalError> {
-    let value = client
-        .post(join_url(api_base_url, path)?)
-        .bearer_auth(token)
-        .json(&serde_json::json!({
-            "challenge_name": challenge.name.as_str(),
-            "target": challenge.target.as_str(),
-            "artifact_base64": artifact_base64,
-            "explanation": explanation,
-            "credit_text": "Agentics production rehearsal"
-        }))
-        .send()
-        .await
-        .map_err(ProductionRehearsalError::HttpClient)?
-        .error_for_status()
-        .map_err(ProductionRehearsalError::HttpClient)?
-        .json::<serde_json::Value>()
-        .await
-        .map_err(ProductionRehearsalError::HttpClient)?;
-    value
-        .get("id")
-        .and_then(serde_json::Value::as_str)
-        .map(ToOwned::to_owned)
-        .ok_or_else(|| {
-            ProductionRehearsalError::InvalidResponse("missing submission id".to_string())
-        })
-}
-
-async fn expect_submission_rejected(
-    client: &Client,
-    api_base_url: &Url,
-    token: &str,
-    challenge: &RehearsalChallengeEvidence,
-    artifact_base64: &str,
-    name: &str,
-) -> CheckEvidence {
-    let url = match join_url(api_base_url, "api/agent/validation-runs") {
-        Ok(url) => url,
-        Err(error) => return CheckEvidence::failed(name, error.to_string()),
-    };
-    match client
-        .post(url)
-        .bearer_auth(token)
-        .json(&serde_json::json!({
-            "challenge_name": challenge.name.as_str(),
-            "target": challenge.target.as_str(),
-            "artifact_base64": artifact_base64,
-            "explanation": format!("adversarial rehearsal: {name}")
-        }))
-        .send()
-        .await
-    {
-        Ok(response) if response.status().is_client_error() => {
-            CheckEvidence::passed(name, format!("rejected with {}", response.status()))
-        }
-        Ok(response) => CheckEvidence::failed(
-            name,
-            format!("expected client error rejection, got {}", response.status()),
-        ),
-        Err(error) => CheckEvidence::failed(name, error.to_string()),
-    }
-}
-
-async fn wait_for_submission(
-    client: &Client,
-    api_base_url: &Url,
-    token: &str,
-    path: &str,
-    name: &str,
-    timeout: Duration,
-) -> CheckEvidence {
-    let Some(deadline) = Instant::now().checked_add(timeout) else {
-        return CheckEvidence::failed(name, "timeout is too large");
-    };
-    loop {
-        let url = match join_url(api_base_url, path) {
-            Ok(url) => url,
-            Err(error) => return CheckEvidence::failed(name, error.to_string()),
-        };
-        match client.get(url).bearer_auth(token).send().await {
-            Ok(response) if response.status().is_success() => {
-                match response.json::<serde_json::Value>().await {
-                    Ok(value) => {
-                        let status = value
-                            .get("status")
-                            .and_then(serde_json::Value::as_str)
-                            .unwrap_or("<missing>");
-                        match status {
-                            "completed" => {
-                                if let Some(primary_metric) =
-                                    value.pointer("/official_primary_metric")
-                                {
-                                    return CheckEvidence::passed(
-                                        name,
-                                        format!("completed with primary metric {primary_metric:?}"),
-                                    );
-                                }
-                                return CheckEvidence::passed(name, "completed");
-                            }
-                            "failed" => {
-                                return CheckEvidence::failed(name, "status failed");
-                            }
-                            _ => {}
-                        }
-                    }
-                    Err(error) => return CheckEvidence::failed(name, error.to_string()),
-                }
-            }
-            Ok(response) => {
-                return CheckEvidence::failed(name, format!("poll returned {}", response.status()));
-            }
-            Err(error) => return CheckEvidence::failed(name, error.to_string()),
-        }
-        if Instant::now() >= deadline {
-            return CheckEvidence::failed(name, format!("timed out after {}s", timeout.as_secs()));
-        }
-        tokio::time::sleep(Duration::from_secs(2)).await;
-    }
-}
-
-async fn public_projection_check(
-    client: &Client,
-    api_base_url: &Url,
-    challenge: &RehearsalChallengeEvidence,
-    submission_id: &str,
-) -> CheckEvidence {
-    let detail = get_json(
-        client,
-        api_base_url,
-        &format!("api/public/solution-submissions/{submission_id}"),
-    )
-    .await;
-    let report = get_json(
-        client,
-        api_base_url,
-        &format!("api/public/solution-submissions/{submission_id}/result-report"),
-    )
-    .await;
-    let ranking = get_json(
-        client,
-        api_base_url,
-        &format!(
-            "api/public/solution-submissions/{submission_id}/ranking-context?challenge_name={}&target={}",
-            challenge.name, challenge.target
-        ),
-    )
-    .await;
-    let list = get_json(
-        client,
-        api_base_url,
-        &format!(
-            "api/public/challenges/{}/solution-submissions?target={}&limit=10",
-            challenge.name, challenge.target
-        ),
-    )
-    .await;
-    let leaderboard = get_json(
-        client,
-        api_base_url,
-        &format!(
-            "api/public/challenges/{}/leaderboard?target={}",
-            challenge.name, challenge.target
-        ),
-    )
-    .await;
-    match (detail, report, ranking, list, leaderboard) {
-        (Ok(detail), Ok(result_report), Ok(ranking), Ok(list), Ok(leaderboard)) => {
-            let leaked_validation = detail.get("validation_evaluation").is_some();
-            let ranked = leaderboard
-                .get("items")
-                .and_then(serde_json::Value::as_array)
-                .is_some_and(|items| !items.is_empty());
-            let listed = list
-                .get("items")
-                .and_then(serde_json::Value::as_array)
-                .is_some_and(|items| {
-                    items.iter().any(|item| {
-                        item.get("id").and_then(serde_json::Value::as_str) == Some(submission_id)
-                    })
-                });
-            let has_report = result_report.get("solution_submission").is_some();
-            let has_ranking = ranking.get("rank").is_some() || ranking.get("entry").is_some();
-            if leaked_validation {
-                CheckEvidence::failed(
-                    format!("{} public redaction", challenge.mode),
-                    "public detail exposed validation_evaluation",
-                )
-            } else if !ranked {
-                CheckEvidence::failed(
-                    format!("{} leaderboard", challenge.mode),
-                    "leaderboard has no ranked entries",
-                )
-            } else if !listed {
-                CheckEvidence::failed(
-                    format!("{} public list", challenge.mode),
-                    "public submission list did not include the official submission",
-                )
-            } else if !has_report || !has_ranking {
-                CheckEvidence::failed(
-                    format!("{} public detail surfaces", challenge.mode),
-                    "public report or ranking context had an unexpected shape",
-                )
-            } else {
-                CheckEvidence::passed(
-                    format!("{} public projection", challenge.mode),
-                    "public detail/report/ranking/list/leaderboard surfaces are reachable and redacted",
-                )
-            }
-        }
-        (Err(error), _, _, _, _)
-        | (_, Err(error), _, _, _)
-        | (_, _, Err(error), _, _)
-        | (_, _, _, Err(error), _)
-        | (_, _, _, _, Err(error)) => CheckEvidence::failed(
-            format!("{} public projection", challenge.mode),
-            error.to_string(),
-        ),
     }
 }
 

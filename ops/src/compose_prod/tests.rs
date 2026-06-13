@@ -1,8 +1,8 @@
+use super::rehearsal_purge::{build_rehearsal_purge_plan, unavailable_runner_cleanup_reports};
 use super::{
     Cli, ComposeContext, ComposeProdError, DEFAULT_PROJECT, ProdCommand, REHEARSAL_PROJECT,
-    RawComposeProdEnv, RunnerDownPolicy, build_rehearsal_purge_plan, down, env_value,
-    private_bundle_restore_args, resolve_compose_profiles, resolve_project, run,
-    unavailable_runner_cleanup_reports, validate_worker_profile_intent,
+    RawComposeProdEnv, RunnerDownPolicy, down, env_value, private_bundle_restore_args,
+    resolve_compose_profiles, resolve_project, run, validate_worker_profile_intent,
 };
 use agentics_config::RunnerNamespace;
 use clap::ValueEnum;
