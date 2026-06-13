@@ -18,14 +18,29 @@ fn default_deferlist_keeps_known_weak_and_allows_upgraded_baselines() {
 
     assert!(
         deferlist.contains(
+            &"colored-ball-pole-sorting-frontier-cs-algorithmic-142"
+                .parse()
+                .expect("name")
+        )
+    );
+    assert!(
+        !deferlist.contains(
             &"uniform-cave-explorer-frontier-cs-algorithmic-80"
                 .parse()
                 .expect("name")
         )
     );
     assert!(
-        deferlist.contains(
+        !deferlist.contains(
             &"adaptive-impostor-search-frontier-cs-algorithmic-245"
+                .parse()
+                .expect("name")
+        )
+    );
+    assert!(!deferlist.contains(&"imagenet-1m-frontier-cs-imagenet-1m".parse().expect("name")));
+    assert!(
+        !deferlist.contains(
+            &"symreg-mccormick-frontier-cs-symreg-mccormick"
                 .parse()
                 .expect("name")
         )

@@ -41,13 +41,13 @@ After strict required-nullable challenge contracts are fixed, finish the remaini
 
 ## Solution Audit Snapshot
 
-The 2026-06-13 solution audit reduced the broad not-submit-ready bucket to 68 explicitly deferred solutions. The local readiness scanner now classifies 180 checked-in solutions as submitter-ready and 68 as deferred.
+The 2026-06-13 solution audit initially reduced the broad not-submit-ready bucket to 68 explicitly deferred solutions. Follow-up baseline work upgraded 67 of those solutions; the local readiness scanner now classifies 247 checked-in solutions as submitter-ready and 1 as deferred.
 
 Follow-up solution work upgraded `cube-sphere-packing-frontier-cs-algorithmic-48`, `functional-cycle-reach-frontier-cs-algorithmic-252`, `hamiltonian-path-frontier-cs-algorithmic-5`, and `signed-rooted-tree-frontier-cs-algorithmic-57` into meaningful baseline submissions.
 
 The metadata review also cleared stale wording for official-capable baselines including `distinct-bakery-types-frontier-cs-algorithmic-141`, `line-recovery-frontier-cs-algorithmic-117`, `llm-sql-small-frontier-cs-llm-sql-small`, `llm-sql-large-frontier-cs-llm-sql-large`, `palindromic-grid-paths-frontier-cs-algorithmic-256`, `poker-action-seeds-frontier-cs-algorithmic-143`, `repaired-road-set-frontier-cs-algorithmic-253`, `snake-path-minima-frontier-cs-algorithmic-233`, `sorted-mode-array-frontier-cs-algorithmic-257`, `treasure-hunt-choices-frontier-cs-algorithmic-70`, and `world-map-frontier-cs-algorithmic-6`.
 
-The remaining deferred set is documented in `working-notes/challenge-solution-baseline-audit.md` and mirrored in the `agentics-submit-baselines` default defer list. It includes live-failed CPU baselines, public-only smoke solutions, tiny interactive fixtures, cheap ImageNet and symbolic-regression baselines, and a handful of implementations that are valid only for small validation sizes.
+The remaining deferred set is documented in `working-notes/challenge-solution-baseline-audit.md` and mirrored in the `agentics-submit-baselines` default defer list. The only remaining default-deferred solution is `colored-ball-pole-sorting-frontier-cs-algorithmic-142`, which still needs a stronger constructive algorithm under the 2,000,000-operation cap.
 
 The GPU-dependent solution set for smoke and production scheduling checks is `cross-entropy-kernel`, `decoding-attn-kernel`, `flash-attn-kernel`, `fused-linear-ce-kernel`, `fused-linear-jsd-kernel`, `gdpa-attention-kernel`, `gemm-annoying`, `gemm-k-skewed`, `gemm-near-tile`, `gemm-rectangles`, `gemm-squares`, `gemm-transformer`, `group-gemm`, `mamba2-scan`, `mixed-gemm`, `qknorm`, `quant-dot-int4`, `ragged-attention`, `vector-add-2-24`, `vector-add-2-28`, and `vector-addition`.
 
@@ -75,7 +75,7 @@ The GPU-dependent solution set for smoke and production scheduling checks is `cr
 - A live submitter smoke for `hello-world-rs/linux-arm64-cpu` succeeded with submission `b12fae78-18d5-45d6-92b9-53f04231e887`.
 - A bounded CPU live pass submitted five challenges: `advertisement-rectangle-placement-frontier-cs-algorithmic-147` and `almost-monochromatic-cycle-frontier-cs-algorithmic-24` completed, while `adaptive-impostor-search-frontier-cs-algorithmic-245`, `adventure-rank-segmentation-frontier-cs-algorithmic-61`, and `average-permutation-frontier-cs-algorithmic-124` failed. This exposed that many still-labeled smoke solutions were not covered by the hardcoded defer list.
 - `agentics-submit-baselines` now also defers local solutions whose README or manifest still says smoke/public-only unless `--include-deferred` is passed. `adaptive-impostor-search-frontier-cs-algorithmic-245` and `average-permutation-frontier-cs-algorithmic-124` were added to the default defer list because their live official runs failed despite not being marked smoke.
-- A focused metadata review cleaned stale wording for official-capable baselines and expanded the default defer list to the 68 still-deferred solutions. The submitter now sees 180 ready solutions and 68 deferred solutions in the checked-in corpus.
+- A focused metadata review cleaned stale wording for official-capable baselines and expanded the default defer list to the 68 initially deferred solutions. A follow-up subagent pass upgraded 67 of those solutions and narrowed the default defer list to `colored-ball-pole-sorting-frontier-cs-algorithmic-142`. The submitter now sees 247 ready solutions and 1 deferred solution in the checked-in corpus.
 - Broad CPU baseline submission can now run through `just prod::submit-baselines`. Broad GPU baseline submission can use the same submitter with an explicit CUDA target or `--all-targets` once the operator wants to spend the GPU time.
 
 ## Track 1: Make GPU Workers Reliable In Dev, Rehearsal, And Production
