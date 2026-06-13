@@ -30,7 +30,6 @@ const DEFAULT_STATE_FILE: &str = "target/agentics-baseline-submissions.jsonl";
 const DEFAULT_DELAY_SECS: u64 = 5;
 const DEFAULT_WAIT_TIMEOUT_SECS: u64 = 900;
 const DEFAULT_POLL_SECS: u64 = 5;
-const DEFAULT_CPU_TARGET: &str = "linux-arm64-cpu";
 const DEFAULT_EXPLANATION: &str =
     "Agentics official baseline submission from the checked-in challenge test solution.";
 const DEFAULT_CREDIT_TEXT: &str = "Agentics official baseline";
@@ -60,12 +59,9 @@ pub struct SubmitBaselinesArgs {
     /// Submit only these challenge names.
     #[arg(long = "challenge")]
     challenges: Vec<ChallengeName>,
-    /// Submit only these target names.
-    #[arg(long = "target")]
+    /// Submit only these target names. At least one explicit target is required.
+    #[arg(long = "target", required = true, num_args = 1..)]
     targets: Vec<TargetName>,
-    /// Submit every declared target instead of the default CPU-only target.
-    #[arg(long)]
-    all_targets: bool,
     /// Include challenges that are deferred by the baseline audit.
     #[arg(long)]
     include_deferred: bool,
@@ -129,24 +125,18 @@ impl BaselineKey {
 }
 
 #[derive(Debug, Clone)]
-enum TargetSelection {
-    DefaultCpu(TargetName),
-    Explicit(BTreeSet<TargetName>),
-    All,
+struct TargetSelection {
+    targets: BTreeSet<TargetName>,
 }
 
 impl TargetSelection {
-    fn from_args(targets: &[TargetName], all_targets: bool) -> Result<Self> {
-        if all_targets && !targets.is_empty() {
-            bail!("use either --all-targets or one or more --target filters, not both");
-        }
-        if all_targets {
-            return Ok(Self::All);
-        }
+    fn from_args(targets: &[TargetName]) -> Result<Self> {
         if targets.is_empty() {
-            return Ok(Self::DefaultCpu(DEFAULT_CPU_TARGET.parse()?));
+            bail!("at least one --target <target> is required; choose targets explicitly");
         }
-        Ok(Self::Explicit(targets.iter().cloned().collect()))
+        Ok(Self {
+            targets: targets.iter().cloned().collect(),
+        })
     }
 }
 
@@ -229,7 +219,7 @@ async fn run(args: SubmitBaselinesArgs) -> Result<()> {
     let solution_root = challenge_repo.join("test-solutions");
     let allowlist = name_set_from_args(&args.challenges, args.allowlist_file.as_deref())?;
     let deferlist = build_deferlist(args.include_deferred, args.deferlist_file.as_deref())?;
-    let target_selection = TargetSelection::from_args(&args.targets, args.all_targets)?;
+    let target_selection = TargetSelection::from_args(&args.targets)?;
     let mut state = load_state(&args.state_file)?;
     let challenges = list_challenges(&client, &api_base_url).await?;
     let mut submitted_count = 0usize;
@@ -741,28 +731,16 @@ fn select_declared_targets(
     target_selection: &TargetSelection,
 ) -> Result<Vec<TargetName>> {
     let declared_set = declared.iter().cloned().collect::<BTreeSet<_>>();
-    let mut targets = match target_selection {
-        TargetSelection::All => declared.to_vec(),
-        TargetSelection::DefaultCpu(cpu_target) => {
-            if declared_set.contains(cpu_target) {
-                vec![cpu_target.clone()]
-            } else {
-                Vec::new()
-            }
+    for target in &target_selection.targets {
+        if !declared_set.contains(target) {
+            bail!("challenge {challenge_name} does not declare requested target {target}");
         }
-        TargetSelection::Explicit(target_filter) => {
-            for target in target_filter {
-                if !declared_set.contains(target) {
-                    bail!("challenge {challenge_name} does not declare requested target {target}");
-                }
-            }
-            declared
-                .iter()
-                .filter(|target| target_filter.contains(*target))
-                .cloned()
-                .collect()
-        }
-    };
+    }
+    let mut targets = declared
+        .iter()
+        .filter(|target| target_selection.targets.contains(*target))
+        .cloned()
+        .collect::<Vec<_>>();
     targets.sort();
     Ok(targets)
 }

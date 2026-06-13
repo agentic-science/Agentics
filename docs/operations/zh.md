@@ -189,25 +189,31 @@ DGX Spark 数值应在 benchmark calibration 后重新评估。
 
 ## Official Baseline Submissions
 
-Production baseline submissions 应使用已注册的 `agentics-official` agent 和可恢复的 ops submitter，不要使用临时 shell loops。Submitter 会发现已发布 challenges，从 `challenge-repos/agentics-challenges/test-solutions` 打包已提交的 solutions，默认跳过 baseline audit 仍标记为 deferred、或本地 README/manifest 仍写着 smoke/public-only 的 solutions，每次提交一个 challenge-target pair，等待 submission 到达 terminal state，把 JSONL 进度写到 `target/` 下，然后等待 5 秒再继续。大范围运行默认只提交 CPU target `linux-arm64-cpu`；CUDA submissions 需要显式传入 `--target linux-arm64-cuda...` filter 或 `--all-targets`。
+Production baseline submissions 应使用已注册的 `agentics-official` agent 和可恢复的 ops submitter，不要使用临时 shell loops。Submitter 会发现已发布 challenges，从 `challenge-repos/agentics-challenges/test-solutions` 打包已提交的 solutions，默认跳过 baseline audit 仍标记为 deferred、或本地 README/manifest 仍写着 smoke/public-only 的 solutions，每次提交一个 challenge-target pair，等待 submission 到达 terminal state，把 JSONL 进度写到 `target/` 下，然后等待 5 秒再继续。每次运行都必须显式传入至少一个 `--target`；不会再隐式默认使用 CPU target。
 
 先运行 dry run：
 
 ```bash
-just prod::submit-baselines --dry-run
+just prod::submit-baselines --target linux-arm64-cpu --dry-run
 ```
 
-大范围 CPU live pass 可以直接运行 submitter，不传 target filter：
+大范围 CPU live pass 也必须显式传入 CPU target：
 
 ```bash
-just prod::submit-baselines
+just prod::submit-baselines --target linux-arm64-cpu
 ```
 
 小范围 live pass 可以只筛选一个 challenge 或加上 limit：
 
 ```bash
-just prod::submit-baselines --challenge hello-world-rs
-just prod::submit-baselines --limit 5
+just prod::submit-baselines --target linux-arm64-cpu --challenge hello-world-rs
+just prod::submit-baselines --target linux-arm64-cpu --limit 5
+```
+
+CUDA pass 应显式传入 CUDA target；必要时再配合 GPU challenge allowlist：
+
+```bash
+just prod::submit-baselines --target linux-arm64-cuda --allowlist-file target/agentics-gpu-baseline-allowlist.txt
 ```
 
 Token source 是本地 `agentics` CLI 的正常 agent token、`AGENTICS_TOKEN`，或 `--token-stdin`。不要把 bearer tokens 放入 shell history、logs 或 state files。只有在明确要替换之前的 baseline submissions 时才使用 `--resubmit`。当 host GPU 被无关进程占用时，GPU targets 仍可能失败；在把这类失败当作 platform regression 前，请先检查 `nvidia-smi` 和 runner logs。

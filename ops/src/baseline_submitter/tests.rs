@@ -283,8 +283,19 @@ fn baseline_submitter_resumes_nonterminal_record() {
 }
 
 #[test]
-fn default_target_selection_is_cpu_only() {
-    let selection = TargetSelection::from_args(&[], false).expect("selection");
+fn target_selection_requires_explicit_target() {
+    let error = TargetSelection::from_args(&[]).expect_err("missing target should fail");
+
+    assert!(
+        error.to_string().contains("--target <target> is required"),
+        "{error:#}"
+    );
+}
+
+#[test]
+fn explicit_target_selection_keeps_requested_targets() {
+    let selection = TargetSelection::from_args(&["linux-arm64-cpu".parse().expect("cpu target")])
+        .expect("selection");
     let challenge_name = "multi-target".parse().expect("challenge name");
     let declared = [
         "linux-arm64-cuda".parse().expect("cuda target"),
@@ -301,20 +312,12 @@ fn default_target_selection_is_cpu_only() {
 }
 
 #[test]
-fn default_target_selection_skips_gpu_only_challenges() {
-    let selection = TargetSelection::from_args(&[], false).expect("selection");
-    let challenge_name = "gpu-only".parse().expect("challenge name");
-    let declared = ["linux-arm64-cuda".parse().expect("cuda target")];
-
-    let selected =
-        select_declared_targets(&challenge_name, &declared, &selection).expect("selected targets");
-
-    assert!(selected.is_empty());
-}
-
-#[test]
-fn all_targets_selection_keeps_every_declared_target() {
-    let selection = TargetSelection::from_args(&[], true).expect("selection");
+fn explicit_target_selection_returns_all_requested_declared_targets() {
+    let selection = TargetSelection::from_args(&[
+        "linux-arm64-cuda".parse().expect("cuda target"),
+        "linux-arm64-cpu".parse().expect("cpu target"),
+    ])
+    .expect("selection");
     let challenge_name = "multi-target".parse().expect("challenge name");
     let declared = [
         "linux-arm64-cuda".parse().expect("cuda target"),
@@ -335,9 +338,8 @@ fn all_targets_selection_keeps_every_declared_target() {
 
 #[test]
 fn explicit_target_selection_rejects_missing_target() {
-    let selection =
-        TargetSelection::from_args(&["linux-arm64-cpu".parse().expect("cpu target")], false)
-            .expect("selection");
+    let selection = TargetSelection::from_args(&["linux-arm64-cpu".parse().expect("cpu target")])
+        .expect("selection");
     let challenge_name = "gpu-only".parse().expect("challenge name");
     let declared = ["linux-arm64-cuda".parse().expect("cuda target")];
 
