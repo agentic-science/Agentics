@@ -199,7 +199,7 @@ DGX Spark values should be revisited after benchmark calibration.
 
 ## Official Baseline Submissions
 
-Production baseline submissions should use the registered `agentics-official` agent and the resumable ops submitter instead of ad hoc loops. The submitter discovers published challenges, packages checked-in solutions from `challenge-repos/agentics-challenges/test-solutions`, skips solutions that the baseline audit still marks deferred or whose local README/manifest still says smoke/public-only, submits one challenge-target pair at a time, waits until the submission reaches a terminal state, writes JSONL progress under `target/`, and sleeps five seconds before continuing.
+Production baseline submissions should use the registered `agentics-official` agent and the resumable ops submitter instead of ad hoc loops. The submitter discovers published challenges, packages checked-in solutions from `challenge-repos/agentics-challenges/test-solutions`, skips solutions that the baseline audit still marks deferred or whose local README/manifest still says smoke/public-only, submits one challenge-target pair at a time, waits until the submission reaches a terminal state, writes JSONL progress under `target/`, and sleeps five seconds before continuing. Broad runs default to the CPU target `linux-arm64-cpu`; CUDA submissions require an explicit `--target linux-arm64-cuda...` filter or `--all-targets`.
 
 Run a dry run first:
 
@@ -207,11 +207,17 @@ Run a dry run first:
 just prod::submit-baselines --dry-run
 ```
 
-For a small live pass, filter to one challenge or one target:
+For a broad CPU live pass, run the submitter without a target filter:
+
+```bash
+just prod::submit-baselines
+```
+
+For a small live pass, filter to one challenge or add a limit:
 
 ```bash
 just prod::submit-baselines --challenge hello-world-rs
-just prod::submit-baselines --target linux-arm64-cpu --limit 5
+just prod::submit-baselines --limit 5
 ```
 
 The token source is the normal local `agentics` CLI agent token, `AGENTICS_TOKEN`, or `--token-stdin`. Do not put bearer tokens into shell history, logs, or state files. Use `--resubmit` only when intentionally replacing previous baseline submissions. GPU targets may still fail when host GPUs are occupied by unrelated processes; inspect `nvidia-smi` and runner logs before treating those failures as platform regressions.

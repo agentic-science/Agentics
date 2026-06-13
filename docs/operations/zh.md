@@ -189,7 +189,7 @@ DGX Spark 数值应在 benchmark calibration 后重新评估。
 
 ## Official Baseline Submissions
 
-Production baseline submissions 应使用已注册的 `agentics-official` agent 和可恢复的 ops submitter，不要使用临时 shell loops。Submitter 会发现已发布 challenges，从 `challenge-repos/agentics-challenges/test-solutions` 打包已提交的 solutions，默认跳过 baseline audit 仍标记为 deferred、或本地 README/manifest 仍写着 smoke/public-only 的 solutions，每次提交一个 challenge-target pair，等待 submission 到达 terminal state，把 JSONL 进度写到 `target/` 下，然后等待 5 秒再继续。
+Production baseline submissions 应使用已注册的 `agentics-official` agent 和可恢复的 ops submitter，不要使用临时 shell loops。Submitter 会发现已发布 challenges，从 `challenge-repos/agentics-challenges/test-solutions` 打包已提交的 solutions，默认跳过 baseline audit 仍标记为 deferred、或本地 README/manifest 仍写着 smoke/public-only 的 solutions，每次提交一个 challenge-target pair，等待 submission 到达 terminal state，把 JSONL 进度写到 `target/` 下，然后等待 5 秒再继续。大范围运行默认只提交 CPU target `linux-arm64-cpu`；CUDA submissions 需要显式传入 `--target linux-arm64-cuda...` filter 或 `--all-targets`。
 
 先运行 dry run：
 
@@ -197,11 +197,17 @@ Production baseline submissions 应使用已注册的 `agentics-official` agent 
 just prod::submit-baselines --dry-run
 ```
 
-小范围 live pass 可以只筛选一个 challenge 或一个 target：
+大范围 CPU live pass 可以直接运行 submitter，不传 target filter：
+
+```bash
+just prod::submit-baselines
+```
+
+小范围 live pass 可以只筛选一个 challenge 或加上 limit：
 
 ```bash
 just prod::submit-baselines --challenge hello-world-rs
-just prod::submit-baselines --target linux-arm64-cpu --limit 5
+just prod::submit-baselines --limit 5
 ```
 
 Token source 是本地 `agentics` CLI 的正常 agent token、`AGENTICS_TOKEN`，或 `--token-stdin`。不要把 bearer tokens 放入 shell history、logs 或 state files。只有在明确要替换之前的 baseline submissions 时才使用 `--resubmit`。当 host GPU 被无关进程占用时，GPU targets 仍可能失败；在把这类失败当作 platform regression 前，请先检查 `nvidia-smi` 和 runner logs。

@@ -30,6 +30,7 @@ const DEFAULT_STATE_FILE: &str = "target/agentics-baseline-submissions.jsonl";
 const DEFAULT_DELAY_SECS: u64 = 5;
 const DEFAULT_WAIT_TIMEOUT_SECS: u64 = 900;
 const DEFAULT_POLL_SECS: u64 = 5;
+const DEFAULT_CPU_TARGET: &str = "linux-arm64-cpu";
 const DEFAULT_EXPLANATION: &str =
     "Agentics official baseline submission from the checked-in challenge test solution.";
 const DEFAULT_CREDIT_TEXT: &str = "Agentics official baseline";
@@ -37,32 +38,73 @@ const REQUIRED_MANIFEST: &str = ZIP_PROJECT_MANIFEST_FILE;
 
 const DEFAULT_DEFERRED_CHALLENGES: &[&str] = &[
     "adaptive-impostor-search-frontier-cs-algorithmic-245",
+    "adventure-rank-segmentation-frontier-cs-algorithmic-61",
     "average-permutation-frontier-cs-algorithmic-124",
-    "distinct-bakery-types-frontier-cs-algorithmic-141",
+    "beacon-string-arrangement-frontier-cs-algorithmic-302",
+    "big-integer-subset-sum-frontier-cs-algorithmic-179",
+    "binary-quadratic-assignment-frontier-cs-algorithmic-181",
+    "binary-square-substrings-frontier-cs-algorithmic-228",
+    "boolean-expression-synthesis-frontier-cs-algorithmic-241",
+    "bridge-blasting-harvest-frontier-cs-algorithmic-306",
+    "brush-stroke-area-frontier-cs-algorithmic-133",
+    "cant-late-ha-loose-large-frontier-cs-cbl-ha-ll",
+    "cant-late-ha-loose-small-frontier-cs-cbl-ha-ls",
+    "cant-late-ha-tight-large-frontier-cs-cbl-ha-tl",
+    "cant-late-ha-tight-small-frontier-cs-cbl-ha-ts",
+    "cant-late-la-loose-large-frontier-cs-cbl-la-ll",
+    "cant-late-la-loose-small-frontier-cs-cbl-la-ls",
+    "cant-late-la-tight-large-frontier-cs-cbl-la-tl",
+    "cant-late-la-tight-small-frontier-cs-cbl-la-ts",
+    "cant-late-ma-loose-large-frontier-cs-cbl-ma-ll",
+    "cant-late-ma-loose-small-frontier-cs-cbl-ma-ls",
+    "cant-late-ma-tight-large-frontier-cs-cbl-ma-tl",
+    "cant-late-ma-tight-small-frontier-cs-cbl-ma-ts",
+    "cant-late-multi-ha-loose-large-frontier-cs-cblm-ha-ll",
+    "cant-late-multi-ha-loose-small-frontier-cs-cblm-ha-ls",
+    "cant-late-multi-ha-tight-large-frontier-cs-cblm-ha-tl",
+    "cant-late-multi-ha-tight-small-frontier-cs-cblm-ha-ts",
+    "cant-late-multi-la-loose-large-frontier-cs-cblm-la-ll",
+    "cant-late-multi-la-loose-small-frontier-cs-cblm-la-ls",
+    "cant-late-multi-la-tight-large-frontier-cs-cblm-la-tl",
+    "cant-late-multi-la-tight-small-frontier-cs-cblm-la-ts",
+    "center-basket-transfer-frontier-cs-algorithmic-113",
+    "cleaning-duty-automaton-frontier-cs-algorithmic-170",
+    "clique-cover-frontier-cs-algorithmic-187",
+    "cloudcast-broadcast-frontier-cs-cloudcast",
+    "colored-ball-pole-sorting-frontier-cs-algorithmic-142",
+    "communication-robot-network-frontier-cs-algorithmic-211",
+    "completely-multiplicative-function-frontier-cs-algorithmic-83",
+    "defensive-lineup-permutation-frontier-cs-algorithmic-313",
+    "delivery-route-selection-frontier-cs-algorithmic-152",
+    "digit-grid-prefix-frontier-cs-algorithmic-110",
+    "distinct-xor-set-frontier-cs-algorithmic-111",
     "editor-width-discovery-frontier-cs-algorithmic-122",
+    "fighter-base-strike-planning-frontier-cs-algorithmic-210",
+    "graph-coloring-frontier-cs-algorithmic-186",
     "heap-tree-sum-frontier-cs-algorithmic-209",
-    "imagenet-200k-frontier-cs-imagenet-200k",
-    "imagenet-500k-frontier-cs-imagenet-500k",
+    "hidden-bipartite-graph-frontier-cs-algorithmic-106",
     "imagenet-1m-frontier-cs-imagenet-1m",
     "imagenet-2-5m-frontier-cs-imagenet-2-5m",
+    "imagenet-200k-frontier-cs-imagenet-200k",
+    "imagenet-500k-frontier-cs-imagenet-500k",
     "imagenet-5m-frontier-cs-imagenet-5m",
+    "independent-set-complement-score-frontier-cs-algorithmic-183",
+    "inversion-recovery-frontier-cs-algorithmic-73",
+    "knight-tour-path-frontier-cs-algorithmic-109",
     "limited-shuffle-restore-frontier-cs-algorithmic-59",
-    "line-recovery-frontier-cs-algorithmic-117",
-    "llm-sql-small-frontier-cs-llm-sql-small",
-    "llm-sql-large-frontier-cs-llm-sql-large",
-    "palindromic-grid-paths-frontier-cs-algorithmic-256",
-    "poker-action-seeds-frontier-cs-algorithmic-143",
-    "repaired-road-set-frontier-cs-algorithmic-253",
-    "snake-path-minima-frontier-cs-algorithmic-233",
-    "sorted-mode-array-frontier-cs-algorithmic-257",
-    "symreg-sincos-frontier-cs-symreg-sincos",
+    "magic-word-spells-frontier-cs-algorithmic-69",
+    "nbody-random-100k-frontier-cs-nbody-100k",
+    "permutation-segment-geemu-frontier-cs-algorithmic-52",
+    "sequence-transform-operations-frontier-cs-algorithmic-247",
+    "skating-rink-route-frontier-cs-algorithmic-171",
+    "space-thief-stars-frontier-cs-algorithmic-63",
+    "sphere-point-spread-frontier-cs-algorithmic-112",
     "symreg-mccormick-frontier-cs-symreg-mccormick",
     "symreg-mixed-polyexp-frontier-cs-symreg-mixed-polyexp",
     "symreg-peaks-frontier-cs-symreg-peaks",
     "symreg-ripple-frontier-cs-symreg-ripple",
-    "treasure-hunt-choices-frontier-cs-algorithmic-70",
+    "symreg-sincos-frontier-cs-symreg-sincos",
     "uniform-cave-explorer-frontier-cs-algorithmic-80",
-    "world-map-frontier-cs-algorithmic-6",
 ];
 
 /// CLI for the production baseline submitter.
@@ -87,6 +129,9 @@ pub struct SubmitBaselinesArgs {
     /// Submit only these target names.
     #[arg(long = "target")]
     targets: Vec<TargetName>,
+    /// Submit every declared target instead of the default CPU-only target.
+    #[arg(long)]
+    all_targets: bool,
     /// Include challenges that are deferred by the baseline audit.
     #[arg(long)]
     include_deferred: bool,
@@ -146,6 +191,28 @@ impl BaselineKey {
             challenge_name,
             target,
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+enum TargetSelection {
+    DefaultCpu(TargetName),
+    Explicit(BTreeSet<TargetName>),
+    All,
+}
+
+impl TargetSelection {
+    fn from_args(targets: &[TargetName], all_targets: bool) -> Result<Self> {
+        if all_targets && !targets.is_empty() {
+            bail!("use either --all-targets or one or more --target filters, not both");
+        }
+        if all_targets {
+            return Ok(Self::All);
+        }
+        if targets.is_empty() {
+            return Ok(Self::DefaultCpu(DEFAULT_CPU_TARGET.parse()?));
+        }
+        Ok(Self::Explicit(targets.iter().cloned().collect()))
     }
 }
 
@@ -228,7 +295,7 @@ async fn run(args: SubmitBaselinesArgs) -> Result<()> {
     let solution_root = challenge_repo.join("test-solutions");
     let allowlist = name_set_from_args(&args.challenges, args.allowlist_file.as_deref())?;
     let deferlist = build_deferlist(args.include_deferred, args.deferlist_file.as_deref())?;
-    let target_filter = args.targets.iter().cloned().collect::<BTreeSet<_>>();
+    let target_selection = TargetSelection::from_args(&args.targets, args.all_targets)?;
     let mut state = load_state(&args.state_file)?;
     let challenges = list_challenges(&client, &api_base_url).await?;
     let mut submitted_count = 0usize;
@@ -258,7 +325,7 @@ async fn run(args: SubmitBaselinesArgs) -> Result<()> {
         }
 
         let detail = get_challenge(&client, &api_base_url, &challenge_name).await?;
-        let selected_targets = select_targets(&detail, &target_filter)?;
+        let selected_targets = select_targets(&detail, &target_selection)?;
         if selected_targets.is_empty() {
             println!("skip {challenge_name}: no selected targets");
             summary.increment_skipped()?;
@@ -723,29 +790,45 @@ async fn get_challenge(
 
 fn select_targets(
     detail: &ChallengeDetailResponse,
-    target_filter: &BTreeSet<TargetName>,
+    target_selection: &TargetSelection,
 ) -> Result<Vec<TargetName>> {
     let declared = detail
         .spec
         .targets
         .iter()
         .map(|target| target.name.clone())
-        .collect::<BTreeSet<_>>();
-    for target in target_filter {
-        if !declared.contains(target) {
-            bail!(
-                "challenge {} does not declare requested target {target}",
-                detail.challenge_name
-            );
-        }
-    }
-    let mut targets = detail
-        .spec
-        .targets
-        .iter()
-        .filter(|target| target_filter.is_empty() || target_filter.contains(&target.name))
-        .map(|target| target.name.clone())
         .collect::<Vec<_>>();
+    select_declared_targets(&detail.challenge_name, &declared, target_selection)
+}
+
+fn select_declared_targets(
+    challenge_name: &ChallengeName,
+    declared: &[TargetName],
+    target_selection: &TargetSelection,
+) -> Result<Vec<TargetName>> {
+    let declared_set = declared.iter().cloned().collect::<BTreeSet<_>>();
+    let mut targets = match target_selection {
+        TargetSelection::All => declared.to_vec(),
+        TargetSelection::DefaultCpu(cpu_target) => {
+            if declared_set.contains(cpu_target) {
+                vec![cpu_target.clone()]
+            } else {
+                Vec::new()
+            }
+        }
+        TargetSelection::Explicit(target_filter) => {
+            for target in target_filter {
+                if !declared_set.contains(target) {
+                    bail!("challenge {challenge_name} does not declare requested target {target}");
+                }
+            }
+            declared
+                .iter()
+                .filter(|target| target_filter.contains(*target))
+                .cloned()
+                .collect()
+        }
+    };
     targets.sort();
     Ok(targets)
 }

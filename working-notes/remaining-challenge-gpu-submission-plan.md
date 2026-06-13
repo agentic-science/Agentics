@@ -33,7 +33,7 @@ After strict required-nullable challenge contracts are fixed, finish the remaini
 - [x] Update the Frontier-CS private asset refresh generator so regenerated private overlays emit strict run/session manifests.
 - [x] Normalize stale persistent private-bundle backup objects and restore the repaired overlays into production object storage.
 - [x] Verify production GPU worker scheduling by submitting GPU challenges with `agentics-official`.
-- [ ] Get a successful GPU challenge result after the host GPU is no longer saturated by non-Agentics processes.
+- [x] Get a successful GPU challenge result after the host GPU is no longer saturated by non-Agentics processes.
 - [x] Clean stale solution wording where the solution is already meaningful.
 - [x] Record a production-submission solution audit checklist.
 - [x] Replace cheap/public-only baseline solutions with meaningful baselines or explicitly defer them with challenge-specific reasons.
@@ -41,11 +41,13 @@ After strict required-nullable challenge contracts are fixed, finish the remaini
 
 ## Solution Audit Snapshot
 
-The first audit classified these as truly cheap or public-only and not yet ready for broad production submission: `editor-width-discovery-frontier-cs-algorithmic-122`, `heap-tree-sum-frontier-cs-algorithmic-209`, `imagenet-200k`, `imagenet-500k`, `imagenet-1m`, `imagenet-2-5m`, `imagenet-5m`, `limited-shuffle-restore-frontier-cs-algorithmic-59`, `line-recovery-frontier-cs-algorithmic-117`, `llm-sql-small`, `llm-sql-large`, `palindromic-grid-paths-frontier-cs-algorithmic-256`, `symreg-sincos`, `symreg-mccormick`, `symreg-mixed-polyexp`, `symreg-peaks`, `symreg-ripple`, and `uniform-cave-explorer-frontier-cs-algorithmic-80`.
+The 2026-06-13 solution audit reduced the broad not-submit-ready bucket to 68 explicitly deferred solutions. The local readiness scanner now classifies 180 checked-in solutions as submitter-ready and 68 as deferred.
 
 Follow-up solution work upgraded `cube-sphere-packing-frontier-cs-algorithmic-48`, `functional-cycle-reach-frontier-cs-algorithmic-252`, `hamiltonian-path-frontier-cs-algorithmic-5`, and `signed-rooted-tree-frontier-cs-algorithmic-57` into meaningful baseline submissions.
 
-The first audit found stale wording only, not behavior problems, in `distinct-bakery-types-frontier-cs-algorithmic-151`, `functional-cycle-reach-frontier-cs-algorithmic-128`, `poker-action-seeds-frontier-cs-algorithmic-115`, `repaired-road-set-frontier-cs-algorithmic-34`, `snake-path-minima-frontier-cs-algorithmic-148`, `sorted-mode-array-frontier-cs-algorithmic-183`, `world-map`, the `cant-late-*` family, and several GPU baseline READMEs.
+The metadata review also cleared stale wording for official-capable baselines including `distinct-bakery-types-frontier-cs-algorithmic-141`, `line-recovery-frontier-cs-algorithmic-117`, `llm-sql-small-frontier-cs-llm-sql-small`, `llm-sql-large-frontier-cs-llm-sql-large`, `palindromic-grid-paths-frontier-cs-algorithmic-256`, `poker-action-seeds-frontier-cs-algorithmic-143`, `repaired-road-set-frontier-cs-algorithmic-253`, `snake-path-minima-frontier-cs-algorithmic-233`, `sorted-mode-array-frontier-cs-algorithmic-257`, `treasure-hunt-choices-frontier-cs-algorithmic-70`, and `world-map-frontier-cs-algorithmic-6`.
+
+The remaining deferred set is documented in `working-notes/challenge-solution-baseline-audit.md` and mirrored in the `agentics-submit-baselines` default defer list. It includes live-failed CPU baselines, public-only smoke solutions, tiny interactive fixtures, cheap ImageNet and symbolic-regression baselines, and a handful of implementations that are valid only for small validation sizes.
 
 The GPU-dependent solution set for smoke and production scheduling checks is `cross-entropy-kernel`, `decoding-attn-kernel`, `flash-attn-kernel`, `fused-linear-ce-kernel`, `fused-linear-jsd-kernel`, `gdpa-attention-kernel`, `gemm-annoying`, `gemm-k-skewed`, `gemm-near-tile`, `gemm-rectangles`, `gemm-squares`, `gemm-transformer`, `group-gemm`, `mamba2-scan`, `mixed-gemm`, `qknorm`, `quant-dot-int4`, `ragged-attention`, `vector-add-2-24`, `vector-add-2-28`, and `vector-addition`.
 
@@ -64,15 +66,17 @@ The GPU-dependent solution set for smoke and production scheduling checks is `cr
 - The first GPU validation failures exposed two separate setup/runtime issues. The dedicated runner Docker bridge lacked `DOCKER-USER` egress rules, so dependency installation timed out, and an interim system-Python workaround broke Triton compilation because `Python.h` was missing.
 - The runner Docker egress fix now verifies scoped forwarding for the dedicated runner bridge during `prod::up`, `prod::check`, `rehearsal::up`, and `rehearsal::check`. `prod::check` also runs a real TLS probe from a runner container to `pypi.org:443`, which catches network-enabled evaluator setup failures before challenge jobs are claimed.
 - The Triton/Python fix restored uv-managed evaluator Python for coexecuted GPU setup scripts after runner egress was repaired. `agentics challenge-creator check` passes for both the main and dev challenge corpora after the restore.
-- The remaining GPU blocker is host-level contention, not Agentics scheduling. `nvidia-smi` showed six long-running `python3` processes owned by user `tengteng`, each using roughly 15 to 17 GiB of GPU memory, while the dedicated runner Docker daemon had no live containers. Agentics should not kill those external jobs. A future scheduler improvement could add a minimum-free-GPU-memory admission probe before claiming GPU jobs.
+- The previous GPU blocker was host-level contention, not Agentics scheduling. `nvidia-smi` showed six long-running `python3` processes owned by user `tengteng`, each using roughly 15 to 17 GiB of GPU memory, while the dedicated runner Docker daemon had no live containers. Agentics should not kill those external jobs. A future scheduler improvement could add a minimum-free-GPU-memory admission probe before claiming GPU jobs.
+- A later production status query confirmed completed official CUDA submissions for `vector-addition-frontier-cs-vector-addition-2-20` and `cross-entropy-kernel-frontier-cs-cross-entropy`, so the representative GPU result requirement is now fixed.
 - GPU baseline solution README and manifest notes were cleaned where the implementation is an honest PyTorch, FlashInfer, or Triton baseline. Public-only and token-flood solutions intentionally keep honest smoke/public-only wording.
 - `working-notes/challenge-solution-baseline-audit.md` now tracks ready baselines and solutions that should stay out of broad production submission until they are replaced.
-- `agentics-submit-baselines` now provides the resumable production baseline submitter. It reads the normal local agent token source, skips known deferred solutions by default, submits one challenge-target pair at a time, waits to terminal state, records JSONL progress, and sleeps five seconds before continuing.
+- `agentics-submit-baselines` now provides the resumable production baseline submitter. It reads the normal local agent token source, skips known deferred solutions by default, defaults broad runs to `linux-arm64-cpu`, submits one challenge-target pair at a time, waits to terminal state, records JSONL progress, and sleeps five seconds before continuing.
 - Submitter dry-run against production succeeded for the first three discovered challenge-target pairs.
 - A live submitter smoke for `hello-world-rs/linux-arm64-cpu` succeeded with submission `b12fae78-18d5-45d6-92b9-53f04231e887`.
 - A bounded CPU live pass submitted five challenges: `advertisement-rectangle-placement-frontier-cs-algorithmic-147` and `almost-monochromatic-cycle-frontier-cs-algorithmic-24` completed, while `adaptive-impostor-search-frontier-cs-algorithmic-245`, `adventure-rank-segmentation-frontier-cs-algorithmic-61`, and `average-permutation-frontier-cs-algorithmic-124` failed. This exposed that many still-labeled smoke solutions were not covered by the hardcoded defer list.
 - `agentics-submit-baselines` now also defers local solutions whose README or manifest still says smoke/public-only unless `--include-deferred` is passed. `adaptive-impostor-search-frontier-cs-algorithmic-245` and `average-permutation-frontier-cs-algorithmic-124` were added to the default defer list because their live official runs failed despite not being marked smoke.
-- Broad CPU baseline submission can now run through `just prod::submit-baselines --target linux-arm64-cpu`. Broad GPU baseline submission remains intentionally deferred until host GPU contention clears.
+- A focused metadata review cleaned stale wording for official-capable baselines and expanded the default defer list to the 68 still-deferred solutions. The submitter now sees 180 ready solutions and 68 deferred solutions in the checked-in corpus.
+- Broad CPU baseline submission can now run through `just prod::submit-baselines`. Broad GPU baseline submission can use the same submitter with an explicit CUDA target or `--all-targets` once the operator wants to spend the GPU time.
 
 ## Track 1: Make GPU Workers Reliable In Dev, Rehearsal, And Production
 
@@ -109,7 +113,7 @@ The GPU-dependent solution set for smoke and production scheduling checks is `cr
 ## Track 4: Rust Production Baseline Submitter
 
 - Add an ops-only Rust binary, for example `agentics-submit-baselines`, rather than a tracked shell script.
-- Inputs should include API base URL, challenge repo path, optional allowlist file, optional target filter, delay seconds defaulting to 5, and a dry-run mode.
+- Inputs should include API base URL, challenge repo path, optional allowlist file, optional target filter, an explicit all-targets mode, delay seconds defaulting to 5, and a dry-run mode. Broad runs without target flags should submit CPU targets only.
 - Token should come from the normal local `agentics` CLI config or an explicit secret source; the submitter must not print bearer tokens or write them into logs.
 - The submitter should discover published challenges from the production API, fetch each challenge detail, read `spec.targets`, find matching test solutions by challenge name, and skip challenges without ready meaningful solutions.
 - For each challenge and target, submit one solution, wait until terminal state, record the submission ID and final status, sleep 5 seconds, and continue.

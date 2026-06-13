@@ -1,8 +1,8 @@
 use std::fs;
 
 use super::{
-    BaselineStateRecord, build_deferlist, name_set_from_args, resumable_submission_id,
-    solution_defer_marker, validate_api_base_url,
+    BaselineStateRecord, TargetSelection, build_deferlist, name_set_from_args,
+    resumable_submission_id, select_declared_targets, solution_defer_marker, validate_api_base_url,
 };
 
 #[test]
@@ -13,10 +13,24 @@ fn default_deferlist_is_disabled_when_requested() {
 }
 
 #[test]
-fn default_deferlist_keeps_public_smoke_and_allows_upgraded_baselines() {
+fn default_deferlist_keeps_known_weak_and_allows_upgraded_baselines() {
     let deferlist = build_deferlist(false, None).expect("deferlist");
 
-    assert!(deferlist.contains(&"world-map-frontier-cs-algorithmic-6".parse().expect("name")));
+    assert!(
+        deferlist.contains(
+            &"uniform-cave-explorer-frontier-cs-algorithmic-80"
+                .parse()
+                .expect("name")
+        )
+    );
+    assert!(
+        deferlist.contains(
+            &"adaptive-impostor-search-frontier-cs-algorithmic-245"
+                .parse()
+                .expect("name")
+        )
+    );
+    assert!(!deferlist.contains(&"world-map-frontier-cs-algorithmic-6".parse().expect("name")));
     assert!(
         !deferlist.contains(
             &"functional-cycle-reach-frontier-cs-algorithmic-252"
@@ -88,4 +102,73 @@ fn baseline_submitter_resumes_nonterminal_record() {
         record.submission_id
     );
     assert!(resumable_submission_id(Some(&record), true).is_none());
+}
+
+#[test]
+fn default_target_selection_is_cpu_only() {
+    let selection = TargetSelection::from_args(&[], false).expect("selection");
+    let challenge_name = "multi-target".parse().expect("challenge name");
+    let declared = [
+        "linux-arm64-cuda".parse().expect("cuda target"),
+        "linux-arm64-cpu".parse().expect("cpu target"),
+    ];
+
+    let selected =
+        select_declared_targets(&challenge_name, &declared, &selection).expect("selected targets");
+
+    assert_eq!(
+        selected,
+        vec!["linux-arm64-cpu".parse().expect("cpu target")]
+    );
+}
+
+#[test]
+fn default_target_selection_skips_gpu_only_challenges() {
+    let selection = TargetSelection::from_args(&[], false).expect("selection");
+    let challenge_name = "gpu-only".parse().expect("challenge name");
+    let declared = ["linux-arm64-cuda".parse().expect("cuda target")];
+
+    let selected =
+        select_declared_targets(&challenge_name, &declared, &selection).expect("selected targets");
+
+    assert!(selected.is_empty());
+}
+
+#[test]
+fn all_targets_selection_keeps_every_declared_target() {
+    let selection = TargetSelection::from_args(&[], true).expect("selection");
+    let challenge_name = "multi-target".parse().expect("challenge name");
+    let declared = [
+        "linux-arm64-cuda".parse().expect("cuda target"),
+        "linux-arm64-cpu".parse().expect("cpu target"),
+    ];
+
+    let selected =
+        select_declared_targets(&challenge_name, &declared, &selection).expect("selected targets");
+
+    assert_eq!(
+        selected,
+        vec![
+            "linux-arm64-cpu".parse().expect("cpu target"),
+            "linux-arm64-cuda".parse().expect("cuda target")
+        ]
+    );
+}
+
+#[test]
+fn explicit_target_selection_rejects_missing_target() {
+    let selection =
+        TargetSelection::from_args(&["linux-arm64-cpu".parse().expect("cpu target")], false)
+            .expect("selection");
+    let challenge_name = "gpu-only".parse().expect("challenge name");
+    let declared = ["linux-arm64-cuda".parse().expect("cuda target")];
+
+    let error = select_declared_targets(&challenge_name, &declared, &selection)
+        .expect_err("missing explicit target should fail");
+
+    assert!(
+        error
+            .to_string()
+            .contains("does not declare requested target")
+    );
 }
