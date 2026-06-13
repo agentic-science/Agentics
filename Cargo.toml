@@ -19,7 +19,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 license = "AGPL-3.0-only"
 repository = "https://github.com/agentic-science/Agentics"
@@ -64,15 +64,15 @@ unwrap_used = "warn"
 wildcard_imports = "warn"
 
 [workspace.dependencies]
-agentics-error = { path = "crates/error", version = "0.3.0" }
-agentics-dev-checks = { path = "crates/dev-checks", version = "0.3.0" }
-agentics-domain = { path = "crates/domain", version = "0.3.0" }
-agentics-contracts = { path = "crates/contracts", version = "0.3.0" }
-agentics-storage = { path = "crates/storage", version = "0.3.0" }
-agentics-config = { path = "crates/config", version = "0.3.0" }
-agentics-persistence = { path = "crates/persistence", version = "0.3.0" }
-agentics-services = { path = "crates/services", version = "0.3.0" }
-agentics-runner = { path = "crates/runner", version = "0.3.0" }
+agentics-error = { path = "crates/error", version = "0.4.0" }
+agentics-dev-checks = { path = "crates/dev-checks", version = "0.4.0" }
+agentics-domain = { path = "crates/domain", version = "0.4.0" }
+agentics-contracts = { path = "crates/contracts", version = "0.4.0" }
+agentics-storage = { path = "crates/storage", version = "0.4.0" }
+agentics-config = { path = "crates/config", version = "0.4.0" }
+agentics-persistence = { path = "crates/persistence", version = "0.4.0" }
+agentics-services = { path = "crates/services", version = "0.4.0" }
+agentics-runner = { path = "crates/runner", version = "0.4.0" }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

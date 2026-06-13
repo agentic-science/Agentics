@@ -13,8 +13,8 @@ agentics-persistence = { workspace = true }
 agentics-runner = { workspace = true }
 agentics-services = { workspace = true }
 agentics-storage = { workspace = true }
-api-server = { package = "agentics-api-server", path = "../api-server", version = "0.3.0" }
-worker = { package = "agentics-worker", path = "../worker", version = "0.3.0" }
+api-server = { package = "agentics-api-server", path = "../api-server", version = "0.4.0" }
+worker = { package = "agentics-worker", path = "../worker", version = "0.4.0" }
 
 tokio = { workspace = true }
 tracing = { workspace = true }
