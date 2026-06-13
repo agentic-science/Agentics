@@ -16,7 +16,6 @@ base64 = { workspace = true }
 clap = { version = "4", features = ["derive"] }
 dirs = "6"
 envy = { workspace = true }
-ignore = { workspace = true }
 reqwest = { workspace = true }
 secrecy = { workspace = true }
 serde = { workspace = true }
@@ -29,7 +28,6 @@ agentics-runner = { workspace = true }
 agentics-storage = { workspace = true }
 tokio = { workspace = true }
 toml = "1.0"
-zip = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

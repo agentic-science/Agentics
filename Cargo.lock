@@ -33,7 +33,6 @@ dependencies = [
  "clap",
  "dirs",
  "envy",
- "ignore",
  "reqwest",
  "secrecy",
  "serde",
@@ -43,7 +42,6 @@ dependencies = [
  "tokio",
  "toml",
  "wiremock",
- "zip",
 ]
 
 [[package]]
@@ -105,6 +103,7 @@ dependencies = [
  "chrono",
  "garde",
  "hex",
+ "ignore",
  "schemars",
  "serde",
  "serde_json",

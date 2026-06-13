@@ -1,15 +1,13 @@
 //! Submit checked-in challenge baseline solutions to an Agentics deployment.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::{self, File, OpenOptions};
-use std::io::{Cursor, Seek, Write};
+use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use agentics_contracts::validation::archive::NormalizedArchivePath;
 use agentics_contracts::zip_project::{
-    MAX_ZIP_PROJECT_ARTIFACT_BYTES, MAX_ZIP_PROJECT_FILE_COUNT, MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
-    ZIP_PROJECT_MANIFEST_FILE, ZipProjectManifest, validate_zip_project_archive_envelope,
+    ZIP_PROJECT_MANIFEST_FILE, ZipProjectWorkspacePackage, package_zip_project_workspace,
 };
 use agentics_domain::models::challenge::{ChallengeDetailResponse, ChallengeListResponse};
 use agentics_domain::models::ids::SolutionSubmissionId;
@@ -21,13 +19,10 @@ use anyhow::{Context, Result, bail};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use clap::Parser;
-use ignore::{DirEntry, WalkBuilder};
 use reqwest::{Client, Url};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use tokio::time::{Instant, sleep};
-use zip::CompressionMethod;
-use zip::write::SimpleFileOptions;
 
 const DEFAULT_API_BASE_URL: &str = "https://agentics.reify.ing";
 const DEFAULT_CHALLENGE_REPO: &str = "challenge-repos/agentics-challenges";
@@ -126,40 +121,7 @@ struct CliConfig {
     token: Option<String>,
 }
 
-#[derive(Debug, Clone)]
-struct SolutionPackage {
-    bytes: Vec<u8>,
-    file_count: usize,
-    uncompressed_bytes: u64,
-}
-
-#[derive(Debug, Clone)]
-struct PackageFile {
-    path: PathBuf,
-    archive_name: String,
-    unix_permissions: u32,
-}
-
-#[derive(Debug, Clone, Copy)]
-struct PackageLimits {
-    max_zip_bytes: u64,
-    max_file_count: usize,
-    max_uncompressed_bytes: u64,
-}
-
-impl PackageLimits {
-    const DEFAULT: Self = Self {
-        max_zip_bytes: MAX_ZIP_PROJECT_ARTIFACT_BYTES,
-        max_file_count: MAX_ZIP_PROJECT_FILE_COUNT,
-        max_uncompressed_bytes: MAX_ZIP_PROJECT_UNCOMPRESSED_BYTES,
-    };
-}
-
-#[derive(Debug, Clone)]
-struct CollectedPackageFiles {
-    files: Vec<PackageFile>,
-    uncompressed_bytes: u64,
-}
+type SolutionPackage = ZipProjectWorkspacePackage;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct BaselineStateRecord {
@@ -902,219 +864,7 @@ fn join_url(base: &Url, path: &str) -> Result<Url> {
 }
 
 fn package_solution_workspace(workspace_dir: &Path) -> Result<SolutionPackage> {
-    package_solution_workspace_with_limits(workspace_dir, PackageLimits::DEFAULT)
-}
-
-fn package_solution_workspace_with_limits(
-    workspace_dir: &Path,
-    limits: PackageLimits,
-) -> Result<SolutionPackage> {
-    let workspace_dir = workspace_dir
-        .canonicalize()
-        .with_context(|| format!("resolve workspace {}", workspace_dir.display()))?;
-    if !workspace_dir.is_dir() {
-        bail!("workspace is not a directory: {}", workspace_dir.display());
-    }
-
-    let manifest_path = workspace_dir.join(REQUIRED_MANIFEST);
-    if !fs::exists(&manifest_path)
-        .with_context(|| format!("inspect {}", manifest_path.display()))?
-    {
-        bail!("{REQUIRED_MANIFEST} must exist at the workspace root");
-    }
-    if !manifest_path.is_file() {
-        bail!("{REQUIRED_MANIFEST} must be a file");
-    }
-    let manifest_raw = fs::read_to_string(&manifest_path)
-        .with_context(|| format!("read {}", manifest_path.display()))?;
-    let manifest = ZipProjectManifest::parse_json(&manifest_raw)?;
-
-    let mut required_scripts = Vec::new();
-    if let Some(setup) = &manifest.commands.setup {
-        required_scripts.push(setup);
-    }
-    if let Some(build) = &manifest.commands.build {
-        required_scripts.push(build);
-    }
-    required_scripts.push(&manifest.commands.run);
-    for script in &required_scripts {
-        let script_path = workspace_dir.join(script.as_path());
-        if !fs::exists(&script_path)
-            .with_context(|| format!("inspect {}", script_path.display()))?
-        {
-            bail!("{script} must exist before packaging");
-        }
-        if !script_path.is_file() {
-            bail!("{script} must be a file");
-        }
-    }
-
-    let collected = collect_package_files(&workspace_dir, limits)?;
-    let files = collected.files;
-    if !files
-        .iter()
-        .any(|file| file.archive_name == REQUIRED_MANIFEST)
-    {
-        bail!("{REQUIRED_MANIFEST} is excluded by .gitignore or package filters");
-    }
-    for script in required_scripts {
-        if !files
-            .iter()
-            .any(|file| file.archive_name == script.as_str())
-        {
-            bail!("{script} is excluded by .gitignore or package filters");
-        }
-    }
-    if files.is_empty() {
-        bail!("workspace contains no packageable files");
-    }
-
-    let bytes = write_zip_archive(&files, limits)?;
-    let zip_bytes = u64::try_from(bytes.len()).context("zip archive length exceeds u64")?;
-    if zip_bytes > limits.max_zip_bytes {
-        bail!(
-            "solution archive must be at most {} bytes after compression",
-            limits.max_zip_bytes
-        );
-    }
-    validate_zip_project_archive_envelope(&bytes)?;
-    Ok(SolutionPackage {
-        bytes,
-        file_count: files.len(),
-        uncompressed_bytes: collected.uncompressed_bytes,
-    })
-}
-
-fn collect_package_files(
-    workspace_dir: &Path,
-    limits: PackageLimits,
-) -> Result<CollectedPackageFiles> {
-    let mut builder = WalkBuilder::new(workspace_dir);
-    builder
-        .git_ignore(true)
-        .git_global(true)
-        .git_exclude(true)
-        .hidden(true)
-        .parents(true)
-        .require_git(false)
-        .filter_entry(should_descend);
-
-    let mut files = Vec::new();
-    let mut uncompressed_bytes = 0u64;
-    for entry in builder.build() {
-        let entry = entry.with_context(|| format!("walk workspace {}", workspace_dir.display()))?;
-        if entry.path() == workspace_dir || !entry.file_type().is_some_and(|kind| kind.is_file()) {
-            continue;
-        }
-        let relative = entry
-            .path()
-            .strip_prefix(workspace_dir)
-            .with_context(|| format!("compute relative path for {}", entry.path().display()))?;
-        let archive_name = archive_name(relative)?;
-        let metadata = entry
-            .metadata()
-            .with_context(|| format!("stat {}", entry.path().display()))?;
-        if files.len() >= limits.max_file_count {
-            bail!(
-                "solution workspace must contain at most {} packageable files",
-                limits.max_file_count
-            );
-        }
-        uncompressed_bytes = uncompressed_bytes
-            .checked_add(metadata.len())
-            .context("solution workspace is too large")?;
-        if uncompressed_bytes > limits.max_uncompressed_bytes {
-            bail!(
-                "solution workspace must contain at most {} bytes before compression",
-                limits.max_uncompressed_bytes
-            );
-        }
-        files.push(PackageFile {
-            path: entry.path().to_path_buf(),
-            archive_name,
-            unix_permissions: unix_permissions(&metadata),
-        });
-    }
-
-    files.sort_by(|a, b| a.archive_name.cmp(&b.archive_name));
-    Ok(CollectedPackageFiles {
-        files,
-        uncompressed_bytes,
-    })
-}
-
-fn should_descend(entry: &DirEntry) -> bool {
-    let Some(name) = entry.file_name().to_str() else {
-        return false;
-    };
-    !matches!(
-        name,
-        ".git"
-            | "target"
-            | "node_modules"
-            | "__pycache__"
-            | ".pytest_cache"
-            | ".ruff_cache"
-            | ".mypy_cache"
-            | ".venv"
-            | "dist"
-            | "build"
-            | ".next"
-    )
-}
-
-fn write_zip_archive(files: &[PackageFile], limits: PackageLimits) -> Result<Vec<u8>> {
-    let cursor = Cursor::new(Vec::new());
-    let mut archive = zip::ZipWriter::new(cursor);
-    for file in files {
-        let options = SimpleFileOptions::default()
-            .compression_method(CompressionMethod::Deflated)
-            .unix_permissions(file.unix_permissions);
-        archive
-            .start_file(&file.archive_name, options)
-            .with_context(|| format!("add {} to zip", file.archive_name))?;
-        copy_file_to_archive(file, &mut archive)?;
-        if current_archive_len(&archive)? > limits.max_zip_bytes {
-            bail!(
-                "solution archive must be at most {} bytes after compression",
-                limits.max_zip_bytes
-            );
-        }
-    }
-    Ok(archive.finish()?.into_inner())
-}
-
-fn current_archive_len(archive: &zip::ZipWriter<Cursor<Vec<u8>>>) -> Result<u64> {
-    let cursor = archive
-        .get_ref()
-        .context("zip writer closed before package finalization")?;
-    u64::try_from(cursor.get_ref().len()).context("zip archive length exceeds u64")
-}
-
-fn copy_file_to_archive<W>(file: &PackageFile, archive: &mut zip::ZipWriter<W>) -> Result<()>
-where
-    W: Write + Seek,
-{
-    let mut input =
-        File::open(&file.path).with_context(|| format!("open {}", file.path.display()))?;
-    std::io::copy(&mut input, archive)
-        .with_context(|| format!("write {} to zip", file.archive_name))
-        .map(|_| ())
-}
-
-fn archive_name(path: &Path) -> Result<String> {
-    Ok(NormalizedArchivePath::from_relative_path(path, "solution package path")?.to_string())
-}
-
-#[cfg(unix)]
-fn unix_permissions(metadata: &std::fs::Metadata) -> u32 {
-    use std::os::unix::fs::PermissionsExt;
-    metadata.permissions().mode() & 0o777
-}
-
-#[cfg(not(unix))]
-fn unix_permissions(_metadata: &std::fs::Metadata) -> u32 {
-    0o644
+    Ok(package_zip_project_workspace(workspace_dir)?)
 }
 
 #[cfg(test)]

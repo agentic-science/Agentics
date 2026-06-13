@@ -18,6 +18,12 @@ pub use agentics_domain::zip_project::{
 use agentics_error::{Result, ServiceError};
 use sha2::{Digest, Sha256};
 
+mod package;
+pub use package::{
+    ZipProjectWorkspacePackage, ZipProjectWorkspacePackageLimits, package_zip_project_workspace,
+    package_zip_project_workspace_with_limits,
+};
+
 pub const ZIP_PROJECT_MANIFEST_FILE: &str = "agentics.solution.json";
 pub const ZIP_PROJECT_PROTOCOL: &str = "zip_project";
 pub const ZIP_PROJECT_PROTOCOL_VERSION: u16 = 1;
