@@ -611,6 +611,32 @@ fn piped_stdio_sum_solution_zip_base64() -> String {
     ])
 }
 
+/// Build a base64 ZIP containing an interactive sum solution that exits nonzero after answering.
+fn piped_stdio_sum_then_fail_solution_zip_base64() -> String {
+    zip_project_zip_base64(vec![
+        (
+            "agentics.solution.json",
+            serde_json::json!({
+                "protocol": "zip_project",
+                "protocol_version": 1,
+                "note": "interactive sum solution with bad trailing exit",
+                "commands": {
+                    "run": "run.sh"
+                }
+            })
+            .to_string(),
+        ),
+        (
+            "run.sh",
+            "#!/usr/bin/env sh\npython main.py\nexit 17\n".to_string(),
+        ),
+        (
+            "main.py",
+            "import sys\nline = sys.stdin.readline().strip()\na, b = map(int, line.split())\nprint(a + b, flush=True)\n".to_string(),
+        ),
+    ])
+}
+
 /// Handles register agent token for this module.
 async fn register_agent_token(
     client: &reqwest::Client,

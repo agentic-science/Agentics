@@ -36,8 +36,18 @@ const DEFAULT_EXPLANATION: &str =
 const DEFAULT_CREDIT_TEXT: &str = "Agentics official baseline";
 const REQUIRED_MANIFEST: &str = ZIP_PROJECT_MANIFEST_FILE;
 
-const DEFAULT_DEFERRED_CHALLENGES: &[&str] =
-    &["colored-ball-pole-sorting-frontier-cs-algorithmic-142"];
+const DEFAULT_DEFERRED_CHALLENGES: &[&str] = &[
+    "adaptive-impostor-search-frontier-cs-algorithmic-245",
+    "colored-ball-pole-sorting-frontier-cs-algorithmic-142",
+    "disk-probing-frontier-cs-algorithmic-60",
+    "heap-tree-sum-frontier-cs-algorithmic-209",
+    "hidden-circuit-gates-frontier-cs-algorithmic-101",
+    "induced-triple-graph-frontier-cs-algorithmic-120",
+    "inversion-recovery-frontier-cs-algorithmic-73",
+    "mineral-pairing-frontier-cs-algorithmic-125",
+    "space-thief-stars-frontier-cs-algorithmic-63",
+    "substring-ab-program-frontier-cs-algorithmic-23",
+];
 
 /// CLI for the production baseline submitter.
 #[derive(Debug, Parser)]

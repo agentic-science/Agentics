@@ -396,6 +396,66 @@ async fn worker_completes_piped_stdio_solution_submission(pool: sqlx::PgPool) {
     );
 }
 
+/// Verifies that a trusted piped-stdio evaluator result is persisted after participant protocol closure even when the participant exits nonzero.
+#[sqlx::test(migrations = "../migrations")]
+async fn worker_persists_piped_stdio_result_when_participant_exits_badly(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("failed to create storage tempdir");
+    let challenges = tempfile::tempdir().expect("failed to create challenge tempdir");
+    create_piped_stdio_challenge(challenges.path());
+    let config = test_config(storage.path(), challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let client = reqwest::Client::new();
+
+    let token = register_agent_token(&client, &app, "piped-stdio-bad-exit-agent").await;
+    let validation_response: serde_json::Value = client
+        .post(api_url(&app, "/api/agent/validation-runs"))
+        .header("Authorization", format!("Bearer {token}"))
+        .json(&serde_json::json!({
+            "challenge_name": published_challenge_name(&pool, "interactive-sum").await,
+            "target": "linux-arm64-cpu",
+            "artifact_base64": piped_stdio_sum_then_fail_solution_zip_base64(),
+            "explanation": "piped stdio validation with participant nonzero after answer"
+        }))
+        .send()
+        .await
+        .expect("failed to create validation run")
+        .json()
+        .await
+        .expect("failed to decode create validation response");
+    let validation_id = validation_response["id"]
+        .as_str()
+        .expect("missing validation id");
+
+    run_worker_once(&pool, &config).await;
+
+    let validation: serde_json::Value = client
+        .get(api_url(
+            &app,
+            &format!("/api/agent/validation-runs/{validation_id}"),
+        ))
+        .header("Authorization", format!("Bearer {token}"))
+        .send()
+        .await
+        .expect("failed to get validation run")
+        .json()
+        .await
+        .expect("failed to decode validation response");
+    let validation_job_error: (Option<String>,) = sqlx::query_as(
+        "SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1::uuid",
+    )
+    .bind(validation_id)
+    .fetch_one(&pool)
+    .await
+    .expect("failed to query piped-stdio validation job error");
+
+    assert_eq!(
+        validation["status"], "completed",
+        "piped_stdio evaluator result should survive participant trailing nonzero exit: {validation:#}; job_error={:?}",
+        validation_job_error.0
+    );
+    assert_eq!(validation["evaluation"]["validation_summary"]["score"], 1.0);
+}
+
 /// Verifies that the worker completes a coexecuted-evaluator without exposing private data to validation.
 #[sqlx::test(migrations = "../migrations")]
 async fn worker_completes_coexecuted_benchmark_submission(pool: sqlx::PgPool) {

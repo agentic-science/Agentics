@@ -158,4 +158,4 @@ Assigned agent: Halley.
 - 2026-06-13: Franklin validated six constructive algorithmic baselines.
 - 2026-06-13: Pascal validated five of six Cant-Late tail and constructive baselines; `colored-ball-pole-sorting` remains deferred because upstream official-shaped cases still fail.
 - 2026-06-13: Avicenna validated six interactive and hidden-state baselines with public evaluator checks and targeted synthetic/upstream checks.
-- 2026-06-13: The default production baseline submitter defer list was narrowed from 68 challenges to only `colored-ball-pole-sorting-frontier-cs-algorithmic-142`.
+- 2026-06-13: The default production baseline submitter defer list was narrowed from 68 challenges to `colored-ball-pole-sorting-frontier-cs-algorithmic-142`, then later expanded to 10 entries after a production pass found eight piped-stdio baselines that still need official-protocol-safe replay evidence and `substring-ab-program-frontier-cs-algorithmic-23` was deferred for official-scale checker work.

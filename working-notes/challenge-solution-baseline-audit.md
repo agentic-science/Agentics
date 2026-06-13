@@ -6,8 +6,8 @@ This note tracks production-submission readiness for checked-in `agentics-challe
 
 The 2026-06-13 metadata review split the previous broad “not submitter-ready” bucket into two groups:
 
-- 247 solutions are now considered submitter-ready by the local readiness scanner.
-- 1 solution remains deferred by the production baseline submitter.
+- 238 solutions are considered submitter-ready by the default production baseline submitter.
+- 10 solutions are deferred by default because they are either known hard-scale baselines or recently showed official interactive protocol safety failures.
 
 The submitter source of truth is `agentics-submit-baselines`: it defers the explicit default list and still has a secondary text-marker guard for local solution directories whose README or manifest says `smoke`, `cheap public`, `public-only`, `tiny public`, or equivalent language.
 
@@ -46,9 +46,18 @@ The 2026-06-13 review also cleared stale wording for many existing official-capa
 
 ## Deferred From Broad Production Submission
 
-Only one checked-in solution remains out of broad production submission:
+Ten checked-in solutions are currently out of broad production submission:
 
 - `colored-ball-pole-sorting-frontier-cs-algorithmic-142`: still requires a stronger constructive algorithm. The checked-in solver passes the tiny public sorted case but fails upstream official-shaped case 1, and a sweep over historical Frontier-CS generated candidates did not find a usable solution under the 2,000,000-operation cap.
+- `substring-ab-program-frontier-cs-algorithmic-23`: public validation passes, but official-shaped separated-evaluator cases `13..22` currently exceed the evaluator budget. This is deferred until the checker path or baseline is made official-scale.
+- `adaptive-impostor-search-frontier-cs-algorithmic-245`: production official piped-stdio run wedged before a structured result. Keep deferred until official replay proves the baseline is protocol-safe.
+- `disk-probing-frontier-cs-algorithmic-60`: production official piped-stdio run wedged before a structured result. Keep deferred until official replay proves the baseline is protocol-safe.
+- `heap-tree-sum-frontier-cs-algorithmic-209`: production official piped-stdio run wedged before a structured result. Keep deferred until official replay proves the baseline is protocol-safe.
+- `hidden-circuit-gates-frontier-cs-algorithmic-101`: production official piped-stdio run wedged before a structured result. Keep deferred until official replay proves the baseline is protocol-safe.
+- `induced-triple-graph-frontier-cs-algorithmic-120`: production official piped-stdio run wedged before a structured result even though the wrapper already had partial timeout handling. Keep deferred until wrapper and baseline replay are verified together.
+- `inversion-recovery-frontier-cs-algorithmic-73`: production official piped-stdio run wedged before a structured result. Keep deferred until official replay proves the baseline is protocol-safe.
+- `mineral-pairing-frontier-cs-algorithmic-125`: production official piped-stdio run wedged before a structured result even though the wrapper already had partial timeout handling. Keep deferred until wrapper and baseline replay are verified together.
+- `space-thief-stars-frontier-cs-algorithmic-63`: production official piped-stdio run wedged before a structured result. Keep deferred until official replay proves the baseline is protocol-safe.
 
 ## Upgraded From The Deferred Set
 

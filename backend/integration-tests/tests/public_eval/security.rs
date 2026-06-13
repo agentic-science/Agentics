@@ -370,7 +370,10 @@ async fn worker_rejects_symlink_declared_output(pool: sqlx::PgPool) {
     .fetch_one(&pool)
     .await
     .expect("failed to query failed job");
-    assert!(last_error.contains("declared output file `path.txt` is a symlink"));
+    assert!(
+        last_error.contains("produced a symlink in its output tree"),
+        "last_error={last_error}"
+    );
 }
 
 /// Verifies that worker reports build phase failure.
@@ -596,19 +599,10 @@ python main.py
         .json()
         .await
         .expect("failed to decode validation response");
-    assert_eq!(validation["status"], "failed");
-    assert_eq!(validation["evaluation"]["status"], "failed");
-
-    let last_error: (String,) = sqlx::query_as(
-        "SELECT last_error FROM evaluation_jobs WHERE solution_submission_id = $1::uuid",
-    )
-    .bind(validation_id)
-    .fetch_one(&pool)
-    .await
-    .expect("failed to query failed job");
-    assert!(
-        last_error.0.contains("\"phase\":\"run\""),
-        "last_error={}",
-        last_error.0
+    assert_eq!(validation["status"], "completed");
+    assert_eq!(validation["evaluation"]["status"], "completed");
+    assert_eq!(
+        validation["evaluation"]["validation_summary"]["score"],
+        serde_json::json!(0.0)
     );
 }

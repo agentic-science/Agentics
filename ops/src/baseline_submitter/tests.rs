@@ -1,4 +1,7 @@
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf;
+use std::process::Command;
 
 use super::{
     BaselineStateRecord, TargetSelection, build_deferlist, name_set_from_args,
@@ -16,23 +19,26 @@ fn default_deferlist_is_disabled_when_requested() {
 fn default_deferlist_keeps_known_weak_and_allows_upgraded_baselines() {
     let deferlist = build_deferlist(false, None).expect("deferlist");
 
-    assert!(
-        deferlist.contains(
-            &"colored-ball-pole-sorting-frontier-cs-algorithmic-142"
-                .parse()
-                .expect("name")
-        )
-    );
+    for challenge_name in [
+        "adaptive-impostor-search-frontier-cs-algorithmic-245",
+        "colored-ball-pole-sorting-frontier-cs-algorithmic-142",
+        "disk-probing-frontier-cs-algorithmic-60",
+        "heap-tree-sum-frontier-cs-algorithmic-209",
+        "hidden-circuit-gates-frontier-cs-algorithmic-101",
+        "induced-triple-graph-frontier-cs-algorithmic-120",
+        "inversion-recovery-frontier-cs-algorithmic-73",
+        "mineral-pairing-frontier-cs-algorithmic-125",
+        "space-thief-stars-frontier-cs-algorithmic-63",
+        "substring-ab-program-frontier-cs-algorithmic-23",
+    ] {
+        assert!(
+            deferlist.contains(&challenge_name.parse().expect("name")),
+            "{challenge_name} should be deferred"
+        );
+    }
     assert!(
         !deferlist.contains(
             &"uniform-cave-explorer-frontier-cs-algorithmic-80"
-                .parse()
-                .expect("name")
-        )
-    );
-    assert!(
-        !deferlist.contains(
-            &"adaptive-impostor-search-frontier-cs-algorithmic-245"
                 .parse()
                 .expect("name")
         )
@@ -94,6 +100,156 @@ fn baseline_submitter_rejects_remote_http_without_override() {
 fn baseline_submitter_allows_loopback_http() {
     validate_api_base_url(&"http://127.0.0.1:3110".parse().expect("url"))
         .expect("loopback HTTP should be allowed");
+}
+
+#[test]
+fn frontier_testlib_wrappers_have_case_timeouts() {
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("workspace root")
+        .to_path_buf();
+    let challenge_root = repo_root.join("challenge-repos/agentics-challenges/challenges");
+    let mut missing = Vec::new();
+
+    for entry in fs::read_dir(&challenge_root).expect("challenge root") {
+        let run_py = entry
+            .expect("challenge entry")
+            .path()
+            .join("v1/interactive-evaluator/run.py");
+        if !run_py.is_file() {
+            continue;
+        }
+        let contents = fs::read_to_string(&run_py).expect("wrapper source");
+        if contents.contains("Frontier-CS Testlib interactive evaluator")
+            && !contents.contains("timeout=case_timeout_sec")
+        {
+            missing.push(run_py);
+        }
+    }
+
+    assert!(
+        missing.is_empty(),
+        "Frontier-CS Testlib wrappers must convert blocked participants into structured evaluator results: {missing:?}"
+    );
+}
+
+#[test]
+fn frontier_testlib_wrapper_writes_result_on_interactor_timeout() {
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .expect("workspace root")
+        .to_path_buf();
+    let wrapper = repo_root
+        .join("challenge-repos/agentics-challenges/challenges/mineral-pairing-frontier-cs-algorithmic-125/v1/interactive-evaluator/run.py");
+    let temp = tempfile::tempdir().expect("tempdir");
+    let fake_bin = temp.path().join("bin");
+    let challenge_dir = temp.path().join("challenge");
+    let session_input_dir = temp.path().join("session-input");
+    let session_file = temp.path().join("session.json");
+    let output_path = temp.path().join("result.json");
+    fs::create_dir_all(&fake_bin).expect("fake bin dir");
+    fs::create_dir_all(challenge_dir.join("interactive-evaluator")).expect("challenge dir");
+    fs::create_dir_all(&session_input_dir).expect("session input dir");
+    fs::write(
+        fake_bin.join("g++"),
+        r#"#!/bin/sh
+set -eu
+out=""
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "-o" ]; then
+    shift
+    out="$1"
+  fi
+  shift || true
+done
+cat > "$out" <<'EOF'
+#!/bin/sh
+sleep 2
+EOF
+chmod +x "$out"
+"#,
+    )
+    .expect("fake g++");
+    fs::set_permissions(fake_bin.join("g++"), fs::Permissions::from_mode(0o755))
+        .expect("fake g++ permissions");
+    fs::write(
+        challenge_dir.join("interactive-evaluator/interactor.cpp"),
+        "int main() { return 0; }\n",
+    )
+    .expect("interactor source");
+    fs::write(session_input_dir.join("case.in"), "1\n").expect("case input");
+    fs::write(session_input_dir.join("case.ans"), "1\n").expect("case answer");
+    fs::write(
+        &session_file,
+        serde_json::json!({
+            "session_name": "timeout-fixture",
+            "metadata": {
+                "case_timeout_sec": 0.1,
+                "cases": [
+                    {
+                        "case_name": "case-1",
+                        "input_path": "case.in",
+                        "answer_path": "case.ans"
+                    }
+                ]
+            }
+        })
+        .to_string(),
+    )
+    .expect("session file");
+
+    let existing_path = std::env::var_os("PATH").unwrap_or_default();
+    let fake_path = format!("{}:{}", fake_bin.display(), existing_path.to_string_lossy());
+    let output = Command::new("python3")
+        .arg(&wrapper)
+        .arg("--challenge-dir")
+        .arg(&challenge_dir)
+        .arg("--session-file")
+        .arg(&session_file)
+        .arg("--session-input-dir")
+        .arg(&session_input_dir)
+        .arg("--output-path")
+        .arg(&output_path)
+        .arg("--mode")
+        .arg("validation")
+        .arg("--target")
+        .arg("linux-arm64-cpu")
+        .env("PATH", fake_path)
+        .output()
+        .expect("wrapper command");
+
+    assert!(
+        output.status.success(),
+        "wrapper should exit successfully after evaluator-authored failure: stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let result: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(output_path).expect("wrapper result json"))
+            .expect("valid result json");
+
+    assert_eq!(
+        result.get("status").and_then(serde_json::Value::as_str),
+        Some("failed")
+    );
+    assert_eq!(
+        result
+            .get("validation_summary")
+            .and_then(|summary| summary.get("protocol_errors"))
+            .and_then(serde_json::Value::as_i64),
+        Some(1)
+    );
+    let message = result
+        .get("public_results")
+        .and_then(serde_json::Value::as_array)
+        .and_then(|results| results.first())
+        .and_then(|result| result.get("message"))
+        .and_then(serde_json::Value::as_str)
+        .expect("message");
+    assert!(
+        message.contains("timed out"),
+        "timeout should be visible in structured diagnostics: {result}"
+    );
 }
 
 #[test]

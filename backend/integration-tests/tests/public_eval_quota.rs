@@ -286,7 +286,11 @@ python main.py
         "expected run phase failure, got: {last_error}"
     );
 
-    assert!(last_error.contains("\"reason\":\"non_zero_exit\""));
+    assert!(
+        last_error.contains("\"reason\":\"resource_limit\"")
+            || last_error.contains("No space left on device"),
+        "expected run quota failure, got: {last_error}"
+    );
 }
 
 /// Verifies that worker enforces platform-owned output file count limits.
