@@ -14,6 +14,7 @@ Product decision: runner infrastructure should not turn participant timeout, par
 - [x] Frontier-CS Testlib-style interactive wrappers preserve valid Testlib reports even when the interactor exits with a nonzero score/report code, and only classify nonzero interactor exit as protocol failure when no report was produced.
 - [x] Structured failed results include capped diagnostics and metrics such as `protocol_errors`, `case_count`, and `query_count` when the evaluator knows them.
 - [x] All Frontier-CS Testlib wrapper scripts now apply a per-case `case_timeout_sec` guard, defaulting to 20 seconds, so a blocked participant can become a structured failed result.
+- [x] Frontier-CS Testlib wrapper scripts no longer stop a multi-case official session just because a case scores zero. They stop early only for protocol failure, timeout, missing report, malformed output, or another evaluator-detected protocol error.
 - [x] `agentics-submit-baselines` defers the eight production-failed piped baselines by default until official replay proves they are protocol-safe.
 
 ## Submission Ledger
@@ -67,20 +68,35 @@ Product decision: runner infrastructure should not turn participant timeout, par
 
 ## Second Production Pass Interactive Failures
 
-The later CPU baseline pass found eight piped-stdio baselines that could still wedge official Testlib sessions before a structured result reached persistence. These are default-deferred until an official-private replay proves the solution and wrapper pair is protocol-safe.
+The later CPU baseline pass found eight piped-stdio baselines that could still wedge official Testlib sessions before a structured result reached persistence. The 2026-06-14 local official-private replay now proves the wrappers produce structured results instead of opaque failures, but the baselines remain default-deferred for production resubmission hygiene until we decide that known zero-score or protocol-failed baselines should be submitted broadly.
 
 | Challenge | Current action |
 | --- | --- |
-| `adaptive-impostor-search-frontier-cs-algorithmic-245` | Default-deferred; wrapper timeout guard added. |
-| `disk-probing-frontier-cs-algorithmic-60` | Default-deferred; wrapper timeout guard added. |
-| `heap-tree-sum-frontier-cs-algorithmic-209` | Default-deferred; wrapper timeout guard added. |
-| `hidden-circuit-gates-frontier-cs-algorithmic-101` | Default-deferred; wrapper timeout guard added. |
-| `induced-triple-graph-frontier-cs-algorithmic-120` | Default-deferred; wrapper timeout guard rechecked because older timeout handling still surfaced opaque production failure. |
-| `inversion-recovery-frontier-cs-algorithmic-73` | Default-deferred; wrapper timeout guard added. |
-| `mineral-pairing-frontier-cs-algorithmic-125` | Default-deferred; wrapper timeout guard rechecked because older timeout handling still surfaced opaque production failure. |
-| `space-thief-stars-frontier-cs-algorithmic-63` | Default-deferred; wrapper timeout guard added. |
+| `adaptive-impostor-search-frontier-cs-algorithmic-245` | Official-private replay wrote a structured result, exited evaluator 0, and replayed all 10 official cases with zero score. |
+| `disk-probing-frontier-cs-algorithmic-60` | Official-private replay wrote a structured failed result, exited evaluator 0, and stopped at case 1 on protocol error. |
+| `heap-tree-sum-frontier-cs-algorithmic-209` | Official-private replay wrote a structured failed result, exited evaluator 0, and stopped at case 1 on protocol error. |
+| `hidden-circuit-gates-frontier-cs-algorithmic-101` | Official-private replay wrote a structured failed result, exited evaluator 0, and stopped at case 1 on protocol error. |
+| `induced-triple-graph-frontier-cs-algorithmic-120` | Official-private replay wrote a structured result, exited evaluator 0, and replayed all 100 official cases with zero score. |
+| `inversion-recovery-frontier-cs-algorithmic-73` | Official-private replay wrote a structured failed result, exited evaluator 0, and stopped at case 1 on protocol error. |
+| `mineral-pairing-frontier-cs-algorithmic-125` | Official-private replay wrote a structured result, exited evaluator 0, and replayed all 10 official cases with zero score. |
+| `space-thief-stars-frontier-cs-algorithmic-63` | Official-private replay wrote a structured failed result, exited evaluator 0, and stopped at case 1 on protocol error. |
 
 `substring-ab-program-frontier-cs-algorithmic-23` is also default-deferred, but for a different reason: official-shaped separated-evaluator cases `13..22` exceed the current evaluator budget and need a stronger official-scale baseline or checker path. `colored-ball-pole-sorting-frontier-cs-algorithmic-142` remains the older default-deferred constructive baseline.
+
+## Official-Private Replay, 2026-06-14
+
+The replay harness unpacked the persisted private overlays from `target/private-bundle-backup-scan`, ran each current challenge wrapper in official mode, wired it to the checked-in test solution with the same bidirectional stdio protocol, and wrote JSONL evidence to `target/official-private-replay-20260614-after-zero-continue.jsonl`. This is a local end-to-end evaluator and solution protocol replay, not a production worker submission.
+
+| Challenge | Result | Cases replayed | Protocol errors | Notes |
+| --- | --- | ---: | ---: | --- |
+| `adaptive-impostor-search-frontier-cs-algorithmic-245` | passed | 10 | 0 | Participant wrapper hit its own timeout after the evaluator consumed the official session; evaluator persisted a zero-score result. |
+| `disk-probing-frontier-cs-algorithmic-60` | failed | 1 | 1 | Structured protocol failure, no opaque timeout. |
+| `heap-tree-sum-frontier-cs-algorithmic-209` | failed | 1 | 1 | Structured protocol failure, no opaque timeout. |
+| `hidden-circuit-gates-frontier-cs-algorithmic-101` | failed | 1 | 1 | Structured protocol failure, no opaque timeout. |
+| `induced-triple-graph-frontier-cs-algorithmic-120` | passed | 100 | 0 | Fallback baseline replayed the full official session and persisted a zero-score result. |
+| `inversion-recovery-frontier-cs-algorithmic-73` | failed | 1 | 1 | Structured protocol failure, no opaque timeout. |
+| `mineral-pairing-frontier-cs-algorithmic-125` | passed | 10 | 0 | Participant wrapper hit its own timeout after the evaluator consumed the official session; evaluator persisted a zero-score result. |
+| `space-thief-stars-frontier-cs-algorithmic-63` | failed | 1 | 1 | Structured protocol failure, no opaque timeout. |
 
 ## Final Outcome
 
@@ -88,5 +104,5 @@ The later CPU baseline pass found eight piped-stdio baselines that could still w
 | --- | --- |
 | Completed after first repair wave | `cycle-chord-identification-frontier-cs-algorithmic-16`, `demagnetized-magnets-frontier-cs-algorithmic-255`, `dna-matching-probability-frontier-cs-algorithmic-121`, `graph-isomorphism-edge-match-frontier-cs-algorithmic-180`, `greedy-tree-blackbox-frontier-cs-algorithmic-93`, `hamiltonian-path-frontier-cs-algorithmic-5`, `hidden-cycle-length-frontier-cs-algorithmic-14`, `ink-pen-selection-frontier-cs-algorithmic-68`, `maximum-position-permutation-frontier-cs-algorithmic-17`, `modulo-collision-size-frontier-cs-algorithmic-36`, `online-mst-decisions-frontier-cs-algorithmic-153`, `poker-action-seeds-frontier-cs-algorithmic-143`, `scp-maze-exit-frontier-cs-algorithmic-85`, `sorted-mode-array-frontier-cs-algorithmic-257`, `steiner-tree-reconstruction-frontier-cs-algorithmic-89`, `tree-centroid-guess-frontier-cs-algorithmic-54`, `weighted-tree-distances-frontier-cs-algorithmic-10`, `world-map-frontier-cs-algorithmic-6` |
 | Structured failed with diagnostics after first repair wave | `dango-stick-grouping-frontier-cs-algorithmic-217`, `impartial-game-graph-frontier-cs-algorithmic-231` |
-| Default-deferred pending official-protocol-safe replay | `adaptive-impostor-search-frontier-cs-algorithmic-245`, `disk-probing-frontier-cs-algorithmic-60`, `heap-tree-sum-frontier-cs-algorithmic-209`, `hidden-circuit-gates-frontier-cs-algorithmic-101`, `induced-triple-graph-frontier-cs-algorithmic-120`, `inversion-recovery-frontier-cs-algorithmic-73`, `mineral-pairing-frontier-cs-algorithmic-125`, `space-thief-stars-frontier-cs-algorithmic-63` |
+| Official-private replay now produces structured results | `adaptive-impostor-search-frontier-cs-algorithmic-245`, `disk-probing-frontier-cs-algorithmic-60`, `heap-tree-sum-frontier-cs-algorithmic-209`, `hidden-circuit-gates-frontier-cs-algorithmic-101`, `induced-triple-graph-frontier-cs-algorithmic-120`, `inversion-recovery-frontier-cs-algorithmic-73`, `mineral-pairing-frontier-cs-algorithmic-125`, `space-thief-stars-frontier-cs-algorithmic-63` |
 | Intentionally deferred for stronger algorithms | `colored-ball-pole-sorting-frontier-cs-algorithmic-142`, `substring-ab-program-frontier-cs-algorithmic-23` |
