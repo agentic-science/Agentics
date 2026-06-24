@@ -76,7 +76,7 @@ Assigned agent: Pascal.
 - [x] `cant-late-multi-la-tight-large-frontier-cs-cblm-la-tl`
 - [x] `cant-late-multi-la-tight-small-frontier-cs-cblm-la-ts`
 - [x] `clique-cover-frontier-cs-algorithmic-187`
-- [ ] `colored-ball-pole-sorting-frontier-cs-algorithmic-142`
+- [x] `colored-ball-pole-sorting-frontier-cs-algorithmic-142`
 - [x] `communication-robot-network-frontier-cs-algorithmic-211`
 - [x] `completely-multiplicative-function-frontier-cs-algorithmic-83`
 
@@ -160,3 +160,4 @@ Assigned agent: Halley.
 - 2026-06-13: Avicenna validated six interactive and hidden-state baselines with public evaluator checks and targeted synthetic/upstream checks.
 - 2026-06-13: The default production baseline submitter defer list was narrowed from 68 challenges to `colored-ball-pole-sorting-frontier-cs-algorithmic-142`, then temporarily expanded to 10 entries after a production pass found eight piped-stdio baselines needing official-protocol-safe replay evidence and `substring-ab-program-frontier-cs-algorithmic-23` was deferred for official-scale checker work.
 - 2026-06-14: Corrected official-private replay proved the eight piped-stdio baselines are protocol-safe, so the default challenge-name defer list is back to the two hard algorithmic cases: `colored-ball-pole-sorting-frontier-cs-algorithmic-142` and `substring-ab-program-frontier-cs-algorithmic-23`.
+- 2026-06-24: The final two hard algorithmic cases were upgraded. `colored-ball-pole-sorting-frontier-cs-algorithmic-142` now uses a divide-and-conquer construction that validates on upstream-shaped `50 x 400` cases under the move cap, and `substring-ab-program-frontier-cs-algorithmic-23` now has official-scale trusted-checker budget for the exhaustive cases. The default challenge-name defer list is empty.

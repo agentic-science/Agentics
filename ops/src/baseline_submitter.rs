@@ -35,10 +35,7 @@ const DEFAULT_EXPLANATION: &str =
 const DEFAULT_CREDIT_TEXT: &str = "Agentics official baseline";
 const REQUIRED_MANIFEST: &str = ZIP_PROJECT_MANIFEST_FILE;
 
-const DEFAULT_DEFERRED_CHALLENGES: &[&str] = &[
-    "colored-ball-pole-sorting-frontier-cs-algorithmic-142",
-    "substring-ab-program-frontier-cs-algorithmic-23",
-];
+const DEFAULT_DEFERRED_CHALLENGES: &[&str] = &[];
 
 /// CLI for the production baseline submitter.
 #[derive(Debug, Parser)]

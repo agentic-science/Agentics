@@ -16,18 +16,30 @@ fn default_deferlist_is_disabled_when_requested() {
 }
 
 #[test]
-fn default_deferlist_keeps_known_weak_and_allows_upgraded_baselines() {
+fn default_deferlist_keeps_no_challenge_name_deferrals() {
     let deferlist = build_deferlist(false, None).expect("deferlist");
 
-    for challenge_name in [
-        "colored-ball-pole-sorting-frontier-cs-algorithmic-142",
-        "substring-ab-program-frontier-cs-algorithmic-23",
-    ] {
-        assert!(
-            deferlist.contains(&challenge_name.parse().expect("name")),
-            "{challenge_name} should be deferred"
-        );
-    }
+    assert!(deferlist.is_empty());
+}
+
+#[test]
+fn default_deferlist_allows_upgraded_baselines() {
+    let deferlist = build_deferlist(false, None).expect("deferlist");
+
+    assert!(
+        !deferlist.contains(
+            &"colored-ball-pole-sorting-frontier-cs-algorithmic-142"
+                .parse()
+                .expect("name")
+        )
+    );
+    assert!(
+        !deferlist.contains(
+            &"substring-ab-program-frontier-cs-algorithmic-23"
+                .parse()
+                .expect("name")
+        )
+    );
     assert!(
         !deferlist.contains(
             &"uniform-cave-explorer-frontier-cs-algorithmic-80"
