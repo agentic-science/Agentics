@@ -18,6 +18,7 @@ use secrecy::{ExposeSecret, SecretString};
 use std::collections::HashMap;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+use test_that::prelude::*;
 
 /// Verifies that loopback bind allows local default credentials.
 #[test]
@@ -34,9 +35,12 @@ fn config_debug_redacts_secrets() {
 
     let debug = format!("{config:?}");
 
-    assert!(!debug.contains("secret@localhost"));
-    assert!(!debug.contains("secret-github-app-client"));
-    assert!(debug.contains("[REDACTED"));
+    assert_that!(debug.as_str(), not(contains_substring("secret@localhost")));
+    assert_that!(
+        debug.as_str(),
+        not(contains_substring("secret-github-app-client"))
+    );
+    assert_that!(debug, contains_substring("[REDACTED"));
 }
 
 /// Verifies local base URL helpers use explicit hosts and ports.
@@ -75,27 +79,28 @@ fn raw_app_env_deserializes_prefixed_values() {
 
     let config = Config::try_from(raw).expect("raw env should convert");
 
-    assert_eq!(config.api_web.api_port, 3222);
-    assert!(
-        config
-            .database
-            .url
-            .expose_secret()
-            .contains(":6543/agentics")
+    assert_that!(config.api_web.api_port, eq(3222));
+    assert_that!(
+        config.database.url.expose_secret().to_string(),
+        contains_substring(":6543/agentics")
     );
-    assert_eq!(config.storage.challenges_root, "/tmp/agentics-challenges");
-    assert_eq!(
+    assert_that!(
+        config.storage.challenges_root,
+        eq("/tmp/agentics-challenges")
+    );
+    assert_that!(
         config.auth.bootstrap_admin_github_user_ids,
-        vec![
-            agentics_domain::models::auth::GithubUserId::try_new(123)
-                .expect("valid test GitHub user id"),
-            agentics_domain::models::auth::GithubUserId::try_new(456)
-                .expect("valid test GitHub user id"),
+        contains_exactly![
+            eq(agentics_domain::models::auth::GithubUserId::try_new(123)
+                .expect("valid test GitHub user id")),
+            eq(agentics_domain::models::auth::GithubUserId::try_new(456)
+                .expect("valid test GitHub user id")),
         ]
+        .in_order()
     );
-    assert_eq!(
+    assert_that!(
         config.quotas.max_active_challenge_review_records_per_human,
-        7
+        eq(7)
     );
 }
 
@@ -128,7 +133,10 @@ fn env_policy_rejects_missing_required_production_values() {
 
     let error = super::validate_env_policy(&env, super::EnvServiceRole::Compose)
         .expect_err("missing production env should fail");
-    assert!(error.to_string().contains("AGENTICS_POSTGRES_USER"));
+    assert_that!(
+        error.to_string(),
+        contains_substring("AGENTICS_POSTGRES_USER")
+    );
 }
 
 /// Verifies optional values report defaults without failing startup.
@@ -139,9 +147,25 @@ fn env_policy_reports_optional_defaults() {
     let report = super::validate_env_policy(&env, super::EnvServiceRole::LocalDev)
         .expect("minimal dev env should pass");
 
-    assert!(report.warnings.iter().any(|warning| warning.name
-        == "NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID"
-        && warning.message.contains("analytics disabled")));
+    let warning_names = report
+        .warnings
+        .iter()
+        .map(|warning| warning.name)
+        .collect::<Vec<_>>();
+    assert_that!(
+        warning_names,
+        contains(eq("NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID"))
+    );
+    assert_that!(
+        report
+            .warnings
+            .iter()
+            .find(|warning| warning.name == "NEXT_PUBLIC_AGENTICS_GA_MEASUREMENT_ID")
+            .expect("analytics warning should be present")
+            .message
+            .as_str(),
+        contains_substring("analytics disabled")
+    );
 }
 
 /// Verifies old env names are rejected instead of silently ignored.
@@ -160,8 +184,14 @@ fn env_policy_rejects_removed_env_names() {
     let error = super::validate_env_policy(&env, super::EnvServiceRole::LocalDev)
         .expect_err("removed env names should fail");
     let message = error.to_string();
-    assert!(message.contains(super::ENV_STALE_REVIEW_RECORD_LIMIT));
-    assert!(message.contains(super::ENV_AGENTICS_REHEARSAL_ENVIRONMENT));
+    assert_that!(
+        message.as_str(),
+        contains_substring(super::ENV_STALE_REVIEW_RECORD_LIMIT)
+    );
+    assert_that!(
+        message,
+        contains_substring(super::ENV_AGENTICS_REHEARSAL_ENVIRONMENT)
+    );
 }
 
 /// Verifies removed-but-ignored env values are surfaced as warnings.
@@ -177,17 +207,18 @@ fn env_policy_warns_for_ignored_env_names() {
     let report = super::validate_env_policy(&env, super::EnvServiceRole::LocalDev)
         .expect("ignored env names should not fail");
 
-    assert!(
-        report
-            .warnings
-            .iter()
-            .any(|warning| warning.name == super::ENV_AGENTICS_WEB_HOST)
+    let warning_names = report
+        .warnings
+        .iter()
+        .map(|warning| warning.name)
+        .collect::<Vec<_>>();
+    assert_that!(
+        warning_names.as_slice(),
+        points_to(contains(eq(super::ENV_AGENTICS_WEB_HOST)))
     );
-    assert!(
-        report
-            .warnings
-            .iter()
-            .any(|warning| warning.name == super::ENV_RUST_LOG)
+    assert_that!(
+        warning_names.as_slice(),
+        points_to(contains(eq(super::ENV_RUST_LOG)))
     );
 }
 

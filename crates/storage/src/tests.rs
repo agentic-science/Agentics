@@ -2,6 +2,7 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
+use test_that::prelude::*;
 
 use super::{
     LocalStorage, S3Storage, S3StorageOptions, Storage, StorageError, StorageKey,
@@ -23,13 +24,13 @@ async fn local_storage_round_trips_relative_keys() {
         .await
         .expect("put should succeed");
 
-    assert_eq!(stored, key);
-    assert_eq!(
+    assert_that!(stored, eq(key.clone()));
+    assert_that!(
         storage
             .get(&key, TEST_INTENT)
             .await
             .expect("get should succeed"),
-        b"hello"
+        eq(b"hello")
     );
 }
 
@@ -43,8 +44,15 @@ async fn local_storage_rejects_oversized_objects() {
         .await
         .expect_err("oversized object should fail");
 
-    assert!(matches!(error, StorageError::ObjectTooLarge { .. }));
-    assert!(!storage.exists(&key).await.expect("exists should work"));
+    assert_that!(
+        error,
+        predicate(|error: &StorageError| matches!(error, StorageError::ObjectTooLarge { .. }))
+            .with_description("is object-too-large", "is not object-too-large")
+    );
+    assert_that!(
+        storage.exists(&key).await.expect("exists should work"),
+        eq(false)
+    );
 }
 
 #[tokio::test]
@@ -63,15 +71,21 @@ async fn local_storage_rejects_conflicts_and_promotes_temp_objects() {
         .await
         .expect("promote should work");
 
-    assert!(!storage.exists(&temp).await.expect("temp exists check"));
-    assert_eq!(
+    assert_that!(
+        storage.exists(&temp).await.expect("temp exists check"),
+        eq(false)
+    );
+    assert_that!(
         storage
             .get(&durable, TEST_INTENT)
             .await
             .expect("durable get"),
-        b"hello"
+        eq(b"hello")
     );
-    assert!(storage.put(&durable, b"again", TEST_INTENT).await.is_err());
+    assert_that!(
+        storage.put(&durable, b"again", TEST_INTENT).await,
+        err(anything())
+    );
 }
 
 #[tokio::test]
@@ -93,13 +107,16 @@ async fn local_storage_concurrent_put_preserves_one_writer() {
 
     let (first, second) = tokio::join!(first, second);
     let outcomes = [first.expect("first task"), second.expect("second task")];
-    assert_eq!(outcomes.iter().filter(|result| result.is_ok()).count(), 1);
-    assert_eq!(
+    assert_that!(
+        outcomes.iter().filter(|result| result.is_ok()).count(),
+        eq(1)
+    );
+    assert_that!(
         outcomes
             .iter()
             .filter(|result| matches!(result, Err(StorageError::ObjectConflict(_))))
             .count(),
-        1
+        eq(1)
     );
 }
 
@@ -134,13 +151,16 @@ async fn local_storage_concurrent_promote_preserves_one_writer() {
 
     let (first, second) = tokio::join!(first, second);
     let outcomes = [first.expect("first task"), second.expect("second task")];
-    assert_eq!(outcomes.iter().filter(|result| result.is_ok()).count(), 1);
-    assert_eq!(
+    assert_that!(
+        outcomes.iter().filter(|result| result.is_ok()).count(),
+        eq(1)
+    );
+    assert_that!(
         outcomes
             .iter()
             .filter(|result| matches!(result, Err(StorageError::ObjectConflict(_))))
             .count(),
-        1
+        eq(1)
     );
 }
 
@@ -162,23 +182,28 @@ async fn local_storage_lists_prefixes() {
         .await
         .expect("list should work");
 
-    assert_eq!(
+    assert_that!(
         keys,
-        vec![storage_key("_tmp/a.txt"), storage_key("_tmp/nested/b.txt")]
+        contains_exactly![
+            eq(storage_key("_tmp/a.txt")),
+            eq(storage_key("_tmp/nested/b.txt"))
+        ]
+        .in_order()
     );
-    assert_eq!(
+    assert_that!(
         storage
             .delete_prefix(&storage_key("_tmp"))
             .await
             .expect("delete prefix should work"),
-        2
+        eq(2)
     );
-    assert!(
+    assert_that!(
         storage
             .list_prefix(&storage_key("_tmp"))
             .await
             .expect("list after delete should work")
-            .is_empty()
+            .is_empty(),
+        eq(true)
     );
 }
 
@@ -195,25 +220,27 @@ async fn local_storage_delete_prefix_does_not_touch_sibling_prefixes() {
         .await
         .expect("put sibling");
 
-    assert_eq!(
+    assert_that!(
         storage
             .delete_prefix(&storage_key("_tmp"))
             .await
             .expect("delete tmp prefix"),
-        1
+        eq(1)
     );
 
-    assert!(
-        !storage
+    assert_that!(
+        storage
             .exists(&storage_key("_tmp/a.txt"))
             .await
-            .expect("tmp exists")
+            .expect("tmp exists"),
+        eq(false)
     );
-    assert!(
+    assert_that!(
         storage
             .exists(&storage_key("_tmpfoo/b.txt"))
             .await
-            .expect("sibling exists")
+            .expect("sibling exists"),
+        eq(true)
     );
 }
 
@@ -575,37 +602,44 @@ async fn rustfs_s3_storage_round_trips_when_configured() {
         .put(&sibling_key, b"sibling", TEST_INTENT)
         .await
         .expect("S3 sibling put should work");
-    assert_eq!(
+    assert_that!(
         storage.get(&key, TEST_INTENT).await.expect("S3 get"),
-        b"hello"
+        eq(b"hello")
     );
-    assert!(storage.exists(&key).await.expect("S3 exists"));
-    assert!(
-        !storage
+    assert_that!(storage.exists(&key).await.expect("S3 exists"), eq(true));
+    assert_that!(
+        storage
             .exists(&storage_key("objects/missing.txt"))
             .await
-            .expect("S3 missing object exists check")
+            .expect("S3 missing object exists check"),
+        eq(false)
     );
-    assert!(matches!(
+    assert_that!(
         storage
             .get(&storage_key("objects/missing.txt"), TEST_INTENT)
             .await,
-        Err(StorageError::ObjectNotFound(_))
-    ));
+        err(
+            predicate(|error: &StorageError| matches!(error, StorageError::ObjectNotFound(_)))
+                .with_description("is object-not-found", "is not object-not-found")
+        )
+    );
     let download_dir = tempfile::tempdir().expect("S3 download tempdir");
     let download_path = download_dir.path().join("value.txt");
     storage
         .get_to_file(&key, &download_path, TEST_INTENT)
         .await
         .expect("S3 get_to_file");
-    assert_eq!(
+    assert_that!(
         fs::read_to_string(download_path).expect("downloaded S3 object"),
-        "hello"
+        eq("hello")
     );
-    assert!(matches!(
+    assert_that!(
         storage.put(&key, b"again", TEST_INTENT).await,
-        Err(StorageError::ObjectConflict(_))
-    ));
+        err(
+            predicate(|error: &StorageError| matches!(error, StorageError::ObjectConflict(_)))
+                .with_description("is object-conflict", "is not object-conflict")
+        )
+    );
     let concurrent_key = storage_key("objects/concurrent.txt");
     let first_put = {
         let storage = storage.clone();
@@ -622,16 +656,16 @@ async fn rustfs_s3_storage_round_trips_when_configured() {
         first_put.expect("first put task"),
         second_put.expect("second put task"),
     ];
-    assert_eq!(
+    assert_that!(
         put_outcomes.iter().filter(|result| result.is_ok()).count(),
-        1
+        eq(1)
     );
-    assert_eq!(
+    assert_that!(
         put_outcomes
             .iter()
             .filter(|result| matches!(result, Err(StorageError::ObjectConflict(_))))
             .count(),
-        1
+        eq(1)
     );
 
     let oversized_key = storage_key("objects/oversized.txt");
@@ -639,12 +673,17 @@ async fn rustfs_s3_storage_round_trips_when_configured() {
         .put(&oversized_key, b"hello", StorageWriteIntent::new("tiny", 1))
         .await
         .expect_err("oversized S3 put should fail before upload");
-    assert!(matches!(error, StorageError::ObjectTooLarge { .. }));
-    assert!(
-        !storage
+    assert_that!(
+        error,
+        predicate(|error: &StorageError| matches!(error, StorageError::ObjectTooLarge { .. }))
+            .with_description("is object-too-large", "is not object-too-large")
+    );
+    assert_that!(
+        storage
             .exists(&oversized_key)
             .await
-            .expect("oversized key exists check")
+            .expect("oversized key exists check"),
+        eq(false)
     );
 
     storage
@@ -655,18 +694,19 @@ async fn rustfs_s3_storage_round_trips_when_configured() {
         .promote(&temp_key, &durable_key)
         .await
         .expect("S3 promote");
-    assert!(
-        !storage
+    assert_that!(
+        storage
             .exists(&temp_key)
             .await
-            .expect("temp key exists check")
+            .expect("temp key exists check"),
+        eq(false)
     );
-    assert_eq!(
+    assert_that!(
         storage
             .get(&durable_key, TEST_INTENT)
             .await
             .expect("promoted get"),
-        b"promoted"
+        eq(b"promoted")
     );
     let first_promote_temp = storage_key("_tmp/promote-first.txt");
     let second_promote_temp = storage_key("_tmp/promote-second.txt");
@@ -704,34 +744,34 @@ async fn rustfs_s3_storage_round_trips_when_configured() {
         first_promote.expect("first promote task"),
         second_promote.expect("second promote task"),
     ];
-    assert_eq!(
+    assert_that!(
         promote_outcomes
             .iter()
             .filter(|result| result.is_ok())
             .count(),
-        1
+        eq(1)
     );
-    assert_eq!(
+    assert_that!(
         promote_outcomes
             .iter()
             .filter(|result| matches!(result, Err(StorageError::ObjectConflict(_))))
             .count(),
-        1
+        eq(1)
     );
 
-    assert_eq!(
+    assert_that!(
         storage
             .delete_prefix(&storage_key("objects"))
             .await
             .expect("S3 delete prefix"),
-        4
+        eq(4)
     );
-    assert_eq!(
+    assert_that!(
         storage
             .get(&sibling_key, TEST_INTENT)
             .await
             .expect("S3 sibling key survives prefix delete"),
-        b"sibling"
+        eq(b"sibling")
     );
 }
 

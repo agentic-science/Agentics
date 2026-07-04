@@ -91,6 +91,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "test-that",
  "url",
 ]
 
@@ -250,6 +251,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "test-that",
  "thiserror",
  "tokio",
  "tokio-util",
@@ -298,6 +300,7 @@ dependencies = [
  "aws-sdk-s3",
  "tar",
  "tempfile",
+ "test-that",
  "thiserror",
  "tokio",
  "url",
