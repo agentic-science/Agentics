@@ -45,4 +45,5 @@ tempfile = { workspace = true }
 toml = "1.0"
 
 [dev-dependencies]
+test-that = { workspace = true }
 wiremock = "0.6"

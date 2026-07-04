@@ -7,6 +7,7 @@ use super::{
 use agentics_config::RunnerNamespace;
 use clap::ValueEnum;
 use std::path::PathBuf;
+use test_that::prelude::*;
 
 /// Verifies production down cannot silently choose a runner policy.
 #[tokio::test]
@@ -117,8 +118,8 @@ fn compose_args_include_active_profiles() {
     let mut context = fake_context();
     context.compose_profiles = vec![String::from("gpu"), String::from("check")];
     let args = compose_args_text(&context);
-    assert!(args.contains("--profile gpu"));
-    assert!(args.contains("--profile check"));
+    assert_that!(args.as_str(), contains_substring("--profile gpu"));
+    assert_that!(args, contains_substring("--profile check"));
 }
 
 /// Verifies rehearsal purge dry-run still requires the explicit rehearsal stage marker.
@@ -177,17 +178,19 @@ fn rehearsal_purge_refuses_paths_outside_rehearsal_root() {
 fn rehearsal_purge_dry_run_reports_resources_and_paths() {
     let context = rehearsal_context();
     let plan = build_rehearsal_purge_plan(&context, false, true).expect("dry-run plan");
-    assert_eq!(plan.namespace.as_str(), REHEARSAL_PROJECT);
-    assert!(
+    assert_that!(plan.namespace.as_str(), eq(REHEARSAL_PROJECT));
+    assert_that!(
         plan.reported_paths
             .iter()
-            .any(|path| path == &PathBuf::from("/srv/agentics-rehearsal/docker.sock"))
+            .any(|path| path == &PathBuf::from("/srv/agentics-rehearsal/docker.sock")),
+        eq(true)
     );
     let reports = plan.dry_run_reports();
-    assert!(
+    assert_that!(
         reports
             .iter()
-            .any(|report| format!("{report:?}").contains("Compose project"))
+            .any(|report| format!("{report:?}").contains("Compose project")),
+        eq(true)
     );
 }
 
@@ -209,10 +212,11 @@ fn rehearsal_purge_skips_runner_cleanup_when_socket_is_missing() {
     )
     .expect("missing socket should skip runner cleanup");
 
-    assert!(
+    assert_that!(
         reports
             .iter()
-            .any(|report| format!("{report:?}").contains("assuming daemon already stopped"))
+            .any(|report| format!("{report:?}").contains("assuming daemon already stopped")),
+        eq(true)
     );
 }
 
@@ -221,13 +225,16 @@ fn rehearsal_purge_skips_runner_cleanup_when_socket_is_missing() {
 fn rehearsal_override_comes_from_env_file_marker() {
     let mut context = fake_context();
     context.process_env.deployment_stage = Some("rehearsal".to_string());
-    assert!(
-        !compose_args_text(&context).contains("compose.rehearsal.yml"),
-        "process env alone must not turn production commands into rehearsal commands"
+    assert_that!(
+        compose_args_text(&context).as_str(),
+        not(contains_substring("compose.rehearsal.yml"))
     );
 
     context.file_env.deployment_stage = Some("rehearsal".to_string());
-    assert!(compose_args_text(&context).contains("compose.rehearsal.yml"));
+    assert_that!(
+        compose_args_text(&context),
+        contains_substring("compose.rehearsal.yml")
+    );
 }
 
 /// Verifies restore-private-bundles passes explicit refresh flags to the copy tool.
@@ -238,18 +245,19 @@ fn private_bundle_restore_args_forward_overwrite_and_dry_run() {
         .into_iter()
         .map(|arg| arg.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
-    assert_eq!(
+    assert_that!(
         args,
-        vec![
-            "run",
-            "--rm",
-            "private-bundle-restore",
-            "/usr/local/bin/agentics-copy-private-bundle-backups",
-            "--work-dir",
-            "/srv/agentics-rehearsal/storage-work/private-bundle-backup-copy",
-            "--overwrite",
-            "--dry-run"
+        contains_exactly![
+            eq("run".to_string()),
+            eq("--rm".to_string()),
+            eq("private-bundle-restore".to_string()),
+            eq("/usr/local/bin/agentics-copy-private-bundle-backups".to_string()),
+            eq("--work-dir".to_string()),
+            eq("/srv/agentics-rehearsal/storage-work/private-bundle-backup-copy".to_string()),
+            eq("--overwrite".to_string()),
+            eq("--dry-run".to_string())
         ]
+        .in_order()
     );
 }
 
