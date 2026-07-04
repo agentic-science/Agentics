@@ -128,10 +128,16 @@ async fn admin_pioneer_code_workflows_use_admin_token() {
         .await
         .expect("pioneer code revoke");
 
-    assert!(list_output.contains("pioneer_codes: 1"));
-    assert!(show_output.contains("pioneer_code: jack-7f9eb67a"));
-    assert!(create_output.contains("status: active"));
-    assert!(revoke_output.contains("revoked_creator_api_tokens: 3"));
+    assert_that!(list_output, contains_substring("pioneer_codes: 1"));
+    assert_that!(
+        show_output,
+        contains_substring("pioneer_code: jack-7f9eb67a")
+    );
+    assert_that!(create_output, contains_substring("status: active"));
+    assert_that!(
+        revoke_output,
+        contains_substring("revoked_creator_api_tokens: 3")
+    );
 }
 
 /// Verifies admin pioneer-code create supports JSON output.
@@ -166,7 +172,10 @@ async fn admin_pioneer_code_create_renders_json() {
         .expect("pioneer code create");
     let value: serde_json::Value = serde_json::from_str(&output).expect("json output");
 
-    assert_eq!(value["code"]["code_display"], "jack-7f9eb67a");
+    assert_that!(
+        value["code"]["code_display"].as_str(),
+        some(eq("jack-7f9eb67a"))
+    );
 }
 
 /// Verifies admin challenge and Moltbook workflows.
@@ -519,33 +528,33 @@ async fn admin_review_record_workflows() {
     let approve_json = execute(approve, admin_env("admin-token"))
         .await
         .expect("approve");
-    assert_eq!(
+    assert_that!(
         serde_json::from_str::<serde_json::Value>(&approve_json).expect("json")["status"],
-        "approved"
+        eq(json!("approved"))
     );
-    assert!(
+    assert_that!(
         execute(reject, admin_env("admin-token"))
             .await
-            .expect("reject")
-            .contains("status: rejected")
+            .expect("reject"),
+        contains_substring("status: rejected")
     );
-    assert!(
+    assert_that!(
         execute(abandon, admin_env("admin-token"))
             .await
-            .expect("abandon")
-            .contains("status: abandoned")
+            .expect("abandon"),
+        contains_substring("status: abandoned")
     );
-    assert!(
+    assert_that!(
         execute(publish, admin_env("admin-token"))
             .await
-            .expect("publish")
-            .contains("status: published")
+            .expect("publish"),
+        contains_substring("status: published")
     );
-    assert!(
+    assert_that!(
         execute(cleanup, admin_env("admin-token"))
             .await
-            .expect("cleanup")
-            .contains("purged_private_assets: 3")
+            .expect("cleanup"),
+        contains_substring("purged_private_assets: 3")
     );
 }
 
@@ -608,23 +617,23 @@ async fn admin_operations_workflows() {
         "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
     ]);
 
-    assert!(
+    assert_that!(
         execute(heartbeats, admin_env("admin-token"))
             .await
-            .expect("heartbeats")
-            .contains("service_heartbeats: 1")
+            .expect("heartbeats"),
+        contains_substring("service_heartbeats: 1")
     );
-    assert!(
+    assert_that!(
         execute(capacity, admin_env("admin-token"))
             .await
-            .expect("capacity")
-            .contains("active_agents: 7")
+            .expect("capacity"),
+        contains_substring("active_agents: 7")
     );
-    assert!(
+    assert_that!(
         execute(disable, admin_env("admin-token"))
             .await
-            .expect("disable agent")
-            .contains("status: disabled")
+            .expect("disable agent"),
+        contains_substring("status: disabled")
     );
 }
 
@@ -713,6 +722,9 @@ async fn admin_command_rejects_missing_token_before_http() {
         .await
         .expect("requests should be recorded");
 
-    assert!(requests.is_empty());
-    assert!(error.to_string().contains("AGENTICS_ADMIN_SERVICE_TOKEN"));
+    assert_that!(requests, empty());
+    assert_that!(
+        error.to_string(),
+        contains_substring("AGENTICS_ADMIN_SERVICE_TOKEN")
+    );
 }

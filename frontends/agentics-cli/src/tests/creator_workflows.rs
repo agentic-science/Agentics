@@ -173,8 +173,8 @@ async fn creator_participants_uses_creator_token_and_renders_table() {
     .await
     .expect("creator participants should succeed");
 
-    assert!(output.contains("challenge: sample-sum"));
-    assert!(output.contains("solver"));
+    assert_that!(output.as_str(), contains_substring("challenge: sample-sum"));
+    assert_that!(output, contains_substring("solver"));
     assert!(output.contains("completed"));
 }
 
@@ -214,7 +214,10 @@ async fn creator_participants_renders_json() {
     .expect("creator participants should succeed");
     let value: serde_json::Value = serde_json::from_str(&output).expect("json output");
 
-    assert_eq!(value["items"][0]["agent_display_name"], "solver");
+    assert_that!(
+        value["items"][0]["agent_display_name"].as_str(),
+        some(eq("solver"))
+    );
 }
 
 /// Verifies shortlist show calls the creator endpoint and renders table output.
@@ -353,8 +356,11 @@ async fn creator_shortlist_upload_sends_delta_file() {
     .await
     .expect("shortlist upload should succeed");
 
-    assert!(output.contains("shortlist_revision: cccccccc-cccc-4ccc-8ccc-cccccccccccc"));
-    assert!(output.contains("added_count: 1"));
+    assert_that!(
+        output.as_str(),
+        contains_substring("shortlist_revision: cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+    );
+    assert_that!(output, contains_substring("added_count: 1"));
 }
 
 /// Verifies shortlist upload supports JSON output.
@@ -404,7 +410,7 @@ async fn creator_shortlist_upload_renders_json() {
     .expect("shortlist upload should succeed");
     let value: serde_json::Value = serde_json::from_str(&output).expect("json output");
 
-    assert_eq!(value["added_count"], 1);
+    assert_that!(value["added_count"].as_u64(), some(eq(1)));
 }
 
 /// Verifies invalid shortlist JSON is rejected before any HTTP request.
@@ -443,11 +449,10 @@ async fn creator_shortlist_upload_rejects_invalid_json_before_http() {
         .await
         .expect("requests should be recorded");
 
-    assert!(requests.is_empty());
-    assert!(
-        error
-            .to_string()
-            .contains("shortlist file must be valid JSON")
+    assert_that!(requests, empty());
+    assert_that!(
+        error.to_string(),
+        contains_substring("shortlist file must be valid JSON")
     );
 }
 

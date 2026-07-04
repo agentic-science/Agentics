@@ -38,6 +38,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "test-that",
  "thiserror",
  "tokio",
  "toml",

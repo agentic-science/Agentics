@@ -119,14 +119,23 @@ async fn validate_remote_posts_validation_run_and_polls_status() {
     let body: serde_json::Value =
         serde_json::from_slice(&post.body).expect("request body should be JSON");
 
-    assert!(output.contains("validation_run: 22222222-2222-4222-8222-222222222222"));
-    assert!(output.contains("validation: completed"));
-    assert!(output.contains("primary_metric: score=1"));
-    assert!(output.contains("visible_after_eval: false"));
-    assert_eq!(body["challenge_name"], "sample-sum");
-    assert_eq!(body["target"], "linux-arm64-cpu");
-    assert_eq!(body["explanation"], "quick check");
-    assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
+    assert_that!(
+        output.as_str(),
+        contains_substring("validation_run: 22222222-2222-4222-8222-222222222222")
+    );
+    assert_that!(output.as_str(), contains_substring("validation: completed"));
+    assert_that!(
+        output.as_str(),
+        contains_substring("primary_metric: score=1")
+    );
+    assert_that!(output, contains_substring("visible_after_eval: false"));
+    assert_that!(body["challenge_name"].as_str(), some(eq("sample-sum")));
+    assert_that!(body["target"].as_str(), some(eq("linux-arm64-cpu")));
+    assert_that!(body["explanation"].as_str(), some(eq("quick check")));
+    assert_that!(
+        body["artifact_base64"].as_str().expect("artifact").len(),
+        gt(20)
+    );
 }
 
 /// Verifies that validate remote rejects disabled validation before packaging.
@@ -170,9 +179,15 @@ async fn validate_remote_rejects_disabled_validation_before_packaging() {
         .await
         .expect("requests should be recorded");
 
-    assert!(error.to_string().contains("validation pass is disabled"));
-    assert_eq!(requests.len(), 1);
-    assert_eq!(requests[0].url.path(), "/api/public/challenges/sample-sum");
+    assert_that!(
+        error.to_string(),
+        contains_substring("validation pass is disabled")
+    );
+    assert_that!(requests, len(eq(1)));
+    assert_that!(
+        requests[0].url.path(),
+        eq("/api/public/challenges/sample-sum")
+    );
 }
 
 /// Verifies that validate local requires bundle dir.

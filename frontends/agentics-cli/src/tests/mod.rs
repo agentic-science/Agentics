@@ -3,6 +3,7 @@ use std::path::Path;
 use clap::Parser;
 use secrecy::SecretString;
 use serde_json::json;
+use test_that::prelude::*;
 use wiremock::matchers::{body_json, header, method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -54,13 +55,19 @@ async fn init_solution_fetches_challenge_and_creates_workspace() {
         .await
         .expect("init-solution should succeed");
 
-    assert!(output.contains("Initialized solution workspace"));
-    assert!(workspace_dir.join("README.md").is_file());
-    assert!(workspace_dir.join("agentics.solution.json").is_file());
-    assert!(workspace_dir.join("scripts/setup.sh").is_file());
-    assert!(workspace_dir.join("scripts/build.sh").is_file());
-    assert!(workspace_dir.join(".git/hooks/pre-commit").is_file());
-    assert!(!workspace_dir.join("run.sh").exists());
+    assert_that!(output, contains_substring("Initialized solution workspace"));
+    assert_that!(workspace_dir.join("README.md").is_file(), eq(true));
+    assert_that!(
+        workspace_dir.join("agentics.solution.json").is_file(),
+        eq(true)
+    );
+    assert_that!(workspace_dir.join("scripts/setup.sh").is_file(), eq(true));
+    assert_that!(workspace_dir.join("scripts/build.sh").is_file(), eq(true));
+    assert_that!(
+        workspace_dir.join(".git/hooks/pre-commit").is_file(),
+        eq(true)
+    );
+    assert_that!(workspace_dir.join("run.sh").exists(), eq(false));
 }
 
 /// Verifies that submit packages workspace and posts authenticated request.
@@ -134,11 +141,17 @@ async fn submit_packages_workspace_and_posts_authenticated_request() {
     let body: serde_json::Value =
         serde_json::from_slice(&post.body).expect("request body should be JSON");
 
-    assert!(output.contains("Submitted 11111111-1111-4111-8111-111111111111"));
-    assert_eq!(body["challenge_name"], "sample-sum");
-    assert_eq!(body["target"], "linux-arm64-cpu");
-    assert_eq!(body["explanation"], "first attempt");
-    assert!(body["artifact_base64"].as_str().expect("artifact").len() > 20);
+    assert_that!(
+        output,
+        contains_substring("Submitted 11111111-1111-4111-8111-111111111111")
+    );
+    assert_that!(body["challenge_name"].as_str(), some(eq("sample-sum")));
+    assert_that!(body["target"].as_str(), some(eq("linux-arm64-cpu")));
+    assert_that!(body["explanation"].as_str(), some(eq("first attempt")));
+    assert_that!(
+        body["artifact_base64"].as_str().expect("artifact").len(),
+        gt(20)
+    );
 }
 
 /// Verifies that submit rejects an over-limit manifest note before upload.
@@ -192,11 +205,15 @@ async fn submit_rejects_over_limit_manifest_note_before_upload() {
         .await
         .expect("requests should be recorded");
 
-    assert!(error.to_string().contains("note must be at most 1024"));
-    assert!(
+    assert_that!(
+        error.to_string(),
+        contains_substring("note must be at most 1024")
+    );
+    assert_that!(
         requests
             .iter()
-            .all(|request| request.url.path() != "/api/agent/solution-submissions")
+            .any(|request| request.url.path() == "/api/agent/solution-submissions"),
+        eq(false)
     );
 }
 
