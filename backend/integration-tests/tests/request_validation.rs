@@ -13,6 +13,7 @@ use helpers::{
     examples_challenges_root, published_challenge_name, run_worker_once, sample_sum_solution,
     solution_zip_base64, spawn_app, spawn_app_with_config, test_config, zip_project_zip_base64,
 };
+use test_that::prelude::*;
 
 /// Handles creator auth for this module.
 fn creator_auth(
@@ -36,31 +37,31 @@ async fn request_validation_returns_contract_error_shape(pool: sqlx::PgPool) {
         .send()
         .await
         .expect("failed to send empty-display-name request");
-    assert_eq!(
+    assert_that!(
         empty_display_name.status(),
-        reqwest::StatusCode::UNPROCESSABLE_ENTITY
+        eq(reqwest::StatusCode::UNPROCESSABLE_ENTITY)
     );
     let empty_display_name_body: serde_json::Value = empty_display_name
         .json()
         .await
         .expect("failed to decode empty-display-name response");
-    assert_eq!(
-        empty_display_name_body["error"]["code"],
-        "validation_failed"
+    assert_that!(
+        empty_display_name_body["error"]["code"].as_str(),
+        some(eq("validation_failed"))
     );
-    assert!(
+    assert_that!(
         empty_display_name_body["error"]["message"]
             .as_str()
-            .unwrap()
-            .contains("display_name")
+            .expect("error message"),
+        contains_substring("display_name")
     );
-    assert_eq!(
-        empty_display_name_body["error"]["details"][0]["field"],
-        "display_name"
+    assert_that!(
+        empty_display_name_body["error"]["details"][0]["field"].as_str(),
+        some(eq("display_name"))
     );
-    assert_eq!(
-        empty_display_name_body["error"]["details"][0]["message"],
-        "must not be empty"
+    assert_that!(
+        empty_display_name_body["error"]["details"][0]["message"].as_str(),
+        some(eq("must not be empty"))
     );
 
     let unknown_field = client
@@ -72,32 +73,41 @@ async fn request_validation_returns_contract_error_shape(pool: sqlx::PgPool) {
         .send()
         .await
         .expect("failed to send unknown-field request");
-    assert_eq!(
+    assert_that!(
         unknown_field.status(),
-        reqwest::StatusCode::UNPROCESSABLE_ENTITY
+        eq(reqwest::StatusCode::UNPROCESSABLE_ENTITY)
     );
     let unknown_field_body: serde_json::Value = unknown_field
         .json()
         .await
         .expect("failed to decode unknown-field response");
-    assert_eq!(unknown_field_body["error"]["code"], "validation_failed");
+    assert_that!(
+        unknown_field_body["error"]["code"].as_str(),
+        some(eq("validation_failed"))
+    );
 
     let invalid_challenge_name = client
         .get(api_url(&app, "/api/public/challenges/bad%20id"))
         .send()
         .await
         .expect("failed to send invalid challenge name request");
-    assert_eq!(invalid_challenge_name.status(), 400);
+    assert_that!(
+        invalid_challenge_name.status(),
+        eq(reqwest::StatusCode::BAD_REQUEST)
+    );
     let invalid_challenge_name_body: serde_json::Value = invalid_challenge_name
         .json()
         .await
         .expect("failed to decode invalid challenge name response");
-    assert_eq!(invalid_challenge_name_body["error"]["code"], "bad_request");
-    assert!(
+    assert_that!(
+        invalid_challenge_name_body["error"]["code"].as_str(),
+        some(eq("bad_request"))
+    );
+    assert_that!(
         invalid_challenge_name_body["error"]["message"]
             .as_str()
-            .expect("message should be a string")
-            .contains("challenge_name")
+            .expect("message should be a string"),
+        contains_substring("challenge_name")
     );
 }
 
@@ -119,14 +129,14 @@ async fn admin_mutation_rejects_invalid_service_token(pool: sqlx::PgPool) {
         .await
         .expect("failed to send admin mutation");
 
-    assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
+    assert_that!(response.status(), eq(reqwest::StatusCode::UNAUTHORIZED));
     let body: serde_json::Value = response.json().await.expect("failed to decode error");
-    assert_eq!(body["error"]["code"], "unauthorized");
-    assert!(
+    assert_that!(body["error"]["code"].as_str(), some(eq("unauthorized")));
+    assert_that!(
         body["error"]["message"]
             .as_str()
-            .expect("message should be a string")
-            .contains("admin service token")
+            .expect("message should be a string"),
+        contains_substring("admin service token")
     );
 }
 
@@ -165,10 +175,9 @@ async fn zip_submission_routes_accept_declared_large_json_bodies(pool: sqlx::PgP
         .await
         .expect("failed to submit large request body");
 
-    assert_ne!(
+    assert_that!(
         response.status(),
-        reqwest::StatusCode::PAYLOAD_TOO_LARGE,
-        "route-specific body limit should exceed Axum's small JSON default"
+        not(eq(reqwest::StatusCode::PAYLOAD_TOO_LARGE))
     );
 }
 
@@ -203,18 +212,24 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
         .send()
         .await
         .expect("failed to send malformed-target submission");
-    assert_eq!(malformed_response.status(), 422);
+    assert_that!(
+        malformed_response.status(),
+        eq(reqwest::StatusCode::UNPROCESSABLE_ENTITY)
+    );
 
     let malformed_error: serde_json::Value = malformed_response
         .json()
         .await
         .expect("failed to decode malformed-target error");
-    assert_eq!(malformed_error["error"]["code"], "validation_failed");
-    assert!(
+    assert_that!(
+        malformed_error["error"]["code"].as_str(),
+        some(eq("validation_failed"))
+    );
+    assert_that!(
         malformed_error["error"]["message"]
             .as_str()
-            .expect("error message")
-            .contains("target")
+            .expect("error message"),
+        contains_substring("target")
     );
 
     let response = client
@@ -228,15 +243,13 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
         .send()
         .await
         .expect("failed to send invalid-target submission");
-    assert_eq!(response.status(), 400);
+    assert_that!(response.status(), eq(reqwest::StatusCode::BAD_REQUEST));
 
     let error: serde_json::Value = response.json().await.expect("failed to decode error");
-    assert_eq!(error["error"]["code"], "bad_request");
-    assert!(
-        error["error"]["message"]
-            .as_str()
-            .expect("error message")
-            .contains("target")
+    assert_that!(error["error"]["code"].as_str(), some(eq("bad_request")));
+    assert_that!(
+        error["error"]["message"].as_str().expect("error message"),
+        contains_substring("target")
     );
 
     let solution_submission_count: (i64,) =
@@ -244,7 +257,7 @@ async fn solution_submission_rejects_invalid_target_before_artifact_decode(pool:
             .fetch_one(&pool)
             .await
             .expect("failed to query solution submission count");
-    assert_eq!(solution_submission_count.0, 0);
+    assert_that!(solution_submission_count.0, eq(0));
 }
 
 /// Verifies that oversized manifest notes are rejected before artifact storage.
@@ -298,13 +311,14 @@ async fn solution_submission_rejects_oversized_manifest_note_before_storage(pool
         .send()
         .await
         .expect("failed to send oversized-note submission");
-    assert_eq!(response.status(), 422);
+    assert_that!(
+        response.status(),
+        eq(reqwest::StatusCode::UNPROCESSABLE_ENTITY)
+    );
     let body: serde_json::Value = response.json().await.expect("failed to decode error");
-    assert!(
-        body["error"]["message"]
-            .as_str()
-            .expect("error message")
-            .contains("note must be at most 1024 UTF-8 bytes")
+    assert_that!(
+        body["error"]["message"].as_str().expect("error message"),
+        contains_substring("note must be at most 1024 UTF-8 bytes")
     );
 
     let solution_submission_count: i64 =
@@ -312,8 +326,11 @@ async fn solution_submission_rejects_oversized_manifest_note_before_storage(pool
             .fetch_one(&pool)
             .await
             .expect("failed to query solution submission count");
-    assert_eq!(solution_submission_count, 0);
-    assert!(helpers::storage_prefix_is_empty(&config, "solution-submissions").await);
+    assert_that!(solution_submission_count, eq(0));
+    assert_that!(
+        helpers::storage_prefix_is_empty(&config, "solution-submissions").await,
+        eq(true)
+    );
 }
 
 /// Verifies accepted submissions persist trusted artifact metadata for runner claims.
@@ -359,19 +376,19 @@ async fn solution_submission_persists_artifact_metadata_for_runner(pool: sqlx::P
     .fetch_one(&pool)
     .await
     .expect("failed to query artifact metadata");
-    assert_eq!(
+    assert_that!(
         u64::try_from(persisted.0).expect("zip bytes should be non-negative"),
-        expected.artifact_zip_bytes
+        eq(expected.artifact_zip_bytes)
     );
-    assert_eq!(
+    assert_that!(
         u64::try_from(persisted.1).expect("expanded bytes should be non-negative"),
-        expected.artifact_uncompressed_bytes
+        eq(expected.artifact_uncompressed_bytes)
     );
-    assert_eq!(
+    assert_that!(
         u64::try_from(persisted.2).expect("file count should be non-negative"),
-        expected.artifact_file_count
+        eq(expected.artifact_file_count)
     );
-    assert_eq!(persisted.3, expected.artifact_sha256.to_string());
+    assert_that!(persisted.3, eq(expected.artifact_sha256.to_string()));
 
     let claimed = Repositories::new(&pool)
         .evaluation_jobs()
@@ -379,8 +396,11 @@ async fn solution_submission_persists_artifact_metadata_for_runner(pool: sqlx::P
         .await
         .expect("job claim should succeed")
         .expect("submission should queue an evaluation job");
-    assert_eq!(claimed.solution_submission_id.to_string(), submission_id);
-    assert_eq!(claimed.artifact_metadata.as_ref(), Some(&expected));
+    assert_that!(
+        claimed.solution_submission_id.to_string(),
+        eq(submission_id)
+    );
+    assert_that!(claimed.artifact_metadata.as_ref(), some(eq(&expected)));
 }
 
 /// Verifies that invalid solution submission path ids return bad request.

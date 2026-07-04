@@ -50,7 +50,10 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     let solution_submission_id = create_response["id"]
         .as_str()
         .expect("missing solution submission id");
-    assert_eq!(create_response["note"], "sample-sum smoke solution");
+    assert_that!(
+        create_response["note"].as_str(),
+        some(eq("sample-sum smoke solution"))
+    );
 
     let unauthenticated_solution_submission_response = client
         .get(api_url(
@@ -60,7 +63,10 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
         .send()
         .await
         .expect("failed to get solution submission without auth");
-    assert_eq!(unauthenticated_solution_submission_response.status(), 401);
+    assert_that!(
+        unauthenticated_solution_submission_response.status(),
+        eq(reqwest::StatusCode::UNAUTHORIZED)
+    );
 
     let other_agent_solution_submission_response = client
         .get(api_url(
@@ -71,7 +77,10 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
         .send()
         .await
         .expect("failed to get solution submission as another agent");
-    assert_eq!(other_agent_solution_submission_response.status(), 404);
+    assert_that!(
+        other_agent_solution_submission_response.status(),
+        eq(reqwest::StatusCode::NOT_FOUND)
+    );
 
     run_worker_once(&pool, &config).await;
 
@@ -84,44 +93,62 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
         .send()
         .await
         .expect("failed to get solution submission");
-    assert_eq!(solution_submission_response.status(), 200);
+    assert_that!(
+        solution_submission_response.status(),
+        eq(reqwest::StatusCode::OK)
+    );
 
     let solution_submission: serde_json::Value = solution_submission_response
         .json()
         .await
         .expect("failed to decode solution submission response");
-    assert_eq!(
-        solution_submission["status"], "completed",
-        "unexpected official submission response: {solution_submission:#}"
+    assert_that!(
+        solution_submission["status"].as_str(),
+        some(eq("completed"))
     );
-    assert_eq!(solution_submission["note"], "sample-sum smoke solution");
-    assert_eq!(solution_submission["visible_after_eval"], true);
-    assert_eq!(
-        solution_submission["official_primary_metric"],
-        serde_json::json!({ "metric_name": "score", "value": 1.0 })
+    assert_that!(
+        solution_submission["note"].as_str(),
+        some(eq("sample-sum smoke solution"))
     );
-    assert_eq!(solution_submission["evaluation"]["status"], "completed");
-    assert_eq!(solution_submission["evaluation"]["eval_type"], "official");
-    assert_eq!(
-        solution_submission["evaluation"]["aggregate_metrics"],
-        serde_json::json!([
+    assert_that!(
+        solution_submission["visible_after_eval"].as_bool(),
+        some(eq(true))
+    );
+    assert_that!(
+        solution_submission["official_primary_metric"].clone(),
+        eq(serde_json::json!({ "metric_name": "score", "value": 1.0 }))
+    );
+    assert_that!(
+        solution_submission["evaluation"]["status"].as_str(),
+        some(eq("completed"))
+    );
+    assert_that!(
+        solution_submission["evaluation"]["eval_type"].as_str(),
+        some(eq("official"))
+    );
+    assert_that!(
+        solution_submission["evaluation"]["aggregate_metrics"].clone(),
+        eq(serde_json::json!([
             { "metric_name": "score", "value": 1.0 },
             { "metric_name": "passed_cases", "value": 2.0 }
-        ])
+        ]))
     );
-    assert_eq!(
-        solution_submission["evaluation"]["run_metrics"],
-        serde_json::json!([])
+    assert_that!(
+        solution_submission["evaluation"]["run_metrics"].clone(),
+        eq(serde_json::json!([]))
     );
-    assert_eq!(
-        solution_submission["evaluation"]["public_results"],
-        serde_json::json!([])
+    assert_that!(
+        solution_submission["evaluation"]["public_results"].clone(),
+        eq(serde_json::json!([]))
     );
-    assert_eq!(
-        solution_submission["evaluation"]["official_summary"],
-        serde_json::json!({ "score": 1.0, "passed": 2, "total": 2 })
+    assert_that!(
+        solution_submission["evaluation"]["official_summary"].clone(),
+        eq(serde_json::json!({ "score": 1.0, "passed": 2, "total": 2 }))
     );
-    assert!(solution_submission["evaluation"]["runner_log_storage_key"].is_null());
+    assert_that!(
+        solution_submission["evaluation"]["runner_log_storage_key"].is_null(),
+        eq(true)
+    );
 
     let owner_logs: serde_json::Value = client
         .get(api_url(
@@ -135,15 +162,12 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
         .json()
         .await
         .expect("failed to decode logs response");
-    assert_eq!(owner_logs["availability"], "redacted_private_official");
-    assert!(
-        owner_logs["runner_log_storage_key"].is_null(),
-        "official evaluation logs must not be exposed to submitters"
+    assert_that!(
+        owner_logs["availability"].as_str(),
+        some(eq("redacted_private_official"))
     );
-    assert!(
-        owner_logs["content"].is_null(),
-        "official evaluation log content must not be exposed to submitters"
-    );
+    assert_that!(owner_logs["runner_log_storage_key"].is_null(), eq(true));
+    assert_that!(owner_logs["content"].is_null(), eq(true));
 
     let job_status: (String, String) = sqlx::query_as(
         "SELECT status, eval_type FROM evaluation_jobs WHERE solution_submission_id = $1::uuid",
@@ -160,13 +184,13 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
     .await
     .expect("failed to query evaluation");
 
-    assert_eq!(
+    assert_that!(
         job_status,
-        ("completed".to_string(), "official".to_string())
+        eq(("completed".to_string(), "official".to_string()))
     );
-    assert_eq!(
+    assert_that!(
         evaluation_status,
-        (
+        eq((
             "completed".to_string(),
             "official".to_string(),
             serde_json::json!([
@@ -183,7 +207,7 @@ async fn worker_completes_official_solution_submission(pool: sqlx::PgPool) {
                     "metrics": [{ "metric_name": "score", "value": 1.0 }]
                 }
             ])
-        )
+        ))
     );
 }
 

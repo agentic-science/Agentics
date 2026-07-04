@@ -14,6 +14,7 @@ use helpers::{
     api_url, examples_challenges_root, published_challenge_name, sample_sum_solution,
     solution_zip_base64, spawn_app_with_config, test_config,
 };
+use test_that::prelude::*;
 
 /// Verifies that stale running job fails after max attempts.
 #[sqlx::test(migrations = "../migrations")]
@@ -76,8 +77,8 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
         .await
         .expect("failed to reap stale jobs");
 
-    assert_eq!(result.requeued, 0);
-    assert_eq!(result.failed, 1);
+    assert_that!(result.requeued, eq(0));
+    assert_that!(result.failed, eq(1));
 
     let states: (String, String) = sqlx::query_as(
         r#"
@@ -91,7 +92,7 @@ async fn stale_running_job_fails_after_max_attempts(pool: sqlx::PgPool) {
     .fetch_one(&pool)
     .await
     .expect("failed to query states");
-    assert_eq!(states, ("failed".to_string(), "failed".to_string()));
+    assert_that!(states, eq(("failed".to_string(), "failed".to_string())));
 }
 
 /// Verifies that refreshed job lease is not reaped.
@@ -156,21 +157,21 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
         .refresh_claim(&job_id, "worker-1", 2)
         .await
         .expect("failed to reject stale attempt refresh");
-    assert!(!stale_attempt_refreshed);
+    assert_that!(stale_attempt_refreshed, eq(false));
 
     let wrong_worker_refreshed = agentics_persistence::Repositories::new(&pool)
         .evaluation_jobs()
         .refresh_claim(&job_id, "worker-2", 1)
         .await
         .expect("failed to reject wrong worker refresh");
-    assert!(!wrong_worker_refreshed);
+    assert_that!(wrong_worker_refreshed, eq(false));
 
     let refreshed = agentics_persistence::Repositories::new(&pool)
         .evaluation_jobs()
         .refresh_claim(&job_id, "worker-1", 1)
         .await
         .expect("failed to refresh job lease");
-    assert!(refreshed);
+    assert_that!(refreshed, eq(true));
 
     let result = agentics_persistence::Repositories::new(&pool)
         .maintenance()
@@ -178,8 +179,8 @@ async fn refreshed_job_lease_is_not_reaped(pool: sqlx::PgPool) {
         .await
         .expect("failed to reap stale jobs");
 
-    assert_eq!(result.requeued, 0);
-    assert_eq!(result.failed, 0);
+    assert_that!(result.requeued, eq(0));
+    assert_that!(result.failed, eq(0));
 }
 
 /// Verifies database constraints keep jobs and evaluations on the submission target.
@@ -389,18 +390,15 @@ async fn worker_accelerator_capability_filters_job_claims(pool: sqlx::PgPool) {
         .await
         .expect("CPU worker claim query should succeed")
         .expect("CPU worker should claim the CPU job");
-    assert_eq!(cpu_claim.id.as_str(), cpu_job_id);
-    assert_eq!(cpu_claim.required_accelerator, TargetAccelerator::None);
+    assert_that!(cpu_claim.id.as_str(), eq(cpu_job_id.as_str()));
+    assert_that!(cpu_claim.required_accelerator, eq(TargetAccelerator::None));
 
     let skipped_gpu_claim = repos
         .evaluation_jobs()
         .claim_next("cpu-only-worker-2", WorkerAccelerators::None)
         .await
         .expect("CPU worker claim query should succeed");
-    assert!(
-        skipped_gpu_claim.is_none(),
-        "CPU-only workers must skip queued GPU jobs"
-    );
+    assert_that!(skipped_gpu_claim, none());
 
     let gpu_claim = repos
         .evaluation_jobs()
@@ -408,8 +406,8 @@ async fn worker_accelerator_capability_filters_job_claims(pool: sqlx::PgPool) {
         .await
         .expect("GPU worker claim query should succeed")
         .expect("GPU worker should claim the GPU job");
-    assert_eq!(gpu_claim.id.as_str(), gpu_job_id);
-    assert_eq!(gpu_claim.required_accelerator, TargetAccelerator::Gpu);
+    assert_that!(gpu_claim.id.as_str(), eq(gpu_job_id.as_str()));
+    assert_that!(gpu_claim.required_accelerator, eq(TargetAccelerator::Gpu));
 }
 
 /// Verifies that stale worker completion cannot overwrite current claim.

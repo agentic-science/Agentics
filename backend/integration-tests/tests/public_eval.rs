@@ -13,6 +13,7 @@ use helpers::{
     sample_sum_solution, solution_zip_base64, solution_zip_base64_with_scripts,
     spawn_app_with_config, test_config, zip_project_zip_base64,
 };
+use test_that::prelude::*;
 
 fn write_challenge_manifest(
     challenge_root: &Path,

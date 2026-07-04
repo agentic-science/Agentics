@@ -3285,6 +3285,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tempfile",
+ "test-that",
  "thiserror",
  "tokio",
  "tracing",
