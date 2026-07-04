@@ -14,7 +14,7 @@ async fn disabled_private_benchmark_bundle_does_not_require_directory() {
     let result = validate_challenge_bundle(&root).await;
     drop(std::fs::remove_dir_all(root));
 
-    assert!(result.is_ok());
+    assert_that!(result, ok(anything()));
 }
 
 /// Verifies that source backed run inputs must exist under bundle root.
@@ -39,8 +39,8 @@ async fn source_backed_run_inputs_must_exist_under_bundle_root() {
     let present_result = validate_challenge_bundle(&root).await;
     drop(std::fs::remove_dir_all(root));
 
-    assert!(missing_result.is_err());
-    assert!(present_result.is_ok());
+    assert_that!(missing_result, err(anything()));
+    assert_that!(present_result, ok(anything()));
 }
 
 /// Verifies source-backed session inputs are validated under the selected source root.
@@ -65,8 +65,8 @@ async fn source_backed_session_inputs_must_exist_under_bundle_root() {
     let present_result = validate_challenge_bundle(&root).await;
     drop(std::fs::remove_dir_all(root));
 
-    assert!(missing_result.is_err());
-    assert!(present_result.is_ok());
+    assert_that!(missing_result, err(anything()));
+    assert_that!(present_result, ok(anything()));
 }
 
 /// Verifies session manifests reject duplicate materialized input paths.
@@ -93,7 +93,7 @@ async fn session_manifest_rejects_duplicate_input_paths() {
     drop(std::fs::remove_dir_all(root));
 
     let error = result.expect_err("duplicate session input paths should fail");
-    assert!(error.to_string().contains("duplicate path"));
+    assert_that!(error.to_string(), contains_substring("duplicate path"));
 }
 
 /// Verifies separated-evaluator run manifests reject duplicate materialized input paths.
@@ -116,7 +116,7 @@ async fn run_manifest_rejects_duplicate_input_paths() {
     drop(std::fs::remove_dir_all(root));
 
     let error = result.expect_err("duplicate run input paths should fail");
-    assert!(error.to_string().contains("duplicate path"));
+    assert_that!(error.to_string(), contains_substring("duplicate path"));
 }
 
 /// Verifies separated-evaluator run manifests require nullable fields to be present.

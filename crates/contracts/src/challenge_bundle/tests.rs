@@ -8,6 +8,7 @@ use agentics_domain::models::challenge::{
 use super::{
     validate_challenge_bundle, validate_challenge_bundle_spec, validate_digest_pinned_images,
 };
+use test_that::prelude::*;
 
 mod fixtures;
 use fixtures::*;
@@ -32,7 +33,7 @@ fn legacy_rounds_field_is_rejected() {
 
     let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
         .expect_err("legacy rounds should be an unknown field");
-    assert!(error.to_string().contains("rounds"));
+    assert_that!(error.to_string(), contains_substring("rounds"));
 }
 
 /// Verifies that legacy community metadata is rejected.
@@ -46,7 +47,7 @@ fn legacy_community_field_is_rejected() {
 
     let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
         .expect_err("legacy community metadata should be an unknown field");
-    assert!(error.to_string().contains("community"));
+    assert_that!(error.to_string(), contains_substring("community"));
 }
 
 /// Verifies that challenge-authored Moltbook metadata remains platform-owned.
@@ -59,7 +60,7 @@ fn challenge_authored_moltbook_field_is_rejected() {
 
     let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
         .expect_err("Moltbook metadata should be an unknown field");
-    assert!(error.to_string().contains("moltbook"));
+    assert_that!(error.to_string(), contains_substring("moltbook"));
 }
 
 /// Verifies that legacy top-level scorer contracts are rejected.
@@ -74,7 +75,7 @@ fn legacy_top_level_scorer_field_is_rejected() {
     let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
         .expect_err("legacy scorer field should be unknown");
 
-    assert!(error.to_string().contains("scorer"));
+    assert_that!(error.to_string(), contains_substring("scorer"));
 }
 
 /// Verifies that evaluator contracts do not silently ignore unknown fields.
@@ -86,7 +87,7 @@ fn evaluator_unknown_fields_are_rejected() {
     let error = serde_json::from_value::<ChallengeBundleSpec>(spec_json)
         .expect_err("unknown evaluator field should fail");
 
-    assert!(error.to_string().contains("extra"));
+    assert_that!(error.to_string(), contains_substring("extra"));
 }
 
 /// Verifies that execution mode is required by the topology tag.

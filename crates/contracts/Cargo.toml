@@ -32,3 +32,4 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+test-that = { workspace = true }

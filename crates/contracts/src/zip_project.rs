@@ -243,6 +243,7 @@ mod tests {
 
     use serde_json::json;
     use sha2::Digest;
+    use test_that::prelude::*;
 
     use agentics_domain::models::paths::LogRelativePath;
 
@@ -292,19 +293,25 @@ mod tests {
         let raw = serde_json::to_string(&valid_manifest()).expect("serialize manifest");
         let manifest = ZipProjectManifest::parse_json(&raw).expect("manifest should parse");
 
-        assert_eq!(manifest.protocol, "zip_project");
-        assert_eq!(manifest.protocol_version, 1);
-        assert_eq!(manifest.note, "public note\nwith whitespace");
-        assert_eq!(manifest.commands.run.as_str(), "run.sh");
+        assert_that!(manifest.protocol, eq("zip_project"));
+        assert_that!(manifest.protocol_version, eq(1));
+        assert_that!(manifest.note, eq("public note\nwith whitespace"));
+        assert_that!(manifest.commands.run.as_str(), eq("run.sh"));
 
         let phases = manifest.phase_execution_plan();
-        assert_eq!(phases.len(), 3);
-        assert_eq!(phases[0].name, ZipProjectPhaseName::Setup);
-        assert_eq!(phases[0].command.as_str(), "scripts/setup.sh");
-        assert_eq!(phases[1].name, ZipProjectPhaseName::Build);
-        assert_eq!(phases[1].command.as_str(), "scripts/build.sh");
-        assert_eq!(phases[2].name, ZipProjectPhaseName::Run);
-        assert_eq!(phases[2].command.as_str(), "run.sh");
+        let phase_pairs = phases
+            .iter()
+            .map(|phase| (phase.name, phase.command.as_str()))
+            .collect::<Vec<_>>();
+        assert_that!(
+            phase_pairs,
+            contains_exactly![
+                eq((ZipProjectPhaseName::Setup, "scripts/setup.sh")),
+                eq((ZipProjectPhaseName::Build, "scripts/build.sh")),
+                eq((ZipProjectPhaseName::Run, "run.sh"))
+            ]
+            .in_order()
+        );
     }
 
     /// Verifies uploaded solution artifacts produce trusted size and digest metadata.
@@ -320,22 +327,22 @@ mod tests {
         let artifact =
             inspect_zip_project_artifact(&bytes).expect("artifact inspection should succeed");
 
-        assert_eq!(artifact.manifest.commands.run.as_str(), "run.sh");
-        assert_eq!(
+        assert_that!(artifact.manifest.commands.run.as_str(), eq("run.sh"));
+        assert_that!(
             artifact.metadata.artifact_zip_bytes,
-            u64::try_from(bytes.len()).expect("test ZIP length fits")
+            eq(u64::try_from(bytes.len()).expect("test ZIP length fits"))
         );
-        assert_eq!(
+        assert_that!(
             artifact.metadata.artifact_uncompressed_bytes,
-            u64::try_from(manifest.len() + readme.len()).expect("test size fits")
+            eq(u64::try_from(manifest.len() + readme.len()).expect("test size fits"))
         );
-        assert_eq!(artifact.metadata.artifact_file_count, 2);
+        assert_that!(artifact.metadata.artifact_file_count, eq(2));
 
         let mut hasher = sha2::Sha256::new();
         hasher.update(&bytes);
-        assert_eq!(
+        assert_that!(
             artifact.metadata.artifact_sha256.to_string(),
-            hex::encode(hasher.finalize())
+            eq(hex::encode(hasher.finalize()))
         );
     }
 
@@ -351,7 +358,7 @@ mod tests {
         let manifest =
             ZipProjectManifest::parse_json(&value.to_string()).expect("manifest should parse");
 
-        assert_eq!(manifest.note, "");
+        assert_that!(manifest.note, eq(""));
     }
 
     /// Verifies that minimal manifest only requires a run command.
@@ -368,10 +375,10 @@ mod tests {
         .expect("minimal manifest should parse");
 
         let phases = manifest.phase_execution_plan();
-        assert_eq!(manifest.note, "");
-        assert_eq!(phases.len(), 1);
-        assert_eq!(phases[0].name, ZipProjectPhaseName::Run);
-        assert_eq!(phases[0].command.as_str(), "run.sh");
+        assert_that!(manifest.note, eq(""));
+        assert_that!(phases, len(eq(1)));
+        assert_that!(phases[0].name, eq(ZipProjectPhaseName::Run));
+        assert_that!(phases[0].command.as_str(), eq("run.sh"));
     }
 
     /// Verifies that setup and build commands are optional.
@@ -381,13 +388,14 @@ mod tests {
             ZipProjectManifest::parse_json(&valid_manifest().to_string()).expect("manifest");
 
         let phases = manifest.phase_execution_plan();
-        assert_eq!(
+        assert_that!(
             phases.iter().map(|phase| phase.name).collect::<Vec<_>>(),
-            vec![
-                ZipProjectPhaseName::Setup,
-                ZipProjectPhaseName::Build,
-                ZipProjectPhaseName::Run,
+            contains_exactly![
+                eq(ZipProjectPhaseName::Setup),
+                eq(ZipProjectPhaseName::Build),
+                eq(ZipProjectPhaseName::Run),
             ]
+            .in_order()
         );
     }
 

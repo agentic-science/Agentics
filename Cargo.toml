@@ -125,3 +125,4 @@ aws-sdk-s3 = { version = "1", default-features = false, features = [
   "sigv4a",
 ] }
 tar = "0.4"
+test-that = "0.5.2"

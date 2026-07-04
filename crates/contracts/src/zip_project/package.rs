@@ -322,6 +322,7 @@ fn unix_permissions(_metadata: &std::fs::Metadata) -> u32 {
 mod tests {
     use std::fs;
     use std::io::Read;
+    use test_that::prelude::*;
 
     use super::{
         ZipProjectWorkspacePackageLimits, package_zip_project_workspace,
@@ -374,14 +375,15 @@ mod tests {
         let package = package_zip_project_workspace(root).expect("workspace should package");
         let names = zip_file_names(&package.bytes);
 
-        assert_eq!(package.file_count, 3);
-        assert_eq!(
+        assert_that!(package.file_count, eq(3));
+        assert_that!(
             names,
-            vec![
-                "agentics.solution.json".to_string(),
-                "main.py".to_string(),
-                "run.sh".to_string()
+            contains_exactly![
+                eq("agentics.solution.json".to_string()),
+                eq("main.py".to_string()),
+                eq("run.sh".to_string())
             ]
+            .in_order()
         );
     }
 
@@ -442,8 +444,8 @@ mod tests {
         let package = package_zip_project_workspace(temp.path()).expect("workspace should package");
         let names = zip_file_names(&package.bytes);
 
-        assert!(names.contains(&"scripts/setup.sh".to_string()));
-        assert!(names.contains(&"scripts/build.sh".to_string()));
+        assert_that!(names, contains(eq("scripts/setup.sh".to_string())));
+        assert_that!(names, contains(eq("scripts/build.sh".to_string())));
     }
 
     #[test]
