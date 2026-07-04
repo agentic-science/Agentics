@@ -22,6 +22,7 @@ This index points to the current documentation set. Use the current docs below a
 - [Scripting policy](scripting-policy/en.md): Rust-first policy for platform-owned operational automation.
 - [API JSON contract](api-json-contract/en.md): response DTO JSON policy and frontend schema-generation workflow.
 - [Visual identity system](visual-identity-system/en.md): UI contribution reference for visual style and frontend polish.
+- [`test-that` crate summary](test-that/en.md): summary of the Rust matcher assertion crate and where it may fit Agentics tests.
 
 ## Product Planning
 
@@ -54,5 +55,6 @@ Most current documents have Chinese versions next to the English version:
 - [脚本策略](scripting-policy/zh.md)
 - [API JSON contract](api-json-contract/zh.md)
 - [Visual identity system](visual-identity-system/zh.md)
+- [`test-that` crate 总结](test-that/zh.md)
 - [PRD](PRD/zh.md)
 - [Milestones](milestones/zh.md)
