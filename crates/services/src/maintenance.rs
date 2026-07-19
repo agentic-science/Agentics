@@ -149,9 +149,7 @@ async fn seed_bundle_dir(
         summary: &spec.summary,
     };
     let repos = Repositories::new(pool);
-    if repos.challenges().publish(&input).await.is_err() {
-        repos.challenges().refresh_seeded(&input).await?;
-    }
+    repos.challenges().sync_seeded(&input).await?;
 
     Ok(())
 }

@@ -1,6 +1,6 @@
 use sqlx::{PgPool, Postgres, Row, Transaction};
 
-use agentics_domain::models::ids::AgentId;
+use agentics_domain::models::ids::{AgentId, HumanId};
 use agentics_domain::models::names::ChallengeName;
 use agentics_error::{Result, ServiceError};
 
@@ -63,7 +63,9 @@ pub async fn create_challenge_shortlist_revision(
 ) -> Result<ChallengeShortlistRevisionRecord> {
     let mut tx = pool.begin().await?;
 
-    lock_challenge_shortlist(&mut tx, &input.challenge_name).await?;
+    lock_active_challenge_shortlist(&mut tx, &input.challenge_name).await?;
+    ensure_shortlist_uploader_allowed_tx(&mut tx, &input.challenge_name, &input.uploader_human_id)
+        .await?;
     ensure_shortlist_agents_exist(&mut tx, &input.agent_ids_to_add).await?;
 
     sqlx::query(
@@ -134,14 +136,85 @@ pub async fn create_challenge_shortlist_revision(
 }
 
 /// Handles lock challenge shortlist for this module.
-async fn lock_challenge_shortlist(
+async fn lock_active_challenge_shortlist(
     tx: &mut Transaction<'_, Postgres>,
     challenge_name: &ChallengeName,
 ) -> Result<()> {
-    sqlx::query("SELECT challenge_name FROM challenges WHERE challenge_name = $1 FOR UPDATE")
-        .bind(challenge_name.as_str())
-        .fetch_one(&mut **tx)
-        .await?;
+    let status = sqlx::query_scalar::<_, String>(
+        "SELECT status FROM challenges WHERE challenge_name = $1 FOR UPDATE",
+    )
+    .bind(challenge_name.as_str())
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or(ServiceError::NotFound)?;
+    if status != "active" {
+        return Err(ServiceError::Conflict);
+    }
+    Ok(())
+}
+
+/// Require current ownership and active creator eligibility inside shortlist admission.
+async fn ensure_shortlist_uploader_allowed_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    challenge_name: &ChallengeName,
+    human_id: &HumanId,
+) -> Result<()> {
+    let owns_challenge = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM challenge_owners
+            WHERE challenge_name = $1
+              AND human_id = $2::uuid
+        )
+        "#,
+    )
+    .bind(challenge_name.as_str())
+    .bind(human_id.as_str())
+    .fetch_one(&mut **tx)
+    .await?;
+    if !owns_challenge {
+        return Err(ServiceError::Forbidden(
+            "human is not an owner of this challenge".to_string(),
+        ));
+    }
+
+    let status = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT status
+        FROM humans
+        WHERE id = $1::uuid
+        FOR UPDATE
+        "#,
+    )
+    .bind(human_id.as_str())
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or_else(|| ServiceError::Forbidden("human account is unavailable".to_string()))?;
+    if status != "active" {
+        return Err(ServiceError::Forbidden(
+            "active creator or admin access is required".to_string(),
+        ));
+    }
+    let eligible = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM human_roles
+            WHERE human_id = $1::uuid
+              AND role IN ('creator', 'admin')
+              AND revoked_at IS NULL
+        )
+        "#,
+    )
+    .bind(human_id.as_str())
+    .fetch_one(&mut **tx)
+    .await?;
+    if !eligible {
+        return Err(ServiceError::Forbidden(
+            "active creator or admin access is required".to_string(),
+        ));
+    }
     Ok(())
 }
 

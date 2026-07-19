@@ -41,7 +41,7 @@ pub use crate::db::challenges::{
     ChallengeShortlistedAgentRecord, CreateChallengeShortlistRevisionInput,
     CreatorChallengeParticipantRecord, CreatorChallengeParticipantsRecord,
     CreatorChallengeStatsRecord, PublishChallengeInput, PublishChallengeRecord,
-    PublishedChallengeList, PublishedChallengeListItemRecord,
+    PublishedChallengeList, PublishedChallengeListItemRecord, SeedChallengeSyncOutcome,
 };
 pub use crate::db::evaluation_jobs::{
     EvaluationJobRecord, QueueEvaluationJobInput, RunnerJobClaimRecord,

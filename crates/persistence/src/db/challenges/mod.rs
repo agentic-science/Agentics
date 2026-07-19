@@ -20,7 +20,7 @@ pub use creator_insights::{get_creator_challenge_stats, list_creator_challenge_p
 pub(super) use helpers::localized_text_from_row;
 pub use owners::{add_challenge_owner, add_challenge_owner_tx, human_owns_challenge};
 pub use publishing::{
-    archive_challenge, publish_challenge, publish_challenge_tx, refresh_seeded_challenge,
+    archive_challenge, publish_challenge, publish_challenge_tx, sync_seeded_challenge,
 };
 pub use records::{
     AdminChallengeListItemRecord, ChallengeCatalogFilters, ChallengeMoltbookDiscussionRecord,
@@ -28,7 +28,7 @@ pub use records::{
     ChallengeShortlistedAgentRecord, CreateChallengeShortlistRevisionInput,
     CreatorChallengeParticipantRecord, CreatorChallengeParticipantsRecord,
     CreatorChallengeStatsRecord, PublishChallengeInput, PublishChallengeRecord,
-    PublishedChallengeList, PublishedChallengeListItemRecord,
+    PublishedChallengeList, PublishedChallengeListItemRecord, SeedChallengeSyncOutcome,
 };
 pub use shortlists::{
     agent_is_shortlisted, challenge_has_shortlist, create_challenge_shortlist_revision,

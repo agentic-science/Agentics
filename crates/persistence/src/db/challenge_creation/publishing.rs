@@ -231,6 +231,7 @@ pub async fn publish_new_challenge_review_record(
     input: &PublishNewChallengeReviewRecordInput,
 ) -> Result<()> {
     let mut tx = pool.begin().await?;
+    ensure_creator_eligible_for_publish_tx(&mut tx, &input.owner_human_id).await?;
     let published = publish_challenge_tx(
         &mut tx,
         &PublishChallengeInput {
@@ -284,6 +285,7 @@ pub async fn publish_archive_challenge_review_record(
     let challenge_name =
         resolve_active_challenge_name_by_name_tx(&mut tx, &input.challenge_name).await?;
     ensure_human_owns_challenge_tx(&mut tx, &challenge_name, &input.owner_human_id).await?;
+    ensure_creator_eligible_for_publish_tx(&mut tx, &input.owner_human_id).await?;
     archive_challenge_tx(&mut tx, &challenge_name).await?;
     mark_challenge_review_record_published_tx(
         &mut tx,
@@ -312,6 +314,46 @@ pub async fn publish_archive_challenge_review_record(
     )
     .await?;
     tx.commit().await?;
+    Ok(())
+}
+
+/// Lock the review-record creator and require current publication eligibility.
+async fn ensure_creator_eligible_for_publish_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    human_id: &HumanId,
+) -> Result<()> {
+    let status = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT status
+        FROM humans
+        WHERE id = $1::uuid
+        FOR UPDATE
+        "#,
+    )
+    .bind(human_id.as_str())
+    .fetch_optional(&mut **tx)
+    .await?;
+    if status.as_deref() != Some("active") {
+        return Err(ServiceError::Conflict);
+    }
+
+    let eligible = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM human_roles
+            WHERE human_id = $1::uuid
+              AND role IN ('creator', 'admin')
+              AND revoked_at IS NULL
+        )
+        "#,
+    )
+    .bind(human_id.as_str())
+    .fetch_one(&mut **tx)
+    .await?;
+    if !eligible {
+        return Err(ServiceError::Conflict);
+    }
     Ok(())
 }
 

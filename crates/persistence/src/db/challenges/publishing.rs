@@ -5,7 +5,7 @@ use agentics_domain::models::names::ChallengeName;
 use agentics_error::{Result, ServiceError};
 
 use super::helpers::{localized_text_to_json, storage_key_from_row};
-use super::records::{PublishChallengeInput, PublishChallengeRecord};
+use super::records::{PublishChallengeInput, PublishChallengeRecord, SeedChallengeSyncOutcome};
 use crate::db::ids::challenge_name_from_row;
 
 /// Publish a validated bundle as the benchmark contract for a challenge name.
@@ -56,6 +56,7 @@ pub async fn publish_challenge_tx(
             status = 'active',
             updated_at = NOW()
         WHERE challenges.spec_json IS NULL
+          AND challenges.status = 'active'
         RETURNING challenge_name, title, bundle_key, public_bundle_key, statement_key
         "#,
     )
@@ -95,17 +96,18 @@ pub async fn publish_challenge_tx(
     })
 }
 
-/// Refresh an existing seeded challenge from a local bundle root.
-///
-/// This intentionally preserves the historical startup seeding behavior: only
-/// the display metadata, bundle keys, statement key, stored spec, and active
-/// status are refreshed. Review-record-driven publication continues to use the guarded
-/// publish/archive state machines.
-pub async fn refresh_seeded_challenge(
+/// Create or refresh an active startup-seeded challenge without reviving archives.
+pub async fn sync_seeded_challenge(
     pool: &PgPool,
     input: &PublishChallengeInput<'_>,
-) -> Result<()> {
-    sqlx::query(
+) -> Result<SeedChallengeSyncOutcome> {
+    match publish_challenge(pool, input).await {
+        Ok(_) => return Ok(SeedChallengeSyncOutcome::Created),
+        Err(ServiceError::Conflict) => {}
+        Err(error) => return Err(error),
+    }
+
+    let result = sqlx::query(
         r#"
         UPDATE challenges
         SET title = $2,
@@ -114,9 +116,18 @@ pub async fn refresh_seeded_challenge(
             public_bundle_key = $5,
             statement_key = $6,
             spec_json = $7,
-            status = 'active',
+            starts_at = $8,
+            closes_at = $9,
+            eligibility_policy_json = $10,
+            validation_submission_limit = $11,
+            official_submission_limit = $12,
+            leaderboard_visibility = $13,
+            score_distribution_visibility = $14,
+            result_detail_visibility = $15,
+            solution_publication_policy = $16,
             updated_at = NOW()
         WHERE challenge_name = $1
+          AND status = 'active'
         "#,
     )
     .bind(input.challenge_name.as_str())
@@ -126,10 +137,36 @@ pub async fn refresh_seeded_challenge(
     .bind(input.public_bundle_key.as_str())
     .bind(input.statement_key.as_str())
     .bind(serde_json::to_value(input.spec).map_err(|e| ServiceError::Internal(e.to_string()))?)
+    .bind(parse_required_time(&input.spec.starts_at)?)
+    .bind(parse_optional_time(input.spec.closes_at.as_deref())?)
+    .bind(
+        serde_json::to_value(&input.spec.eligibility)
+            .map_err(|e| ServiceError::Internal(e.to_string()))?,
+    )
+    .bind(input.spec.validation_submission_limit)
+    .bind(input.spec.official_submission_limit)
+    .bind(to_json_string(input.spec.visibility.leaderboard)?)
+    .bind(to_json_string(input.spec.visibility.score_distribution)?)
+    .bind(to_json_string(input.spec.visibility.result_detail)?)
+    .bind(to_json_string(input.spec.solution_publication)?)
     .execute(pool)
     .await?;
 
-    Ok(())
+    if result.rows_affected() == 1 {
+        return Ok(SeedChallengeSyncOutcome::Refreshed);
+    }
+
+    let status =
+        sqlx::query_scalar::<_, String>("SELECT status FROM challenges WHERE challenge_name = $1")
+            .bind(input.challenge_name.as_str())
+            .fetch_optional(pool)
+            .await?;
+
+    match status.as_deref() {
+        Some("archived") => Ok(SeedChallengeSyncOutcome::SkippedArchived),
+        Some(_) => Err(ServiceError::Conflict),
+        None => Err(ServiceError::NotFound),
+    }
 }
 
 /// Archive a challenge shell while preserving private assets and historical submissions.

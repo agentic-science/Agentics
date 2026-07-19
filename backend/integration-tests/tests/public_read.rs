@@ -5,6 +5,7 @@ mod helpers;
 use std::path::Path;
 
 use agentics_config::Config;
+use agentics_domain::models::names::ChallengeName;
 use agentics_storage::{StorageKey, build_storage};
 use helpers::{
     api_url, copy_dir_all, examples_challenges_root, published_challenge_name, run_worker_once,
@@ -706,6 +707,61 @@ async fn seeded_challenge_summaries_are_public(pool: sqlx::PgPool) {
         .await
         .expect("failed to decode sample-sum challenge");
     assert_eq!(sample_sum_challenge["title"], "Sample Sum");
+}
+
+/// Verifies startup seed synchronization never reactivates an archived challenge.
+#[sqlx::test(migrations = "../migrations")]
+async fn startup_seeding_preserves_archived_challenges(pool: sqlx::PgPool) {
+    let storage_root = tempfile::tempdir().expect("failed to create storage tempdir");
+    let config = test_config(storage_root.path(), &examples_challenges_root());
+    let app = spawn_app_with_config(pool.clone(), config.clone()).await;
+    let challenge_name = ChallengeName::try_new("sample-sum").expect("valid challenge name");
+    agentics_persistence::Repositories::new(&pool)
+        .challenges()
+        .archive(&challenge_name)
+        .await
+        .expect("seeded challenge should archive");
+
+    let storage = build_storage(
+        config
+            .storage_factory_options()
+            .expect("test storage options should validate"),
+    )
+    .await
+    .expect("test storage should initialize");
+    agentics_services::maintenance::ensure_challenges_seeded_from_root(
+        &pool,
+        &config,
+        storage.as_ref(),
+        &config.storage.challenges_root,
+    )
+    .await
+    .expect("startup seed synchronization should succeed");
+
+    let status: String =
+        sqlx::query_scalar("SELECT status FROM challenges WHERE challenge_name = $1")
+            .bind(challenge_name.as_str())
+            .fetch_one(&pool)
+            .await
+            .expect("archived challenge status should query");
+    assert_eq!(status, "archived");
+    let response = reqwest::Client::new()
+        .get(api_url(&app, "/api/public/challenges"))
+        .send()
+        .await
+        .expect("public challenge list request should complete")
+        .error_for_status()
+        .expect("public challenge list should load")
+        .json::<serde_json::Value>()
+        .await
+        .expect("public challenge list should decode");
+    assert!(
+        response["items"]
+            .as_array()
+            .expect("challenge list items")
+            .iter()
+            .all(|item| item["challenge_name"] != challenge_name.as_str())
+    );
 }
 
 /// Adds a running official rejudge after a completed official result.

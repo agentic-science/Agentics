@@ -94,6 +94,14 @@ pub struct PublishChallengeRecord {
     pub statement_key: StorageKey,
 }
 
+/// Outcome of synchronizing one startup-seeded challenge bundle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SeedChallengeSyncOutcome {
+    Created,
+    Refreshed,
+    SkippedArchived,
+}
+
 /// Input for one shortlist delta revision.
 #[derive(Debug, Clone)]
 pub struct CreateChallengeShortlistRevisionInput {

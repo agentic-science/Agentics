@@ -6,7 +6,7 @@ use crate::repositories::{
     ChallengeRecord, ChallengeShortlistRecord, ChallengeShortlistRevisionRecord,
     CreateChallengeShortlistRevisionInput, CreatorChallengeParticipantsRecord,
     CreatorChallengeStatsRecord, PublishChallengeInput, PublishChallengeRecord,
-    PublishedChallengeAdmission, PublishedChallengeList,
+    PublishedChallengeAdmission, PublishedChallengeList, SeedChallengeSyncOutcome,
 };
 use agentics_domain::models::evaluation::ScoringMode;
 use agentics_domain::models::ids::{AgentId, HumanId};
@@ -47,8 +47,11 @@ impl ChallengesRepository<'_> {
         db::challenges::publish_challenge(self.pool, input).await
     }
 
-    pub async fn refresh_seeded(&self, input: &PublishChallengeInput<'_>) -> Result<()> {
-        db::challenges::refresh_seeded_challenge(self.pool, input).await
+    pub async fn sync_seeded(
+        &self,
+        input: &PublishChallengeInput<'_>,
+    ) -> Result<SeedChallengeSyncOutcome> {
+        db::challenges::sync_seeded_challenge(self.pool, input).await
     }
 
     pub async fn archive(&self, challenge_name: &ChallengeName) -> Result<()> {

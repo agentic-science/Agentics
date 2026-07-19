@@ -1113,3 +1113,5 @@ async fn materialize_bundle_key(
 
 #[path = "challenge_creation/lifecycle.rs"]
 mod lifecycle;
+#[path = "challenge_creation/publication_invariants.rs"]
+mod publication_invariants;
