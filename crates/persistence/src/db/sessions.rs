@@ -451,6 +451,7 @@ pub async fn revoke_admin_role(
 ) -> Result<HumanRecord> {
     let mut tx = pool.begin().await?;
     lock_bootstrap_admin_scope_tx(&mut tx).await?;
+    ensure_active_human_tx(&mut tx, human_id).await?;
     let role_exists = sqlx::query(
         r#"
         SELECT id
@@ -525,6 +526,16 @@ pub async fn create_creator_api_token(
     pool: &PgPool,
     input: &CreateCreatorApiTokenInput,
 ) -> Result<CreatorApiTokenRecord> {
+    let mut tx = pool.begin().await?;
+    ensure_active_human_tx(&mut tx, &input.created_by_human_id).await?;
+    let creator_eligible =
+        active_role_exists_tx(&mut tx, &input.created_by_human_id, HumanRole::Creator).await?
+            || active_role_exists_tx(&mut tx, &input.created_by_human_id, HumanRole::Admin).await?;
+    if !creator_eligible {
+        return Err(ServiceError::Forbidden(
+            "active creator or admin role is required to create a creator API token".to_string(),
+        ));
+    }
     let row = sqlx::query(
         r#"
         INSERT INTO creator_api_tokens (
@@ -551,11 +562,13 @@ pub async fn create_creator_api_token(
     .bind(input.label.trim())
     .bind(input.created_by_human_id.as_str())
     .bind(input.expires_at)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await
     .map_err(map_creator_api_token_create_error)?;
 
-    creator_api_token_record_from_row(&row)
+    let record = creator_api_token_record_from_row(&row)?;
+    tx.commit().await?;
+    Ok(record)
 }
 
 /// List creator API tokens owned by one human.

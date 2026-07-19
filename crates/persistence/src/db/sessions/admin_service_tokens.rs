@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Row};
 
+use agentics_domain::models::auth::HumanRole;
 use agentics_domain::models::ids::{AdminServiceTokenId, HumanId};
 use agentics_error::{ErrorDetail, Result, ServiceError};
 
@@ -46,6 +47,13 @@ pub async fn create_admin_service_token(
     pool: &PgPool,
     input: &CreateAdminServiceTokenInput,
 ) -> Result<AdminServiceTokenRecord> {
+    let mut tx = pool.begin().await?;
+    super::ensure_active_human_tx(&mut tx, &input.created_by_human_id).await?;
+    if !super::active_role_exists_tx(&mut tx, &input.created_by_human_id, HumanRole::Admin).await? {
+        return Err(ServiceError::Forbidden(
+            "active admin role is required to create an admin service token".to_string(),
+        ));
+    }
     let row = sqlx::query(
         r#"
         INSERT INTO admin_service_tokens (
@@ -73,11 +81,13 @@ pub async fn create_admin_service_token(
     .bind(input.label.trim())
     .bind(input.created_by_human_id.as_str())
     .bind(input.expires_at)
-    .fetch_one(pool)
+    .fetch_one(&mut *tx)
     .await
     .map_err(map_admin_service_token_create_error)?;
 
-    admin_service_token_record_from_row(&row)
+    let record = admin_service_token_record_from_row(&row)?;
+    tx.commit().await?;
+    Ok(record)
 }
 
 /// List admin service tokens.

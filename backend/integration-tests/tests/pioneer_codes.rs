@@ -888,6 +888,11 @@ async fn pioneer_code_revoke_revokes_derived_human_tokens(pool: sqlx::PgPool) {
         .complete_human_setup(&invited_human.human_id, &code_hash)
         .await
         .expect("setup should grant creator");
+    repos
+        .sessions()
+        .grant_admin_role(&invited_human.human_id, &admin_human.human_id)
+        .await
+        .expect("invited human should receive admin role for admin-token coverage");
     let admin_token = agentics_services::auth::create_admin_service_token();
     let token_hash = agentics_services::auth::hash_opaque_token(&admin_token);
     repos
@@ -1004,5 +1009,109 @@ async fn pioneer_code_revoke_revokes_derived_human_tokens(pool: sqlx::PgPool) {
             .expect("old creator token auth lookup should not fail")
             .is_none(),
         "old creator token must stay revoked after the human regains creator access"
+    );
+}
+
+/// Verifies creator-token issuance cannot escape a concurrent pioneer-code setup reset.
+#[sqlx::test(migrations = "../migrations")]
+async fn creator_token_creation_serializes_with_pioneer_code_revocation(pool: sqlx::PgPool) {
+    let repos = agentics_persistence::Repositories::new(&pool);
+    let admin = repos
+        .sessions()
+        .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
+            fallback_human_id: HumanId::generate(),
+            github_user_id: github_user_id(9_011),
+            github_login: "concurrent-code-admin".to_string(),
+            bootstrap_admin_candidate: true,
+        })
+        .await
+        .expect("bootstrap admin should resolve");
+    let code_id = PioneerCodeId::generate();
+    let code = "concurrent-deadbeef";
+    let code_hash = agentics_services::auth::hash_opaque_token(code);
+    repos
+        .pioneer_codes()
+        .create(&agentics_persistence::CreatePioneerCodeInput {
+            id: code_id.clone(),
+            code_display: code.to_string(),
+            code_hash: code_hash.clone(),
+            label: Some("concurrent reset".to_string()),
+            note: "concurrency regression".to_string(),
+            max_uses: 1,
+            expires_at: None,
+            created_by_human_id: Some(admin.human_id.clone()),
+            created_by_admin_service_token_id: None,
+            created_by_display: "concurrent-code-admin".to_string(),
+        })
+        .await
+        .expect("pioneer code should insert");
+    let creator = repos
+        .sessions()
+        .resolve_github_human(&agentics_persistence::ResolveGithubHumanInput {
+            fallback_human_id: HumanId::generate(),
+            github_user_id: github_user_id(9_012),
+            github_login: "concurrent-code-creator".to_string(),
+            bootstrap_admin_candidate: false,
+        })
+        .await
+        .expect("creator should resolve");
+    let creator = repos
+        .sessions()
+        .complete_human_setup(&creator.human_id, &code_hash)
+        .await
+        .expect("creator setup should complete");
+
+    let token = agentics_services::auth::create_creator_api_token();
+    let token_hash = agentics_services::auth::hash_opaque_token(&token);
+    let create_pool = pool.clone();
+    let create_human_id = creator.human_id.clone();
+    let create_token_hash = token_hash.clone();
+    let revoke_pool = pool.clone();
+    let revoke_code_id = code_id.clone();
+    let (create_result, revoke_result) = tokio::join!(
+        async move {
+            agentics_persistence::Repositories::new(&create_pool)
+                .sessions()
+                .create_creator_api_token(&agentics_persistence::CreateCreatorApiTokenInput {
+                    id: CreatorApiTokenId::generate(),
+                    token_hash: create_token_hash,
+                    label: "concurrent-creator-token".to_string(),
+                    created_by_human_id: create_human_id,
+                    expires_at: None,
+                })
+                .await
+        },
+        async move {
+            agentics_persistence::Repositories::new(&revoke_pool)
+                .pioneer_codes()
+                .revoke(&revoke_code_id)
+                .await
+        }
+    );
+
+    revoke_result.expect("pioneer-code revocation should commit");
+    if let Err(error) = create_result {
+        assert!(matches!(error, agentics_error::ServiceError::Forbidden(_)));
+    }
+    let active_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM creator_api_tokens
+        WHERE created_by_human_id = $1::uuid
+          AND status = 'active'
+        "#,
+    )
+    .bind(creator.human_id.as_str())
+    .fetch_one(&pool)
+    .await
+    .expect("active creator token count should query");
+    assert_eq!(active_count, 0);
+    assert!(
+        repos
+            .sessions()
+            .authenticate_creator_api_token(&token_hash)
+            .await
+            .expect("creator token authentication should query")
+            .is_none()
     );
 }

@@ -429,6 +429,21 @@ pub async fn revoke_pioneer_code(
         .map(|row| row.try_get::<Uuid, _>("human_id"))
         .collect::<std::result::Result<Vec<_>, _>>()?;
 
+    if !human_ids.is_empty() {
+        sqlx::query(
+            r#"
+            SELECT id
+            FROM humans
+            WHERE id = ANY($1::uuid[])
+            ORDER BY id
+            FOR UPDATE
+            "#,
+        )
+        .bind(&human_ids)
+        .fetch_all(&mut *tx)
+        .await?;
+    }
+
     let revoked_human_count = if human_ids.is_empty() {
         0
     } else {

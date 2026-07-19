@@ -179,6 +179,19 @@ async fn account_delete_revokes_human_access_and_blocks_re_registration(pool: sq
     .expect("creator role should insert");
 
     let repos = agentics_persistence::Repositories::new(&pool);
+    let remaining_admin = create_creator_session(&pool, 71_007, "remaining-admin").await;
+    let remaining_admin_id =
+        HumanId::try_new(remaining_admin.human_id).expect("remaining admin human id should parse");
+    repos
+        .sessions()
+        .grant_admin_role(&remaining_admin_id, &remaining_admin_id)
+        .await
+        .expect("remaining admin role should grant");
+    repos
+        .sessions()
+        .grant_admin_role(&human_id, &remaining_admin_id)
+        .await
+        .expect("deleted human should receive admin role for admin-token coverage");
     let admin_token = agentics_services::auth::create_admin_service_token();
     let admin_token_hash = agentics_services::auth::hash_opaque_token(&admin_token);
     repos
@@ -292,6 +305,67 @@ async fn account_delete_revokes_human_access_and_blocks_re_registration(pool: sq
         .await
         .expect("failed to complete repeated GitHub sign-in");
     assert_eq!(repeated_callback.status(), StatusCode::FORBIDDEN);
+}
+
+/// Verifies creator-token issuance cannot escape a concurrent account deletion sweep.
+#[sqlx::test(migrations = "../migrations")]
+async fn creator_token_creation_serializes_with_account_deletion(pool: sqlx::PgPool) {
+    let creator = create_creator_session(&pool, 71_008, "concurrent-delete-creator").await;
+    let human_id = HumanId::try_new(creator.human_id).expect("creator human id should parse");
+    let token = agentics_services::auth::create_creator_api_token();
+    let token_hash = agentics_services::auth::hash_opaque_token(&token);
+    let create_pool = pool.clone();
+    let create_human_id = human_id.clone();
+    let create_token_hash = token_hash.clone();
+    let delete_pool = pool.clone();
+    let delete_human_id = human_id.clone();
+
+    let (create_result, delete_result) = tokio::join!(
+        async move {
+            agentics_persistence::Repositories::new(&create_pool)
+                .sessions()
+                .create_creator_api_token(&agentics_persistence::CreateCreatorApiTokenInput {
+                    id: CreatorApiTokenId::generate(),
+                    token_hash: create_token_hash,
+                    label: "concurrent-delete-token".to_string(),
+                    created_by_human_id: create_human_id,
+                    expires_at: None,
+                })
+                .await
+        },
+        async move {
+            agentics_persistence::Repositories::new(&delete_pool)
+                .sessions()
+                .delete_human_account(&delete_human_id)
+                .await
+        }
+    );
+
+    delete_result.expect("account deletion should commit");
+    if let Err(error) = create_result {
+        assert!(matches!(error, agentics_error::ServiceError::Forbidden(_)));
+    }
+    let active_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM creator_api_tokens
+        WHERE created_by_human_id = $1::uuid
+          AND status = 'active'
+        "#,
+    )
+    .bind(human_id.as_str())
+    .fetch_one(&pool)
+    .await
+    .expect("active creator token count should query");
+    assert_eq!(active_count, 0);
+    assert!(
+        agentics_persistence::Repositories::new(&pool)
+            .sessions()
+            .authenticate_creator_api_token(&token_hash)
+            .await
+            .expect("creator token authentication should query")
+            .is_none()
+    );
 }
 
 /// Verifies deleting the final active human admin is rejected.

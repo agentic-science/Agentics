@@ -357,6 +357,87 @@ async fn revoking_admin_role_revokes_owner_admin_service_tokens(pool: sqlx::PgPo
     assert_eq!(row_status, "revoked");
 }
 
+/// Verifies concurrent admin-token issuance cannot escape the role-revocation sweep.
+#[sqlx::test(migrations = "../migrations")]
+async fn admin_token_creation_serializes_with_admin_role_revocation(pool: sqlx::PgPool) {
+    let actor = create_creator_session(&pool, 7_004, "concurrent-actor-admin").await;
+    let actor_id = HumanId::try_new(actor.human_id).expect("actor human id should parse");
+    let target = create_creator_session(&pool, 7_005, "concurrent-token-admin").await;
+    let target_id = HumanId::try_new(target.human_id).expect("target human id should parse");
+    let repos = agentics_persistence::Repositories::new(&pool);
+    repos
+        .sessions()
+        .grant_admin_role(&actor_id, &actor_id)
+        .await
+        .expect("actor admin role should grant");
+    repos
+        .sessions()
+        .grant_admin_role(&target_id, &actor_id)
+        .await
+        .expect("target admin role should grant");
+
+    let token = agentics_services::auth::create_admin_service_token();
+    let token_hash = agentics_services::auth::hash_opaque_token(&token);
+    let create_pool = pool.clone();
+    let create_target_id = target_id.clone();
+    let create_token_hash = token_hash.clone();
+    let revoke_pool = pool.clone();
+    let revoke_target_id = target_id.clone();
+    let revoke_actor_id = actor_id.clone();
+    let (create_result, revoke_result) = tokio::join!(
+        async move {
+            agentics_persistence::Repositories::new(&create_pool)
+                .sessions()
+                .create_admin_service_token(&agentics_persistence::CreateAdminServiceTokenInput {
+                    id: AdminServiceTokenId::generate(),
+                    token_hash: create_token_hash,
+                    label: "concurrent-role-token".to_string(),
+                    created_by_human_id: create_target_id,
+                    expires_at: None,
+                })
+                .await
+        },
+        async move {
+            agentics_persistence::Repositories::new(&revoke_pool)
+                .sessions()
+                .revoke_admin_role(&revoke_target_id, &revoke_actor_id)
+                .await
+        }
+    );
+
+    revoke_result.expect("admin role revocation should commit");
+    if let Err(error) = create_result {
+        assert!(matches!(error, agentics_error::ServiceError::Forbidden(_)));
+    }
+    let active_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM admin_service_tokens
+        WHERE created_by_human_id = $1::uuid
+          AND status = 'active'
+        "#,
+    )
+    .bind(target_id.as_str())
+    .fetch_one(&pool)
+    .await
+    .expect("active admin token count should query");
+    assert_eq!(active_count, 0);
+
+    repos
+        .sessions()
+        .grant_admin_role(&target_id, &actor_id)
+        .await
+        .expect("target admin role should re-grant");
+    assert!(
+        repos
+            .sessions()
+            .authenticate_admin_service_token(&token_hash)
+            .await
+            .expect("admin token authentication should query")
+            .is_none()
+    );
+}
+
 /// Verifies that admin official run cannot overlap an active validation job.
 #[sqlx::test(migrations = "../migrations")]
 async fn admin_official_run_rejects_submission_with_active_job(pool: sqlx::PgPool) {
