@@ -13,7 +13,7 @@ use super::{
     read_limited_result_json, resolve_run_plan, sanitize_runner_error, validate_evaluator_result,
     visible_log_content, write_submission_metadata,
 };
-use agentics_storage::StorageError;
+use agentics_storage::{Storage, StorageError, StorageKey, StorageWriteIntent};
 
 /// Execute one evaluation job in Docker and return the validated evaluator result.
 pub(crate) async fn execute_evaluation_job(
@@ -320,13 +320,14 @@ pub(crate) async fn execute_evaluation_job(
     }
     .await;
 
-    let log_write = storage
-        .put(
-            &runner_log_storage_key,
-            logs.as_bytes(),
-            agentics_storage::StorageWriteIntent::new("runner log", max_log_bytes),
-        )
-        .await;
+    let log_write = persist_runner_log(
+        storage,
+        &runner_log_storage_key,
+        logs.as_bytes(),
+        max_log_bytes,
+        !matches!(execution, Err(ServiceError::RunnerCapacity(_))),
+    )
+    .await;
     let cleanup = cleanup_paths([working_root]).await;
     match (execution, log_write, cleanup) {
         (Ok(result), Ok(_), Ok(())) => Ok(result),
@@ -343,6 +344,26 @@ pub(crate) async fn execute_evaluation_job(
     }
 }
 
+async fn persist_runner_log(
+    storage: &dyn Storage,
+    key: &StorageKey,
+    content: &[u8],
+    max_bytes: u64,
+    should_persist: bool,
+) -> std::result::Result<(), StorageError> {
+    if !should_persist {
+        return Ok(());
+    }
+    storage
+        .put(
+            key,
+            content,
+            StorageWriteIntent::new("runner log", max_bytes),
+        )
+        .await
+        .map(|_| ())
+}
+
 fn storage_error_to_runner_error(error: StorageError) -> ServiceError {
     match error {
         StorageError::InvalidKey(message) | StorageError::SymlinkRejected(message) => {
@@ -354,5 +375,44 @@ fn storage_error_to_runner_error(error: StorageError) -> ServiceError {
         | StorageError::Internal(_)
         | StorageError::Backend(_) => ServiceError::Runner(error.to_string()),
         StorageError::Io(error) => ServiceError::Io(error),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::persist_runner_log;
+    use agentics_storage::{LocalStorage, Storage, StorageError, StorageKey, StorageWriteIntent};
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn capacity_requeue_leaves_reused_attempt_log_key_available() {
+        let root = tempdir().expect("temporary storage root");
+        let storage = LocalStorage::new(root.path());
+        let key = StorageKey::try_new("eval-artifacts/job/attempt-1/runner.log")
+            .expect("valid runner log key");
+
+        persist_runner_log(&storage, &key, b"capacity", 1024, false)
+            .await
+            .expect("capacity path skips durable logging");
+        assert!(
+            storage
+                .get(&key, StorageWriteIntent::new("runner log", 1024))
+                .await
+                .is_err()
+        );
+
+        persist_runner_log(&storage, &key, b"completed", 1024, true)
+            .await
+            .expect("retry can persist reused attempt log key");
+        let persisted = storage
+            .get(&key, StorageWriteIntent::new("runner log", 1024))
+            .await
+            .expect("persisted runner log");
+        assert_eq!(persisted, b"completed");
+
+        assert!(matches!(
+            persist_runner_log(&storage, &key, b"duplicate", 1024, true).await,
+            Err(StorageError::ObjectConflict(_))
+        ));
     }
 }
