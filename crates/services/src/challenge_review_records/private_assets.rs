@@ -189,6 +189,7 @@ pub async fn upload_challenge_private_asset(
     {
         Ok(asset) => private_asset_response(asset),
         Err(error) => {
+            fail_challenge_private_asset_record(pool, &asset_row_id, &error.to_string()).await;
             cleanup_storage_key(storage, &storage_key).await;
             return Err(error);
         }

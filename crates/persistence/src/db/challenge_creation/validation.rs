@@ -91,6 +91,23 @@ pub async fn begin_challenge_review_record_validation(
         return Err(ServiceError::Conflict);
     }
 
+    let pending_asset_exists = sqlx::query_scalar::<_, bool>(
+        r#"
+        SELECT EXISTS (
+            SELECT 1
+            FROM challenge_private_assets
+            WHERE review_record_id = $1::uuid
+              AND status = 'pending'
+        )
+        "#,
+    )
+    .bind(input.review_record_id.as_str())
+    .fetch_one(&mut *tx)
+    .await?;
+    if pending_asset_exists {
+        return Err(ServiceError::Conflict);
+    }
+
     let recent_validations = count_recent_challenge_review_record_validations_tx(
         &mut tx,
         input.review_record_id.as_str(),

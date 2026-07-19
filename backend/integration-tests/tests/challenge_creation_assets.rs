@@ -6,8 +6,8 @@ use agentics_domain::models::{
     challenge_creation::ChallengePrivateAssetKind,
     hashes::Sha256Digest,
     ids::{
-        ChallengePrivateAssetId, ChallengeReviewRecordId, ChallengeReviewValidationRecordId,
-        HumanId,
+        ChallengePrivateAssetId, ChallengeReviewAuditEventId, ChallengeReviewRecordId,
+        ChallengeReviewValidationRecordId, HumanId,
     },
     names::AssetName,
 };
@@ -182,6 +182,184 @@ async fn private_asset_upload_rejects_active_validation_and_recovers_stale_claim
     .await
     .expect("failed to query active validation");
     assert!(active_validation.is_none());
+}
+
+/// Verifies validation cannot freeze a review record while an uploaded object is still pending.
+#[sqlx::test(migrations = "../migrations")]
+async fn pending_private_asset_blocks_validation_until_activation(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+
+    let review_record = create_review_record(&client, &app, &creator, 12, manifest_json()).await;
+    let review_record_id =
+        ChallengeReviewRecordId::try_new(review_record["id"].as_str().expect("review_record id"))
+            .expect("valid review_record id");
+    let creator_human_id = HumanId::try_new(&creator.human_id).expect("valid creator human id");
+    let manifest_sha256 = Sha256Digest::try_new(
+        review_record["manifest_sha256"]
+            .as_str()
+            .expect("manifest sha should exist"),
+    )
+    .expect("manifest sha should parse");
+    let asset_input = private_asset_input(
+        &review_record_id,
+        &creator_human_id,
+        "official-cases",
+        "validation-freeze",
+    );
+    let repos = db::Repositories::new(&pool);
+    let pending_asset = repos
+        .challenge_review_records()
+        .reserve_private_asset(&asset_input, 1024, 30, 30)
+        .await
+        .expect("private asset reservation should succeed");
+
+    let validation_input = db::BeginChallengeReviewRecordValidationInput {
+        validation_record_id: ChallengeReviewValidationRecordId::generate(),
+        review_record_id: review_record_id.clone(),
+        repository_path: storage.path().to_string_lossy().to_string(),
+        manifest_sha256,
+    };
+    assert!(matches!(
+        repos
+            .challenge_review_records()
+            .begin_validation(&validation_input, 24 * 60 * 60, 10, 30)
+            .await,
+        Err(ServiceError::Conflict)
+    ));
+
+    repos
+        .challenge_review_records()
+        .activate_private_asset(&pending_asset.id)
+        .await
+        .expect("private asset activation should succeed");
+    repos
+        .challenge_review_records()
+        .begin_validation(&validation_input, 24 * 60 * 60, 10, 30)
+        .await
+        .expect("validation should reserve after activation");
+
+    let asset_status: String =
+        sqlx::query_scalar("SELECT status FROM challenge_private_assets WHERE id = $1::uuid")
+            .bind(pending_asset.id.as_str())
+            .fetch_one(&pool)
+            .await
+            .expect("private asset status should load");
+    assert_eq!(asset_status, "active");
+}
+
+/// Verifies approval and private-asset activation serialize on the review-record lock.
+#[sqlx::test(migrations = "../migrations")]
+async fn private_asset_activation_serializes_with_approval(pool: sqlx::PgPool) {
+    let storage = tempfile::tempdir().expect("storage tempdir");
+    let seeded_challenges = tempfile::tempdir().expect("seed tempdir");
+    let config = test_config(storage.path(), seeded_challenges.path());
+    let app = spawn_app_with_config(pool.clone(), config).await;
+    let client = reqwest::Client::new();
+    let creator = create_creator_session(&pool, 1001, "creator").await;
+
+    let review_record = create_review_record(&client, &app, &creator, 13, manifest_json()).await;
+    let review_record_id =
+        ChallengeReviewRecordId::try_new(review_record["id"].as_str().expect("review_record id"))
+            .expect("valid review_record id");
+    let creator_human_id = HumanId::try_new(&creator.human_id).expect("valid creator human id");
+    let asset_input = private_asset_input(
+        &review_record_id,
+        &creator_human_id,
+        "official-cases",
+        "approval-race",
+    );
+    let pending_asset = db::Repositories::new(&pool)
+        .challenge_review_records()
+        .reserve_private_asset(&asset_input, 1024, 30, 30)
+        .await
+        .expect("private asset reservation should succeed");
+    let validated_digest =
+        Sha256Digest::try_new("d".repeat(64)).expect("test validation digest is valid");
+    sqlx::query(
+        r#"
+        UPDATE challenge_review_records
+        SET status = 'validated',
+            validation_bundle_sha256 = $2,
+            active_validation_record_id = NULL
+        WHERE id = $1::uuid
+        "#,
+    )
+    .bind(review_record_id.as_str())
+    .bind(validated_digest.to_string())
+    .execute(&pool)
+    .await
+    .expect("test review record should become validated");
+
+    let barrier = std::sync::Arc::new(tokio::sync::Barrier::new(3));
+    let activation_pool = pool.clone();
+    let activation_barrier = barrier.clone();
+    let asset_id = pending_asset.id.clone();
+    let activation = tokio::spawn(async move {
+        activation_barrier.wait().await;
+        db::Repositories::new(&activation_pool)
+            .challenge_review_records()
+            .activate_private_asset(&asset_id)
+            .await
+    });
+    let approval_pool = pool.clone();
+    let approval_barrier = barrier.clone();
+    let approval_review_record_id = review_record_id.clone();
+    let approval_creator_id = creator_human_id.clone();
+    let approval_digest = validated_digest;
+    let approval = tokio::spawn(async move {
+        approval_barrier.wait().await;
+        db::Repositories::new(&approval_pool)
+            .challenge_review_records()
+            .approve_validated_with_audit(
+                &approval_review_record_id,
+                &approval_digest,
+                Some("approval race"),
+                &db::CreateChallengeReviewRecordAuditEventInput {
+                    event_id: ChallengeReviewAuditEventId::generate(),
+                    review_record_id: approval_review_record_id.clone(),
+                    actor_human_id: Some(approval_creator_id),
+                    actor_admin_service_token_id: None,
+                    actor_display: None,
+                    action: "review_record_approved".to_string(),
+                    message: "approval race".to_string(),
+                    metadata: json!({}),
+                },
+            )
+            .await
+    });
+    barrier.wait().await;
+    let activation_result = activation.await.expect("activation task should join");
+    let approval_result = approval.await.expect("approval task should join");
+    assert_ne!(activation_result.is_ok(), approval_result.is_ok());
+    let losing_result = if activation_result.is_err() {
+        activation_result.map(|_| ())
+    } else {
+        approval_result
+    };
+    assert!(matches!(losing_result, Err(ServiceError::Conflict)));
+
+    let (review_status, asset_status): (String, String) = sqlx::query_as(
+        r#"
+        SELECT d.status, a.status
+        FROM challenge_review_records d
+        JOIN challenge_private_assets a ON a.review_record_id = d.id
+        WHERE d.id = $1::uuid AND a.id = $2::uuid
+        "#,
+    )
+    .bind(review_record_id.as_str())
+    .bind(pending_asset.id.as_str())
+    .fetch_one(&pool)
+    .await
+    .expect("race outcome should load");
+    assert!(
+        (review_status == "pending_review" && asset_status == "active")
+            || (review_status == "approved" && asset_status == "pending")
+    );
 }
 
 /// Verifies that private asset quota admission serializes concurrent inserts.

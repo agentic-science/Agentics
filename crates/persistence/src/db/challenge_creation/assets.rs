@@ -155,6 +155,42 @@ async fn activate_challenge_private_asset_tx(
     tx: &mut Transaction<'_, Postgres>,
     asset_row_id: &ChallengePrivateAssetId,
 ) -> Result<ChallengePrivateAssetRecord> {
+    let review_record_id = sqlx::query_scalar::<_, String>(
+        r#"
+        SELECT review_record_id::text
+        FROM challenge_private_assets
+        WHERE id = $1::uuid
+          AND status = 'pending'
+        "#,
+    )
+    .bind(asset_row_id.as_str())
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or(ServiceError::Conflict)?;
+    let parent = sqlx::query(
+        r#"
+        SELECT status, active_validation_record_id::text AS active_validation_record_id
+        FROM challenge_review_records
+        WHERE id = $1::uuid
+        FOR UPDATE
+        "#,
+    )
+    .bind(&review_record_id)
+    .fetch_optional(&mut **tx)
+    .await?
+    .ok_or(ServiceError::NotFound)?;
+    let parent_status = review_record_status_from_row(&parent, "status")?;
+    let active_validation_record_id: Option<String> =
+        parent.try_get("active_validation_record_id")?;
+    if active_validation_record_id.is_some()
+        || !matches!(
+            parent_status,
+            ChallengeReviewRecordStatus::PendingReview | ChallengeReviewRecordStatus::Validated
+        )
+    {
+        return Err(ServiceError::Conflict);
+    }
+
     let row = sqlx::query(
         r#"
         UPDATE challenge_private_assets
@@ -176,14 +212,17 @@ async fn activate_challenge_private_asset_tx(
     };
     sqlx::query(
         r#"
-        UPDATE challenge_review_records d
-        SET updated_at = NOW()
-        FROM challenge_private_assets a
-        WHERE a.id = $1::uuid
-          AND d.id = a.review_record_id
+        UPDATE challenge_review_records
+        SET status = CASE WHEN status = 'validated' THEN 'pending_review' ELSE status END,
+            validation_message = CASE WHEN status = 'validated' THEN NULL ELSE validation_message END,
+            validation_repository_path = CASE WHEN status = 'validated' THEN NULL ELSE validation_repository_path END,
+            validation_bundle_sha256 = CASE WHEN status = 'validated' THEN NULL ELSE validation_bundle_sha256 END,
+            approved_bundle_sha256 = CASE WHEN status = 'validated' THEN NULL ELSE approved_bundle_sha256 END,
+            updated_at = NOW()
+        WHERE id = $1::uuid
     "#,
     )
-    .bind(asset_row_id.as_str())
+    .bind(&review_record_id)
     .execute(&mut **tx)
     .await?;
     row_to_private_asset_record(row)
