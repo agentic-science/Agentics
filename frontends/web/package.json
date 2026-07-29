@@ -16,7 +16,7 @@
     "generate:schemas:check": "bun scripts/generate-api-schemas.mjs --check"
   },
   "dependencies": {
-    "framer-motion": "^12.40.0",
+    "framer-motion": "^12.42.2",
     "geist": "^1.7.2",
     "gifenc": "^1.0.3",
     "lucide-react": "^1.17.0",
